@@ -1,0 +1,114 @@
+name: Export to the shelf
+
+# SKB-038 — this public repo is the shelf. The private workbench (peter-tu-zynkr/zynkr-skill-builder)
+# builds the public tree in its own export-stage.yml and keeps it as a 3-day artifact, `stage`.
+# This job downloads that one file, checks it with tools/publish.mjs (which trusts nothing it did
+# not check), mirrors skills/, and posts the signed shelf-v1 body to zynkr.ai on every run.
+#
+# This repo's run logs are public: no workbench code is checked out here, nothing is uploaded, and
+# the publisher names no path until it has proved the stage public.
+#
+# Scheduled runs stay off until the repository variable SHELF_LIVE is 'true'; a dispatch always
+# runs. The first publish is a dispatch with promote: all. Never add pull_request_target or any
+# trigger a fork can reach: the export environment holds WORKBENCH_READ_TOKEN and
+# SKILLS_SYNC_HMAC_SECRET. GitHub disables the schedule after 60 days without repository activity:
+# `gh workflow enable export.yml -R peter-tu-zynkr/zynkr-ai-skills`, then dispatch once.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      prune:
+        description: 'Site rows the shelf no longer holds: report lists them, true removes them'
+        type: choice
+        options:
+          - report
+          - 'true'
+        default: report
+      promote:
+        description: 'Publish skills new to the shelf: slugs separated by commas, or all'
+        type: string
+        default: ''
+      allow_shrink:
+        description: 'Allow a stage under half of the shelf (and let the site prune past its valve)'
+        type: boolean
+        default: false
+      allow_rewind:
+        description: "Allow a stage whose workbench commit does not descend from the last export's"
+        type: boolean
+        default: false
+      seed_fail:
+        description: 'Red proof: plant an unlisted file in the stage, so the publisher must refuse'
+        type: boolean
+        default: false
+
+concurrency:
+  group: shelf-export
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || vars.SHELF_LIVE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: export
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # main's tip, not github.sha: a run that waited in the concurrency group behind a run
+          # that pushed would otherwise mirror onto the older commit, read an older
+          # Workbench-Commit, and have its push rejected. Nothing else pushes to main while this
+          # run holds the group.
+          ref: main
+          # The whole history, so the last Workbench-Commit trailer is readable.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Test the publisher
+        run: node --test 'tools/*.test.mjs'
+
+      # Refuses a run that is not on the workbench's main; writes run.json beside stage/ for the
+      # publisher, which refuses a stage whose workbench_sha is not that run's commit.
+      - name: Download the stage
+        env:
+          GH_TOKEN: ${{ secrets.WORKBENCH_READ_TOKEN }}
+        run: node tools/fetch-stage.mjs --out "$RUNNER_TEMP/in"
+
+      - name: Set the commit identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Inputs reach the script through env, never ${{ }} inside run:, so a promote string cannot
+      # become shell.
+      - name: Check, mirror and post
+        env:
+          WORKBENCH_READ_TOKEN: ${{ secrets.WORKBENCH_READ_TOKEN }}
+          SKILLS_SYNC_HMAC_SECRET: ${{ secrets.SKILLS_SYNC_HMAC_SECRET }}
+          EVENT: ${{ github.event_name }}
+          PRUNE: ${{ inputs.prune }}
+          PROMOTE: ${{ inputs.promote }}
+          ALLOW_SHRINK: ${{ inputs.allow_shrink }}
+          ALLOW_REWIND: ${{ inputs.allow_rewind }}
+          SEED_FAIL: ${{ inputs.seed_fail }}
+        run: |
+          args=(--stage "$RUNNER_TEMP/in" --shelf "$GITHUB_WORKSPACE" --event "$EVENT" --run "$RUNNER_TEMP/in/run.json")
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            args+=(--prune "$PRUNE")
+            if [ -n "$PROMOTE" ]; then args+=(--promote "$PROMOTE"); fi
+            if [ "$ALLOW_SHRINK" = "true" ]; then args+=(--allow-shrink); fi
+            if [ "$ALLOW_REWIND" = "true" ]; then args+=(--allow-rewind); fi
+            if [ "$SEED_FAIL" = "true" ]; then args+=(--seed-fail); fi
+          fi
+          node tools/publish.mjs "${args[@]}"
