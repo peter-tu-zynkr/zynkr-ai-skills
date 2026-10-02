@@ -1,0 +1,84 @@
+---
+name: seo-keyword-mapper
+sheetId: "1.18"
+description: "Fourth leg of the SEO pipeline: use keyword tools (Ubersuggest / AnswerThePublic) to expand angles and seed terms into a complete keyword map. Maps to the v2 flow diagram's 'filter keywords to build the keyword map + compile the complete keyword map'. Triggers when the user hands over an Angles handoff packet, pastes a keyword-tool export, or says '做關鍵字地圖'. Builds the map only — it does not classify intent and does not write articles."
+category: brand-marketing
+project: seo-keyword-mapper
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "seo-angle-finder's SEO_PACKET ▸ Angles; a Ubersuggest / AnswerThePublic export pasted by the user (CSV/text)"
+process: "Expand seed terms per keyword-checklist → compile a keyword map with search volume/difficulty (thread head → keyword) → human supplements via tools → hand off"
+output: "A complete keyword map (keywords, thread heads, volume/difficulty), handed to seo-keyword-classifier"
+synergy: ["seo-keyword-classifier"]
+handoff: ["seo-keyword-classifier"]
+house-style: bound
+
+---
+
+# SEO Keyword Mapper
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-keyword-mapper
+```
+
+The fourth leg of the SEO pipeline, mapping to the flow diagram's "find the thread head: discover keywords". It expands angles and seed terms into a complete keyword map. **Search volume / difficulty data comes from real tools** (Ubersuggest, AnswerThePublic, keyword planner) — this skill does not invent numbers; it organizes the tool exports a human pastes in.
+
+---
+
+## Resources you'll use
+
+> **Knowledge source**: the rubrics/templates this skill uses are read first from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, search by name); if unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Keyword checklist**: `./references/keyword-checklist.md`
+- **SEO knowledge base folder ID**: `<your-seo-kb-folder-id>` (stores the keyword-map working file)
+- **MCP server**: `google-workspace`
+- **External tools (manual)**: Ubersuggest, AnswerThePublic (the user runs them, then pastes the export)
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the angles
+
+Read the seed terms from `SEO_PACKET ▸ Angles` and `▸ Questions`.
+
+## Step 2 — Ask the user to run the tools (HITL)
+
+Maps to the flow diagram's "use tools to find keywords (Ubersuggest / keyword planner)". Ask the user to feed the seed terms into the tools and paste back the export (including search volume, difficulty, related suggested terms). **When there is no tool data, mark it as "volume/difficulty pending" — do not fabricate numbers.**
+
+## Step 3 — Compile the keyword map
+
+Following `./references/keyword-checklist.md`, organize the terms into a map: thread head (seed) → derived keywords → long-tail, each entry annotated with search volume, difficulty, the corresponding angle/question, and language (zh-TW / EN).
+
+## Step 4 — Hand off and save
+
+Save it as a "keyword map" working file in this article's subfolder, and output:
+
+```
+SEO_PACKET ▸ KeywordMap
+- 線頭：<種子> → 關鍵字：<字>（量 / 難度 / 對應切角 / 語言）
+- ...（含待補標記）
+
+關鍵字地圖已完成，可交棒給 seo-keyword-classifier 依意圖分類。
+```
+
+## Outputs
+
+A complete keyword map (`SEO_PACKET ▸ KeywordMap` + Drive working file).
+
+## Limitations
+
+Does not classify by intent (the next leg), does not validate demand / rank by difficulty (seo-demand-validator), and does not write articles. Does not fabricate search volume.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

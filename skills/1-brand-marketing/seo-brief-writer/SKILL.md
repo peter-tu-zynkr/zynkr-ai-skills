@@ -1,0 +1,96 @@
+---
+name: seo-brief-writer
+sheetId: "1.21"
+description: "Seventh stage of the SEO pipeline: for one selected topic, find the value proposition and winning angle, and produce a complete SEO writing Brief. Corresponds to the v2 flowchart step 「選擇主題：設計 Brief」. Triggers when the user hands over a Topics handoff packet, provides reference articles/forums/expert opinions, or says 「寫 Brief」. Only writes the Brief — does not design the outline and does not write the article."
+category: brand-marketing
+project: seo-brief-writer
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "The SEO_PACKET ▸ Topics from seo-demand-validator; optional: reference articles / forum Q&A / expert opinions (an article reference pack)"
+process: "Analyze ceiling articles per ceiling-article-features → find the winning angle and value proposition per winning-key-scoring → apply brief-template to produce the Brief → human verification and augmentation → hand off"
+output: "One SEO writing Brief, handed to seo-outline-designer"
+synergy: ["seo-outline-designer"]
+handoff: ["seo-outline-designer"]
+house-style: bound
+
+---
+
+# SEO Brief Writer
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-brief-writer
+```
+
+Seventh stage of the SEO pipeline, corresponding to the flowchart step "find the value proposition and winning angle + write the Brief". It first breaks down what makes this topic's "ceiling article" (the strongest result on the SERP) work, identifies the key angle Zynkr needs to win on, then produces a Brief that can be fed directly into the outline and writing stages.
+
+---
+
+## Resources you'll use
+
+> **Knowledge source**: The rubrics/templates this skill uses should be read first from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, via the google-workspace MCP, search by name); if unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Ceiling article features**: `./references/ceiling-article-features.md`
+- **Winning-angle review sheet / scoring sheet**: `./references/winning-key-scoring.md`
+- **Brief template**: `./references/brief-template.md`
+- **SEO Knowledge Base folder ID**: `<your-seo-kb-folder-id>`; seed knowledge and first-hand material live in the `02 Seed Knowledge` subfolder — use `search_drive_files` to pull it in to support your judgment
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the topic + reference material
+
+Read `SEO_PACKET ▸ Topics` and lock onto one topic. If the user provides reference articles / forum Q&A / expert opinions (an article reference pack), fold them into the analysis. You can use `search_drive_files` to pull seed knowledge and supplement first-hand material.
+
+**Dig into the FULL transcript — don't stop at the summary (quality over tokens).** First-hand sources in the knowledge folder are often *curated summaries* (`逐字稿_…` Docs) that carry only a ~300-字 digest and end with a `來源:` hyperlink to the real source Doc, whose verbatim transcript lives in a tab named `逐字稿`. A summary is NOT enough for decision-first evidence. For every source you'll lean on:
+1. Read the summary to decide it's relevant.
+2. Resolve its `來源:` hyperlink → open the source Doc → read the **full `逐字稿` tab** (`get_drive_file_content` flattens tabs; if a doc returns only notes, use `get_doc_as_markdown` / `manage_doc_tab` to reach the 逐字稿 tab).
+3. Pull *verbatim* detail — exact quotes, real numbers, the actual before/after moment — into the Brief. Paraphrase reconstructed from a summary reads generic and is the #1 quality leak. Peter's standing instruction: burn the tokens, read the transcript.
+
+For a large sweep, delegate the transcript trawl to a sub-agent and keep only the mined verbatim nuggets.
+
+## Step 2 — Analyze the ceiling articles
+
+Per `./references/ceiling-article-features.md`, dissect the 2–3 strongest results on the SERP: coverage points, structure, depth, gaps.
+
+## Step 3 — Find the winning angle and value proposition
+
+Score per `./references/winning-key-scoring.md` and decide what this piece will win on (prioritize a decision-first angle: a sharper question + real trade-offs + a clear recommendation; first-hand experience as supporting evidence), then write a one-sentence value proposition.
+
+## Step 4 — Produce the Brief
+
+Apply `./references/brief-template.md`: target keyword, search intent, target reader (persona), value proposition, winning angle, must-cover points, first-hand material, CTA (B2B discovery first), AEO requirements, language (zh-TW + whether a flagship EN version is needed).
+
+## Step 5 — Human verification and augmentation (HITL)
+
+Corresponds to "verify and augment". Give the Brief to the user to add first-hand information / correct the direction, and save it once confirmed.
+
+## Step 6 — Hand off
+
+```
+SEO_PACKET ▸ Brief
+<complete Brief, per the brief-template fields>
+
+Brief confirmed; ready to hand off to seo-outline-designer to design the outline and FAQ.
+```
+
+## Outputs
+
+One SEO writing Brief (`SEO_PACKET ▸ Brief` + the Drive working file "SEO 撰寫 Brief").
+
+## Limitations
+
+Does not design the outline (next stage), does not write the article. When first-hand material is insufficient, mark `[需 Peter 補]` rather than fabricating cases.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

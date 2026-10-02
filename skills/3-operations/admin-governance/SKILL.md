@@ -1,0 +1,150 @@
+---
+name: admin-governance
+sheetId: "3.05"
+description: "Weekly hygiene ritual for Zynkr's local↔cloud knowledge governance. Lists Google Drive Docs modified in the last N days across the 8 LOB folders (and Drive root), diffs against local `_INDEX.md` entries in `~/Desktop/Claude/zynkr/`, and proposes specific index edits: new entries to add, broken/renamed links to fix, deleted Docs to remove. Triggers on phrases like 'drift check', 'weekly hygiene', 'sync indexes', 'check cloud changes', 'what changed in cloud this week', '/admin-governance', or when the user pastes nothing but asks to reconcile local/cloud state. Should fire eagerly when the user references the weekly hygiene ritual from the Zynkr knowledge-governance model."
+category: operations
+project: admin-governance
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "Optional: number of days to look back (default 7). Optional: LOB scope as either an LOB number ('2.0', '7.1') or 'all' (default 'all'). Optional: Google account override (defaults to <your-google-workspace-account>)."
+process: "List cloud folder contents with modifiedTime via Google Workspace MCP → filter to the time window → read each affected local `_INDEX.md` → diff cloud entries against indexed URLs → emit a per-LOB report: new Docs to add, broken entries to fix, summary count. Do NOT edit `_INDEX.md` files automatically — surface a ready-to-apply changelist for the user to approve."
+output: "Per-LOB report (one section per LOB touched in the window): NEW (cloud Docs not in index) · CHANGED (Docs whose modifiedTime moved within the window) · BROKEN (index entries whose URLs no longer resolve). Each line includes the cloud URL and the proposed `_INDEX.md` edit. End with a single-line summary count."
+synergy: []
+house-style: bound
+
+---
+
+# Drift Check
+
+The weekly (or on-demand) reconciliation between Zynkr's Google Drive (cloud SOT for human knowledge) and the local `_INDEX.md` files (the navigation map). Without this, indexes rot and the governance model breaks.
+
+This skill **only reports** — it does not edit indexes. The user reviews the proposed changes and applies them (or asks Claude Code to apply them).
+
+---
+
+## 0) Required reading (do this before acting)
+
+| File | Read when |
+|---|---|
+| `references/lob-folder-map.md` | Always — the canonical mapping of LOB number → Drive folder ID → local path. Source of truth for what to scan and where the indexes live. |
+
+---
+
+## 1) Resolve inputs
+
+Defaults:
+- `days_back`: 7
+- `scope`: `all` (scan every LOB folder)
+- `user_google_email`: `<your-google-workspace-account>`
+
+If the user gave any of these, use what they said. If `scope` is a specific LOB (e.g., `2.0`), only scan that one folder.
+
+Compute `cutoff_iso = (now - days_back days)` as RFC 3339 (e.g., `2026-05-20T00:00:00Z`).
+
+---
+
+## 2) For each LOB in scope:
+
+### 2a. List cloud folder contents
+
+Call `mcp__google-workspace__list_drive_items` with:
+- `user_google_email`: the resolved email
+- `folder_id`: from `references/lob-folder-map.md`
+- `page_size`: 100
+
+Some LOBs map to multiple cloud folders (e.g., `7` → `[7.1]`, `[7.2]`, `[7.3]`). List each.
+
+For LOB `5` the cloud counterpart is the `[5.x]` series under the Drive root (`1rqkpNt1NFmRXhXnVAXL_eoXVfON4qD32`) — list the root and filter to children whose name starts with `[5.`.
+
+### 2b. Filter to the time window
+
+Keep items where `modifiedTime >= cutoff_iso`.
+
+### 2c. Read the local index
+
+Read `~/Desktop/Claude/zynkr/<local_path>/_INDEX.md` per `references/lob-folder-map.md`. Extract all URLs that match `https://docs.google.com/document/d/<id>` or `https://drive.google.com/drive/folders/<id>`.
+
+### 2d. Diff
+
+- **NEW**: a cloud item whose ID does not appear anywhere in the local index.
+- **CHANGED**: a cloud item whose ID appears in the index but whose `modifiedTime` is inside the window (worth re-reading the cloud Doc to decide if the index entry's one-liner needs updating).
+- **BROKEN**: an index entry whose URL no longer resolves (404 from `list_drive_items` or its parent folder). To check, call `mcp__google-workspace__list_drive_items` with the parent folder and look for the ID. If absent → BROKEN.
+
+For the broken check: optional, only do it if `days_back >= 30` (cheap on small windows, expensive on large ones). Otherwise note "BROKEN check skipped (window < 30d)" in the report.
+
+---
+
+## 3) Emit the report
+
+Format exactly:
+
+```
+# Drift check — 2026-05-27 (window: 7 days)
+
+## LOB 0 — strategy-planning
+NEW (1):
+  - "Some new Doc title" — https://docs.google.com/document/d/<id>/edit
+    → Add to `0 strategy-planning/_INDEX.md` under "Cloud (canonical)":
+      `| **Some new Doc title** | Doc | [open](https://...) |`
+
+CHANGED (0): —
+BROKEN (0): —
+
+## LOB 2.0 — sales-consultant-offering
+NEW (0): —
+CHANGED (1):
+  - "Sales and Consultant Operating Plan" — modifiedTime 2026-05-26
+    → Re-check that the index one-liner still reflects the Doc's current scope. Open: https://...
+
+BROKEN (0): —
+
+...
+
+---
+Summary: 1 new · 1 changed · 0 broken across 2 LOBs. 6 LOBs clean.
+```
+
+If the entire scan is clean, the report is one line:
+
+```
+Drift check — 2026-05-27 (window: 7 days, scope: all): all clean ✓
+```
+
+---
+
+## 4) Self-checks
+
+- Did you scan every LOB in scope? Cross-check against `references/lob-folder-map.md`.
+- Did you handle the `[5.x]` multi-folder case?
+- Did you handle the `[7.x]` multi-folder case?
+- Did you skip the BROKEN check when window < 30d, and say so?
+
+---
+
+## 5) What this skill explicitly does not do
+
+- Does **not** edit `_INDEX.md` files. Reporting only.
+- Does **not** push or pull content. Pure metadata diff.
+- Does **not** touch local files in `6.0 tech/` — that side is git-tracked, not part of the cloud SOT model.
+- Does **not** trigger sync re-pulls for Strategy B snapshots (v2 strategy, methodology, dev plan, dev process). If a CHANGED item is one of those, flag it for re-sync in the report — but the user decides.
+
+## 6) Output style
+
+- Be terse. The user is scanning for action items, not reading prose.
+- Use the exact format in §3 — downstream tools (or a future auto-apply step) parse it.
+- "Clean ✓" is a complete answer. Don't pad.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

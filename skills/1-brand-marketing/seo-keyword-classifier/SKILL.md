@@ -1,0 +1,86 @@
+---
+name: seo-keyword-classifier
+sheetId: "1.19"
+description: "Fifth leg of the SEO pipeline: classify the keyword map \"by search intent\" (not by product category), and offer several grouping versions to choose from. Maps to the v2 flowchart step \"classify by different classification methods, provide different versions\". Triggers when the user hands over a KeywordMap handoff packet, or says '關鍵字分類' or '按意圖分群'. Only classifies — does not validate demand or difficulty, and does not write articles."
+category: brand-marketing
+project: seo-keyword-classifier
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "The SEO_PACKET ▸ KeywordMap from seo-keyword-mapper"
+process: "Group by search intent per intent-taxonomy + apply the keyword-sop screening principles → produce 2–3 grouping versions → human Trigger picks a version → hand off"
+output: "Keywords grouped by intent (pick one of multiple versions), handed off to seo-demand-validator"
+synergy: ["seo-demand-validator"]
+handoff: ["seo-demand-validator"]
+house-style: bound
+
+---
+
+# SEO Keyword Classifier
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-keyword-classifier
+```
+
+Fifth leg of the SEO pipeline, corresponding to the classification step of the flowchart's "pick your lane: classify and validate keyword demand". **Key principle (note from the flowchart's original author): group by "search intent", not directly by product category.** A single product may span multiple intents; intent is what determines article type and funnel position.
+
+---
+
+## Resources you'll use
+
+> **Knowledge sources**: the rubrics/templates this skill uses are read preferentially from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, search by name); when unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Screening SOP**: `./references/keyword-sop.md`
+- **Intent taxonomy**: `./references/intent-taxonomy.md`
+- **SEO knowledge base folder ID**: `<your-seo-kb-folder-id>`
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the keyword map
+
+Read `SEO_PACKET ▸ KeywordMap`.
+
+## Step 2 — Screen
+
+Following `./references/keyword-sop.md`, first remove keywords that are clearly irrelevant or that the brand won't pursue.
+
+## Step 3 — Group by intent (multiple versions)
+
+Following `./references/intent-taxonomy.md`, produce **2–3 grouping versions** (e.g. pure intent grouping / intent × funnel matrix / intent × five content pillars). Maps to the flowchart's "provide different versions". List the pros and cons of each version.
+
+## Step 4 — Human Trigger picks a version (HITL)
+
+Maps to "Trigger keyword classification". Ask the user which version (by number) to use, or whether to mix and match.
+
+## Step 5 — Hand off and save
+
+```
+SEO_PACKET ▸ Classified
+- 採用版本：<名稱>
+- 分群：<意圖群> → <關鍵字...>（漏斗階段 / 對應支柱）
+- ...
+
+分群已確認，可交棒給 seo-demand-validator 驗證需求與難度。
+```
+
+## Outputs
+
+Keywords grouped by intent (`SEO_PACKET ▸ Classified`).
+
+## Limitations
+
+Does not validate search demand / difficulty (the next leg), and does not write articles. **Does not force a product-category split.**
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

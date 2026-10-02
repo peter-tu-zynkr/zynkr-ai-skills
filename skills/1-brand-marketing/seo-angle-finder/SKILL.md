@@ -1,0 +1,84 @@
+---
+name: seo-angle-finder
+sheetId: "1.17"
+description: "Third leg of the SEO pipeline: working from an SEO expert's perspective plus competitor URLs, surface the content angles and differentiation opportunities for 'where we can do better.' Maps to the v2 flow diagram step 'think about strengthening from the SEO angle + reference competitor URLs to think about strengthening.' Triggers when the user hands over a Questions handoff packet, provides competitor URLs, or says 「找 SEO 切角」. It only finds angles — it does not build the keyword map and does not write the article."
+category: brand-marketing
+project: seo-angle-finder
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "The SEO_PACKET ▸ Questions from seo-question-miner; optional: known competitor URLs (article reference pack)"
+process: "From the questions and competitor content, surface unmet angles, points to strengthen, and entry points for Zynkr's first-hand evidence → human validation → handoff"
+output: "Differentiated content angle list (including competitor gaps), handed off to seo-keyword-mapper"
+synergy: ["seo-keyword-mapper"]
+handoff: ["seo-keyword-mapper"]
+house-style: bound
+
+---
+
+# SEO Angle Finder
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-angle-finder
+```
+
+The third leg of the SEO pipeline, corresponding to the SEO-strengthening thinking in the "find the thread end" stage of the flow diagram. Starting from buyer questions and known competitors, it surfaces the angles where Zynkr can differentiate via "decision-first" thinking — everyone else hands out answers; Zynkr points out the decision and the real trade-offs behind it. First-hand experience is only the evidence that backs up the judgment, not the selling point.
+
+---
+
+## Resources you'll use
+
+> **Knowledge sources**: The rubrics/templates this skill uses are read first from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, search by name); when unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Angle evaluation**: `./references/seo-angle-rubric.md`
+- **SEO Knowledge Base folder ID**: `<your-seo-kb-folder-id>`; the seed knowledge (livestream hands-on experience, first-hand cases) is in the `02 Seed Knowledge` subfolder — use `search_drive_files` to pull relevant angles as differentiation evidence
+- **MCP server**: `google-workspace`; competitor URLs can be summarized with WebFetch
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the question pack and competitors
+
+Read `SEO_PACKET ▸ Questions`. If the user provides known competitor URLs (article reference pack), use WebFetch to summarize what the competitors cover and what they miss.
+
+## Step 2 — Find strengthening angles
+
+Per `./references/seo-angle-rubric.md`:
+- Competitor gaps (covered vs missing).
+- Entry points for Zynkr's first-hand evidence (livestream hands-on, real builds, consulting methodology). When a seed-knowledge doc is a *curated summary* (`逐字稿_…`), resolve its `來源:` hyperlink and read the full `逐字稿` tab for verbatim detail — don't angle off a 300-字 digest (quality over tokens).
+- AEO angle: which question can grab an AI citation using an "answer-up-front" structure.
+
+## Step 3 — Human-validate the proposals (HITL)
+
+List the angles and ask the user which are worth doing. Maps to the flow-diagram steps "brainstorm from the SEO angle, validate the proposals" and "provide known competitor URLs, validate the proposals."
+
+## Step 4 — Hand off and save
+
+```
+SEO_PACKET ▸ Angles
+- 切角：<標題> ｜競品缺口：<...> ｜Zynkr 差異化證據：<...> ｜對應問題：<...>
+- ...
+
+切角已確認，可交棒給 seo-keyword-mapper 進行關鍵字研究與地圖。
+```
+
+## Outputs
+
+Differentiated angle list (`SEO_PACKET ▸ Angles`), including competitor gaps and first-hand evidence points.
+
+## Limitations
+
+Does not produce the keyword map, does not classify, does not write the article. Competitor analysis is limited to public pages.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

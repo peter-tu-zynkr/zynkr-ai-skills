@@ -1,0 +1,226 @@
+---
+name: slide-storyline-designer
+description: "Leg 1 of the three-leg slide relay: take the raw slide material / topic + the message you want to land, and shape it into a logically smooth storyline — confirm the presentation's goal and audience, fix the core claim that runs through the whole talk, lay out an ordered narrative arc (beats), and check each transition one by one for leaps or gaps, producing the SLIDE_PACKET ▸ Storyline narrative skeleton that gets handed to slide-page-splitter for paging. Trigger me proactively when the user says '幫我設計簡報故事線', '順一下這份簡報的邏輯', '這個 deck 的敘事怎麼排', '我要做提案／募資／培訓簡報，先把骨架抓出來', '檢查我的簡報流暢度', or hands you a pile of scattered slide material wanting to clarify the structure first. Scope boundary: I only handle the storyline and logical skeleton — I don't split slide pages, don't write per-page copy, and don't pick layouts or visuals. Paging is leg 2 slide-page-splitter's job, visual specs are leg 3 slide-visual-selector's job, and rendering the .pptx is the slide-pptx skill's job."
+category: brand-marketing
+project: slide-storyline-designer
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "1.25"
+originalName: "品牌行銷助理 ─ 設計品牌行銷故事線"
+input: "Raw slide material / topic + the message you want to land (scattered notes, bullets, an old deck, or verbal key points all welcome)"
+process: "Clarify goal and audience → fix the core claim → lay out the narrative arc beats → logic-flow check → human review (HITL) → hand off and save"
+output: "SLIDE_PACKET ▸ Storyline narrative skeleton, handed to slide-page-splitter (1.26) for paging"
+synergy: ["slide-page-splitter"]
+handoff: ["slide-page-splitter"]
+house-style: bound
+
+---
+
+# slide-storyline-designer
+
+```
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill slide-storyline-designer
+```
+
+## Which leg this is
+
+This is **leg 1 of the slide-assistant three-leg relay**. The full relay chain is:
+
+```
+zynkr-slide (conductor, optional)
+        │  SLIDE_PACKET ▸ Brief (presentation purpose / audience and occasion / work subfolder / page budget / must-include material / mode / apply brand / per-leg emphasis)
+        ▼
+slide-storyline-designer (1.25)  ← you are here
+        │  SLIDE_PACKET ▸ Storyline
+        ▼
+slide-page-splitter (1.26)
+        │  SLIDE_PACKET ▸ Pages
+        ▼
+slide-visual-selector (1.27)
+        │  SLIDE_PACKET ▸ Visuals (render-ready)
+        ▼
+slide-pptx skill  → renders to .pptx
+```
+
+**Core idea**: a good presentation isn't "cramming material into slides" — it's "first having a storyline the audience can follow." Most failed presentations fail not on the art but on narrative leaps — the audience loses the thread by slide three. So this leg deliberately **isolates and finishes first** the work of "thinking through what to say, in what order, and where it breaks," before handing down. Splitting pages and placing images before the storyline is smooth is like building walls before the foundation is set.
+
+**What it eats**: raw slide material / topic + the message you want to land. It can be scattered bullets, meeting notes, an old deck, a few data charts, or just one line like "I need to pitch to XX." However messy the material, it takes it.
+
+**What it spits out**: a named handoff package `SLIDE_PACKET ▸ Storyline`, containing the presentation goal, audience and context, core claim, an ordered narrative arc of beats, and a logic checklist. This package **feeds directly into** slide-page-splitter (1.26); the field names align strictly with the next leg's input, so nothing has to be retyped.
+
+**What it doesn't spit out**: it doesn't split slide page counts, doesn't write each page's title and copy, doesn't pick layouts or visual elements. That's the job of the next two legs (see ## Limitations).
+
+---
+
+## Resources you'll use
+
+- **Relay contract**: this leg only needs to honor the five contract fields of `SLIDE_PACKET ▸ Storyline` (presentation goal, audience and context, core claim, narrative arc, logic check). The field names must match the input of the next leg slide-page-splitter (1.26) **word for word** — don't invent or rename them.
+- **Brand voice source (config)**: `./references/brand-source.md` — this skill **does not bundle brand-voice content**; this file configures where to load your brand narrative method, voice formulas, and wording preferences from, and includes a generic schema. When writing the core claim, laying out the narrative arc, and running the logic check, load the brand per this file; if not configured, use generic narrative principles.
+- **Save location (durable record)**: open a **work subfolder** under the user's presentation project and save the finalized `SLIDE_PACKET ▸ Storyline` into it. This subfolder is where 1.25 / 1.26 / 1.27 **share the same SLIDE_PACKET** — you are leg 1, so you create it; the next two legs append ▸ Pages and ▸ Visuals into the same folder, keeping the relay record of the whole presentation unbroken. If the user doesn't specify a location, ask first where to save it, then create the folder.
+
+---
+
+## Step 1 — Receive the previous leg's handoff package (this leg is the start, so it receives raw material)
+
+You are leg 1; there's no upstream handoff package, so what you receive is the user's **raw material**. First inventory what's in hand; ask about whatever's missing, and only start once it's clear — don't fabricate the presentation goal out of thin air.
+
+> **If an upstream `SLIDE_PACKET ▸ Brief` is present (produced by the `zynkr-slide` conductor)**: read it first, fill `Audience and occasion` directly into this leg's "audience and context" (audience/occasion, no need to re-ask); adjust the narrative-arc skeleton and the weighting of the logic check per "presentation purpose" and "per-leg emphasis ▸ storyline (leg 1)"; and make sure every item of "must-include material" has a corresponding beat carrying it. `Page budget` is for reference only (actual paging is leg 2's job). If `Apply brand` is "yes," load brand voice per this leg's `./references/brand-source.md`; if "no," use generic narrative principles. If ▸ Brief carries a "work subfolder" field, reuse it — don't open another, and don't ask the user again where to save. When ▸ Brief is missing items or conflicts with this leg's principles, defer to this leg's principles and the user's ruling; **with no ▸ Brief, just run independently per the flow below as normal**. Note: the storyline finalization gate (Step 5) is kept regardless of whether there's a ▸ Brief and regardless of express/guided.
+
+Before starting, confirm these four things, and ask pointedly about whatever's missing (ask it all at once, don't squeeze it out question by question):
+
+1. **Presentation goal**: what should this presentation achieve? After it's done, which one thing do you most want the audience to **remember** / **which one action** do you want them to take? (This determines where the whole storyline lands.)
+2. **Audience and context**: who's the audience, what occasion? The four typical contexts differ a lot in wording and pacing (occasion wording must align with the contract enum: **outbound pitch / internal update / teaching & training / fundraise**):
+   - **Outbound pitch (pitch)**: pain first, then solution, landing on a call to action.
+   - **Internal update (update)**: conclusion first, then evidence; emphasize progress and decisions.
+   - **Teaching & training (teach)**: framework first, then cases; emphasize repeatable steps.
+   - **Fundraise (fundraise)**: problem → market → solution → evidence → team → ask; none can be missing.
+3. **Material**: lay out everything in hand — bullets, data, old decks, quotes, stories. Mark which are "must include" and which are "nice to have."
+4. **Hard constraints**: time length, page-count cap, brand tone, things that absolutely can't be said (compliance/confidentiality).
+
+> If the user only tossed a topic without a message, ask first: "After this talk, what's the **one sentence** you most want the audience to remember?" That sentence is often the seed of the core claim.
+
+---
+
+## Step 2 — Fix the core claim (through-line)
+
+Before laying out sections, force out **one** sentence that runs through the whole talk. It's the spine of the entire presentation; every beat must serve it.
+
+> **Decision framework (generic principle)**: write the claim with a "decision framework" — what decision does this presentation help the audience **make / what trade-off does it help them see clearly**, rather than a roll call of features or topics. Brand voice and signature phrasing are loaded from `./references/brand-source.md`.
+
+**Tests for a good core claim**:
+
+- **It's a claim, not a topic**. ✗ "About our new product" (topic) ✓ "Our new product cuts go-live time from three weeks to three days" (claim — has a stance, can be argued against).
+- **The audience can say it out loud**. If the audience is asked after leaving "what was that about," this is the sentence you'd want them to recite.
+- **Provable**. The beats that follow must be able to hold it up with evidence; if they can't, it's bragging.
+- **Single**. A presentation can have only one through-line; wanting to say two things = two presentations.
+
+Write 1–2 candidate claims for the user to pick/edit — don't make the call yourself.
+
+---
+
+## Step 3 — Lay out the narrative arc (beats)
+
+Break the core claim into **ordered section nodes**. Each beat is a "narrative section" (later split by leg 2 into 1–N pages), not one slide page. Record three things per beat, with field names aligned to the contract:
+
+```
+beat = { name, purpose, key message }
+```
+
+- **Name**: this section's role in the story (e.g., opening hook, pain point, turn, solution, evidence, action).
+- **Purpose**: what change this section should **produce in the audience** (from not knowing → knowing, from doubting → believing, from watching → acting).
+- **Key message**: the one sentence this section absolutely must convey.
+
+**Pick a narrative skeleton by context** (use as an opening move, then adjust by material):
+
+| Context | Suggested arc (beats template) |
+|------|------------------------|
+| Outbound pitch | hook → pain point / cost of the status quo → turn (why now) → solution → evidence/case → differentiation → call to action |
+| Internal update | one-page conclusion (TL;DR) → progress vs goal → highlights → risks/blockers → decision request → next steps |
+| Teaching & training | why it matters → mental model/framework → step breakdown → worked example → common mistakes → exercise/wrap-up |
+| Fundraise | one-line vision → problem → market size → solution → traction/data → business model → team → raise and use of funds |
+
+**Principles for laying out beats**:
+
+- **One beat, one job**. Each section advances only one thing; cramming two key points = split into two beats.
+- **Emotional/logical ups and downs**. Flat narration all the way through puts people to sleep; pitch-type talks must amplify the pain first so the relief of the solution can come through.
+- **Every beat ties back to the through-line**. After writing, ask yourself: if I remove this beat, does the claim collapse? If not = it's decoration, cut or demote it.
+- **Restrain the count**. A talk usually needs only 4–7 beats; over 8 is usually mistaking a "page" for a "beat" (paging is the next leg's job — don't overstep here).
+- **Default skeleton for decision-type presentations**: for outbound pitch / fundraise / decision-type content, you can apply the brand's narrative method as the beats (loaded from `./references/brand-source.md`; if no brand is configured, use the generic "problem → trade-off → direction" structure).
+
+---
+
+## Step 4 — Logic-flow check (this leg's core value)
+
+Once the beats are laid out, walk through **each transition** one by one, finding leaps and gaps. This is this leg's most valuable move — neither paging nor image placement can rescue a broken storyline.
+
+For the transition between every two adjacent beats, apply this checklist:
+
+- **Leap**: from A to B, did it presume a premise the audience doesn't yet know? (e.g., asking for money before having made clear how serious the problem is.)
+- **Gap**: is a necessary middle section missing? (e.g., there's a solution and evidence, but missing "why now / why us.")
+- **Non-sequitur**: does B actually follow from A, or is it just "placed later in order"?
+- **Redundancy**: are the two beats saying the same thing? Merge them.
+- **Unsupported claim**: which key message currently **has no material behind it**? Mark it as to-be-filled.
+- **Closing force**: does the last beat really carry the audience to the "goal" action/memory point?
+- **Voice drift**: does the presentation "only give answers, no judgment," "give options, no trade-off," or violate brand wording preferences (loaded per `./references/brand-source.md`)? Flag and suggest a rewrite — this, like a logic leap, is a gap to fill.
+
+Organize the findings into a **logic check table**: each row = `{problem location, problem type, why it's a problem, suggested fix}`. The suggested fix must be specific ("insert a beat 'why it must be done now' between the pain point and the solution, backed by X data"), not "this feels off here."
+
+> For to-be-filled items missing material, clearly mark "need you to provide ___" and hand it back to the user — don't make up numbers yourself.
+
+---
+
+## Step 5 — Human review (HITL)
+
+The storyline is the master for all the pages that follow, so the user must sign off before handing down. List the deliverables **numbered** for the user, asking them to process item by item:
+
+1. Print the full draft: presentation goal, audience and context, core claim, numbered beats, logic check table.
+2. For each **beat number**, ask the user to mark: **keep / modify / delete / reorder**.
+3. For each **logic issue**, ask the user to: **accept the suggested fix / fill the material themselves / decide no action is needed**.
+4. Specifically confirm three key things: **is the core-claim sentence right**, **is the order of the beats right**, **is any must-say section missing**.
+5. After the user revises, reissue a version, and only enter Step 6 once they say "OK, ready to page."
+
+Don't auto-toss to the next leg; without the user's OK, this leg is not done.
+
+---
+
+## Step 6 — Hand off and save
+
+Once review passes, first save the final into this presentation's work subfolder (durable record, sharing the same SLIDE_PACKET with 1.26 / 1.27), then output the named handoff package. **Field names align strictly with the relay contract** (= slide-page-splitter's input), so the next leg doesn't need to translate:
+
+```
+SLIDE_PACKET ▸ Storyline
+────────────────────────────────────────
+簡報目標：
+  <一句話講清楚這份簡報要達成什麼 / 要聽眾記得什麼>
+
+受眾與情境：
+  聽眾：<是誰>
+  場合：<對外提案 / 內部更新 / 教學培訓 / 募資>
+
+核心主張 (through-line)：
+  <貫穿全場的一句主軸>
+
+敘事弧線 (beats)：
+  1. { 名稱：<…>, 目的：<讓聽眾產生什麼變化>, 關鍵訊息：<這段一定要傳達的那句> }
+  2. { 名稱：<…>, 目的：<…>, 關鍵訊息：<…> }
+  …（有序，4–7 個為宜）
+
+邏輯檢查：
+  - { 問題位置：<beat N→N+1>, 問題類型：<跳躍/缺口/斷裂/重複/舉證落差>,
+      為什麼是問題：<…>, 建議補法：<具體做法> }
+  - …
+  待補素材：<明確列出需要使用者提供什麼，沒有則寫「無」>
+────────────────────────────────────────
+交給 → slide-page-splitter (1.26)
+```
+
+After saving, proactively prompt the user on the next step: "The storyline is finalized and saved into this presentation's work subfolder. Ready to move into paging (slide-page-splitter, leg 2) to split each beat into slide pages?" If slide-page-splitter isn't installed yet, prompt to install it first before relaying.
+
+---
+
+## Outputs
+
+A user-reviewed, finalized `SLIDE_PACKET ▸ Storyline` narrative skeleton — containing the presentation goal, audience and context, core claim, ordered beats, logic check, and to-be-filled material — saved into this presentation's work subfolder as the master for the whole presentation, handed directly to slide-page-splitter (1.26) for paging.
+
+## Limitations
+
+- **Only the storyline and logical skeleton, no paging**. Deciding how many pages a presentation splits into, which beat each page maps to, and the information density of a single page is the job of leg 2 **slide-page-splitter (1.26)** (producing SLIDE_PACKET ▸ Pages). What this leg hands over is "narrative beats," not "slide pages."
+- **Doesn't write per-page copy, doesn't set page titles**. Per-page titles and content points belong to the paging leg; this leg only gives each beat's "key message."
+- **Doesn't pick layouts, doesn't place visuals**. Layout archetypes, visual elements (addText / addTable / addChart…), layout arrangement, and design notes are the job of leg 3 **slide-visual-selector (1.27)** (producing SLIDE_PACKET ▸ Visuals).
+- **Doesn't render the .pptx**. Actual file production is handled by the installed **slide-pptx skill** (`~/.claude/skills/slide-pptx`, Create from scratch / pptxgenjs path) after 1.27 is done.
+- **Doesn't fabricate material**. Missing data or missing cases are all marked "to be filled" and handed back to the user; it doesn't invent evidence on its own.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

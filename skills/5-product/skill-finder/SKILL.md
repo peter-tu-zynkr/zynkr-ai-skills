@@ -1,0 +1,122 @@
+---
+name: skill-finder
+description: "Recommend the right Zynkr assistant(s) for a user's task. Interprets intent, matches against the structured assistant index, filters to usable entries, and either recommends or asks a single clarifying question."
+category: product
+project: skill-finder
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "5.01"
+originalName: "行政助理 ─ 搜尋助理索引"
+input: "A user inquiry describing a task, problem, or workflow they want help with"
+process: "Interpret intent, match against the structured assistant index using functional descriptions, filter to usable entries, decide whether to recommend or ask one clarification"
+output: "A concise recommendation of the most relevant assistant(s), or a clear single-question clarification request, or an honest 'no match' response"
+synergy: []
+handoff: []
+house-style: exempt — pure router — selects a child skill, drafts nothing itself
+
+---
+
+# Skill Finder
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill skill-finder
+```
+
+Help a user pick the right Zynkr assistant for what they're trying to do. This skill reads the structured assistant index, matches the user's stated need against functional descriptions, and either recommends a small set of assistants or asks one targeted clarifying question. Use it as the front door to the Zynkr marketplace when a user describes a task but doesn't know which skill exists for it.
+
+---
+
+## Step 1 — Load the assistant index
+
+Read the canonical taxonomy and index from these references (relative to `{{SKILL_DIR}}`):
+- `./references/assistant-index.md` — list of assistants with category, slug, one-line description, IPO summary, and stage status
+- `../../../taxonomy.md` (repo root) — category definitions
+
+If the index file is missing or stale, fall back to fetching the current marketplace API:
+```
+GET https://zynkr.ai/api/skills
+```
+That lists the **public** skills — the ones anyone can install from the shelf, which is what this skill recommends. It is not every skill: team skills stay in the private workbench, whose own index (`generated/skills-index.json`) only its collaborators can read.
+
+---
+
+## Step 2 — Interpret intent
+
+Read the user's request carefully and extract:
+1. **The task verb** — what action do they want done? (write / analyze / summarize / interview / translate / etc.)
+2. **The artifact** — what's the input or output? (article / CV / meeting notes / lecture / business card / etc.)
+3. **The domain** — which functional area? (marketing / sales / operations / training / product / engineering / talent / etc.)
+4. **The constraint** — language, scale, format, urgency
+
+Do not ask the user yet. Make a best-effort interpretation first.
+
+---
+
+## Step 3 — Match against the index
+
+Score each indexed assistant on:
+- **Task match** (does its `process` cover the user's task verb?)
+- **Artifact match** (does its `input`/`output` cover the user's artifact?)
+- **Category match** (is it in the right functional domain?)
+- **Stage** (Done > WIP > Not started — never recommend a non-Done skill without flagging the status)
+
+Filter to Done assistants unless the user explicitly wants experimental ones.
+
+---
+
+## Step 4 — Decide: recommend, clarify, or decline
+
+Apply these rules in order:
+
+1. **Strong match (1–2 candidates)** → Recommend directly. Show:
+   - Skill name + zh-TW alias
+   - One-line description
+   - Why it fits this user's task (1 sentence)
+   - Install snippet
+2. **Multiple plausible candidates (3+)** → Ask **one** clarifying question that disambiguates. Examples:
+   - "Are you preparing for an interview, or running an interview as the interviewer?"
+   - "Is this for a written article, a video, or a lecture?"
+3. **No usable match** → Be honest:
+   - State that no current assistant matches the task
+   - Suggest the closest neighbor (with caveats)
+   - Point at the proposal repo: `https://github.com/peter-tu-zynkr/zynkr-skill-idea` so the user can request a new one
+
+Never invent an assistant that doesn't exist in the index.
+
+---
+
+## Step 5 — Output format
+
+For a recommendation:
+
+```
+Recommended: <skill-name> (<zh-TW name>)
+What it does: <one-line description>
+Why it fits: <one sentence connecting user's task to the skill's IPO>
+Install: npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill <skill-name>
+```
+
+For a clarification:
+
+```
+One quick question before I recommend:
+<single targeted disambiguation question>
+```
+
+For no match:
+
+```
+I don't see a current Zynkr assistant that matches this. The closest is <skill> but it differs in <X>. If you'd like to propose a new skill, open an issue at https://github.com/peter-tu-zynkr/zynkr-skill-idea.
+```
+
+---
+
+## Rules
+
+- One clarifying question max per turn
+- Never recommend more than 2 assistants in a single response (forces the user to triage)
+- Always include the install snippet so the recommendation is immediately actionable
+- Never invent assistant names; only recommend what's in the index
+- If the user asks "what assistants are there?" without a task, point them at the index file directly instead of dumping the full list

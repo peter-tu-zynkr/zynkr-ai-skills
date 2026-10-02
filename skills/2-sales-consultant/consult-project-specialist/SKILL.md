@@ -1,0 +1,284 @@
+---
+name: consult-project-specialist
+description: >-
+  Turn a single sales / consulting meeting into tracked work. Give it a meeting
+  transcript or notes — pasted text, a Google Doc, or a Gemini Notes link — and
+  it produces a structured Weekly Project Update, then lays down the three things
+  the engagement needs: a numbered Google Drive project folder, a kickoff/context
+  Doc inside it, and a CRM deal in Supabase with a meeting + links-note + one task
+  per "What's Next" item. Trigger on /consult-project-specialist or when Peter says
+  "turn this meeting into a project", "建立顧問專案", "把這次會議建成 deal",
+  "log this engagement into the CRM", "document this consult", "建專案資料夾 +
+  CRM", or hands over a meeting transcript / Gemini Notes about a sales or
+  consulting engagement and wants it tracked end-to-end. This is the
+  document-one-engagement skill — distinct from project-note-specialist (which
+  ONLY tidies notes into a Weekly Update and writes NO folder or CRM record) and
+  from sales-inbound (which sweeps the week's inbound website consult EMAILS in
+  batch). When Peter has ONE meeting/debrief he wants captured as a project +
+  deal, prefer this skill.
+category: sales-consultant
+project: consult-project-specialist
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "2.05"
+input: "A meeting transcript / notes — a Fireflies meeting (id/URL/name; preferred), pasted text, a Google Doc, or a Gemini Notes link — plus any CRM company/contact/deal ref."
+process: "Read input → write a Weekly Project Update → create a numbered Drive project folder + kickoff doc → create a NEW Supabase CRM deal with meeting/note/task activities → backlink + report."
+output: "A Weekly Project Update, a numbered Drive project folder, a kickoff/context Doc, and a CRM deal with its activity timeline."
+synergy: []
+house-style: bound
+
+---
+
+# Sales Project Specialist
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill consult-project-specialist
+```
+
+Peter has a sales or consulting meeting, comes away with a transcript or a pile
+of notes, and wants it to *become a tracked project* — not just a tidy summary.
+This skill does that in one shot: it reads the meeting, writes a **Weekly Project
+Update**, and then lays down the three things the engagement needs to live in the
+system — a **Drive project folder**, a **kickoff/context Doc** so whoever picks it
+up starts with context, and a **CRM deal** with a real activity timeline (the
+meeting itself, a note carrying the workspace links, and a task for each
+"What's Next" item).
+
+It runs **autonomously**: read → summarise → create → report. No mid-run
+confirmation. Each run is a fresh debrief, so it **always creates a new deal and
+a new folder** — there is no dedupe and no "append to the existing deal". If Peter
+runs it twice on the same meeting he gets two deals; that's intended (re-running
+is how you redo a botched capture). Override any inferred field by just telling it.
+
+## How this differs from its neighbours
+
+- **project-note-specialist** — only reorganises messy notes into a Weekly Update
+  and stops. It touches no Drive folder and no CRM. Use it when Peter just wants
+  the words cleaned up.
+- **sales-inbound** — a weekly BATCH job that reads inbound `website@zynkr.ai`
+  consult emails and de-dupes leads into deals. Use it for the inbox sweep.
+- **consult-project-specialist** (this one) — takes ONE meeting and documents it as
+  a project + deal, always-new, with a full activity timeline.
+
+## Fixed facts (don't re-derive these)
+
+- **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
+- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, where numbered project folders go): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **CRM deal URL** for the doc/report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- **CRM company / contact URLs** look like `https://platform.zynkr.ai/companies/{id}` and `.../contacts/{id}` — the `{id}` is a uuid you can pass straight into the SQL.
+- Owner (`Peter Tu`) and pipeline (`銷售流程`) are looked up **live inside the SQL** — never hardcode their ids.
+
+---
+
+## Workflow
+
+### 1 · Acquire the input
+
+The meeting can arrive four ways. **Prefer Fireflies** — it needs no paste and no
+upload, so reach for it before asking Peter for anything.
+- **A Fireflies meeting** — Peter names it ("把範例科技那場會議建成專案"), gives a
+  meeting id, or an `app.fireflies.ai/view/<id>` URL. Resolve with
+  `mcp__fireflies__fireflies_search(query="keyword:\"範例科技\" from:2026-09-01")`,
+  confirm the row by title + date + attendees, then
+  `mcp__fireflies__fireflies_get_transcript(transcriptId="<id>")` for the
+  verbatim, speaker-labelled sentences. `mcp__fireflies__fireflies_get_summary`
+  additionally returns an overview, keywords and **action items with timestamps**
+  — useful for the Weekly Project Update, but the transcript carries the real
+  detail, so read it too. The attendee emails on the row are the fastest route to
+  the CRM company/contact below.
+- **Pasted text** — use it directly.
+- **A Google Doc / Gemini Notes link** — read it with
+  `mcp__google-workspace__get_doc_content(user_google_email="<your-google-workspace-account>", document_id="<id>")`.
+  Gemini Notes docs have a `Notes` tab (summary + action items) and a
+  `Transcript` tab (verbatim) — read both; the transcript carries the real detail.
+- **A Gmail thread** — read it with the Gmail tools if that's what Peter points at.
+
+⚠️ **Fireflies request budget.** The free plan allows **50 API requests per day**
+and every tool call spends one. Resolve in a single `fireflies_search`, fetch
+once, and never loop over meetings.
+
+Also capture any **CRM context** Peter gives:
+- A `…/companies/{id}` or `…/contacts/{id}` or `…/deals/{id}` URL → pull the `{id}`
+  (a uuid) and pass it as `{{COMPANY_ID}}` / `{{CONTACT_ID}}` so the deal links to
+  the existing record instead of creating a duplicate company/contact.
+- Otherwise read the company name + contact name / title / email out of the notes.
+
+### 2 · Write the Weekly Project Update
+
+Produce the same four-section format as project-note-specialist and show it to
+Peter:
+
+```
+Weekly Project Update
+
+1. Summary Update      — a concise overview of this meeting's themes
+2. Progress            — what was covered / decided / discovered
+3. Blockers / challenges — current issues, root causes, dependencies
+4. What's Next         — planned actions, decisions needed, priorities
+```
+
+Reorganise scattered ideas into clear bullets. Infer context logically but do not
+fabricate. If a section has no material, write "No updates this week."
+
+### 3 · Extract the structured fields
+
+From the meeting, pull:
+- **Company** name (and id if a CRM URL was given).
+- **Contact** — first/last name, title, email (and id if given).
+- **Project title** — a short, glanceable label, e.g. `流程自動化導入`.
+- **Deal attributes** — see *Inference defaults* below.
+- **Tasks** — turn each actionable "What's Next" item into one task.
+
+### 4 · Create the numbered Drive folder
+
+Name it **`[N] Company（Project）`** — e.g. `[3] 範例科技（流程自動化導入）`. If the
+company is blank, use `[N] Project`.
+
+Compute `N` by listing the parent **once** and scanning **folders** (not files)
+for a leading `[number]`:
+
+```
+mcp__google-workspace__list_drive_items(
+  user_google_email = "<your-google-workspace-account>",
+  folder_id = "1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t"
+)
+```
+
+`N` = (highest `[number]` among folders) + 1, or `1` if none are numbered. Then:
+
+```
+mcp__google-workspace__create_drive_file(
+  user_google_email = "<your-google-workspace-account>",
+  file_name  = "[N] Company（Project）",
+  folder_id  = "1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t",
+  mime_type  = "application/vnd.google-apps.folder",
+  content    = " "
+)
+```
+
+Capture the new folder's `id`. (Pass a single-space `content` — the tool rejects a
+completely empty call even for a folder.)
+
+### 5 · Create the kickoff / context Doc
+
+Read `references/kickoff-doc-template.md`, fill its placeholders, create the Doc,
+then move it into the project folder (this two-step is reliable; creating a Doc
+directly via `create_drive_file` with the document mime-type returns HTTP 400):
+
+```
+## 1. create the doc (lands in My Drive root)
+mcp__google-workspace__create_doc(
+  user_google_email = "<your-google-workspace-account>",
+  title   = "[Kickoff] {{PROJECT_NAME}} — 專案脈絡與會議紀錄",
+  content = "<filled-in template>"
+)
+## 2. move it into the project folder (capture the doc id from step 1)
+mcp__google-workspace__update_drive_file(
+  user_google_email = "<your-google-workspace-account>",
+  file_id    = "<doc id>",
+  add_parents = "<folder id from step 4>"
+)
+```
+
+Capture the doc link.
+
+### 6 · Create the CRM deal + activity timeline
+
+Build the deal `name` as **`Company Project`** (e.g.
+`範例科技 (ExampleCo) 流程自動化導入`). Every write previews first — call once without
+`confirm`, then again with `confirm=true`.
+
+1. **Company** — by id when you already have one, else
+   `mcp__zynkr__list_companies(search="<Company>")`, else
+   `mcp__zynkr__create_company(name="<Company>", confirm=true)`.
+2. **Contact** — by id when given, else
+   `mcp__zynkr__list_contacts(search="<email or name>")`, else
+   `mcp__zynkr__create_contact(…, legal_basis="consent", confirm=true)`.
+3. **Deal** — `mcp__zynkr__create_deal(name="<Company Project>", company_id=…,
+   contact_id=…, notes="<NOTES>", confirm=true)`. The pipeline, 交易 number,
+   owner and the `created` activity come with it.
+4. **The timeline**, one call each:
+   - the session → `mcp__zynkr__log_meeting(deal_id=…, subject=…, body=…,
+     occurred_at="<when it happened>", confirm=true)` — set `occurred_at`, or it
+     is stamped now and a debrief written days later lands on the wrong date
+   - the links (folder / doc / source) → `mcp__zynkr__create_note(deal_id=…,
+     subject=…, body=…, confirm=true)`
+   - each "What's Next" item → `mcp__zynkr__create_task(deal_id=…, subject=…,
+     body=…, due_at=…, confirm=true)`
+
+Count the activities you actually created and report that number — it replaces
+the count the old single statement returned.
+
+### 7 · Backlink the folder to the deal
+
+Simplest is to include the folder URL in the `notes` you pass to `create_deal`.
+If you need to add it afterwards, remember `update_deal` REPLACES `notes`:
+`mcp__zynkr__get_deal` first, append to what comes back, then
+`mcp__zynkr__update_deal(id=…, notes="<combined>", confirm=true)`.
+
+### 8 · Report
+
+Re-show the Weekly Project Update, then a compact artifact table:
+
+```
+專案已建立：範例科技 (ExampleCo) 流程自動化導入
+
+| 產出 | 連結 |
+|------|------|
+| Drive 資料夾 | [3] 範例科技（流程自動化導入） |
+| Kickoff 文件 | <doc url> |
+| CRM Deal | <deal url> |
+| 活動 | meeting · note · N tasks |
+```
+
+---
+
+## Inference defaults (Peter overrides by just saying so)
+
+These live in the prompt; pick the closest enum value from the meeting and pass it
+into the SQL. When the meeting gives no signal, use the fallback.
+
+- **stage** (`new|contacted|qualified|proposal|won|lost`) — a meeting happened, so
+  default **`contacted`**; clear commit / "we're doing this" signal → **`qualified`**;
+  numbers/scope on the table → `proposal`.
+- **service_tier** (`workshop|coaching|transformation|advisory|other`) — infer from
+  the work: a full process refactor / automation build → **`transformation`**; a
+  one-off session → `workshop`; ongoing advice → `advisory` (fallback).
+- **priority** (`low|medium|high`) — default **`medium`**; hot / near-closed → `high`.
+- **lead_source** (`content|workshop|referral|outbound|other`) — default
+  **`referral`** for a warm intro; `other` if genuinely unclear.
+- **value** — `NULL` unless a concrete figure was agreed (don't bank a hypothetical).
+- **close_date** — `NULL` unless a date was stated.
+
+## Why it's built this way
+
+- **Autonomous, not confirm-first** — Peter runs it and comes back to a finished
+  project. Correctness comes from the skill doing exactly what a manual "Create
+  Deal" + folder + doc would, in one pass.
+- **Always-new, no dedupe** — unlike sales-inbound (a recurring inbox sweep that
+  must not double-book a lead), this is invoked once per meeting on purpose. A
+  second run is a deliberate redo, so it should produce a fresh deal — no silent
+  "skipped, already exists" that hides a real capture.
+- **One SQL statement** — deal + company + contact + the whole activity timeline
+  land atomically, so a run never leaves half-built records.
+
+## Optional — draft a stakeholder email
+
+If Peter also asks to "send/draft this to <someone>", draft (don't send) a Gmail
+with the Weekly Update via `mcp__google-workspace__draft_gmail_message`
+(`body_format="html"`). Off by default — only when he asks.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

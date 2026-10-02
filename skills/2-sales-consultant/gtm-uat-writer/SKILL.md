@@ -1,0 +1,296 @@
+---
+name: gtm-uat-writer
+sheetId: "2.14"
+description: >-
+  Turn a consulting engagement's PRD (the SDD-shaped spec Doc written by
+  ops-prd-writer) plus the deployed assistant's facts into a client-facing
+  zh-TW UAT testing guide — a Google Doc in the client's numbered [N] Drive
+  folder with a scenario table (one client-runnable scenario per AC), pass/fail
+  checkboxes, bug-report instructions, and a sign-off block — plus a CRM task
+  so the acceptance round is tracked. Trigger on /gtm-uat-writer or when
+  Peter says "寫 UAT 指南", "產驗收測試文件", "幫客戶寫測試指引", "驗收清單",
+  "write the UAT guide", "make the acceptance test doc", "testing guide for
+  the client", or hands over a PRD wanting the client to run acceptance —
+  fire eagerly even if he never says the letters "UAT". Distinct from
+  ops-prd-writer (WRITES the PRD this skill consumes — route there when
+  the spec itself is missing or malformed) and from gtm-bug-ticket
+  (handles the bug mails the UAT round produces — this skill's 問題回報方式
+  section is exactly what shapes those mails).
+category: sales-consultant
+project: gtm-uat-writer
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "The PRD Doc (URL, or found in the client's [N] folder) + the deployed assistant's name/URL and access notes"
+process: "Parse the PRD's spec ID, D-level, AC-n/Verify lines and Out-of-scope → derive one client-runnable scenario per AC (D3 adds negative cases) → scenario-table gate → generate the guide Doc in the [N] folder → CRM task + backlink → report"
+output: "A client-facing UAT guide Google Doc (scenarios, pass/fail checklist, bug-report instructions, sign-off block) linked on the CRM deal"
+synergy:
+  - "ops-prd-writer"
+  - "gtm-bug-ticket"
+house-style: bound
+
+---
+
+# GTM UAT Writer
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill gtm-uat-writer
+```
+
+The build is deployed, the PRD says what "done" means — but the client can't
+sign off on an AC list written for builders. This skill closes that gap: it
+parses the PRD's spec ID, D-level, AC/Verify pairs and Out-of-scope, and turns
+them into a **zh-TW UAT testing guide** the client can run unassisted — numbered
+scenarios with click-path steps and expected results, a bug-report recipe, and a
+sign-off block — created in the client's `[N]` Drive folder with a CRM task so
+the acceptance round doesn't drift.
+
+It never invents test content: every scenario is derived from an `AC-n` in the
+PRD, traceably (`S-n ↔ AC-n`). A malformed PRD stops the run — the fix belongs
+upstream in /ops-prd-writer, not in improvised acceptance criteria here.
+
+## How this differs from its neighbours
+
+- **ops-prd-writer** — WRITES the PRD this skill consumes. If the client has
+  no `[PRD]` doc, or its structure is broken, route there; this skill only reads.
+- **gtm-bug-ticket** — downstream of the UAT round: it parses the bug mails
+  the client sends while testing. This skill's 問題回報方式 section is what
+  shapes those mails (發生了什麼 / 預期看到什麼 / 操作步驟 / 截圖), so the two
+  skills stay format-compatible by construction.
+
+## Fixed facts (don't re-derive these)
+
+- **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
+- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, where numbered project folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **CRM deal URL** for the doc/report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+
+## Hard rules
+
+1. **Never improvise ACs.** If any named PRD shape is missing (step 1), STOP and
+   name it — the PRD is malformed; fix upstream via /ops-prd-writer.
+2. **Every client scenario must be runnable from the client's own UI.** Builder-
+   only checks (SQL / curl / CLI) never appear in the client checklist — they move
+   to the 顧問側驗證 appendix (step 3).
+3. **Never generate the full guide before the step-4 gate is approved.**
+4. **Client-facing email is ALWAYS a Gmail draft** — the optional UAT invite uses
+   `mcp__google-workspace__draft_gmail_message`. Never send.
+
+---
+
+## Workflow
+
+### 1 · Locate and parse the PRD
+
+If Peter gave a Doc URL, read it directly with
+`mcp__google-workspace__get_doc_as_markdown(user_google_email="<your-google-workspace-account>", document_id="<id>", include_comments=false)`.
+Read the PRD as Markdown, never with `get_doc_content`: plain text drops the `**AC-n**`
+and `*Verify:*` markers the four shapes below are matched on.
+Otherwise resolve the client workspace first: find the deal
+(`mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`, or SQL by company name),
+extract the `專案資料夾：<url>` backlink from its notes, then scan that folder
+for spec docs. No backlink → list the projects parent once
+(`mcp__google-workspace__list_drive_items(user_google_email="<your-google-workspace-account>", folder_id="1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t")`)
+and match a `[N] <Company>（…）` folder by the deal's company name, ignoring case, spaces and
+punctuation. Use it only when exactly one folder matches, and say the deal is missing its
+backlink; when none or several match, ask Peter for the folder. Then scan the folder:
+`mcp__google-workspace__search_drive_files(user_google_email="<your-google-workspace-account>", query="'<folder id>' in parents and name contains '[PRD]'")`.
+Several `[PRD]` docs → list them and ask which one; never guess.
+
+Parse exactly four things — these shapes are the contract
+(ops-prd-writer's `prd-spec-template.md` guarantees them byte-stable):
+
+1. the H1 line — `# {{SPEC_ID}} — {{TITLE}}` (spec identity)
+2. the Size / DoD line — `- **Size / DoD:** …` (test depth: D2 or D3)
+3. every AC pair — `- **AC-n** — When …, then …` + its following `*Verify:*`
+   line (one UAT scenario each)
+4. the `## Out of scope` section (expectation-setting / negative checks)
+
+**Any of the four missing → STOP** and name precisely which shape wasn't found
+(e.g. "AC-3 has no `*Verify:*` line"). The PRD is malformed — hard rule 1 says
+the fix happens upstream via /ops-prd-writer. Never fill the hole with
+invented ACs or guessed Verify steps.
+
+### 2 · Collect the deployment facts
+
+The guide describes a live system, so gather (from the conversation, the PRD's
+Design sketch, or by asking Peter — one consolidated question, not a drip):
+
+- **Assistant name + URL** — what the client opens (e.g. `https://<client-app>.vercel.app`).
+- **Test account** — the login the client tests with. In all examples and in the
+  generated doc's illustrative text, use the placeholder `tester@example.com`;
+  the real credential note is whatever Peter supplies.
+- **Access notes** — password delivery, VPN/permission caveats, seeded test data.
+
+Missing facts that block a scenario from being runnable (no URL, no account) are
+a STOP-and-ask; cosmetic gaps (no time estimate) get a sensible default.
+
+### 3 · Build the scenario table
+
+One **client-runnable scenario per AC**, in AC order, numbered `S-n` so that
+`S-n ↔ AC-n` stays traceable — numbers are permanent once gated. Each row:
+目的 (the AC's intent in client language) · 步驟 (a click path starting from
+login, UI strings quoted in 「」) · 預期結果 (the AC's observable outcome).
+
+**Test depth comes from the parsed D-level:**
+
+- **D2** — one end-to-end scenario per AC. That's the whole table.
+- **D3** — additionally one negative / permission test per auth-, data-, or
+  money-touching AC (numbered `S-nN`, placed under its parent row): the wrong
+  role is refused, the bad input is rejected, the money math survives an edge
+  amount.
+
+**The UI-runnable rule (hard rule 2):** a `*Verify:*` line the client can't
+perform — `curl`, SQL, CLI, log-reading — is rewritten as the effect the client
+CAN observe in their UI (e.g. *Verify:* `SELECT count(*) FROM quotes …` becomes
+步驟「重新整理報價列表」/ 預期結果「多出一筆今天日期的報價」), and the original
+builder check moves verbatim into the guide's 附錄 · 顧問側驗證 — the consultant
+runs those, not the client.
+
+`## Out of scope` lines become the guide's 不在本次驗收範圍 section — phrased so
+the client knows those behaviours are *expected to be absent* and must not be
+reported as bugs.
+
+### 4 · GATE — scenario-table approval
+
+Present, then **wait** for approve / adjust:
+
+1. The scenario table (S-n · 目的 · 對應 AC — one line each, steps abbreviated).
+2. A coverage line: **"N ACs → M scenarios, D-level"** (e.g. `5 ACs → 7
+   scenarios, D3` — the surplus being the negative cases), plus how many builder
+   checks moved to the appendix.
+3. Open questions — any AC whose UI translation required a judgment call.
+
+Re-gate only if the scenario list itself changes. Hard rule 3: no full-document
+prose before this clears.
+
+### 5 · Generate the guide Doc into the `[N]` folder
+
+Read `./references/uat-guide-template.md`, fill every `{{PLACEHOLDER}}`, delete
+the template's comment blocks, and create the Doc via the reliable two-step
+(creating a Doc directly in a folder via `create_drive_file` returns HTTP 400):
+
+> **`<your-company-contact-email>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it. The template names it twice (顧問窗口 and the 問題回報方式 address): put the value in both, and never copy this instruction into the client's Doc.
+
+```
+## 1. create the doc (lands in My Drive root)
+mcp__google-workspace__create_doc(
+  user_google_email = "<your-google-workspace-account>",
+  title   = "[UAT] {{COMPANY}} — 驗收測試指南",
+  content = "<filled-in template>"
+)
+## 2. move it into the client's [N] project folder
+mcp__google-workspace__update_drive_file(
+  user_google_email = "<your-google-workspace-account>",
+  file_id     = "<doc id from step 1>",
+  add_parents = "<the [N] folder id resolved in step 1>"
+)
+```
+
+Keep the template's 問題回報方式 four-item shape byte-stable — it is the mail
+format gtm-bug-ticket parses (the template's contract comment says so).
+
+### 6 · Log it on the CRM
+
+**Task** — `mcp__zynkr__create_task(deal_id="<deal_id>",
+subject="UAT 驗收 — 待客戶完成", body="驗收文件：<doc url>",
+due_at="<today + 7 days>", confirm=true)`. It is created as you and assigned to
+you, so there is no owner id to resolve and none to hardcode. Preview first by
+calling without `confirm`.
+
+**Backlink** — append the Doc URL to the deal's notes (the same pattern
+sales-inbound / consult-brd-writer use):
+
+`mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
+
+1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
+2. build the new value: the existing notes, then a blank line, then the block below
+3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+Call it once without `confirm` to preview, then again with `confirm=true`. Never
+send `notes` without the existing text in front of it — the field is overwritten,
+not appended, and skipping the read loses every earlier backlink.
+
+### 7 · Optional (ask-only) — UAT-invite draft
+
+Ask: "Draft the UAT invite mail to the client?" Only on yes, create a **Gmail
+DRAFT** (`mcp__google-workspace__draft_gmail_message` — hard rule 4, never send):
+zh-TW, to the client contact, linking the guide Doc, naming the requested
+completion window and the 問題回報方式 in one line. Example recipient in any
+illustration: `王小明 <client@example.com>`.
+
+### 8 · Report
+
+A compact artifact table, then the headline in prose:
+
+```
+驗收指南已產出：{{COMPANY}} — {{SPEC_ID}}
+
+| 產出 | 內容 |
+|------|------|
+| 文件 | [UAT] {{COMPANY}} — 驗收測試指南（<doc url>）|
+| 覆蓋 | 5 ACs → 7 scenarios（D3：2 個負向測試）· 1 項顧問側驗證 |
+| CRM | 任務「UAT 驗收 — 待客戶完成」（+7d）· notes 已附文件連結 |
+| 待 Peter | UAT 邀請信草稿（未執行 / 已入 Drafts）|
+```
+
+---
+
+## Why it's built this way
+
+- **The PRD is parsed, never paraphrased.** The four shapes in step 1 are a
+  published contract (the PRD template's top comment names this skill). Holding
+  the line hard — STOP on any miss — keeps the whole chain honest: a hole in the
+  spec gets fixed in the spec, and the UAT guide can never claim coverage the
+  PRD doesn't define.
+- **Scenarios in client language, checks in two tiers.** Clients sign what they
+  can see. Splitting each Verify into an observable UI effect (client checklist)
+  plus the raw builder check (顧問側驗證 appendix) means sign-off is genuinely
+  the client's, while nothing from the PRD's verification intent is lost.
+- **Gate on the table, not the prose.** The scenario list is the entire risk —
+  wrong coverage signed by a client is expensive; wording is cheap. So approval
+  happens where a mistake is still one table edit.
+- **The bug-mail shape is load-bearing.** 問題回報方式 prescribes exactly the
+  four fields gtm-bug-ticket parses, so every bug the UAT round produces is
+  machine-ingestible on arrival — the guide is the upstream half of that contract.
+
+## Inference defaults (Peter overrides by just saying so)
+
+- **Guide language** → zh-TW throughout (it's client-facing); S-n ids and the
+  spec ID stay latin.
+- **Test depth** → exactly what the PRD's D-level dictates; if the Size/DoD line
+  says D3 but no AC touches auth/data/money, note it at the gate rather than
+  inventing negative cases.
+- **Task due date** → +7 days; title `UAT 驗收 — 待客戶完成`.
+- **Doc title** → `[UAT] {{COMPANY}} — 驗收測試指南`; version `v0.1（草稿）`.
+- **UAT invite** → OFF; offered in step 7, drafted only on a yes.
+
+## Reference files
+
+- `./references/uat-guide-template.md` — the zh-TW client-facing guide skeleton
+  (fill, then delete its comment blocks). Its 問題回報方式 four-item shape and
+  the S-n ↔ AC-n numbering are contracts — don't restructure.
+
+## Limitations
+
+- Consumes a PRD; it will not write one (ops-prd-writer), conduct discovery,
+  or bootstrap a missing `[N]` workspace (sales-inbound / consult-project-specialist).
+- Scenario quality is bounded by the PRD's Verify lines — vague Verify upstream
+  yields a judgment-call translation here, flagged at the gate rather than hidden.
+- One PRD per run: a guide covers exactly one spec ID. Two specs = two runs and
+  two guide Docs.
+- It schedules nothing and processes no results: the client's bug mails are
+  gtm-bug-ticket's job, and sign-off interpretation stays with Peter.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

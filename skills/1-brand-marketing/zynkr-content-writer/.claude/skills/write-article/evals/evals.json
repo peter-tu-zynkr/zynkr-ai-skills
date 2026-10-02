@@ -1,0 +1,43 @@
+{
+  "skill_name": "write-article",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to write an article about how remote work has changed team communication. I have a few main points: async communication has largely replaced real-time meetings, tools like Slack have created new social norms, and managers need to adapt their leadership style.",
+      "expected_output": "The orchestrator correctly detects Stage 1 (clear topic + initial thoughts), invokes article-style-selector, and shows a progress bar with Structure as the active stage.",
+      "files": [],
+      "expectations": [
+        "The orchestrator identifies this as a Stage 1 entry point (user has a clear topic and initial thoughts)",
+        "The orchestrator invokes the article-style-selector agent",
+        "The response includes a progress bar or stage indicator showing Structure as the active/current stage",
+        "The orchestrator does NOT just write the article itself — it delegates to the appropriate agent",
+        "The orchestrator asks the user for confirmation or presents a summary before proceeding further"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want to write something about AI but I'm really not sure what angle to take. There's so much to say but I can't quite articulate what I actually want to explore.",
+      "expected_output": "The orchestrator detects Stage 0 (vague idea, no clear direction), invokes the socratic-ideation-partner agent to help clarify the idea.",
+      "files": [],
+      "expectations": [
+        "The orchestrator identifies this as a Stage 0 entry point (vague idea, user can't articulate their angle)",
+        "The orchestrator invokes the socratic-ideation-partner agent",
+        "The orchestrator explains that it will help the user refine and clarify their idea before structuring the article",
+        "The orchestrator does NOT jump straight to article-style-selector or article-drafter"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Here's my finished draft that I'd like help editing and polishing:\n\n---\nTitle: The Hidden Cost of Convenience\n\nWe live in an age of unprecedented convenience. With a few taps on a smartphone, we can summon food, transportation, or entertainment in minutes. But as these systems have grown more seamless, something quieter has happened beneath the surface: we have gradually outsourced our discomfort.\n\nThe problem isn't convenience itself. It's that convenience, in its current form, often functions as an avoidance mechanism. When we can skip any moment of friction — the wait, the walk, the conversation — we begin to lose our tolerance for difficulty. And with that tolerance goes something harder to name: the capacity to sit with a problem long enough to actually solve it.\n\nThis essay argues that the real cost of convenience culture is not laziness, but a shrinking threshold for difficulty — and that recovering it requires deliberate friction.\n---",
+      "expected_output": "The orchestrator detects Stage 3 (completed draft), invokes the article-editor agent, and shows a progress bar with Editing as the active stage.",
+      "files": [],
+      "expectations": [
+        "The orchestrator identifies this as a Stage 3 entry point (user has a completed draft)",
+        "The orchestrator invokes the article-editor agent",
+        "The response includes a progress bar or stage indicator showing Editing as the active/current stage",
+        "The orchestrator does NOT re-run ideation or structure stages since the user already has a draft",
+        "The orchestrator passes the full draft content to the article-editor agent"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+---
+name: admin-meeting-prep
+sheetId: "3.03"
+description: "A scheduled, auto-running admin-meeting-prep assistant: every day at 9 AM it scans meetings within the next 7 days and sends action reminders; every day at 3 PM it sends a full briefing for the next day's meetings. Notifications are sent to yourself via Google Chat. No manual trigger needed; does not handle post-meeting follow-up."
+category: operations
+project: admin-meeting-prep
+platform: claude
+status: WIP
+visibility: public
+author: Jane Liao
+input: "None (scheduled auto-trigger; reads Google Calendar and Gmail)"
+process: "9am cron: scan the 7-day calendar → send action reminders to Google Chat | 3pm cron: scan Gmail for attendee background → send briefing to Google Chat"
+output: "Google Chat self-message: an action checklist in the morning, a structured briefing in the afternoon"
+synergy: []
+type: agent
+skills: ["admin-meeting-note"]
+house-style: bound
+
+---
+
+# Meeting Prep
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill admin-meeting-prep
+```
+
+A admin-meeting-prep assistant that runs automatically twice a day: at 9 AM it tells you which meetings in the coming week need advance preparation, and at 3 PM it sends a full briefing for the next day's meetings — including attendee background, a summary of recent email exchanges, and suggested prep items. Notifications go straight into Google Chat, no manual trigger required.
+
+---
+
+## Two Scheduled Modes
+
+| Schedule | Time | Function |
+|------|------|------|
+| **Morning Scan** | Daily 09:00 | Scan meetings in the next 7 days → send action reminders |
+| **Afternoon Briefing** | Daily 15:00 | Scan the next day's meetings → send a full briefing |
+
+---
+
+## Mode A — Morning Scan (triggered at 09:00)
+
+### Step A1 — Scan Google Calendar
+
+Read all calendar events within the next 7 days.
+
+Use `mcp__google_workspace__get_events`:
+- `user_google_email`: the user's email
+- `time_min`: today 00:00
+- `time_max`: today + 7 days 23:59
+
+Filter criteria:
+- Keep only events that have other attendees (not personal block time)
+- Exclude all-day events
+- Exclude cancelled events
+
+### Step A2 — Send Action Reminders to Google Chat
+
+For each qualifying meeting, list the actions that need to be taken.
+
+Decision logic:
+- Within 1 day from now → `🔴 明天！請確認是否有準備`
+- 2–3 days out → `🟡 本週內，建議開始準備`
+- 4–7 days out → `🟢 本週末前留意`
+
+Output format (Google Chat self-message):
+
+```
+📅 本週會議 Action 清單｜[日期]
+
+🔴 明天
+• [會議名稱] [時間] — 與會者：[人名]
+  → 動作：確認議程 / 回顧相關 email
+
+🟡 2–3 天內
+• [會議名稱] [時間] — 與會者：[人名]
+  → 動作：預先準備資料
+
+🟢 4–7 天內
+• [會議名稱] [時間]
+  → 動作：備查
+
+如無特定會議 → 發送「📅 本週無多人會議，保持待命。」
+```
+
+Use `mcp__google_workspace__google_chat_send_self_message` (requires Peter to wire up the Google Chat API on his end).
+
+---
+
+## Mode B — Afternoon Briefing (triggered at 15:00)
+
+### Step B1 — Get the Next Day's Meetings
+
+Use `mcp__google_workspace__get_events`:
+- `time_min`: tomorrow 00:00
+- `time_max`: tomorrow 23:59
+
+Apply the same filtering as Mode A to obtain `TOMORROW_MEETINGS[]`.
+
+If there are no meetings → send "✅ 明天沒有多人會議，無需準備。" and stop.
+
+### Step B2 — Gather Gmail Background
+
+For each attendee of each meeting, search recent email exchanges.
+
+Use `mcp__google_workspace__search_gmail_messages`:
+- query: `from:[attendee_email] OR to:[attendee_email]`
+- time range: the past 30 days
+
+Compile for each attendee:
+- Subjects of the most recent 3–5 emails + a one-line summary each
+- Whether there are any unanswered to-dos (detect keywords like 「請確認」, 「麻煩回覆」, "waiting for", etc.)
+
+### Step B3 — Generate and Send the Briefing
+
+Generate one Google Chat message per meeting:
+
+```
+📋 明日會議 Briefing｜[會議名稱]
+時間：[start_time]
+與會者：[人名清單]
+
+🎯 會議目的
+[從 description 或 title 推斷；無法判斷則標「未知，建議確認」]
+
+👥 與會者背景
+• [名字]：[近期互動摘要 / 職稱（若已知）]
+
+📧 近期相關 Email（最多 5 筆）
+• [日期] [主旨] — [一句話摘要]
+
+⚠️ 待確認事項
+• [未回覆 / 懸而未決的項目]
+
+✅ 建議進場前確認
+1. [問題或資料]
+2. [問題或資料]
+```
+
+Send one independent message per meeting.
+
+---
+
+## Inputs
+
+| Parameter | Default | Description |
+|------|--------|------|
+| `SCAN_DAYS` | 7 | How many days ahead the morning scan covers |
+| `EMAIL_LOOKBACK_DAYS` | 30 | How many days back to search Gmail |
+
+---
+
+## Outputs
+
+| Schedule | Output |
+|------|------|
+| 09:00 | Google Chat self-message: a 7-day action checklist |
+| 15:00 | Google Chat self-message: one briefing per meeting for the next day |
+
+---
+
+## Limitations
+
+- **Google Chat MCP not yet wired up**: currently the google_workspace MCP supports Gmail / Drive / Calendar; Google Chat requires Peter to separately integrate the Chat API on his end
+- Does not support LINE / Slack or other chat tools
+- If an attendee has no Gmail exchange history, the background field shows "無歷史記錄"
+- Scheduled triggering requires implementation via a cron job or the Claude Code schedule skill
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

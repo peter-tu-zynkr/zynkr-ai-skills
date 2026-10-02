@@ -1,0 +1,417 @@
+---
+name: zynkr-kms
+sheetId: "3.02"
+description: >-
+  The knowledge-curator (WRITE) half of Peter's support loop: it turns resolved support
+  threads into KB cards in the Zynkr platform 知識庫 (the source of truth), then mirrors every
+  change to a Google Drive backup. After a support / inbound-sales ticket is resolved,
+  zynkr-kms reads the thread, learns Peter's actual answer, and writes it as a clean,
+  LLM-friendly card into the **Zynkr platform 知識庫** (platform.zynkr.ai/kb, via the `zynkr`
+  MCP server) — the single source of truth since the 2026-07-15 cutover. Core Facts
+  (canonical numbers/policies) become `fact` cards with a stable `fact_id`; Q&A answers
+  become `qa` cards that CITE those facts instead of restating numbers. It reasons like a
+  KMS specialist (intent taxonomy → which KB section → how to structure for retrieval),
+  proposes entries, and only writes after Peter approves. /zynkr-support reads the same
+  platform KB, so the drafter gets smarter every week. It also GOVERNS BOTH STORES: after
+  every approved write it mirrors the change to the Google Drive backup (`[3.2] 客服知識庫
+  (KMS)`) — one Doc per section plus a full-fidelity JSON snapshot — so the knowledge
+  survives a Supabase incident and stays human-readable. The mirror is one-way (platform →
+  Drive) and never authoritative. Trigger whenever Peter says "/zynkr-kms", "learn from
+  resolved tickets", "update the support KB", "curate the KB", "把已回覆的 support 信變成知識庫",
+  "更新知識庫", "整理 KB", "let the KB learn", or hands over a resolved support/sales thread and
+  wants the answer captured — and also on "備份知識庫", "back up the KB", "sync the KB to
+  Drive", "mirror the KB", "KB 有沒有備份", "reconcile the KB mirror". This is the WRITE side;
+  /zynkr-support is the READ side.
+category: operations
+project: zynkr-kms
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "Resolved Support／Inbound-Sales Gmail threads (or one Peter specifies); the KB is the Zynkr platform 知識庫 (SOT), mirrored one-way to a Google Drive backup"
+process: "Pull resolved, not-yet-ingested threads → extract Peter's answer (PII-stripped) → classify intent / target section / fact-vs-qa → propose for approval → write facts before citing qa cards → mirror touched sections + snapshot to Drive → mark KMS-ingested"
+output: "Approved cards land in the matching platform 知識庫 section (SOT); touched sections + _KB-SNAPSHOT.json are re-mirrored to the Google Drive backup; source thread marked KMS-ingested"
+synergy: ["zynkr-support"]
+house-style: bound
+
+---
+
+# Zynkr KMS — Support Knowledge Curator (platform KB + Drive mirror)
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill zynkr-kms
+```
+
+`/zynkr-support` *reads* the platform 知識庫 to draft replies. This skill is the other half of the
+loop: it **learns from resolved tickets and writes the answers back** so the KB heals and the
+drafter stops falling back to `[[NEEDS PETER]]` holding replies.
+
+You think like a **KMS specialist**, not a transcriber. For every resolved thread you reason
+through three lenses before anything is written:
+
+1. **Intent taxonomy** — what *kind* of question is this?
+2. **Where to write** — which **KB section** does it belong in, and is it a new card or an update?
+3. **Structure for the LLM** — a canonical `fact` card, or a `qa` card that cites facts?
+
+The golden rule: **extract, never invent.** KB facts come only from what Peter actually wrote. A
+bad KB card silently poisons every future auto-reply, so the bar is high and **nothing enters the
+KB without Peter's approval.**
+
+> **This skill governs TWO stores, and the arrow between them only points one way.**
+>
+> ```
+> Zynkr platform KB  ──(mirror)──▶  Google Drive Docs
+>    (writable SOT)                  (read-only backup)
+> ```
+>
+> - **Zynkr platform 知識庫** (Supabase-backed, `https://platform.zynkr.ai/kb`, via the `zynkr`
+>   MCP server) — the **only writable KB** and the single source of truth. `/zynkr-support`
+>   reads this, never the mirror.
+> - **Google Drive** `[3.2] 客服知識庫 (KMS)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) — the
+>   **backup mirror**: one Doc per section plus a full-fidelity `_KB-SNAPSHOT.json`. Rewritten
+>   from the platform on every run (Step 6). Never authoritative, never read back into the KB;
+>   a human edit made there is destroyed on the next mirror. If the two disagree, the platform
+>   is right.
+>
+> History: one monolith Google Doc → nested one-doc-per-section Google Docs (2026-06-06) →
+> seeded into the platform KB (2026-06-09) → **full cutover 2026-07-15**, after which Drive was
+> a frozen archive → **2026-08-26: Drive relit as a live one-way mirror**, closing a 6-week gap
+> where 22 cards existed only in Supabase.
+
+---
+
+## Resources you'll use (fixed facts — don't re-derive)
+
+- **KB access** — the **`zynkr` MCP server** (the platform's own MCP at `platform.zynkr.ai`,
+  authenticated as Peter's workspace). The tools you'll use:
+  - `mcp__zynkr__list_kb_sections` — the live section vocabulary (13 sections; run this first)
+  - `mcp__zynkr__search_kb` / `mcp__zynkr__list_kb_articles` — dedupe & lookup
+  - `mcp__zynkr__get_kb_article` — fetch one card by uuid **or by `fact_id`** (qa cards resolve
+    their cited facts inline)
+  - `mcp__zynkr__create_kb_article` / `mcp__zynkr__update_kb_article` — the write pair
+  - `mcp__zynkr__create_kb_section` — only for a Peter-approved NEW intent category
+- **Write safety** — the write tools are preview-by-default: called without `confirm` they return a
+  dry-run. Peter's approval in Step 4 is the real gate; after it, call with `confirm: true`.
+- **KB UI** (for links in your summary): `https://platform.zynkr.ai/kb`
+- **Google account**: `<your-google-workspace-account>` — **MCP server `google-workspace`** for all Gmail tools.
+  Gmail is still where tickets live; only the KB moved.
+- **Source labels** (nested — use the **full path**):
+  - Support: `[3] Operation/[3.8] Support`
+  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales`
+- **Ingest-ledger label**: `KMS-ingested` — applied once a thread's answer is in the KB. The
+  idempotency record; never re-process a thread that already carries it.
+- **Drive mirror** (the backup half — full mechanics in `references/drive-mirror.md`):
+  - Folder `[3.2] 客服知識庫 (KMS)` — `1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`
+  - `scripts/kb-drive-mirror.mjs` — renders the KB to Markdown locally (read-only; needs
+    `--workspace`, see below). Card bodies stay on disk, out of context.
+  - `mcp__google-workspace__update_drive_file` — uploads in place by Doc ID (`source_format: "md"`
+    converts Markdown → native Doc and **keeps the Doc ID**)
+  - ⚠️ **Your workspace is `<your-crm-workspace-id>`.** `crm_kb_*` is a shared
+    multi-tenant table whose other tenants have `nn`-colliding sections; an unscoped read mirrors
+    their cards into Peter's Drive. `mcp__zynkr__list_kb_sections` is already workspace-scoped.
+
+    > **`<your-crm-workspace-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.crm-workspace-id`, on the `zynkr-atlas` MCP server; the value is the `value:` line) and pass it as `--workspace`. If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+  - ⚠️ The `google-workspace` MCP only accepts local paths under
+    `~/.workspace-mcp/attachments/` — stage rendered files there before uploading.
+- **Companion files**:
+  - `references/intent-taxonomy.md` — intent categories, aliases, and the intent → section map
+  - `references/entry-schema.md` — the exact fact-card / qa-card schema (tool-call fields)
+  - `references/new-section-playbook.md` — how to add a **new section** for a new intent
+  - `references/drive-mirror.md` — the Drive backup: arrow of truth, Doc-ID registry, how to run
+    a mirror or a full reconcile, and how to restore from the snapshot
+
+---
+
+## Step 1: Pull the *resolved, not-yet-ingested* queue
+
+This is the **inverse** of `/zynkr-support`: the drafter handles threads Peter *hasn't* replied to;
+this skill harvests threads he *has* replied to and that aren't ingested yet.
+
+If Peter handed you a **specific thread** (pasted link or "learn from this one"), use just that —
+skip the queue search.
+
+Otherwise search both queues with `mcp__google-workspace__search_gmail_messages`:
+
+```
+(label:"[3] Operation/[3.8] Support" OR label:"[2] Sales & consultant/[2.1] Inbound Sales") from:me -label:KMS-ingested newer_than:90d
+```
+
+Fallback for website-form sales inquiries answered as fresh emails (only if Peter asks you to sweep
+website inquiries too):
+
+```
+from:website@zynkr.ai -label:KMS-ingested newer_than:90d
+```
+
+Dedupe by thread ID. If nothing comes back, tell Peter the KB is already up to date and stop.
+Otherwise list what you found (subject · sender · queue) and say you're reviewing N threads.
+
+---
+
+## Step 2: Confirm the thread is *learnable*, then extract
+
+Call `mcp__google-workspace__get_gmail_thread_content` on each thread ID. A thread is **learnable
+only if all three hold**:
+
+1. The **last message is from Peter** (`<your-google-workspace-account>` / `<your-company-contact-email>` / any zynkr.ai sender) — i.e. he replied.
+2. An **earlier inbound carried a real question** from the inquirer.
+3. Peter's reply contains a **real answer** — concrete facts, not a holding reply.
+
+> **`<your-company-contact-email>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it. `<your-google-workspace-account>` is your own account, not a fact.
+
+**Skip (and do NOT label `KMS-ingested`) when:**
+- Peter's last message was a holding reply ("讓我確認一下細節後再回覆您" / "let me get back to you") —
+  there's no answer to learn yet. Leaving it un-labelled means it gets re-checked next run.
+- The thread is spam / out-of-scope / a thank-you with no Q&A content.
+
+For each learnable thread, extract:
+- The inquirer's **question(s)** — there may be several; each can become its own card.
+- Peter's **committed facts**: pricing, policy, how-to steps, scope, dates he actually stated.
+- **Source context**: thread link, the date Peter answered, the inquirer's **first name + company
+  only**.
+
+**Guardrails while extracting:**
+- **Never invent or "improve" facts.** If Peter only answered part of the question, capture only
+  that part; note the unanswered part in your proposal.
+- **PII guard**: keep first name + company for context; **strip** the inquirer's email, phone, and
+  any attendee-list / roster data. None of it reaches the KB.
+
+---
+
+## Step 3: Apply the three lenses → draft a proposed card
+
+Start by calling `mcp__zynkr__list_kb_sections` once — it returns the live section vocabulary
+(slug, title, aliases, section `id`). For each question you extracted:
+
+### Lens 1 — Intent taxonomy
+Classify into the best-fit section from `references/intent-taxonomy.md` (`pricing-quoting`,
+`course-content`, `scheduling-logistics`, `team-training-enterprise`, `technical-howto`,
+`access-account`, `refund-policy`, `instructor-profile`, `brand-product-vision`,
+`ai-workflow-architecture`, …). If nothing fits well, **propose a new section** — flag it for
+Peter; never silently invent one or dump it in `other` without saying so.
+
+> **Style rules are not Q&A.** When Peter gives a **tone / wording / term** rule (e.g.
+> `parachute`→「和團隊諮詢、觀察流程」, `discovery call`→「線上會議」), it belongs in the
+> **`tone-style`** section: append a row to the 用語對照表 by updating the
+> **`term-mapping-table`** fact card (`get_kb_article("term-mapping-table")` → add the row to its
+> markdown table → `update_kb_article`). Broader voice rules go in the **`tone-voice-rules`** card.
+
+### Lens 2 — Where to write (which section, new card or update)
+- Map the intent → its section `id` from `list_kb_sections`.
+- **Dedupe**: run `mcp__zynkr__search_kb` with the question's key terms (zh + EN), and
+  `mcp__zynkr__list_kb_articles` filtered by that `section_id` **with `status: "all"`** to scan
+  titles (search covers published only; a draft or archived near-duplicate matters too). If a
+  near-duplicate exists, propose an **UPDATE / supersede** of that card rather than a second card.
+  This matters most for `pricing-quoting` and `refund-policy`, where stale answers are harmful.
+
+### Lens 3 — Structure for the LLM (fact card vs. citing qa card)
+The KB has **two card types** (full spec in `references/entry-schema.md`):
+
+- **`fact` card** — canonical, reusable truths whose *numbers/terms live once*: the pricing table,
+  refund policy, standard durations. Each has a stable kebab-case **`fact_id`** (e.g.
+  `pricing-rates`), unique per workspace.
+- **`qa` card** — maps one inquiry to the facts and **cites** them via the `cites` array (bare
+  fact ids, e.g. `["pricing-rates"]`) rather than restating the numbers.
+
+**Decide which you're writing.** If the answer rests on a fact that could appear in other answers or
+changes over time (price, rate, policy, lead time):
+1. Is there already a fact card for it? Check with `get_kb_article("<fact-id-guess>")` and
+   `search_kb`. → the qa card just lists it in `cites` and describes the *mapping/logic*, **no
+   restated numbers**.
+2. No fact yet? → propose a **NEW fact card** (numbers go there) **and** a thin citing qa card.
+3. The fact exists but Peter's reply changes it (new rate)? → propose **UPDATE fact** via
+   `update_kb_article` — one edit, and every citing card everywhere is current.
+
+Draft each proposed card with these fields (they map 1:1 onto `create_kb_article`):
+
+```
+type:        fact | qa
+title:       fact → short human title (e.g. 授課費率表)
+             qa   → the canonical, normalized question (e.g. 一天 N 小時的 AI 課程如何報價？)
+fact_id:     fact only — stable kebab-case id (e.g. pricing-rates)
+body_md:     fact → the canonical numbers/terms (table/bullets), incl. explicit 未定範圍 caveats
+             qa   → the mapping/logic ("依 FACT:pricing-rates …"), NOT the restated numbers
+section_id:  from list_kb_sections
+cites:       qa only — bare fact ids this answer rests on
+keywords:    bilingual zh-TW + EN synonyms — the retrieval surface, spend effort here
+source_url:  Gmail thread permalink
+source_note: "<YYYY-MM-DD> · <provenance, e.g. inbound 詢價>"
+source_type: fact → core_fact · qa → peter_answer
+```
+
+Only inline a hard number in a qa card when it is specific to this ticket and lives in **no** fact
+(then preserve it verbatim). `get_kb_article` resolves a qa card's cited facts inline at draft
+time — so a cite only works if the fact card **already exists**. Always write/UPDATE the fact first.
+
+---
+
+## Step 4: Propose, then wait for approval (the write gate)
+
+Present **one table** of everything you intend to write — nothing is written yet:
+
+```
+Proposed KB changes from N resolved threads:
+
+| # | Action | Section | Card / fact_id | Preview | Flag |
+|---|--------|---------|----------------|---------|------|
+| 1 | UPDATE fact | core-facts | pricing-rates | 實體 rate → NT$Y | ⚠ pricing change |
+| 2 | NEW qa      | pricing-quoting | Q: … | cites pricing-rates | — |
+| 3 | NEW fact    | core-facts | refund-policy | (creates canonical fact) | ⚠ new fact |
+| 4 | NEW SECTION | (new) + qa | logistics-overseas | create_kb_section + card | ⚠ new category |
+```
+
+Then show the **full rendered card** for each proposed entry below the table.
+
+**Always flag for explicit confirmation:**
+- ⚠ **Pricing / policy supersession** — "this overwrites the older NT$X answer; confirm the current
+  rate before I replace it."
+- ⚠ **New section** — proposing a category that doesn't exist yet.
+- ⚠ **Ambiguous intent** or **partial answer**.
+
+Peter approves all / edits / rejects per row. **Only approved rows proceed to Step 5.** If he
+rejects a thread entirely, do not label it ingested (Step 6).
+
+---
+
+## Step 5: Write approved cards to the platform KB
+
+**Order matters: write/UPDATE the fact card FIRST, then the qa card that cites it** — cites resolve
+only against facts that already exist.
+
+### 5a — NEW or UPDATE a fact card
+- **NEW fact** — `mcp__zynkr__create_kb_article` with `confirm: true` and:
+  `type: "fact"`, `fact_id`, `title`, `body_md`, `section_id` (usually the `core-facts` section —
+  style rules go in `tone-style`), `keywords`, `source_url`, `source_note`,
+  `source_type: "core_fact"`, `mark_verified: true`.
+- **UPDATE a fact** (the high-value path — one edit refreshes every citing card) —
+  `mcp__zynkr__update_kb_article` with `confirm: true`, the card's `id` (find it via
+  `get_kb_article("<fact_id>")`), only the changed fields, and `mark_verified: true` (version
+  auto-bumps).
+
+### 5b — NEW qa card into an existing section
+`mcp__zynkr__create_kb_article` with `confirm: true` and:
+`type: "qa"`, `title` (the normalized question), `body_md` (the mapping/logic), `section_id`,
+`cites` (bare fact ids), `keywords`, `source_url`, `source_note`, `source_type: "peter_answer"`,
+`mark_verified: true`.
+
+### 5c — UPDATE / supersede an existing qa card
+`mcp__zynkr__update_kb_article` with `confirm: true`, `id` = the existing card's uuid, only the
+changed fields (`body_md`, `cites`, `keywords`, `source_url`, `source_note`), `mark_verified: true`.
+**Supersede in place — never leave two contradictory cards** the drafter might both retrieve.
+
+### 5d — NEW SECTION (intent has no section yet)
+Follow `references/new-section-playbook.md`:
+1. `mcp__zynkr__create_kb_section` with `confirm: true` — kebab `slug`, `title`, `title_zh`,
+   `description`, bilingual `aliases` (they aid routing/search), an appropriate lucide `icon`
+   (`nn` auto-assigns).
+2. Then write the card(s) into it per 5a/5b using the returned section `id`.
+3. Add the new category to `references/intent-taxonomy.md` so it's first-class next time.
+
+### Verify each write
+After every create/update, `mcp__zynkr__get_kb_article` on the returned id — confirm the card
+reads back with a non-empty body and (for qa) that every cite resolves to a real fact card. A
+dangling cite means you wrote the qa before its fact — fix by writing the fact now.
+
+---
+
+## Step 6: Mirror the change to the Google Drive backup
+
+Every approved write in Step 5 must reach the Drive mirror in the same run — a KB write that
+isn't mirrored is exactly the drift this step exists to prevent. Mirror **after** the writes
+land (it renders whatever the KB currently holds), and only for the sections you touched.
+
+Full mechanics, the Doc-ID registry, and the restore procedure live in
+`references/drive-mirror.md`. The short form:
+
+1. **Render** the touched sections —
+   `node scripts/kb-drive-mirror.mjs --out <staging> --workspace <Peter's uuid> --env <.env.local>
+   --sections <slug,slug>`. Omit `--sections` for a full reconcile (also refreshes the snapshot,
+   the manifest and the 00 INDEX Doc). The script is read-only and prints just a counts summary.
+2. **Stage** the rendered files into `~/.workspace-mcp/attachments/kb-mirror/`.
+3. **Upload in place** with `mcp__google-workspace__update_drive_file` — `file_id` from the
+   registry, `source_format: "md"`, and the AUTO-GENERATED MIRROR banner as `description`. Never
+   create a second Doc for a section that already has one.
+4. **Refresh `_KB-SNAPSHOT.json`** whenever any card changed — it is the only artifact with
+   enough fidelity to restore from (`fact_id`, `cites`, `keywords`, `version`, `source_*`).
+5. If Step 5d created a **new section**, the mirror gains a Doc: use
+   `mcp__google-workspace__import_to_google_doc` (`create_drive_file` leaves raw markdown, not a
+   Doc), then add its ID to the registry in `references/drive-mirror.md`.
+
+**Check before moving on:** the script's `sections` count must match
+`mcp__zynkr__list_kb_sections`, and `orphans` must be `0`. A larger `sections` number means the
+workspace filter was dropped — stop and fix it rather than uploading.
+
+---
+
+## Step 7: Mark ingested + report
+
+- Resolve the ledger label's **ID**: `mcp__google-workspace__list_gmail_labels` and find
+  `KMS-ingested`. If it doesn't exist yet, create it with `manage_gmail_label`
+  (`action: "create"`, `name: "KMS-ingested"`) and take the ID from the response.
+- Apply it to **every thread whose card was written**:
+  `mcp__google-workspace__modify_gmail_message_labels` (or `batch_modify_gmail_message_labels`)
+  with the thread's **message ID(s)** (from the Step-1 search results) as `message_ids` and the
+  label **ID** (not the name) in `add_label_ids`. Do **not** label skipped or rejected threads.
+
+Then give Peter a single summary:
+
+```
+KB updated — N cards from M threads:
+
+✅ Added (X):
+  - [section] — Q: … — [sender / company]
+✏️  Updated / superseded (Y):
+  - [section] — card/fact_id: … — replaced older answer (e.g. pricing)
+🆕 New sections created (Z):
+  - [slug — title] (now in list_kb_sections + intent-taxonomy.md)
+⏭️  Skipped (W):
+  - [Subject] — [reason: holding reply / no answer yet / out of scope]
+💾 Mirrored to Drive (S sections + snapshot):
+  - [NN slug] … — or "full reconcile, N cards"
+⚠️  For your attention:
+  - [anything you want Peter to double-check]
+
+Browse: https://platform.zynkr.ai/kb
+Backup: https://drive.google.com/drive/folders/1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6
+```
+
+If a new section was created, confirm it's added to `references/intent-taxonomy.md`.
+
+---
+
+## Things to be careful about
+
+- **Extraction, not generation.** Every fact in the KB must trace to something Peter wrote. Holding
+  replies teach nothing — skip them.
+- **One source of truth: the platform KB.** Drive is a *backup*, not a second KB. Never author a
+  card in Drive, never cite the mirror as current, and never read a Drive edit back into the
+  platform. If the two disagree, the platform is right and the mirror is stale.
+- **A write that isn't mirrored is drift.** Step 6 runs in the same pass as Step 5, every time.
+  Leaving it for later is how the 2026-07-15 → 08-26 gap happened (22 cards in one store only).
+- **Never mirror unscoped.** `crm_kb_*` is shared/multi-tenant; always pass Peter's
+  `--workspace`. An unscoped run leaks other tenants' cards into Peter's Drive.
+- **Canonical numbers live once.** Pricing/policy/rates go in a `fact` card; qa cards **cite** it
+  (`cites: ["<fact_id>"]`). Update the fact in one place rather than chasing numbers across cards.
+- **Write the fact before the citing qa card** — cites only resolve against existing facts.
+- **Supersede, don't pile up.** An UPDATE to the canonical fact beats two contradictory cards the
+  drafter might both retrieve. `update_kb_article` auto-bumps `version`, so history is kept.
+- **Never archive/delete without Peter asking.** Archiving (`status: "archived"`) is Peter's call.
+- **PII never lands in the KB** — first name + company only.
+- **Idempotency is the label.** A thread carrying `KMS-ingested` is done; never re-write it. A
+  skipped thread stays un-labelled so it's reconsidered once truly answered.
+- **zh-TW default**, bilingual keywords — match how Peter and his inquirers actually search.
+- **Preview is not approval.** The MCP write tools dry-run without `confirm: true`; that's a safety
+  net, not the gate. The gate is Peter's explicit approval in Step 4.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

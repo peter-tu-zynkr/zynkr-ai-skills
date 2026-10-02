@@ -1,0 +1,129 @@
+# SEO Article Pipeline — Config
+
+The settings the SEO content pipeline depends on. **Company facts are not kept here — Atlas is their source.** The SEO knowledge-base folder, the published-article folder and the SEO tracker appear below only as the blanks `<your-seo-kb-folder-id>`, `<your-published-archive-folder-id>` and `<your-seo-sheet-id>`; every SEO skill (`seo-persona-builder` … `seo-publish-article`) reads their values from Atlas at run time, and its `SKILL.md` says how. This file keeps only settings that are not company facts: your own account, the knowledge base's sub-folder and rubric ids, and the publish settings. When one of those moves, update this file — don't edit each SKILL.md. When a company fact moves, it is changed in Atlas, never here.
+
+---
+
+## Google account
+
+```
+user_google_email: <your-google-workspace-account>
+```
+
+All Google Workspace MCP calls (Drive search/read, Doc create) use this account.
+
+---
+
+## Drive — SEO Knowledge Base
+
+**The living knowledge base (brand context + seed knowledge + per-article working artifacts):**
+
+```
+seo_kb_folder_id:  <your-seo-kb-folder-id>   # company fact — Atlas key company.seo-kb-folder
+seo_kb_folder_url: https://drive.google.com/drive/folders/<your-seo-kb-folder-id>
+```
+
+`seo_kb_folder_id` is the blank `<your-seo-kb-folder-id>` that every SEO skill names. Its value is the Atlas fact `company.seo-kb-folder` (the `value:` line of `get_knowledge` on the `zynkr-atlas` MCP server); if Atlas cannot give it, ask — never guess it or copy it into this file.
+
+### Contents (as of 2026-05-29)
+
+| File | ID | Purpose |
+|---|---|---|
+| 00 Brand Context (SEO source of truth) | 1XF5VbcDtAcktE8wptTF7ejqPi21DFbtEMm3bHsF9ssE | Brand-level fuel for persona + brief. v2 — aligned to the authoritative Zynkr Brand Guide (decision-first voice, words-to-reduce list). |
+| TEMPLATE — Brand-level Context Packet | 1sumEZUBE2V6c2pSl67Dh2b8Kj_5t5W-LuXQJ_C92pj0 | FE intake, fill once |
+| TEMPLATE — Article-level Context Packet | 1TX-mpHDMAkXzXbtcCJ6wtB403as_ZEyUN4_fR6llZ2w | FE intake, per article |
+
+---
+
+## Knowledge resolution rule (Drive-first, local fallback)
+
+Every SEO skill's rubric/template is hosted as an **editable Google Doc** in the SEO-KB subfolder `01 Rubrics & Templates`, AND kept as a local `./references/*.md` fallback inside each skill.
+
+**At runtime, each skill must:**
+1. Try Drive first — `search_drive_files` in `rubrics_folder_id` by the doc name (e.g. `persona-rubric`), then `get_drive_file_content`. This is the master copy Peter edits.
+2. If Drive is unavailable / not found / no MCP access → fall back to the bundled `./references/<file>.md`.
+3. If the two ever diverge, the Drive version wins; sync the local copy on next edit.
+
+```
+rubrics_folder_id:  1YUUrX0e5JDKy6C0QcWeWD9NfKQpKqXWW
+rubrics_folder_url: https://drive.google.com/drive/folders/1YUUrX0e5JDKy6C0QcWeWD9NfKQpKqXWW
+```
+
+### Rubric mapping (Drive master ↔ local fallback)
+
+| Skill | Drive doc (name) | Drive doc ID | Local fallback |
+|---|---|---|---|
+| seo-persona-builder | persona-rubric | 1mv2klNsA5PIb18Niq6GnPIifV6OHeBt3r7adAD7sHqg | ./references/persona-rubric.md |
+| seo-question-miner | question-frames | 1lWc9_Sc4IsXv-_dhvyEHJO1CXweKiVxuNOxSCBSY9e4 | ./references/question-frames.md |
+| seo-angle-finder | seo-angle-rubric | 1SVQBv-wQIVyhbD9Z5bLW1v-FboBqmdtcCwLluFnF_eA | ./references/seo-angle-rubric.md |
+| seo-keyword-mapper | keyword-checklist | 1pbGpMgz-OtEnJpmcZ1BL8T_wSkoy1U2Mh5oINIweVa0 | ./references/keyword-checklist.md |
+| seo-keyword-classifier | keyword-sop | 1NakOLc35YFDNecpWEd9FgOTxHuwyb3UKPdapZ1z-8H4 | ./references/keyword-sop.md |
+| seo-keyword-classifier | intent-taxonomy | 1vhCo1QLI2gBcSvVwLYBqQguCuwBAIH98RaEMaWxD0ac | ./references/intent-taxonomy.md |
+| seo-demand-validator | competitor-review-table | 1bhCPjV-YoGJw21RdqGcE2K5ObO5HZwEnZ802p9dObKI | ./references/competitor-review-table.md |
+| seo-brief-writer | ceiling-article-features | 1rbF9ZT1HHZpa3MMVE5fIxg1QtSqSmhRHctRD9z7HOKA | ./references/ceiling-article-features.md |
+| seo-brief-writer | winning-key-scoring | 1CVrriUQYc-ttOF0lGUIfVUmtdmR-INK32G1cbt2YKUk | ./references/winning-key-scoring.md |
+| seo-brief-writer | brief-template | 1JchbS6D42XzFsbWJx4OTIjM_4YtGxgvedxZQ1fio9Lc | ./references/brief-template.md |
+| seo-outline-designer | outline-patterns | 1Csp8S6u16a4wo8zt3XrCXvqLdrJTGiIOYH66SngEu40 | ./references/outline-patterns.md |
+| seo-article-finalizer | internal-link-rules | 1dWXE1uEVj9h7v6fOVwEr3b774N4u4y2hJ7U1a9vTIa0 | ./references/internal-link-rules.md |
+| seo-article-finalizer | meta-schema-rules | 11M-nPx2NL08TJejHAEBn4FGr15qKUmS-EkHWl6nDfu8 | ./references/meta-schema-rules.md |
+
+---
+
+### SEO-KB subfolders
+
+```
+rubrics_folder_id:         1YUUrX0e5JDKy6C0QcWeWD9NfKQpKqXWW   # 01 Rubrics & Templates
+seed_knowledge_folder_id:  1K-pSQtVR7ezWADIH2_tSCqpOcY-btAkK   # 02 Seed Knowledge
+article_working_folder_id: 1BtnHEqgBeF7ak0gER8m6X98Ku-02khk5   # 03 Article brief & outline & draft — per-article working folders are created HERE
+```
+
+Other KB files: `03 AEO Prompt Panel & Metrics (measurement)` = `1qx9_tXF2Zp8zLGkB4qYQB9k8-vCKapNsEfMqiGlwFoM` (Phase-5 measurement template, run monthly — manual).
+
+### Per-article working subfolders — the process flow
+
+`seo-article-pipeline` creates one subfolder per article (named by working title) under **`article_working_folder_id` (「03 Article brief & outline & draft」)**, NOT under the SEO-KB root. Each holds the durable green artifacts: 人物誌 · 關鍵字地圖 · 主題清單 · Brief · 大綱 · FAQ · 初稿 · 上架包.
+
+Fixed Drive flow: `03 Article brief & outline & draft/<工作標題>/` (all staging) → on publish, `seo-publish-article` moves the 上架包 Doc into **`04 Published article`** (`published_article_folder_id`). Append-into-folder rule: `create_doc` lands at Drive root, then `update_drive_file(add_parents=<folder>, remove_parents='root')` — every stage saves this way.
+
+### Seed knowledge (self-heal source)
+
+Lives in the `02 Seed Knowledge` subfolder (`seed_knowledge_folder_id`). `seo-angle-finder`, `seo-brief-writer`, `seo-persona-builder` `search_drive_files` here for first-hand angles/evidence.
+
+**Living-KB self-heal bridge — MANUAL (not yet automated):** after running a livestream through `training-process-video`, copy its `training-idea-curator` ideas + accepted `training-qa-knowledge` entries into `02 Seed Knowledge` (one doc per stream, named `seed_<date>_<topic>`). Keep entries decision-first (angle = a decision/trade-off, not a feature). Until a sync step is built, this deposit is done by hand so the SEO skills see fresh seed knowledge. Future automation: extend `training-process-video` to write an SEO-seed doc straight into `seed_knowledge_folder_id`.
+
+---
+
+## Publish targets (stage 12 — seo-publish-article)
+
+Stage 12 (`seo-publish-article`) takes the finalizer's publish-ready Doc, publishes it to the live website, archives the Doc, and updates the tracker. Its settings (the first two are company facts, read from Atlas at run time — `seo-publish-article` Step 7 says how):
+
+```
+published_article_folder_id: <your-published-archive-folder-id>   # company fact — Atlas key company.published-archive-folder · 「04 Published article」(under seo_kb_folder_id) — source Doc archived here AFTER publish, not before
+tracker_sheet_id:            <your-seo-sheet-id>   # company fact — Atlas key company.seo-tracker-sheet · Zynkr SEO 關鍵字地圖 + 主題清單 — Topic List (Status=Done / Published URL / Published Date) + Keyword Pool (coverage URL on the cluster rows)
+site_blog_url:               https://zynkr.ai/blog/<slug>
+cms_repo_path:               <your-cms-repo-path>   # zynkr-cms local checkout; its .env.local holds NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+```
+
+The CMS write path (Supabase `articles` table, Tiptap content rules, the no-table constraint) + the tracker column scheme live in `seo-publish-article/references/cms-publishing.md` — don't duplicate them here.
+
+## Brand voice (Brand Guide — authoritative)
+
+Zynkr is a **decision-first AI consulting counterpart**, not "AI enablement / productivity." Every article must: lead with a decision, name the real trade-off, commit to a direction; make at least one Zynkr Method move visible (Frame · Clarify · Constrain · Compare · Commit). First-hand experience is evidence for judgment, not the selling point.
+- **Words to own:** 決策 · 取捨/trade-off · 判斷 · 方向 · 脈絡 · 顧問夥伴 · 框架 · 清晰.
+- **Words to reduce (never in copy):** owned by 《[3.2] 禁用詞清單 Forbidden Words》 (`1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`) — read it at runtime, never restate it here.
+- Governance: every article answers YES to all 4 (decision not feature · only-Zynkr-could-say-this · asking/framing/committing not selling · Method shows through).
+
+## Content pillars (decision-first; B2B-priority)
+
+1. **AI 決策思維** — making better judgment calls amid uncertainty (TOFU thought leadership; brand core)
+2. **流程即決策** — using AI to re-engineer the decision points in a workflow (B2B core / authority)
+3. **打造會思考的 AI 夥伴** — the Agent asks the right question first, then answers (builder credibility)
+4. **AI 導入的關鍵抉擇** — what to automate, when, and why (B2B BOFU / decision)
+5. **用 AI 蓋產品** — every step is a decision (practitioner, AEO-strong)
+
+## Conventions
+
+- zh-TW headings/taglines do not end with 句號 (。); series separator is ·.
+- Per-article folder name: `<工作標題>`.
+- Artifact filenames: `<工作標題> - 人物誌`, `… - 關鍵字地圖`, `… - Brief`, `… - 大綱`, `… - 上架包`.
+- Languages: zh-TW primary; flagship pieces also produce EN via `content-translator` reverse mode.

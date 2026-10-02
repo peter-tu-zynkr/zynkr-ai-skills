@@ -1,0 +1,98 @@
+---
+name: training-lecture-transcript
+sheetId: "4.01"
+description: "Polish long video lecture transcripts into lecturer-friendly readout scripts in Traditional Chinese."
+category: training
+project: training-lecture-transcript
+platform: multi
+status: Done
+visibility: public
+author: Peter Tu
+input: "Raw 30-90 minute lecture transcript text with filler words and STT artifacts"
+process: "Sequential batch processing (~700 Chinese chars per batch) with strict order gating, filler removal, and sentence restructuring"
+output: "Lecturer-friendly readout script in Traditional Chinese with terminology consistency notes"
+synergy: []
+house-style: exempt — verbatim capture — fidelity to the source outranks house voice
+
+---
+
+# Polish Lecture Transcript
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill training-lecture-transcript
+```
+
+Process long transcript text into lecturer-friendly readout content. Use this skill when you've recorded a 30–90 minute Chinese lecture and want a clean Traditional Chinese readout script — filler words removed, STT artifacts fixed, run-on speech broken into short readable sentences, all without losing terminology or speaker intent.
+
+## Workflow
+
+1. Normalize input text.
+2. Split transcript into ordered batches of ~700 Chinese characters.
+3. Process exactly one batch at a time.
+4. Do not start batch N+1 until batch N is completed and checked.
+5. Merge completed batches and run final consistency pass.
+
+## Batch Gate Rules
+
+- Maintain strict order: `001 -> 002 -> 003 ...`.
+- Keep a visible status for each batch: `PENDING | IN_PROGRESS | DONE`.
+- Move to the next batch only when current batch is `DONE`.
+- If text is ambiguous, add a short editor note in the current batch; do not skip ahead.
+
+## Per-Batch Rewrite Objective
+
+For each batch, keep meaning and remove speech noise.
+
+### Must do
+
+- Remove filler/disfluency words (see `./references/filler_words_zh.md`).
+- Fix obvious STT errors and repeated fragments.
+- Convert run-on speech into short, readable sentences.
+- Preserve terminology, examples, and speaker intent.
+- Keep original language (Traditional Chinese by default).
+
+### Must not do
+
+- Add new claims not present in the source batch.
+- Reorder major logic across batches.
+- Mix two batches in one rewrite.
+- Jump to later batches before current batch is done.
+
+## Output Format
+
+Use this structure for each completed batch:
+
+```markdown
+### Batch 001
+- Status: DONE
+- Source length: <N chars>
+- Edited length: <N chars>
+
+<rewritten text>
+```
+
+After all batches are done, produce:
+
+1. `Merged Script (full)`
+2. `Terminology/consistency notes` (only if needed)
+
+## Recommended Command Helpers
+
+Use bundled scripts for deterministic batching:
+
+- Split text into batches:
+  - `python3 scripts/chunk_transcript_zh.py <input.txt> --max-chars 700 --out batches.md`
+- Validate order and status gate:
+  - `python3 scripts/chunk_transcript_zh.py --validate batches.md`
+
+## Readout Style Defaults
+
+- Sentence length: short and easy to read aloud.
+- Tone: lecturer-friendly, concise, direct.
+- Paragraphing: split by idea shifts, not by arbitrary line breaks.
+- Keep key terms in English when they are standard in context (e.g., IPO, SOP, RAG), otherwise use Traditional Chinese.
+
+## Optional Final Transform
+
+If user asks for chapterized output, reorganize only after all batch rewrites are done.
+

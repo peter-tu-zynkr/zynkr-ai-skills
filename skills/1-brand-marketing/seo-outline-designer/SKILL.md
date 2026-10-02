@@ -1,0 +1,103 @@
+---
+name: seo-outline-designer
+sheetId: "1.22"
+description: "Stage 8 of the SEO pipeline: turn the SEO Brief into an article outline and FAQ section, outputting a handoff summary compatible with content-draft. Corresponds to the v2 flow diagram's 'Structure article: outline design' and 'Build FAQ'. Triggers when the user hands over a Brief handoff packet and says '設計大綱' or '做 FAQ'. Only handles the outline and FAQ; the actual writing is handed off to content-draft."
+category: brand-marketing
+project: seo-outline-designer
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "seo-brief-writer's SEO_PACKET ▸ Brief; optional: whether to supplement information (other reference articles), client first-hand information"
+process: "Design the H2/H3 outline per outline-patterns (answer-first opening) → build the FAQ from the Brief's must-answer questions → decide whether to supplement information → human review → output an content-draft-compatible handoff summary"
+output: "Article outline + FAQ + handoff summary of target keywords, handed off to content-draft (1.06) for writing"
+synergy: ["content-draft"]
+handoff: ["content-draft"]
+house-style: bound
+
+---
+
+# SEO Outline Designer
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-outline-designer
+```
+
+Stage 8 of the SEO pipeline, corresponding to the flow diagram's 'Structure article' and 'Build FAQ'. It is the **junction** between the front half of the SEO pipeline and the existing writing pipeline: the handoff summary it produces is deliberately formatted so `content-draft` (1.06) can consume it directly (structure + per-section talking points), and additionally carries the target keywords, FAQ, and AEO requirements.
+
+---
+
+## Resources you'll use
+
+> **Knowledge source**: The rubrics/templates this skill uses are read preferentially from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, search by name); when unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Outline patterns**: `./references/outline-patterns.md`
+- **Downstream**: `content-draft` (1.06) writes, `content-title` (1.09) titles, `content-editor` (1.07) proofreads
+- **SEO Knowledge Base folder ID**: `<your-seo-kb-folder-id>`
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the Brief
+
+Read `SEO_PACKET ▸ Brief`.
+
+## Step 2 — Decide whether to supplement information (HITL decision)
+
+Corresponds to the flow diagram's diamond "Need to supplement information?". If the Brief is marked `[需 Peter 補]` or is missing first-hand material:
+- Yes → ask the user to provide other reference articles / client first-hand information ("ask the client for first-hand information") and add it in.
+- No → design the outline directly.
+
+## Step 3 — Design the outline (answer-first)
+
+Per `./references/outline-patterns.md`: answer up front in the opening (to capture AEO) → H2/H3 skeleton, with each H2 marking one talking-point direction plus the placement of the corresponding target/supporting keywords. **Give 3 writable talking points per section** (following content-style-select's handoff convention, so the drafter can write directly).
+
+## Step 4 — Build the FAQ
+
+Write the Brief's must-answer questions (3–5 questions) into an FAQ section, with concise answers that can be cited by AI (for schema use). Corresponds to "build the FAQ from the outline and Brief".
+
+## Step 5 — Human review of the outline and FAQ (HITL)
+
+Corresponds to "review the outline and FAQ". Once confirmed, save the "article outline" and "FAQ" working files.
+
+## Step 6 — Output an content-draft-compatible handoff summary
+
+```
+✅ 大綱與 FAQ 已確認（SEO）
+
+**選定架構：** <對應 content-style-select 的某型，如 思維流程型>
+**目標關鍵字：** 主 <...> ｜輔 <...>
+**章節要點：**
+**第一章：<H2>**（關鍵字落點：<...>）
+1. <要點>
+2. <要點>
+3. <要點>
+**第二章：…**
+…
+**FAQ（供 AEO / schema）：**
+- Q：… / A：…（精簡）
+**AEO 要求：** 開頭即答句「<...>」；命名框架「<...>」
+**CTA：** <B2B discovery / lead magnet>
+
+大綱與要點已確認，可交棒給 content-draft 進行段落撰寫。
+```
+
+## Outputs
+
+Article outline + FAQ + handoff summary (compatible with `content-draft`).
+
+## Limitations
+
+Does not write paragraphs, set titles, or proofread — those go to the existing 1.06 / 1.09 / 1.07.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

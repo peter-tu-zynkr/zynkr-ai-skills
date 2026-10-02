@@ -1,0 +1,82 @@
+# KPI map — `KPI Dashboard` tab of `sources.okr_kpi_tracker`
+
+19 metric rows (rebased 2026-08-06 to the Main Tracker; `Actual` empty for every row at seed time). Some rows carry a combined Tracker # (e.g. `1.01/1.02/1.10/1.11`); the runway/burn row has no `#`. **Never address rows by position** — `scripts/kpi_locate.py` reads the whole tab, resolves the `Actual` / `As of` / `Source` columns by header text and matches rows by Tracker # (normalised) with metric-name fallback. Owners are not listed here: read them from the tracker's `負責人` column each run, and resolve emails via `people{}` in the private config.
+
+Class: **AUTO** = the skill can compute it from a system of record · **SEMI** = partly readable, human confirms/attributes · **HUMAN** = no machine source; the skill asks, never invents.
+
+| Tracker # | Metric | Class | Actual comes from | Fetch LOCALLY (tool + sketch) | Cloud routine? |
+|---|---|---|---|---|---|
+| 1.08 | 電子報 stack (Drip + 分流 + Pop-up) status | HUMAN (SEMI via repo log) | Kit account config + website-fe repo commits | `gh` / git log on the website repo for pop-up + Kit form commits; Kit account has no MCP (Kit MCP here is docs-only) | unfilled · ask owner |
+| 1.03 | SEO 文章 cadence (1/wk) | AUTO | CMS Supabase `articles` | `mcp__supabase__execute_sql`: `select date_trunc('week', published_at) wk, count(*) from articles where status='published' and published_at >= now() - interval '8 weeks' group by 1 order by 1` (filter SEO category if the column exists) | no (Supabase not reachable) → unfilled · ask owner |
+| 1.09 | 活化舊名單 progress | HUMAN | Kit / CSRC broadcasts | none (no Kit account MCP) | unfilled · ask owner |
+| 1.01/1.02/1.10/1.11 | About / 敘事線 / 見證 / 合作廠商 shipped (n of 4) | SEMI | live site + tracker 狀態 | `WebFetch` the public pages + `read_sheet_values` on 「H2 專案項目」 rows 1.01/1.02/1.10/1.11 → count 進行中/PROPOSE_DONE | yes (tracker readable) — value is a proposal until owner confirms |
+| 2.01 · 2.02 · 2.03 | Sales-ops P0 builds live (業務流程結構化 · On-board · 分潤系統) | SEMI | tracker 狀態 (human-set) | `read_sheet_values` on the three rows | yes (mirror tracker status; no invention) |
+| 2.04 | 企業戶陌生開發 qualified accounts | AUTO (if logged in CRM) | Zynkr CRM `crm_deals` | `mcp__zynkr__list_deals` (filter stage ≥ qualified, created ≥ H2 start; owner = 2.04 owner) or `execute_sql` on `crm_deals` | no (CRM not reachable) → unfilled · ask owner |
+| 2.06 | 高 LTV 課程 revenue attributed | SEMI (revenue) / HUMAN (attribution) | `sources.finance_ledger` tab `Income` (cash-basis, bank-reconciled) | `read_sheet_values` on `Income!A1:N200`; filter `category = income` and `subcategory = course-revenue`. Attribution to 主動販賣 does not exist as a field → ask | **yes** (revenue readable; attribution still HUMAN) |
+| 3.04 | 線下場次 + funnel | SEMI | [3.1] `#Operation` event list (Accupass link + 報名人數) + Calendar | parse newest [3.1] block Operation section (`extract_newest_block.py`); count events + 報名人數; Calendar via cloud connector only | yes (weekly log readable) — funnel conversion stays HUMAN |
+| 3.01 | LINE 群 rhythm + conversion | HUMAN | LINE OA (connector beta only) | none | unfilled · ask owner |
+| 3.02 | 內部講師 developed | HUMAN | — | none | unfilled · ask owner |
+| 4.01 | 企業 AI 診斷 engagements | SEMI | CRM consult deals + Notion Kanban | `mcp__zynkr__list_deals` (consult pipeline stages) + `notion-search` on the consultancy Kanban | no → unfilled · ask owner |
+| 4.05 | 陪跑課 | SEMI → HUMAN | course tracker 專案管理總表 | `read_sheet_values` on `sources.course_tracker` tab; % complete from task status | yes (sheet readable) |
+| 4.07 | Vibe Coding | SEMI → HUMAN | course tracker 專案管理總表 | same as 4.05 | yes (sheet readable) |
+| 5.02 | 內部導入 Zynkr adoption | AUTO | Zynkr Supabase `crm_*` activity + AI usage metering | `execute_sql`: distinct active internal users / AI calls last 7d & 28d from the platform's usage tables | no → unfilled · ask owner |
+| 5.03 | 分潤系統 build | SEMI | platform repo CHANGELOG / GitHub | `gh` on the platform repo: commits / spec IDs touching 分潤 | no (no gh) → unfilled · ask owner |
+| 7.01 | 公司 KPI 制度 | HUMAN | the metric-set design itself — the `Ops Metrics v0` tab | `read_sheet_values` on that tab; Q3「designed」closed 2026-09-07 (tracker 7.01 → 完成) | Q3 filled; Q4「operating」(≥90% of weeks the review actually ran) unfilled · ask owner |
+| — | Net monthly burn (NT$/mo) | **AUTO** | `sources.finance_ledger` (Zynkr Finance Ledger) tab `Monthly Summary` | `read_sheet_values` on `Monthly Summary!A1:H30`; the `net` column (G) per month, averaged over `constraints.burn_window`; books-as-of = the last non-zero month row, cross-checked against `max(Transactions!B)` | **yes** — the Drive connector reads this Sheet |
+| — | Runway (months) | **AUTO** | same ledger, tab `Monthly Summary` | cash ÷ the burn above, where cash = the cumulative `total` column (H) at the last closed month. ⚠ **Cash is that cumulative figure, never the 富邦 bank balance** — the gap between them is the personal-card float the company owes Peter, which is a payable, not spendable cash | **yes** |
+
+Permanently HUMAN (no MCP exists): 1.08 · 1.09 · 3.01 · 3.02 · 7.01. Say so in the brief instead of re-asking weekly; batch HUMAN asks monthly.
+
+⚠ The Tracker # for 公司 KPI 制度 is **7.01** (7.0 People & Talent / 7.1 目標與績效), never 6.01 — 6.01 is 課程平台 (暫停, 繼續和 Hahow 配合). The `KPI Dashboard` tab has always carried 7.01; this file and the `Ops Metrics v0` header row said 6.01 until 2026-09-07. `kpi_locate.py` matches rows by normalised Tracker #, so a wrong id misses silently rather than erroring.
+
+## Runway rule (C1 · O5)
+
+- The **first line of every brief** is the runway line: `Runway ≈ N.N mo · burn NT$X/mo (cap NT$C) · books as of YYYY-MM-DD (source)`, where C is `constraints.burn_cap_ntd_per_month` from the private config.
+- **RED** when runway < 4 months (guardrail: no spend that pushes runway below 4 months) **or** books-as-of is > 30 days old **or** the value cannot be fetched (unattended cloud runs: print `RED · unfilled — books not readable in this environment`). RED is never silent.
+- Two clocks under the runway line: cash clock (months) and calendar clock (days to Q3 close 09-30 / H2 close 12-31).
+
+### How to compute it (wired 2026-09-13)
+
+Runway is no longer un-metered. `sources.finance_ledger` is the books — bank-reconciled to the
+富邦 statement every month — and the Drive connector can read it, so the **cloud routine computes
+this too**. Three reads, in order:
+
+1. `Monthly Summary!A1:H30` — one row per month: `month · income · operating-cost · payroll · misc · total_expenses · net · total`.
+2. **Cash** = column `total` (H) at the last closed month. That column is the running cumulative,
+   and per the ledger's validating identity `cumulative + outstanding personal-card float = 富邦 balance`.
+   Use the cumulative. The float is money owed to Peter.
+3. **Burn** = the mean of column `net` (G) over the window in `constraints.burn_window`, after
+   backing out every row listed in `sources.finance_ledger.runway_read.one_off_ids` (subtract an
+   income row from its month's `net`, add a cost row back).
+
+**Ruled 2026-09-21: `trailing_6_ex_oneoff`, with two one-offs.** Answering the W39 brief, the GM
+ruled that the July income windfall does not recur, and that a one-time cost in the same month is
+backed out too, so both sides of July are normalised rather than only the income side. Both rows
+sit in `one_off_ids` in the private config, and the resulting figures live there, not here.
+
+Rejected along the way: `trailing_3` (July alone swings it net-positive, so there is no finite
+runway) and `trailing_6` as booked (it counts the windfall as run-rate). Stripping only the income
+one-off was the interim reading from 09-13 to 09-21. It was superseded because it left the matching
+one-time cost in, which made July the worst month on the books.
+
+From 09-13 to 09-21 the brief printed both candidates and took the worse state. Keep that behaviour
+for any future unruled window: print every candidate, never pick one silently.
+
+**One-off / non-operating filter.** Never treat these as operating revenue when reasoning about
+run-rate: `income/transfer` (e.g. a one-time capital injection),
+`income/interest`, `misc/refund`, and every id in `one_off_ids`. Key the exclusion by **id**, not
+by note text: the two ruled rows no longer carry 待確認. Row notes live on `Transactions` (column
+K); `Income` and `Costs` are `QUERY` views of it, so link and edit the `Transactions` row — typing
+into `Income` or `Costs` breaks the whole view.
+
+**Read-only.** zynkr-gm never writes to this ledger. Appends to `Transactions` belong to
+`/zynkr-accounting`. Never write into the `Financial Model` tab's month columns (E:AP) — they are
+spilled array results and a write turns the row into `#REF!`.
+
+## Write rule (P1 — local runs only)
+
+1. Read the whole `KPI Dashboard` tab; `scripts/kpi_locate.py` returns `{tracker_no, row_index, actual_col, asof_col, source_col}` per row. Missing `As of` / `Source` columns → do **not** add columns (schema change to a canonical sheet needs a decision); write `Actual` only and put as-of + source in the brief.
+2. Write single A1 cells with `modify_sheet_values` for AUTO and SEMI rows only: `Actual` = value, `As of` = `YYYY-MM-DD`, `Source` = tool/table.
+3. Re-read the written cells and compare; mismatch → fail loud, do not retry blindly.
+4. HUMAN rows: never write; list under "KPI asks" with owner. Never invent a value, never copy a target into `Actual`.
+5. Cloud routines never write cells (no cell-level Sheets API via the Drive connector) — they report values in the brief for Peter to paste.

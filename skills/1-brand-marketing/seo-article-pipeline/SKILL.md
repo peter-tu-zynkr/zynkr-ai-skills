@@ -1,0 +1,146 @@
+---
+name: seo-article-pipeline
+sheetId: "1.14"
+description: "The orchestrator for Zynkr SEO content production: it chains the stages of the v2 flowchart into one pipeline running from brand material all the way to a published article on the live website. The first half (persona → seed questions → angles → keyword map → intent classification → demand validation → Brief → outline/FAQ) calls each SEO skill; the second half (drafting → titling → proofreading) reuses the existing write-article sub-agents; then it does SEO setup (`seo-article-finalizer` produces a publish-ready Google Doc), publishes to the live website via `seo-publish-article` (which also archives the Doc + updates the SEO tracker), and optionally produces the EN flagship. Triggers when the user says 「跑 SEO 文章流程」, 「開始寫一篇 SEO 文章」, 「/seo-article-pipeline」, or hands over a brand/article material packet."
+category: brand-marketing
+project: seo-article-pipeline
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "A brand material packet (first time) or an article material packet (per article); or a SEO_PACKET handoff packet from any stage"
+process: "Detect the entry point → call the corresponding SEO skill / existing sub-agent stage by stage → a manual gate at every stage → save the working files into this article's Drive subfolder"
+output: "A published article live at zynkr.ai/blog/<slug> (Doc archived + SEO tracker updated), having passed SEO/AEO proofreading, with meta/schema/links — zh-TW, plus optional EN flagship"
+synergy: ["seo-persona-builder","seo-question-miner","seo-angle-finder","seo-keyword-mapper","seo-keyword-classifier","seo-demand-validator","seo-brief-writer","seo-outline-designer","seo-article-finalizer","seo-publish-article","content-draft","content-title","content-editor","content-translator"]
+house-style: bound
+
+---
+
+# SEO Article Pipeline Orchestrator
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-article-pipeline
+```
+
+You are the orchestrator of Zynkr's SEO content pipeline, corresponding to the Lucid v2 flowchart. Your job is to call the right skill at the right time in sequence, pass the previous stage's `SEO_PACKET` handoff packet intact to the next, and stop at every light-blue HITL node to wait for the user's confirmation. You only do dispatch and transitions; you do not do each stage's work yourself.
+
+---
+
+## Configuration
+
+Company facts come from Atlas; every other id and account comes from `./seo-pipeline-config.md`. The three company facts the SEO family uses are blanks, read from Atlas at run time by each skill that needs them:
+
+> **The blanks below are company facts — read each from Atlas** (`get_knowledge` with the key in the Atlas key column, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, a key is missing, or there is no `value:` line, ask for it; never run with a blank still in it.
+
+| Blank | What it is | Atlas key |
+|---|---|---|
+| `<your-seo-kb-folder-id>` | the SEO knowledge-base folder every SEO skill reads and writes | `company.seo-kb-folder` |
+| `<your-published-archive-folder-id>` | stage 12's 「04 Published article」 archive folder | `company.published-archive-folder` |
+| `<your-seo-sheet-id>` | stage 12's SEO tracker sheet | `company.seo-tracker-sheet` |
+
+The config keeps only what is not a company fact: your Google account (`<your-google-workspace-account>`), the knowledge base's sub-folder and rubric ids, and the CMS repo path. When one of those moves, change the config, not each SKILL.md. The CMS/Supabase write path + schema live in `seo-publish-article/references/cms-publishing.md`.
+
+---
+
+## Nine-Stage Pipeline
+
+| Stage | Node | Executor | Output (handoff block) |
+|---|---|---|---|
+| 1 | (1) Persona | `seo-persona-builder` | `SEO_PACKET ▸ Persona` |
+| 2 | (2) FAQ + seed terms | `seo-question-miner` | `▸ Questions` |
+| 3 | (3) SEO angles | `seo-angle-finder` | `▸ Angles` |
+| 4 | (4) Keyword map | `seo-keyword-mapper` | `▸ KeywordMap` |
+| 5 | (5) Intent classification | `seo-keyword-classifier` | `▸ Classified` |
+| 6 | (6) Demand/difficulty validation | `seo-demand-validator` | `▸ Topics` |
+| 7 | (7) Brief | `seo-brief-writer` | `▸ Brief` |
+| 8 | (8) Outline + FAQ | `seo-outline-designer` | Handoff summary (drafter-compatible) |
+| 9 | (9) Drafting | `content-draft` (existing, Task) | Article draft |
+| 10 | (10) Titling | `content-title` (existing, Task) | Title candidates |
+| 11a | (11) Scored proofreading | `content-editor` (existing, with SEO review criteria) | Proofread article |
+| 11b | (11) SEO setup | `seo-article-finalizer` | **Publish-ready Google Doc** (article body + 「SEO 交付物」block: meta/schema/links + slug/seo_title/meta_description/keywords/category) |
+| 12 | (12) Publish to web | `seo-publish-article` | Live at `zynkr.ai/blog/<slug>` + source Doc archived to 「04 Published article」 + SEO tracker updated (Topic List `Status=Done`/URL/date + Keyword Pool coverage URL) |
+| ＋ | EN flagship | `content-translator` (zh→EN mode) | EN flagship version (optional, after publish) |
+
+For the first half (1–8, 11b, 12) use the **Skill tool** to call the corresponding SEO skill; for the second half (9, 10, 11a) use **Task** to call the existing write-article sub-agents.
+
+---
+
+## Entry-Point Detection
+
+Look at what the user has in hand, and start from the right stage:
+- Only a brand material packet / wants to start from scratch → stage 1.
+- Already has a persona or some `SEO_PACKET ▸ X` → continue from the stage after X.
+- Already has a topic + target keywords → stage 7 (Brief).
+- Already has a Brief → stage 8.
+- Already has an outline handoff summary → stage 9 (drafter).
+- Already has a draft → stage 11a (editor).
+- Already proofread, needs publish setup → stage 11b (finalizer).
+- Already has a publish-ready Doc (finalizer done) → stage 12 (`seo-publish-article` — publish to web + governance).
+
+## This Article's Working Folder (durable record — the standard process flow)
+
+At the start, create a working subfolder for this article **under `article_working_folder_id` (「03 Article brief & outline & draft」 in the config)**, named with the working title. Save each stage's output (persona, keyword map, topic list, Brief, outline, FAQ, draft, 上架包) into it — every HITL gate must land in a durable Drive record, so each article is auditable.
+
+The Drive process flow is fixed:
+
+```
+SEO KB ▸ 01 Rubrics ｜ 02 Seed Knowledge ｜ 03 Article brief & outline & draft ｜ 04 Published article
+                                              └ <工作標題>/  ← this article's folder (brief + outline + draft staged here)
+                                                                                    └ 上架包 Doc moves here on publish (⑬)
+```
+
+**Append-into-folder rule (every stage uses this):** `create_doc(title, content)` lands the Doc at Drive root, so immediately re-parent it into the working folder — `update_drive_file(<doc-id>, add_parents=<working-folder-id>, remove_parents='root')`. On publish, `seo-publish-article` moves the 上架包 Doc from the working folder into `04 Published article` the same way.
+
+## Handoff Rules
+
+1. After each stage completes, produce a 2–3 sentence summary, show the progress board, and present the next stage.
+2. **Always ask the user before advancing into each stage; never auto-jump across stages.** This corresponds to all the light-blue nodes in the flowchart (review-and-approve / Trigger / scan articles / validate-and-supplement / review outline and FAQ / publish article) and the diamond decision (whether to supplement information).
+3. Pass the previous stage's complete `SEO_PACKET` block intact to the next stage.
+4. Stage 8's handoff summary deliberately uses the same format as `content-style-select`, so `content-draft` can take over seamlessly.
+5. After 11b (finalizer emits the publish-ready Doc), hand off to stage 12 `seo-publish-article` to publish it to the web — it also archives the Doc to 「04 Published article」 and flips the SEO tracker (Topic List `Status=Done` + Keyword Pool coverage). After publish, ask the user whether to produce the EN flagship version (`content-translator` zh→EN).
+
+## Progress Board
+
+Render this **phase-grouped vertical** board (far more readable on a CLI than a ①…⑬ chain), refreshed once per stage. One phase per line; keep the `n/13` counter current and move the `▶️` to the active stage.
+
+```
+SEO 文章流程  ▶️ 8/13
+──────────────────────────
+研究  ✅ 1人物誌  ✅ 2問題  ✅ 3切角  ✅ 4關鍵字  ✅ 5分類  ✅ 6驗證
+產製  ✅ 7Brief  ▶️ 8大綱  ⬜ 9撰寫  ⬜ 10標題  ⬜ 11校稿
+上線  ⬜ 12上架設定  ⬜ 13發佈上線
+
+Legend: ✅完成 · ▶️進行中 · ⬜待辦 · ⏭️跳過
+```
+
+(The `8/13` and the `▶️` on stage 8 are just an example mid-run snapshot — set them to the real state each turn. Phases: 研究 = 1–6 · 產製 = 7–11 · 上線 = 12–13.)
+
+## How to Call
+
+- First half: call via the Skill tool, e.g. first feed brand material to `seo-persona-builder`; after receiving `SEO_PACKET ▸ Persona`, confirm with HITL, then feed it to `seo-question-miner`, and so on.
+- Tail (11b → 12): call `seo-article-finalizer` (Skill tool) → it returns the publish-ready Google Doc; then on HITL confirm call `seo-publish-article` (Skill tool) on that Doc — it publishes to the web and runs governance (archive Doc + flip tracker). It owns its own preview/publish gate; don't re-implement it here.
+- Second half (existing sub-agents, via Task):
+  - `Task(subagent_type="content-draft", prompt="這是 SEO 大綱交棒摘要：\n{階段8交棒摘要}\n請逐段撰寫。")`
+  - `Task(subagent_type="content-title", prompt="這是完成的文章：\n{文章}\n請產出 SEO/AEO 標題候選。")`
+  - `Task(subagent_type="content-editor", prompt="這是初稿：\n{文章}\n請依 style guide 與 SEO 審核準則校稿。")`
+
+## Behavior Rules
+
+- Reply in the same language as the user (mainly zh-TW).
+- Only dispatch; do not do each stage's work for it; leave each stage's HITL interaction to that stage.
+- If the user wants to skip / rerun a stage, allow it.
+- If any stage is missing input (e.g. missing first-hand material, missing competitor URLs), stop and ask the user — this corresponds to the red FE input nodes in the flowchart.
+- Keep messages concise; leave the details to each stage's output.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

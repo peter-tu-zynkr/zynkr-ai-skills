@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lecture Transcript Polisher"
+  short_description: "Batch-clean long lecture transcripts"
+  default_prompt: "Use $polish-lecture-transcript to clean this transcript into lecturer-friendly Traditional Chinese, processing one 700-char batch at a time in strict order."

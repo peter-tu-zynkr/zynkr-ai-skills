@@ -1,0 +1,370 @@
+---
+name: skill-publish
+sheetId: "6.10"
+description: "Land a freshly-built SKILL.md into the Zynkr skills pipeline — the closing step of the canonical chain (/skill-sourcer → /skill-triager → /skill-author → /skill-qa → /skill-publish). Attaches the artifact to the existing pipeline issue, fires the publish-skill workflow to open a PR, and hands off to /skill-triager confirm-ship for closure. Trigger on phrases like 'publish this skill', 'land this skill', 'I finished building, push it', 'register this skill', 'add this built skill', 'check category and dedup before upload', or '/skill-publish'. Use whenever the user has a finished SKILL.md and wants it landed in zynkr-skill-builder — whether it came from /skill-author (happy path) or from elsewhere (fresh intake fallback)."
+category: engineer
+project: skill-publish
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "A path to the finished SKILL.md (folder or file), a GitHub URL to a SKILL.md, or pasted content. Optionally an existing pipeline issue number — if not given, the skill tries to match by slug + category against the GitHub Project."
+output: "Either (a) continuation mode: existing Project item updated (Build Status=ready-to-ship, Built Skill URL=PR URL, Artifact=skill-md-only), publish-skill.yml dispatched, PR opened, comment posted on the existing issue, or (b) fresh-intake mode: new GitHub issue + Project item created (Intake Source=skill-publish), then same dispatch + PR + comment."
+synergy: ["skill-sourcer", "skill-triager", "skill-author", "skill-qa"]
+handoff: ["skill-triager"]
+disable-model-invocation: true
+security_audits:
+  gen_agent_trust_hub: pending
+  socket: pending
+  snyk: pending
+house-style: exempt — machine artifact — git and publish plumbing, no prose output
+
+---
+
+# Skill Publish
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill skill-publish
+```
+
+The **closing step** of the Zynkr skill pipeline. `/skill-publish` lands a finished SKILL.md into `zynkr-skill-builder`, attaches it to the existing pipeline issue, and hands off the rest to automation + `/skill-triager`.
+
+> **Canonical chain (the happy path you'll hit 80% of the time):**
+>
+> ```
+> /skill-sourcer  →  /skill-triager  →  /skill-author   →  /skill-qa  →  /skill-publish
+>   (find idea)      (approve)         (fill the stub)    (QA gate)    (land + ship)
+> ```
+>
+> By the time `/skill-publish` runs, a GitHub issue already exists in `peter-tu-zynkr/zynkr-skill-idea` with `Pipeline Status=approved`, a slug + category, and an open `skill/<slug>` branch carrying the stub SKILL.md. `/skill-author` filled in the real content and `/skill-qa` passed it. `/skill-publish` just attaches the artifact to that existing pipeline state, fires `publish-skill.yml` to open the PR, and lets `/skill-triager` close the loop after merge.
+
+---
+
+## Step 0 — QA gate (mandatory, runs in both modes)
+
+Before anything else, the SKILL.md must clear QA. Invoke `/skill-qa <path>` on the artifact and read its verdict:
+
+- **Recent-PASS short-circuit:** if `/zynkr-skills` already ran `/skill-qa` on this same artifact this turn and it PASSed, record "QA: PASS (from front-door)" and proceed — don't re-run.
+- **ERROR-tier fail → HARD STOP.** Do not detect mode, do not dispatch (Step 5's dispatch is the only state-changing step). Print the QA report's ERRORs with their fixes and tell the user to fix and re-run `/skill-publish`.
+- **WARN-only → advise, then ask:** "QA passed with N warnings (listed). Publish anyway, or fix first?" Default to publishing with the warnings recorded. WARN never blocks.
+
+Print a one-line verdict at the top of your output: `QA: PASS (0 errors, N warnings)` or `QA: FAIL (M errors) — not publishing.`
+
+This is the interactive half of the tollgate; CI (`publish-skill.yml` / `qa.yml`) re-runs the same engine as a hard backstop, so a skipped or overridden Step 0 still cannot land an ERROR-tier skill on `main`.
+
+---
+
+## Step 1 — Locate the artifact and detect mode
+
+Accept input in any of these forms:
+
+- **Folder path** → expect a `SKILL.md` at the root
+- **Direct `SKILL.md` path** → read the file
+- **Pasted SKILL.md content** → use as-is
+- **GitHub URL** to a `SKILL.md` (raw or blob) → fetch it
+
+If the user didn't provide an input, ask:
+
+> "Where's the finished SKILL.md? Drop a folder path, a SKILL.md path, a GitHub link, or paste the content."
+
+### Then detect the mode — this changes everything downstream
+
+Ask the user (or auto-detect from context):
+
+> "Was this skill opened via `/skill-sourcer` already? If yes, what's the issue number? If not, I'll do a fresh intake."
+
+**Mode A — Continuation (happy path):** The user gives an issue number, or you can match the SKILL.md's frontmatter `name`/`description` against open issues in `peter-tu-zynkr/zynkr-skill-idea` with label `triage-ready` or `building`. Confirm the match with the user:
+
+> "Found issue #N — `[Skill Proposal] X — <title>` (Pipeline Status: approved, Build Status: context-prep). Attaching this SKILL.md to it. ✓"
+
+Skip the dedup/classify chain entirely — the issue already carries those decisions.
+
+**Mode B — Fresh intake (fallback):** No prior pipeline item exists. Run the full classify + dedup + propose chain (Steps 2b–4b below) before landing the artifact.
+
+---
+
+## Step 2 — Continuation flow (Mode A — happy path)
+
+The issue already exists; the SKILL.md is the body that fills it. Almost no skill-side work — most of the action is in the workflow.
+
+1. **Read the SKILL.md** — parse frontmatter (`name`, `description`, `category`, `status`). Display it to the user as a sanity check, but **don't re-classify** — the issue's category is authoritative.
+2. **Verify the category matches** — if the SKILL.md's `category:` differs from what's on the existing issue/Project item, surface the mismatch and ask the user which to trust. Update the issue/Project to match the SKILL.md, or fix the SKILL.md, before continuing.
+3. **Resolve the target path** — `skills/<N-cat>/<slug>/SKILL.md` from the existing Project item's `Build Target Path`. (If empty, derive `slug` from the SKILL.md's `name` or the issue title.)
+4. **Fire the `publish-skill` dispatch** (see Step 5 — same payload for both modes).
+5. **Update the existing Project item** — `Build Status=ready-to-ship`, `Artifact=skill-md-only`, `Built Skill URL=pending PR` (will backfill once the workflow runs).
+6. **Post a comment on the existing issue** so the audit trail is one continuous thread:
+
+   ```bash
+   gh issue comment <num> --repo peter-tu-zynkr/zynkr-skill-idea --body "Skill artifact attached via \`/skill-publish\`. Dispatched \`publish-skill.yml\` — PR will follow shortly."
+   ```
+
+7. Skip to Step 6 (sync READMEs after PR merges).
+
+---
+
+## Step 2b — Fresh-intake flow (Mode B — fallback)
+
+When no prior pipeline item exists for this SKILL.md. Same shape as `/skill-sourcer` but without the extractor (the SKILL.md is the extract). Run these steps before reaching Step 5.
+
+### 2b.1 Parse the SKILL.md as the extract
+
+Read frontmatter and body intro. Build a structured extract:
+
+```
+name:        <frontmatter.name>
+title:       <H1 or humanised name>
+description: <frontmatter.description>
+input:       <frontmatter.input>
+output:      <frontmatter.output>
+who it helps: <inferred from description — ask if unclear>
+source URL:  <upstream URL or "Peter-authored, no upstream">
+prior category: <frontmatter.category or null>
+```
+
+Confirm with the user: **"This is what I read from the SKILL.md. Anything to correct before classifying?"**
+
+### 2b.2 Classify (subagent)
+
+Spawn the **skill-classifier** subagent at `../skill-sourcer/agents/classifier.md`. Pass the SKILL.md's `category:` as the **prior** — the classifier confirms or overrides.
+
+### 2b.3 Dedup (subagent)
+
+Spawn the **skill-deduplicator** subagent at `../skill-sourcer/agents/deduplicator.md`.
+
+- **`new`** → proceed.
+- **`partial_overlap`** → ask the user whether to proceed anyway.
+- **`exact_duplicate` / `near_duplicate`** → **you should be in continuation mode, not fresh intake**. Switch back to Mode A — the existing item is what you want to attach to. (If the user *really* wants a duplicate proposal, fall through to "replace existing" — rare.)
+
+### 2b.4 Propose (subagent)
+
+Spawn the **skill-proposer** subagent at `../skill-sourcer/agents/proposer.md`. Creates the issue + Project item with:
+
+- `Intake Source=skill-publish`
+- `Artifact=skill-md-only`
+- `Build Status=ready-to-ship`
+- Issue body includes `**Built via**: skill-publish` and `**Built Skill URL**: pending PR`
+
+Ask: **"Set Keep=yes to approve now, or leave as ? for later review."** On approval, set `Pipeline Status=approved`, add `triage-ready` label.
+
+Then fall through to Step 5.
+
+---
+
+## Step 5 — Fire `publish-skill.yml` dispatch (both modes)
+
+> **Pre-flight:** do not reach this step unless Step 0 returned **QA PASS** (or WARN-only with explicit user override). The dispatch is the one state-changing action — never fire it for an ERROR-tier skill.
+
+Identical for continuation and fresh intake. The dispatch event is what makes the SKILL.md actually land in the repo.
+
+Pick **one** of the three payload shapes — `skill_md_url`, `skill_md_b64`, or `bundle_b64`. The workflow rejects payloads with more than one or none.
+
+**Decision tree:**
+- Skill is a single SKILL.md, content already on GitHub (other repo, gist, raw URL) → `skill_md_url`.
+- Skill is a single SKILL.md, only local → `skill_md_b64`.
+- Skill has additional files (`references/`, `scripts/`, `assets/`) — **the common case for Peter-authored skills** → `bundle_b64`.
+
+**Shape 1 — `skill_md_url`** (single file, remote):
+
+```bash
+gh api repos/peter-tu-zynkr/zynkr-skill-builder/dispatches \
+  -X POST \
+  -f event_type=skill-publish-request \
+  -F "client_payload[issue_number]=<num>" \
+  -F "client_payload[issue_repo]=peter-tu-zynkr/zynkr-skill-idea" \
+  -F "client_payload[slug]=<slug>" \
+  -F "client_payload[category]=<category-number-or-slug>" \
+  -F "client_payload[skill_md_url]=<raw or blob URL to the SKILL.md>"
+```
+
+**Shape 2 — `skill_md_b64`** (single file, local):
+
+```bash
+gh api repos/peter-tu-zynkr/zynkr-skill-builder/dispatches \
+  -X POST \
+  -f event_type=skill-publish-request \
+  -F "client_payload[issue_number]=<num>" \
+  -F "client_payload[issue_repo]=peter-tu-zynkr/zynkr-skill-idea" \
+  -F "client_payload[slug]=<slug>" \
+  -F "client_payload[category]=<category-number-or-slug>" \
+  -F "client_payload[skill_md_b64]=$(base64 -w0 < /path/to/SKILL.md)"
+```
+
+**Shape 3 — `bundle_b64`** (multi-file, local):
+
+```bash
+# Build the tarball — the top-level entry MUST be the slug folder.
+# Run from the parent of the skill folder:
+SLUG=<slug>
+BUNDLE_B64=$(tar -czf - -C /path/to/parent "$SLUG" | base64 | tr -d '\n')
+
+gh api repos/peter-tu-zynkr/zynkr-skill-builder/dispatches \
+  -X POST \
+  -f event_type=skill-publish-request \
+  -F "client_payload[issue_number]=<num>" \
+  -F "client_payload[issue_repo]=peter-tu-zynkr/zynkr-skill-idea" \
+  -F "client_payload[slug]=$SLUG" \
+  -F "client_payload[category]=<category-number-or-slug>" \
+  -F "client_payload[bundle_b64]=$BUNDLE_B64"
+```
+
+The workflow extracts the bundle to `skills/<N-cat>/<slug>/` — all files inside (SKILL.md, references/, scripts/, assets/) land in the same PR.
+
+**Size limit.** GitHub caps `client_payload` at ~64 KB serialized. Gzipped markdown is usually 25-35% of raw, so most multi-file skills fit comfortably (ops-workflow-design with 7 files = ~40 KB b64). If your bundle is too large, use the **pre-push fallback**:
+
+1. Create branch `skill/<slug>` from `main` locally.
+2. Add the whole folder, commit, push to that branch.
+3. Open the PR manually with `gh pr create --base main --head skill/<slug> --title "publish(<slug>): from <repo>#<num>" --body ...`.
+4. Comment on the source issue with the PR URL.
+5. Skip the dispatch entirely — you've already done what it would have.
+
+This fallback should be rare; most skills fit in `bundle_b64`.
+
+**Verify the workflow landed:**
+
+```bash
+gh run list --repo peter-tu-zynkr/zynkr-skill-builder \
+  --workflow publish-skill.yml --limit 3
+```
+
+The workflow:
+1. Writes `skills/<N-cat>/<slug>/SKILL.md` (idempotent — refuses to overwrite)
+2. Runs the QA gate (`validate-skill.ts` — frontmatter + body + path-leak ERROR checks); blocks the PR on any ERROR
+3. Creates branch `skill/<slug>`, opens a PR titled `publish(<slug>): from peter-tu-zynkr/zynkr-skill-idea#<num>`
+4. Comments back on the source issue with the PR URL
+
+Surface the run URL and (once the workflow finishes) the PR URL to the user.
+
+After the PR merges, `ingest-skills.yml` adds the skill to the workbench's full index within a minute or two. It reaches the marketplace only if its manifest says `visibility: public` (no key means team): `export-stage.yml` stages it, and the public shelf holds a newly public skill until the owner promotes it there.
+
+---
+
+## Step 6 — Sync READMEs (after PR merges)
+
+Same logic as `/skill-sourcer`'s Step 6.5, plus a taxonomy-tree rebuild.
+
+### A — Local taxonomy tree
+
+The auto-generated section of `skills/README.md` updates itself when `ingest-skills.yml` runs in CI. No manual rebuild needed unless you're working off a local branch.
+
+### B — `SOURCED.md` row (optional, for the audit trail)
+
+Append a row in `peter-tu-zynkr/zynkr-skill-idea/SOURCED.md` with `Intake Source: skill-publish` so the two intake paths stay distinguishable in the index.
+
+### C — Build handoff tracking
+
+Same `Pipeline Status` / `Build Status` two-track model as `/skill-sourcer`. After the PR merges and ingest fires, the artifact is live but the Project still says `Build Status=ready-to-ship`. **`/skill-triager` Option D `confirm-ship` is the closer** — see Step 7.
+
+### D — Skills Index Sheet + Drive `[6.2]` mirror
+
+`ingest-skills.yml` carries the skill into the workbench's full index, and a public skill goes on to
+the marketplace through the shelf. That chain stops there. Two
+human-facing surfaces sit outside that chain and **no script in the repo writes them**: the
+**Skills Index Sheet** (the portfolio index) and the **Drive `[6.2]` Skills & Knowledge Library**
+mirror that the Sheet's link columns point at.
+
+`/skill-publish` deliberately does **not** do this work, for the same reason it does not flip the
+issue to `shipped`: it returns before the PR merges, and the Drive mirror copies files from
+`main` — there is nothing to copy yet. **`/skill-triager` Option D `confirm-ship` owns it**, and
+carries the procedure in `references/index-and-mirror.md`.
+
+What you *can* do here is hand the closer its inputs. Print them with the PR URL:
+
+```bash
+# knowledge files = everything the skill ships besides its SKILL.md.
+# Non-empty ⇒ confirm-ship also creates 2 Knowledge/<slug>/. Empty ⇒ it does not.
+git ls-tree -r --name-only origin/main -- "skills/<N-cat>/<slug>" | grep -v '/SKILL\.md$'
+```
+
+Report it as one line — `Knowledge: 5 files (2 Knowledge/<slug> required)` or
+`Knowledge: none (SKILL.md only — no knowledge folder)` — so the closer does not re-derive it.
+
+> ⚠️ Until `confirm-ship` runs, the skill is **in the full index (and, if public and promoted, on
+> the marketplace) but absent from the Sheet and Drive**. That is the normal window, not a bug — but it is also how rows end up with dead
+> plain-text link columns if the loop is never closed.
+
+---
+
+## Step 7 — Hand off to `/skill-triager` (the closer)
+
+`/skill-publish` does not flip the Project to `shipped` itself. That's `/skill-triager`'s job, and on purpose:
+
+- The PR may take time to merge (review, conflicts).
+- `ingest-skills.yml` may not have run yet by the time `/skill-publish` returns.
+- A separate human gate (`/skill-triager confirm-ship`) gives one final verification beat before the audit trail closes.
+
+When you're done with `/skill-publish`, tell the user:
+
+> "Published via dispatch. PR opened (URL: <pr_url>). After the PR merges, run `/skill-triager` and pick **Option D — `confirm-ship`** on this issue to close the loop. The triager will run its read-only verifications (`gh api contents` and the full `skills-index.json`, plus `/api/skills` for a public skill), then document the skill in the Skills Index Sheet and the Drive `[6.2]` mirror (a knowledge folder only if it ships files besides its SKILL.md), before flipping `Pipeline Status=shipped` and offering to install it into your local `~/.claude/skills/` via `npx skills add … --skill <slug>` — publishing to the marketplace alone does **not** make the skill invocable in your own Claude Code session."
+
+**Completion checklist (mode-dependent):**
+
+Continuation mode (happy path):
+- [ ] **QA Step 0 returned PASS** (or WARN-only override) — ERROR-tier never published
+- [ ] Artifact located, frontmatter parsed
+- [ ] Existing pipeline issue identified and confirmed with user
+- [ ] Category cross-check passes (or mismatch resolved)
+- [ ] `publish-skill` dispatch fired
+- [ ] `publish-skill.yml` run observed
+- [ ] Knowledge-file count reported for the closer (`n files` or `none`)
+- [ ] PR URL surfaced and posted as a comment on the existing issue
+- [ ] Project item updated: `Build Status=ready-to-ship`, `Artifact=skill-md-only`
+- [ ] User reminded to run `/skill-triager confirm-ship` after PR merges
+
+Fresh intake mode (fallback):
+- [ ] All continuation-mode checks above
+- [ ] Plus: extract confirmed by user, classifier ran (with override prompt if confidence was medium/low or differed from the prior), dedup verdict was `new` (or user explicitly chose to proceed despite overlap)
+- [ ] New issue created with `skill-proposal` label and `**Built via**: skill-publish` in the body
+- [ ] If approved: `Keep=yes`, `Pipeline Status=approved`, `triage-ready` label added
+
+Ask: **"Want to publish another skill?"**
+
+---
+
+## Where this skill can decouple from the others
+
+The canonical chain is opinionated, but each handoff has a clean break-point you can use:
+
+> **QA is the one step you cannot decouple from.** Even hand-committed skills (the pre-push fallback, a manual PR, a direct commit) must clear the CI QA backstop (`qa.yml` required check + the `ingest-skills.yml` pre-step). Skipping Step 0 locally only defers the gate to CI; it does not remove it.
+
+### Decouple from `/skill-sourcer`
+
+- **When:** Someone hands you a finished SKILL.md without going through sourcer (downloaded from another repo, third-party authored, scraped from a talk).
+- **How:** Use Step 2b (fresh intake) — `/skill-publish` runs classify + dedup + propose itself. No `/skill-sourcer` invocation needed.
+- **Tradeoff:** You lose the source-link traceability that sourcer captures. Manually note the origin in the issue body if it matters.
+
+### Decouple from `/skill-triager`'s scaffold step
+
+- **When:** The SKILL.md was written outside the pipeline (by hand, or with the `skill-creator` plugin on its own), not on a `skill/<slug>` branch opened by `pickup-approved-issue.yml`. The stub `SKILL.md` from the scaffolder is irrelevant or absent.
+- **How:** Run `/skill-publish` directly against the existing approved issue. `publish-skill.yml` opens a new PR with your real SKILL.md — the stub PR (if any) can be closed without merging.
+- **Tradeoff:** Two PRs for the same slug if both flows ran. Clean up the unused scaffold PR.
+
+### Decouple from `/skill-author`
+
+- **When:** You hand-authored the SKILL.md, or it came from outside the Zynkr pipeline entirely.
+- **How:** The provenance doesn't matter to `/skill-publish` — it cares about the SKILL.md being well-formed (parseable frontmatter, valid category, unique slug). No author handshake required.
+- **Tradeoff:** Nothing claims the `sheetId` or checks the frontmatter contract for you. Claim the next free id yourself and run `/skill-qa` before publishing.
+
+### Decouple from `/skill-triager` closure
+
+- **When:** You want the skill live and don't care about the audit Project flipping to `shipped`.
+- **How:** Just merge the PR. `ingest-skills.yml` makes it live regardless of triager status. The Project item stays at `Build Status=ready-to-ship` forever — harmless but messy.
+- **Tradeoff:** Audit trail goes stale. Recommended only for low-stakes / personal skills.
+
+### Decouple from `publish-skill.yml` (the dispatch path)
+
+- **When:** You're committing the SKILL.md by hand (e.g., a manual PR on a fork, working without `gh` auth).
+- **How:** Skip Step 5. Commit `skills/<N-cat>/<slug>/SKILL.md` to a branch yourself, open a PR. `/skill-publish` still does the classify + dedup + Project bookkeeping; you handle the file write.
+- **Tradeoff:** You lose the automated PR + back-comment. Update `Built Skill URL` manually once the PR is up.
+
+---
+
+## Error handling
+
+- **SKILL.md missing required frontmatter:** ask the user to fill it before continuing — `validate-skill.ts` will block the workflow anyway.
+- **QA ERROR-tier fail (Step 0):** treat like missing frontmatter — stop and re-prompt with the QA report; CI's `qa.yml` would block the PR anyway.
+- **Artifact path doesn't exist:** stop and re-prompt.
+- **Continuation mode but the issue isn't `approved`:** flag it — the user may have meant a different issue, or the triager step was skipped. Confirm before attaching.
+- **Existing target file in the repo (idempotency block):** `publish-skill.ts` exits 3. The slug is already taken — pick a different slug, or update the existing skill via a normal PR instead of re-dispatching.
+- **Dispatch returns non-2xx:** report the error and don't update the Project. The dispatch is the only state-changing step; everything before it is reversible.
+- **Workflow's "Comment back on the source issue" step shows a warning (yellow):** this is expected when `SKILL_IDEA_PAT` isn't set as a repo secret — the default `GITHUB_TOKEN` is scoped to `zynkr-skill-builder` only and can't comment cross-repo. The workflow continues past it (`continue-on-error: true`); the PR is open and the file landed. Post the back-comment yourself via `gh issue comment <num> --repo peter-tu-zynkr/zynkr-skill-idea --body "Published... PR: <url>"` and surface this to the user. Long-term fix: create a fine-grained PAT with cross-repo `issues:write`, save it as the `SKILL_IDEA_PAT` secret on `zynkr-skill-builder`.
+- **Bundle extracts but SKILL.md is missing inside:** the tarball's top-level directory didn't match the slug. Rebuild with `tar -czf - -C <parent> <slug>/` — the path argument must be the slug folder name, not its contents or an absolute path.

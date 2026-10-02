@@ -1,0 +1,4 @@
+interface:
+  display_name: "SRT Optimizer"
+  short_description: "Minimally clean .srt subtitles while preserving original wording"
+  default_prompt: "Use $srt-optimizer to minimally edit this .srt into readable Traditional Chinese subtitles. Preserve cue timing, numbering, and original wording. Only remove filler words, fix obvious STT mistakes, and adjust line breaks or spacing."

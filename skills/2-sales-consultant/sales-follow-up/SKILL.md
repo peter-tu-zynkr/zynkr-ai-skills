@@ -1,0 +1,284 @@
+---
+name: sales-follow-up
+description: >-
+  Turn a finished sales DEMO / discovery call into a converting follow-up — the
+  post-meeting counterpart to sales-outbound. Give it the demo transcript (a
+  Fireflies meeting, a Google Doc URL, or pasted notes) and it does two things in
+  one pass: (1) drafts
+  a pre-sales follow-up reply as a threaded Gmail DRAFT in Peter's inbox (never
+  sends), in the prospect's language and Peter's voice — opening by mirroring the
+  exact pain points they raised, mapping each to the matching Zynkr CRM
+  capability (zynkr.ai/crm), and moving them toward adopting the
+  solution, with a "sales kit attached manually" line; (2) syncs the EXISTING
+  CRM deal — finds the deal / contact / company, logs the demo as a note
+  activity, refreshes the deal summary, nudges the stage if warranted, closes the
+  now-stale scheduling task, and creates the agreed follow-up task. Trigger on
+  /sales-follow-up or when Peter hands over a demo / meeting transcript after a
+  call and says "draft a follow-up", "draft the pre-sales follow-up", "follow up
+  on this demo", "寫跟進信", "擬一封 demo 後的跟進信", "幫這場 demo 寫追蹤信並更新
+  CRM", "log the demo and draft the follow-up", or otherwise wants the post-demo
+  email plus the deal updated. Distinct from sales-outbound (a PRE-meeting DM →
+  new lead + first reply) and consult-project-specialist (documents a meeting
+  into a NEW project + Drive folder): this one takes ONE completed demo
+  transcript on an EXISTING deal and produces a conversion follow-up draft + a
+  light deal update — no new lead, no Drive folder, no meeting-to-project.
+category: sales-consultant
+project: sales-follow-up
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "2.10"
+input: "A demo transcript — a Fireflies meeting (id/URL/name; preferred), a Google Doc URL, or pasted — for a prospect with an existing CRM deal + email thread."
+process: "Parse the transcript (pains / what was shown / feedback / next steps) → map pains to solution-page capabilities → draft a threaded Gmail follow-up (never send) → sync the existing deal (demo note, refreshed summary, stage nudge, follow-up task) → report."
+output: "A threaded Gmail follow-up draft in Peter's inbox + an updated CRM deal (demo note, refreshed summary, follow-up task). Doesn't log the email — Gmail sync captures it on send."
+synergy: ["sales-outbound", "consult-project-specialist", "sales-specialist"]
+house-style: bound
+
+---
+
+# Sales Follow-up
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-follow-up
+```
+
+`sales-outbound` handles the *pre-meeting* moment: a DM reaches "yes, let's do a
+demo" and the skill books the lead + drafts the first reply. **`sales-follow-up`
+is the other end of that arc** — the demo happened, and now Peter wants the
+*converting* follow-up sitting in his inbox as a draft, and the deal in the CRM
+brought up to date with what actually happened on the call.
+
+From a single demo transcript it does both:
+
+1. **Drafts the follow-up email** — a threaded Gmail **draft** (never sent), in
+   the prospect's language and Peter's voice, that opens by mirroring the pain
+   points *they* raised, maps each to the matching Zynkr capability, and pushes
+   toward adopting the solution.
+2. **Syncs the existing deal** — logs the demo as a **note**, refreshes the deal
+   summary, nudges the stage if the call earned it, **closes the stale
+   "schedule the demo" task**, and books the **agreed follow-up task**.
+
+It runs **autonomously**: read transcript → draft email → update deal → report.
+No mid-run confirmation needed — the email is a *draft* (Peter reviews before
+sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
+
+## How this differs from its neighbours
+
+- **sales-outbound** — PRE-meeting. One pasted DM → a *new* lead (company +
+  contact + deal) + a first reply. Use it before a demo exists.
+- **consult-project-specialist** — takes a meeting transcript and stands up a
+  whole *project*: Weekly Update + numbered Drive folder + kickoff Doc. Heavy.
+  Use it when a consulting engagement is starting.
+- **sales-follow-up** (this one) — POST-demo. One completed demo transcript on an
+  *existing* deal → a conversion follow-up draft + a *light* deal update. No new
+  lead, no Drive folder, no project scaffold.
+
+## Fixed facts (don't re-derive these)
+
+- **Supabase project_id**: `uomieoqlkazknjgmfdda` (the shared Zynkr project; CRM tables are `crm_*`).
+- **Google account** for all Gmail / Docs tools: `<your-google-workspace-account>`.
+- **Writing style is NOT owned by this file.** The house voice lives in two Google Docs
+  under `[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`) and is read at runtime:
+  - 《[2.2] 內文風格指南 Style guide》 `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M`
+    — positive rules. **Part 3｜業務信件專屬 §八** is the section that governs this skill.
+  - 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+    — forbidden patterns + quotas. **Category X** is the sales-email-only one.
+
+  `get_doc_as_markdown` takes **no tab parameter** — it returns every tab as a top-level
+  `#` heading. Use only `# 最終產出`; ignore `# 指令工程`. If the Doc read fails, fall back
+  to the condensed copy in step 4 and say so in the report. **If the two disagree, the Doc
+  wins** — and flag that the condensed copy needs re-syncing.
+- **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 知識庫, 工作指南, 名單拓展, 情境工程 engine, pricing). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it.
+- **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
+- Never hardcode a user id (`auth.uid()` is NULL over MCP/SQL). The Zynkr MCP resolves the author itself — an activity written through it is authored by **the token's own user**, which for Peter's token is Peter.
+- **Do NOT log the follow-up email as a CRM activity.** Peter's Gmail is synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row. The **demo** is different — it isn't in Gmail, so the demo `note` is legitimately yours to write.
+
+---
+
+## Workflow
+
+### 1 · Acquire the inputs
+
+The trigger is a **demo transcript**. Read it — **prefer Fireflies**, which needs
+no paste and no upload:
+- **A Fireflies meeting** → Peter names it ("跟進範例科技那場 demo"), gives a meeting
+  id, or an `app.fireflies.ai/view/<id>` URL. Resolve with
+  `mcp__fireflies__fireflies_search(query="keyword:\"範例科技\" from:2026-09-01")`,
+  confirm by title + date + attendees, then read **both**:
+  `mcp__fireflies__fireflies_get_summary(transcriptId="<id>")` for the overview,
+  keywords and **action items with timestamps** — these map almost directly onto
+  the follow-up task and the agreed next step in §5 — and
+  `mcp__fireflies__fireflies_get_transcript(transcriptId="<id>")` for the verbatim
+  sentences, which is where the prospect's pain points appear **in their own
+  words**. §2 needs their wording, so never build the email off the summary alone.
+  The attendee emails on the row are the fastest route to the deal and the thread.
+- **Google Doc URL** → `mcp__google-workspace__get_doc_content(document_id=<url>)`.
+- **Pasted text** → read directly.
+
+⚠️ **Fireflies request budget.** The free plan allows **50 API requests per day**
+and every tool call spends one — a search + summary + transcript is three. Resolve
+in one search and never loop over meetings.
+
+Also capture anything Peter hands alongside it (don't block if absent — you can find them):
+- The **prospect's name / company** (to find the deal and the thread).
+- A **deal URL** (`…/deals/{id}`) → use that uuid directly instead of searching.
+- The **email-thread subject** (e.g. the original demo-invite) → to reply in-thread.
+
+### 2 · Parse the transcript
+
+Pull these out (infer logically, never fabricate — leave blank if absent):
+- **Pain points the prospect raised** — in *their* words. These are the spine of the email; lead with them.
+- **What was demoed** — which capabilities they actually saw.
+- **Their feedback / reactions** — what landed, what they liked, any hesitation.
+- **Pricing / plan discussed** — free tier, Plus, team/Pro, token caps.
+- **Promised next steps** — anything Peter committed to (send a recording, follow up in N days, help migrate data). These become the email's asks + the follow-up task.
+- **Language** (zh-TW vs EN) → the draft matches it.
+
+### 3 · Ground the pitch in the solution page
+
+`WebFetch https://zynkr.ai/crm` and pull the current capability names +
+pricing. Map **each pain point → the capability that answers it** (e.g. "資料散在
+雲端、翻找耗時" → 知識庫 + 資料 CSV 匯入 搬遷; "報價無固定邏輯" → 知識庫 報價
+criteria; "業務在外面跑沒空 key 資料" → Zynkr 執行模式). This mapping is what makes
+the follow-up *convert* instead of just recap.
+
+### 4 · Draft the follow-up reply (Gmail draft — never send)
+
+**Find the thread** with
+`mcp__google-workspace__search_gmail_messages(query="subject:\"<subject>\" in:anywhere")`,
+then read it with `get_gmail_thread_content` to grab the **last message's**
+`Message-ID`, the `References` chain, the `thread_id`, and the recipient/Cc set.
+
+Draft the reply with
+`mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to=<their email>, cc=<same cc as the thread>, thread_id=<id>, in_reply_to=<last Message-ID>, references=<chain>, subject="Re: <original subject>", include_signature=false, body=…)`.
+
+⚠️ **A threaded reply draft is immutable — get the body right the first time.**
+`mcp__claude_ai_Gmail__update_draft` DETACHES it: the call succeeds, but the returned
+`threadId` comes back equal to the new `messageId`, meaning the draft has been re-created
+as a standalone conversation with `In-Reply-To` / `References` stripped. (Observed
+2026-09-10 on a client follow-up.) To change the body, call `draft_gmail_message` again
+with the full corrected body plus `thread_id` + `in_reply_to` + `references`, then trash
+the old one with `mcp__claude_ai_Gmail__trash_message(messageId=…)` — the `messageId`, not
+the `r-…` draft id. **Always verify afterwards** with `list_drafts`: `threadId` must still
+equal the ORIGINAL thread id. A `threadId` that equals the `messageId` means detached.
+(`sales-outbound` may use `update_draft` freely — its mails are new, not threaded replies.)
+
+**Shape of the email.** The authoritative rules are 《[2.2] 內文風格指南》 **Part 3 §八 業務信件格式**
+(positive) and 《[3.2] 禁用詞清單》 **category X** (forbidden) — read them first, see *Fixed facts*.
+What follows is the follow-up-specific running order plus a condensed fallback. **Where they
+disagree, the Docs win.**
+
+Follow-up-specific beats, in order:
+- **Open by mirroring their pain** — name the 1–2 problems they raised on the call, quoted back
+  in 「」 in *their* words. Never paraphrase their words into marketing language (category X).
+- **Map pain → capability** — as **prose paragraphs, not a bullet list**. One short paragraph per
+  pain, each answered by the capability they actually saw on the call. §八 caps a sales mail at
+  two lists total, reserved for 「要聊的三件事」 and the slot block; a pain/capability bullet wall
+  is precisely the 項目符號牆 category X forbids.
+- **Restate the concrete next steps** Peter promised (recording to follow, migration help…),
+  each with an owner and a time.
+- **Say one thing we cannot do**, with the reason, before they ask — §八 requires this in every
+  long mail. Pair it with one pressure-release line (「不用急著決定」).
+- **Convert** — one prose line naming Zynkr CRM and carrying `https://zynkr.ai/crm` + 免費開始 · 免綁信用卡.
+  Name Plus (NT$300/月) or team pricing only as the level-up, never as the ask. Never paste a
+  feature table into the mail — link it instead.
+- **Sales-kit line** — end with 「先附上 Zynkr 的介紹資料給你參考」 so Peter's manually-attached kit
+  reads naturally.
+
+Condensed house style (fallback only — the Doc is authoritative):
+- Greeting `Hi <名>，` / `哈囉 <名>，` / `<名> 你好，` / `<名> 您好，` (cold, HR, senior), always with a
+  full-width comma. 你／您 follows the counterpart and only ever steps **down**, never back up.
+- 我們 for company commitments, 我 for what Peter does himself. Mixing inside one mail is
+  deliberate — do not normalise it. 「我們這邊／你這邊」 is the house softener.
+- Blank-line paragraphs, 1–3 sentences each. A post-demo follow-up runs **600–950 字** — that is
+  the longest genre Peter writes. Do not exceed it.
+- Numbered lists are plain **`1. 2. 3.`** — NOT 1️⃣2️⃣3️⃣, never circled ①②③. Emoji numerals are a
+  *UI* convention; 禁用詞清單 S and X ban them in email. Peter's sent mail uses plain digits.
+- The dash is the **half-width ` — ` with one space each side**. Never the full-width ——.
+- Prose takes 句號; list items and micro-replies do not. Headings/taglines take no 句號. `·` for
+  series separators. One space between CJK and Latin/digits. Time ranges use an EN dash `–`.
+- English terms go bare — Demo · brief · feedback · skill · MCP · CRM · token — with no
+  parenthetical Chinese gloss. Write AI, never 人工智慧.
+- **No Markdown in the body.** No `##`, no `**bold**`, no `-` bullets, no `---`. The only
+  permitted heading form is `── 文字 · 文字 ──`, and only in a long post-meeting letter.
+- Sign off `Best regards,` + `Peter`. No title, phone, address, or signature block.
+- **Draft only, never send.** Flag anything you were unsure about (e.g. whether the recording
+  link belongs in this mail) so Peter can adjust before sending.
+
+### 5 · Sync the existing deal (light update — Zynkr MCP)
+
+**Find the deal.** If Peter gave a deal URL, use that id. Otherwise
+`mcp__zynkr__list_deals(query="<name>")` and pick the match (confirm by
+contact/company). Read it with `mcp__zynkr__get_deal(id=…)` to see the current
+stage, notes, contact_id, company_id, owner_id.
+
+Then, in order:
+
+1. **Log the demo as a note** — `mcp__zynkr__create_note(deal_id=…, subject="[DEMO] …", body=…, confirm:true)`
+   (preview → `confirm:true`). Structure the body: 展示內容 · 痛點 · feedback · 方案 · 下一步.
+   Attach to **exactly one parent** (the deal) — the deal timeline already widens to
+   its contact's activities, so also passing `contact_id` would render the same note
+   twice. `body` is required; `subject` is the short title on the timeline.
+   *(Was raw SQL until 2026-08-16 — `create_note` shipped as PLAT-045 and this write
+   now goes through the confirm gate + audit trail + tenant wall like every other one.)*
+2. **Refresh the deal summary** — `mcp__zynkr__update_deal(id=…, notes=<one-paragraph rolling summary>)` (preview → `confirm:true`). Rewrite `notes` from the pre-demo state to a post-demo recap: what happened, pains, that the follow-up mail is drafted, and the next step.
+3. **Nudge the stage** *only if the call earned it* — `mcp__zynkr__move_deal_stage(id=…, stage=…)`. See *Inference defaults*. Don't force `proposal` unless an actual quote/proposal was discussed; a soft pre-sales follow-up leaves a `qualified` deal at `qualified`.
+4. **Close the stale scheduling task** — `mcp__zynkr__list_tasks(filter="open")`, find the open task on THIS deal about scheduling/chasing the demo (subject mentions demo / 安排 / 追蹤…回覆), and `mcp__zynkr__set_task_status(ids=[…], status="done", confirm:true)`. The demo happened, so it's complete. If no clear match, skip and say so.
+5. **Create the follow-up task** — `mcp__zynkr__create_task(subject=…, body=…, deal_id=…, due_at=<+task_due_days, ISO 8601 UTC 'Z'>, confirm:true)`. Attach to **exactly one parent** (the deal — don't also pass contact_id, it errors). Use UTC `Z` format for `due_at` (e.g. `2026-07-06T01:00:00Z`); an offset like `+08:00` is rejected.
+
+### 6 · Report
+
+```
+Demo 跟進已就緒：王小明（範例科技 ExampleCo）
+
+| 產出 | 連結 / 狀態 |
+|------|------------|
+| Gmail 跟進草稿 | 已放進收件匣（threaded），待你過目 + 附 sales kit 後寄出 |
+| CRM Deal | <deal url>（stage: qualified → …） |
+| Demo 紀要 | note 已寫入 timeline |
+| 排程任務 | 「安排 demo」已標記完成 |
+| 跟進任務 | 7/6 跟進（已建立） |
+```
+
+Call out anything you left for Peter's judgement (a stage you did NOT auto-advance, a recording link you didn't have, a task match you weren't sure about).
+
+---
+
+## Inference defaults (Peter overrides by just saying so)
+
+- **stage** (`new|contacted|qualified|proposal|won|lost`) — advance a `new`/`contacted` deal to **`qualified`** after a real demo with engagement. Move to **`proposal`** only if a concrete quote/proposal was actually put on the table. A deal already at `qualified`+ with only a soft follow-up **stays put** — don't inflate the pipeline.
+- **task_due_days** — default **3** (chase within a few days of the demo). Use the exact interval Peter promised on the call if he named one ("我三天後跟進" → 3).
+- **note author** — resolved by the MCP from the token; nothing to pass.
+- **email language** — matches the transcript / thread.
+- **value / close_date** — leave untouched unless a concrete figure or date was agreed on the call.
+
+## Why it's built this way
+
+- **Transcript → both outputs.** The point is to kill the two-step (write the
+  follow-up, then go update the CRM). One transcript in; the converting draft is
+  waiting and the deal reflects reality.
+- **Lead with their pain, map to capability.** A recap email is forgettable; an
+  email that says "here's the exact thing that fixes the problem you told me
+  about" converts. That's why step 3 (ground in the solution page) exists.
+- **Email is a draft, not a send.** Outbound to a real prospect is Peter's call —
+  the skill prepares, he approves and attaches the sales kit himself.
+- **Don't log the email; do log the demo.** The Gmail→CRM sync captures the sent
+  mail on send (logging it here = a duplicate row). The demo isn't in Gmail, so
+  the demo `note` is the record only this skill can write.
+- **Update, don't create.** Post-demo the deal already exists (sales-outbound or
+  a prior touch made it). This skill finds and *updates* it — it never opens a
+  second deal for the same live opportunity.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

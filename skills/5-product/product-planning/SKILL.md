@@ -1,0 +1,61 @@
+---
+name: product-planning
+sheetId: "5.02"
+category: product
+project: product-planning
+platform: claude
+status: Done
+visibility: public
+author: "MrPM-Stanley"
+description: "Turns an early product idea into a structured plan — persona, user journey, prioritized pain points (size × intensity × frequency), MVP scope, and success metrics. Based on the 產品企劃力 design-thinking + product-positioning framework by MrPM-Stanley. Works for software, hardware, and service products. Use when you have a raw idea and need it shaped into a planning artifact, not just brainstormed."
+input: "See upstream README"
+process: "See upstream README"
+output: "See upstream README"
+synergy: []
+upstream_repo: https://github.com/MrPM-Stanley/product-planning-skill
+original_source_url: https://github.com/MrPM-Stanley/product-planning-skill/blob/main/README.md
+original_author: "MrPM-Stanley"
+house-style: bound
+
+---
+# product-planning
+
+> Lift-and-shift mirror of [MrPM-Stanley/product-planning-skill](https://github.com/MrPM-Stanley/product-planning-skill) — original content by **MrPM-Stanley**. Sourced via [issue](https://github.com/peter-tu-zynkr/zynkr-skill-idea/issues/9).
+
+## About this skill
+
+0 — Product Planning Framework Guide
+
+## Upstream README
+
+Whether it's a product that's already half-built or one starting from scratch, you give it an idea and it will produce, in one go, a Persona and a User Journey, identify and rank the users' pain points, and use factors like the size of the user segment, the intensity of the pain, and the frequency... to help you find opportunities. Finally it helps you put together an MVP plan, along with what metrics you should be watching at the end... and so on.
+
+It's not simply asking the AI to role-play as some brilliant product manager brainstorming ideas — it's the output that comes from going through a full "design thinking" + "product positioning" methodology.
+
+Of course, these are all hypotheses; you'll need to validate them through user interviews and an actual launch.
+
+This product-planning framework is suitable not only for software products — hardware products and even service-type products fit it just as well!
+
+Here's a <a target="_blank" href="https://mrpm.cc/wp-content/product_planning_sample.html">case study of the product-planning framework in practice</a> so everyone can get a sense of what this skill can do. You just tell it what idea you want to build, and it will interact with you and produce this whole page for you.
+
+If you're interested in the complete theory, you can check out the <a href="https://www.pressplay.cc/project/757DCE83D2D7FE4573DC4DF02F2B5569/about" rel="noopener" target="_blank">產品企劃力</a> course on PPA.
+
+## Attribution
+
+This card is a **lift-and-shift mirror** of the upstream project. All implementation, documentation, and design credit goes to **MrPM-Stanley** and the upstream contributors.
+
+- **Upstream repo:** [https://github.com/MrPM-Stanley/product-planning-skill](https://github.com/MrPM-Stanley/product-planning-skill)
+- **Original source:** [https://github.com/MrPM-Stanley/product-planning-skill/blob/main/README.md](https://github.com/MrPM-Stanley/product-planning-skill/blob/main/README.md)
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

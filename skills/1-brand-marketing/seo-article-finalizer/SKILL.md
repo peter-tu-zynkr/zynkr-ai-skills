@@ -1,0 +1,100 @@
+---
+name: seo-article-finalizer
+sheetId: "1.23"
+description: "The final leg of the SEO pipeline: add internal/backlinks, a meta description, and structured data (schema) to an already-proofed article, then assemble it into a publish-ready Google Doc (article body + a 「SEO 交付物」block carrying slug/seo_title/meta_description/keywords/category + links/schema) for seo-publish-article. Corresponds to node (11) of the v2 flow diagram — 'list which paragraphs can take links + add the meta description' and 'article settings'. Triggers when the user hands over an already-proofed article and says '做 SEO 設定', '上 meta', '準備上架', or '產出可上架的 Google Doc'. Does pre-publish settings + assembles the Doc; does not rewrite content, and does not publish/move/track (that's seo-publish-article)."
+category: brand-marketing
+project: seo-article-finalizer
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "An article proofed by content-editor (including the SEO review rubric) + that article's SEO_PACKET ▸ Brief"
+process: "Mark internal/backlink paragraphs → write the meta description + FAQ/Article schema → human confirm → assemble the article + settings into a publish-ready Google Doc (working folder) handed to seo-publish-article"
+output: "A publish-ready Google Doc (article body + 「SEO 交付物」block: slug/seo_title/meta/keywords/category + links/schema) in the SEO working folder, handed to seo-publish-article"
+synergy: ["seo-publish-article"]
+handoff: ["seo-publish-article"]
+house-style: bound
+
+---
+
+# SEO Article Finalizer
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-article-finalizer
+```
+
+The final leg of the SEO pipeline, corresponding to the flow-diagram step "article settings: backlinks and meta description". At this point the article content is already written and proofed (including the SEO/AEO review). This skill handles only the pre-publish technical settings: links, meta, schema. It **does not rewrite content**.
+
+---
+
+## Resources you'll use
+
+> **Knowledge source**: The rubrics/templates used by this skill are read first from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, searched by name); when unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Link rules**: `./references/internal-link-rules.md`
+- **meta / schema rules**: `./references/meta-schema-rules.md`
+- **SEO knowledge-base folder ID**: `<your-seo-kb-folder-id>` (look at pillar pages / existing articles for internal links)
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the article and Brief
+
+Read the already-proofed article + `SEO_PACKET ▸ Brief` (to get the target keyword, CTA, and internal-link targets).
+
+## Step 2 — Link suggestions
+
+Per `./references/internal-link-rules.md`:
+- Mark the paragraphs that can take **internal links** (pillar pages, related articles, the /consult B2B page).
+- Mark the paragraphs suited to **backlinks / external citations** (third-party authorities, digital PR). Corresponds to "list which paragraphs can take links".
+
+## Step 3 — meta description + schema
+
+Per `./references/meta-schema-rules.md`:
+- Write the meta description (includes the primary keyword, a hook, length-compliant). Corresponds to "add the meta description".
+- Produce FAQ schema (using the FAQ from the outline stage) + Article schema.
+
+## Step 4 — Human confirmation (HITL)
+
+List the finalized settings (links · meta · schema · the 交付物 fields) for the user to confirm before you assemble the Doc.
+
+## Step 5 — Assemble the publish-ready Google Doc
+
+Build one markdown document and create it as a Google Doc — **this Doc is the artifact `seo-publish-article` reads**, so its shape matters:
+
+- **Article body** — the proofed article, unchanged: the H1 title, the sections, and the FAQ.
+- **A `## SEO 交付物` block at the very end** carrying the fields the publisher consumes:
+  - `Slug`（英文 kebab-case）· `SEO title`（<title> / OG）· `Meta description`（含主關鍵字）· `Keywords` · `Category`（對應一個 CMS 分類）
+  - 內部/外部連結建議（段落 → 目標頁／錨文字）· 結構化資料（FAQ + Article schema，附 JSON-LD）
+
+Create it in **this article's working folder** (the `<工作標題>/` subfolder under 「03 Article brief & outline & draft」 = `article_working_folder_id`, alongside the Brief / outline / draft). **Do not** move it to 「04 Published article」 — that happens at publish time, in `seo-publish-article`.
+
+```
+import_to_google_doc(file_name="[SEO草稿] <title>", content=<assembled markdown>, source_format="md", folder_id=<working-folder-id>)
+```
+
+Return the Doc link.
+
+## Step 6 — Hand off
+
+Tell the user the Doc is publish-ready and hand it to **`seo-publish-article`**, which publishes it to the web, then archives the Doc into 「04 Published article」 and updates the SEO tracker. The EN flagship → `content-translator`.
+
+## Outputs
+
+A publish-ready Google Doc (article body + 「SEO 交付物」block) in the SEO working folder, ready for `seo-publish-article`.
+
+## Limitations
+
+Does not rewrite content or score (that's content-editor). Does **not** publish to the web, move the Doc to 「04 Published article」, or update the tracker — those are `seo-publish-article`'s job.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

@@ -1,0 +1,218 @@
+---
+name: slide-visual-selector
+description: "The third leg of the slide-assistant three-leg relay (picks up after slide-page-splitter, then hands off to the slide-pptx skill for rendering): once it has the SLIDE_PACKET ▸ Pages, it decides page by page \"what is the most effective visual treatment for this page?\" (chart / bullets / diagram / image / comparison / big statement…), and converges each page into a render-ready per-page visual spec SLIDE_PACKET ▸ Visuals, handing it off to the installed slide-pptx skill to render into a .pptx. Trigger proactively when the user hands over a ▸ Pages handoff packet, or says 「挑視覺呈現」「選版式」「決定每頁要用什麼圖」「把分頁變成可算繪的視覺規格」「準備餵 slide-pptx」. Scope boundary: it only does the visual mapping and layout of 'content → layout archetype → pptxgenjs primitive'; it does not rewrite the storyline (that is slide-storyline-designer), does not re-paginate (that is slide-page-splitter), and does not actually generate the .pptx file (that is the slide-pptx skill)."
+category: brand-marketing
+project: slide-visual-selector
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "1.27"
+originalName: "品牌行銷助理 ─ 品牌行銷視覺呈現選擇"
+input: "slide-page-splitter's SLIDE_PACKET ▸ Pages handoff packet (already paginated, with each page carrying page number / corresponding beat / page type / title / content points / information density)"
+process: "For each page, pick the layout using the 'content characteristics → layout archetype' decision rule → map the title and content points to pptxgenjs primitives (addText/bullets/addTable/addChart/addShape/addImage) and write out the layout → human review keep/adjust → hand off"
+output: "A render-ready per-page visual spec SLIDE_PACKET ▸ Visuals, handed to the installed slide-pptx skill (Create from scratch / pptxgenjs.md) to render into a .pptx"
+synergy: ["slide-page-splitter", "slide-pptx"]
+handoff: ["slide-pptx"]
+house-style: bound
+
+---
+
+# Slide Visual Selector
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill slide-visual-selector
+```
+
+## Which leg is this
+
+The **third leg** of the slide-assistant three-leg relay. The full relay chain is:
+
+```
+zynkr-slide (orchestrator, optional) ─ carries SLIDE_PACKET ▸ Brief throughout
+        ▼
+slide-storyline-designer (1.25)
+        │  SLIDE_PACKET ▸ Storyline
+        ▼
+slide-page-splitter (1.26)
+        │  SLIDE_PACKET ▸ Pages
+        ▼
+slide-visual-selector (1.27)  ← you are here
+        │  SLIDE_PACKET ▸ Visuals (render-ready)
+        ▼
+slide-pptx skill  → renders into .pptx
+```
+
+**Core idea**: once pagination is done, the content of every page is **already fixed**, and the only key question left is — "what visual treatment for this page lets the audience understand it fastest and remember it best?" A set of figures laid out as a paragraph of text gets skipped; laid out as a bar chart it's understood in one second. Three parallel options written as bullets are easy to muddle together; turned into a two-column comparison table, the differences become visible. This leg makes exactly that judgment for each page, and converges it into a per-page visual spec that the slide-pptx skill can render **directly**.
+
+**What it eats**: `SLIDE_PACKET ▸ Pages` (the output of the previous leg, slide-page-splitter, each page carrying `{page number, corresponding beat, page type, title, content points, information density}`).
+
+**What it spits out**: `SLIDE_PACKET ▸ Visuals` (render-ready), each page carrying `{page number, title, layout archetype, visual elements, content mapping, layout, design notes}`, with field names matching the relay contract verbatim, handed to the installed slide-pptx skill to render into a `.pptx`.
+
+**What it does NOT spit out**: it does not rewrite the storyline, does not re-paginate, does not generate the `.pptx` file itself. It only does the "content → layout archetype → rendering primitive" visual mapping and layout (see ## Limitations).
+
+---
+
+## Resources you'll use
+
+- **Downstream rendering skill (installed)**: the slide-pptx skill at `~/.claude/skills/slide-pptx/`. When this leg hands off, it asks that skill to take the **Create from scratch** path (`Read ~/.claude/skills/slide-pptx/pptxgenjs.md`). The slide-pptx skill replaces the retired #7 open-slide React runtime, so every visual element in ▸ Visuals must map onto a pptxgenjs primitive, so the downstream can render 1:1.
+- **Rendering-canvas common sense** (keep this in mind when writing layouts; coordinate unit is inches): the slide-pptx skill defaults to `pres.layout = 'LAYOUT_16x9'`; but this leg always describes layouts in **16:9 widescreen ≈ 13.33" × 7.5"** (i.e. pptxgenjs's `LAYOUT_WIDE`, which the downstream uses if it wants a larger canvas), reserving a 0.5" margin. Coordinates only need to be "relative blocks" (e.g. "left half / right half", "top title band / bottom content area"); the exact x/y/w/h is computed by the slide-pptx skill, and this leg does not hardcode pixel-level coordinates.
+- **Content→visual decision framework**: `./references/visual-decision-framework.md` ── the complete decision logic of "see this kind of content → use this set of building blocks" (content-relationship classification, detection cues, building-block recipes, worked examples, anti-patterns; synthesizing Zelazny's *Say It With Charts* "define the message first, then pick the chart", the Minto Pyramid, and the visualframeworks.com framework catalog). Consult it first when deciding the layout in Step 2.
+- **Brand visual source (configuration)**: `./references/brand-source.md` ── this skill does **not** ship brand content built in; this file configures where to load your brand visual standards from (color roles, type scale, image rules, logo), and includes a generic schema. When writing "design notes" in Step 3, load the brand per this file; if unconfigured, fall back to neutral defaults.
+
+---
+
+## Step 1 — Receive the page list (▸ Pages)
+
+Read the previous leg's `SLIDE_PACKET ▸ Pages`, and confirm every page carries the full contract fields: `{page number, corresponding beat, page type, title, content points, information density}`, and that the page type uses the contract enum (`title / section / content / data / quote / closing`).
+
+If the user **has not provided** ▸ Pages, first ask them to paste it, or go run `slide-page-splitter` first (and further back, `slide-storyline-designer`). Do **not** make up pagination yourself, and do not expand the visual spec ahead of time when there is no ▸ Pages — that would break the field linkage of the relay contract, and the next leg (the slide-pptx skill) can't catch it either.
+
+> **If an upstream `SLIDE_PACKET ▸ Brief` is present (produced by `zynkr-slide`)**: first read the "per-leg emphasis ▸ visual (leg 3)" directives and `presentation purpose`, and use them as weights for choosing archetypes and writing design notes (e.g. deep-dive leans toward `data-chart` / `two-column-compare` (including before/after contrasts) to reveal impact; all-hands leans toward `big-statement`, low density, with `section` pages carried by `big-statement` or a title section variant). When `apply brand` is "yes", load the brand per this leg's `./references/brand-source.md`; when "no", use neutral defaults. If the ▸ Brief's "mode" value is express, this leg's human review (Step 4) switches to **non-blocking**: it lists the per-page visual spec and notes that the user can stop it at any time, and if there are no major issues it automatically continues and hands off to slide-pptx for rendering; when the "mode" value is guided, **or there is no ▸ Brief**, keep Step 4's original per-page blocking HITL. The ▸ Brief's visual preferences are still bound by this leg's gatekeeping principles (one main visual per page, only output layout names within the nine-archetype enum, reject charts with no information, kick density overflow back to leg 2). **When there is no ▸ Brief, this leg runs entirely standalone per the original Step 1–5 flow, and none of the above weights apply.**
+
+---
+
+## Step 2 — Pick a layout per page (content characteristics → archetype)
+
+For **each page**, first read its "page type + content points + information density", then use the table below to map it to one **layout archetype**. The layout enum (strictly aligned with the contract):
+`title / big-statement / bulleted-list / two-column-compare / data-chart / process-diagram / image-led / quote / closing-CTA`.
+
+> The table below is the **common-case quick decision rule**. The full "content relationship → building blocks" classification (with detection cues, recipes, worked examples, anti-patterns) is in `./references/visual-decision-framework.md` ── consult it for any page where you're not sure how to choose. Core principle: **define the message first, then pick the form** (same data, different message → different visual).
+
+Decision mapping table (content characteristics → layout archetype):
+
+| Content characteristic / signal | Choose this archetype | Why |
+|---|---|---|
+| Page type = `title` (cover: deck name + subtitle + speaker/occasion) | `title` | First impression; whitespace and a big headline, don't cram content |
+| Page type = `section` (section divider, announcing the next beat) | `big-statement` or `title` (section variant) | A visual breathing point; one line fills the page, helping the audience reorient |
+| Only **one** impactful conclusion / key number / one-line claim (low information density) | `big-statement` | One point per page; big type is more forceful than a paragraph of text |
+| 3–6 **parallel, mutually independent** points, no quantification, no need to compare against each other | `bulleted-list` | Bullets are the most direct; more than 6 points means it should go back to the previous leg to be split |
+| A **contrast** of two subjects (option A vs B, before/after, current vs target, us vs competitor) | `two-column-compare` | Side by side reveals the difference; clearer than stacked bullets |
+| Has **quantified data**: trend, share, ranking, multi-period comparison (page type is usually `data`) | `data-chart` | Numbers should be "seen", not "read"; see the chart sub-rule below |
+| **Ordered process / steps / phases / causal chain / timeline** | `process-diagram` | Use nodes and arrows to express order; bullet text can't express flow |
+| The message is **carried by the image** (product shot, situational photo, schematic, conceptual metaphor) | `image-led` | One right image beats three lines of text; image leads, text supports |
+| Page type = `quote` (customer testimonial, famous quote, strong endorsement) | `quote` | Quote marks + attribution with whitespace; borrows third-party authority |
+| Page type = `closing` (call to action, contact info, next steps) | `closing-CTA` | The ending must make "so what now?" explicit; give a single action |
+
+`data-chart` chart-type sub-rule (→ the corresponding pptxgenjs `addChart` chart type):
+
+| Data intent | chart type | pptxgenjs |
+|---|---|---|
+| Compare sizes / rankings across categories | bar (`barDir:'col'` vertical columns or `'bar'` horizontal bars) | `addChart(pres.charts.BAR, …)` |
+| Trend changing over time/sequence | line | `addChart(pres.charts.LINE, …)` |
+| Composition share of a whole (≤5 categories) | pie / doughnut | `addChart(pres.charts.PIE / DOUGHNUT, …)` |
+| Pure tabular, need exact per-cell values | not a chart, use a table instead | `addTable(rows, …)` |
+
+Gatekeeping principles when deciding:
+
+- **One main visual per page**. Pick **one** main archetype per page; at most add supporting elements (title band, page number, one small icon), don't cram two images onto the same page competing for focus.
+- **The title carries its own conclusion** (following the previous leg's title philosophy). The visual is only there to "act out" that conclusion, not to decorate.
+- **Reject charts with no information**. If a page has no quantifiable number, don't force in a chart; bullets or big type are more honest.
+- **Information density overflow = kick it back to the previous leg**. If a page needs >6 bullets or >1 main image to finish saying its point, that's a pagination problem — flag it and ask the user to go back to `slide-page-splitter` to split the page; this leg does not force a fit by shrinking type.
+- **Don't decorate, do diagram + use color sparingly** (general design principle). If a structural diagram (geometric shapes) can make it clear, don't stuff in a stock image; **the decision color is used at most once per page** (mark only the real decision / CTA), and the accent color is used sparingly. The actual color values come from the brand loaded via `./references/brand-source.md`.
+
+---
+
+## Step 3 — Map content to rendering primitives + write the layout
+
+After picking the archetype, translate each page's "title + content points" into concrete **visual elements**. Every visual element must be able to map 1:1 to a pptxgenjs primitive, otherwise the slide-pptx skill can't render it:
+
+| Visual element | pptxgenjs primitive | Typical use |
+|---|---|---|
+| Text block | `addText(text, {x,y,w,h,fontSize,color,bold,align})` | Title, big-statement claim, quote, caption |
+| Bullets | `addText([{text, options:{bullet:true, breakLine:true}}, …])` | Each point of a bulleted-list (use `bullet:true`; do **not** type a unicode "•", it produces a double bullet) |
+| Table | `addTable(rows, opts)` | The contrast of two-column-compare, data needing exact values |
+| Chart | `addChart(type, data, opts)` | data-chart (BAR / LINE / PIE / DOUGHNUT) |
+| Shape diagram | `addShape(pres.shapes.RECTANGLE / OVAL / ROUNDED_RECTANGLE / LINE, {…})` | Nodes/connectors of a process-diagram, color blocks, card backgrounds, column dividers |
+| Image | `addImage({path|data, x,y,w,h})` | image-led main image, icon (icons are converted from react-icons to PNG; the slide-pptx skill handles it) |
+
+Then write the **layout** for each page (describe with relative blocks; coordinates are computed by slide-pptx). The layout skeleton of each archetype:
+
+- `title`: a big headline at top-center + one subtitle line; speaker/occasion lower down; lots of whitespace. Dark background with light text (covers commonly use a dark background).
+- `big-statement`: one claim centered or left-aligned in the upper area, largest type; can add a brand-color block / OVAL as a background accent.
+- `bulleted-list`: title band at top-left; below it, left-aligned `bullet:true` bullets (**not centered**); the right side can leave a schematic image or icon column.
+- `two-column-compare`: title band + two left/right columns below (two `addTable`s, or two sets of cards `addShape`+`addText`), columns of symmetric width, header filled with brand color.
+- `data-chart`: title band (the title states the data conclusion) + the main chart `addChart` filling the bottom main area; alongside it you can place a large number callout (`addText` 60–72pt) pointing out the key takeaway.
+- `process-diagram`: title band + a row/column of nodes (`ROUNDED_RECTANGLE` cards + inner text) connected by `LINE`, evenly divided by the number of steps; numbered 1→N.
+- `image-led`: a half-page main image (`addImage`, left-half or right-half bleed) + the other half with overlaid text or whitespace; the text block's color contrasts enough with the image.
+- `quote`: a large quote mark + the quote (italic or big type) centered/left-aligned + small attribution lower down; lots of whitespace.
+- `closing-CTA`: an explicit single action (`addText` big type) + necessary contact info/QR; dark-background ending echoing the cover, forming a "dark—light—dark" sandwich.
+
+Mark the **design notes** per page, applying the brand loaded via `./references/brand-source.md` (use neutral defaults if no brand is configured):
+
+- **Background color**: use the brand's "default surface color"; cover / section / closing use the brand's "dark contrast color" as a full-bleed dark background (text flips to the surface color).
+- **Decision emphasis**: at most one "decision color" per page (CTA / the single decision); the key thinking verb uses the "accent color" (≤ 1 per title).
+- **Type scale**: give slide-pptx `fontSize` per the brand type scale (title / body / footnote / numbering); use the brand font roles (display / body / numbering / Chinese) for typefaces.
+- **Chart coloring**: use the brand palette; only the key series gets the decision color; do **not** use Office's default rainbow.
+- Mark on each page which word / which number to "emphasize". Color values given to slide-pptx always drop the `#` (e.g. `color: "RRGGBB"`).
+
+---
+
+## Step 4 — Human review (HITL)
+
+List the per-page visual spec to the user **numbered** (one summary line per page: `P# | title | archetype | main visual element`), and ask them to confirm page by page, requesting keep / change layout / adjust layout. Key items for the user to review:
+
+1. Whether the layout was chosen correctly (especially judgments like "should this use a chart" or "should this use a comparison table").
+2. Whether any page's information density is too high and should actually go back to `slide-page-splitter` to be split.
+3. Whether every page's visual elements all map onto a pptxgenjs primitive (nothing "can't be drawn").
+
+Before the user signs off on everything, do **not** hand off to the slide-pptx skill for rendering. If changes are large, adjust and then list it again for their review.
+
+---
+
+## Step 5 — Hand off and save (→ slide-pptx skill renders)
+
+After review passes:
+
+1. Save the complete `SLIDE_PACKET ▸ Visuals` into this deck's working subfolder (durable record, the same SLIDE_PACKET as 1.25 / 1.26).
+2. **Call the installed slide-pptx skill**: ask it to take the **Create from scratch** path (`Read ~/.claude/skills/slide-pptx/pptxgenjs.md`), with `SLIDE_PACKET ▸ Visuals` as input, and page by page `pres.addSlide()` render each visual element with its corresponding primitive into a `.pptx`, and complete the QA that the slide-pptx skill itself requires (markitdown text check + subagent visual check).
+3. Remind the slide-pptx skill: colors and fonts follow the brand loaded via `./references/brand-source.md` (surface-color background, single decision color, brand-palette charts, color values with `#` dropped), and the layout follows the layout this leg gives; use neutral defaults if no brand is configured.
+
+Handoff block (render-ready, fields strictly aligned with the contract):
+
+```
+SLIDE_PACKET ▸ Visuals   (handed to the slide-pptx skill to render into a .pptx)
+
+Per-page visual spec (one entry per page):
+- Page number: P1
+  Title: <this page's title (carries its own conclusion)>
+  Layout archetype: <title / big-statement / bulleted-list / two-column-compare / data-chart / process-diagram / image-led / quote / closing-CTA>
+  Visual elements:
+    - <text block addText> — <content>
+    - <bullets / table addTable / chart addChart{type} / shape diagram addShape / image addImage> — <content/data>
+  Content mapping: <which of ▸ Pages's content points each of these visual elements carries>
+  Layout: <relative-block description, e.g.: title band at top; two left/right columns below; right-half main image…(canvas 16:9 ≈ 13.33×7.5, margin 0.5")>
+  Design notes: <dark/light background, type-scale hierarchy, which word/number to emphasize; colors per brandbook primary/accent color>
+
+- Page number: P2
+  …(same structure as above, list every page)
+
+— Visual spec confirmed page by page; ready to hand off to the slide-pptx skill (Read pptxgenjs.md, Create from scratch) to render into a .pptx.
+```
+
+---
+
+## Outputs
+
+A render-ready per-page visual spec `SLIDE_PACKET ▸ Visuals`: every page has its layout archetype decided, lists the visual elements that map 1:1 onto pptxgenjs primitives, has its layout and brandbook-based design notes written, and has been reviewed by the user page by page, ready to hand directly to the installed slide-pptx skill to render into a `.pptx`.
+
+## Limitations
+
+It only does the visual selection and layout of "content → layout archetype → pptxgenjs rendering primitive". It does **not**:
+
+- **Rewrite the storyline**: the presentation goal / core claim / narrative arc belong to the first leg `slide-storyline-designer` (1.25) (▸ Storyline).
+- **Re-paginate or change what each page says**: that is the second leg `slide-page-splitter` (1.26) (▸ Pages); when a single page's information overflows, it only flags it for return, it does not force a cram.
+- **Actually generate the `.pptx` file, write pptxgenjs code, or do the final rendering QA**: that is the downstream installed **slide-pptx skill** (`~/.claude/skills/slide-pptx`, Create from scratch / pptxgenjs.md); this leg only hands ▸ Visuals to it.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

@@ -1,0 +1,398 @@
+---
+name: zynkr-support
+sheetId: "3.01"
+description: "The READ half of Peter's support loop (formerly support-reply-drafter). Parses Peter's Gmail support queue and the website-form notifications that are not AI-consulting inquiries, detects unreplied inquiries, identifies each inquirer's intent, and matches it against the **Zynkr platform 知識庫** (platform.zynkr.ai/kb — the single source of truth since 2026-07-15, accessed via the `zynkr` MCP server's search_kb / get_kb_article) to draft a safe reply on the thread. Drafts match the inbound language (zh-TW or EN). When the KB has no confident answer it does NOT guess — it leaves a holding reply with an inline `[[NEEDS PETER: ...]]` block flagging exactly what's missing and notifies Peter. Once Peter supplies the real answer, this skill hands the resolved thread off to /zynkr-kms, which writes it into the platform KB so the next identical question resolves automatically. Trigger whenever Peter says '/zynkr-support', 'draft support replies', 'process support inbox', '回覆 support 信箱', '清 support queue', '幫我回 support 信', or otherwise asks to handle the support inbox. The [2.1] Inbound Sales label and the website's AI 顧問服務 inquiries belong to /sales-inbound, which logs the lead and drafts the first reply; this skill lists them and drafts nothing on them."
+category: operations
+project: zynkr-support
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "Unreplied Support threads and website-form notifications in Gmail (the Inbound-Sales label is /sales-inbound's); the KB is the Zynkr platform 知識庫, via the zynkr MCP"
+process: "Pull the unreplied queue → read the full thread + detect unreplied + determine language → identify intent → search_kb + get_kb_article (qa cards resolve their cited facts inline) + the tone-style cards to find the answer → if an answer exists draft a proper reply / if none, write a holding reply + [[NEEDS PETER]] and notify Peter → after Peter supplies the answer, hand the thread off to /zynkr-kms to write it back into the KB"
+output: "One Gmail draft per thread; a summary (drafted / needs Peter / skipped); for threads Peter has since answered, trigger the /zynkr-kms hand-off"
+synergy: ["zynkr-kms"]
+house-style: bound
+
+---
+
+# Zynkr Support — Support Reply Drafter (READ side, platform-KB backed)
+
+Peter runs a small support inbox. The job here is to clear it: read each
+unreplied thread, **work out what the inquirer actually wants, find the answer in the knowledge
+base, and leave a draft Peter only needs to skim and send.**
+
+This skill is the **READ** half of a two-skill loop:
+
+- **/zynkr-support (this skill)** — reads the KB, drafts replies, and flags gaps it can't answer.
+- **/zynkr-kms** — after Peter answers a gap, learns that answer and writes it back into the KB.
+
+So the loop is self-healing: every gap this skill flags becomes a KB card via /zynkr-kms, and the
+next identical question gets a confident auto-draft. The two skills share **one** knowledge base:
+the **Zynkr platform 知識庫** (browsable at `https://platform.zynkr.ai/kb`, Supabase-backed,
+accessed here through the `zynkr` MCP server). The old Google-Docs KB folder is a read-only
+archive since the 2026-07-15 cutover — never read it for answers.
+
+The drafts must be **safe to send** — never invent product behavior, pricing, dates, or
+commitments. When the KB doesn't cover something, say so and surface it rather than guessing.
+**Price and quote questions are the highest-risk category**: unless an exact rate/quote is in the KB
+*or* Peter supplied it in the current conversation, treat any pricing ask as low-confidence and
+write a holding reply with a `[[NEEDS PETER]]` block.
+
+---
+
+## The 9-step scope (what this skill is, end to end)
+
+1. **Parse mail** — pull the unreplied Support / website-form queue (the Inbound-Sales label and AI 顧問服務 inquiries are /sales-inbound's).
+2. **Detect the unanswered inquiry** — the thread's last message is from the inquirer, not Peter.
+3. **Identify the inquirer's intent** — classify it against the KB section taxonomy.
+4. **Match intent → find the answer** — `search_kb` + `get_kb_article` (cited facts resolve inline).
+5. **Write the reply** as a Gmail draft *if* a confident answer exists.
+6. **Notify Peter** when no answer is found — holding reply + inline `[[NEEDS PETER]]` block.
+7. **Peter supplies the missing context + answer** (replies to the customer / tells the skill).
+8. **Hand the resolved thread off to /zynkr-kms.**
+9. **/zynkr-kms writes the new answer into the KB** so next time /zynkr-support finds it itself.
+
+Steps 1–6 are this run. Steps 7–9 are the learning loop (see **Step 9** below).
+
+---
+
+## Resources you'll use
+
+- **Gmail labels** (both nested — use the **full path** in queries):
+  - Support: `[3] Operation/[3.8] Support` (ID `Label_1343405731176716360`)
+  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` (ID `Label_1203655627141795093`) — /sales-inbound's queue; listed, never drafted on here
+- **Website form sender**: `website@zynkr.ai` — discovery-call / contact-form inquiries arrive as
+  notifications *from* this address. Fallback queue source (see Step 1).
+- **KB access** — the **`zynkr` MCP server** (the platform's own MCP, authenticated as Peter's
+  workspace). Read-side tools:
+  - `mcp__zynkr__search_kb` — scored search over published cards (title/keyword/body, zh or EN)
+  - `mcp__zynkr__get_kb_article` — one card by uuid **or `fact_id`**; qa cards come back with
+    their cited fact cards resolved inline
+  - `mcp__zynkr__list_kb_sections` — the live section/intent taxonomy (13 sections + aliases)
+  - `mcp__zynkr__list_kb_articles` — browse a section's card titles (filter by `section_id`)
+- **KB UI** (for links in your summary): `https://platform.zynkr.ai/kb`
+- **Google account**: `<your-google-workspace-account>` — **MCP server `google-workspace`** for all Gmail tools.
+
+### KB structure (what you're retrieving from)
+
+Two card types, 13 sections:
+
+- **`fact` cards** — canonical numbers/policies (pricing table, refund policy, durations), each
+  with a stable `fact_id` (e.g. `pricing-rates`). The numbers live here, once.
+- **`qa` cards** — one per past resolved inquiry; the body carries the *logic* and the `cites`
+  array names the fact(s) it rests on. `get_kb_article` on a qa card resolves those cited facts
+  inline, so **one fetch gives you the full answer including current numbers.**
+- **Sections** = the intent taxonomy (`pricing-quoting`, `course-content`, `scheduling-logistics`,
+  `team-training-enterprise`, `technical-howto`, `access-account`, `refund-policy`, `other`,
+  `instructor-profile`, `brand-product-vision`, `ai-workflow-architecture`), plus two special ones:
+  - **`core-facts`** — the canonical fact cards qa cards cite.
+  - **`tone-style`** — ALWAYS-READ style rules: fetch `get_kb_article("tone-voice-rules")` and
+    `get_kb_article("term-mapping-table")` (the anti-Chinglish 晶晶體 用語對照表) once per run;
+    every draft must follow them.
+
+> **Label gotcha (learned the hard way):** the Gmail labels are *nested*, so the leaf name alone
+> (`label:"[3.8] Support"`) matches **nothing** — use the full path
+> (`label:"[3] Operation/[3.8] Support"`). The labels also may not be reliably applied yet (no
+> filter set up), so a label search returning zero does **not** mean the queue is empty. Always run
+> the sender fallback in Step 1 before declaring the queue clear.
+
+---
+
+## Step 1 — Parse mail: pull the unreplied queue
+
+Run these searches with `mcp__google-workspace__search_gmail_messages` and union the results
+(dedupe by thread ID):
+
+```
+label:"[3] Operation/[3.8] Support" -from:me
+```
+
+Then the **sender fallback** (the label isn't reliably applied), scoped to recent website forms and
+leaving out the AI-consulting inquiries:
+
+```
+from:website@zynkr.ai -from:me newer_than:14d -"Interest: AI 顧問服務"
+```
+
+**One owner per inbox.** The `[2.1] Inbound Sales` label and every `Interest: AI 顧問服務` inquiry
+belong to **/sales-inbound**, which logs the lead and drafts the first reply. Never draft on them
+here: two drafts on one thread is what this rule prevents. If one turns up anyway (a label on the
+wrong thread), list it under *Owned by /sales-inbound* in the report.
+
+**Only declare the queue empty if both return zero.** If the label search is empty but the
+fallback found threads, tell Peter at the end that auto-labeling isn't set up (he likely needs a
+Gmail filter). Otherwise list what you found — subject, sender, snippet, queue — and say you're
+processing N threads.
+
+---
+
+## Step 2 — Detect the unanswered inquiry
+
+Call `mcp__google-workspace__get_gmail_thread_content` on each thread ID:
+
+- **Last message from Peter** (<your-google-workspace-account> / <your-company-contact-email> / any zynkr.ai sender) → he already replied. Skip;
+  don't duplicate a draft.
+- **Last message from the inquirer** → this thread needs a draft. Continue.
+
+> **`<your-company-contact-email>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it. `<your-google-workspace-account>` is your own account, not a fact.
+
+### Website-form notifications (special case)
+
+Threads **from `website@zynkr.ai`** are *not* real conversations — they're a form-submission
+notification to Peter's own inbox. Body looks like:
+
+```
+New discovery call inquiry
+Name: 王小明
+Email: inquirer@example.com
+Company: ...
+Interest: 團隊訓練
+Source page: consult
+Brief context: <the actual question>
+```
+
+For these:
+- The **real inquirer email is the `Email:` line in the body**, NOT the `From:`. Parse it out.
+- Use `Name:` / `Company:` / `Interest:` / `Brief context:` as the question content.
+- **Do not reply in-thread** — that just emails `website@zynkr.ai`. These get a **fresh email to
+  the customer** (Step 7).
+- Check if already handled: search sent/drafts to that customer (`to:<email> from:me`). If a reply
+  or draft exists, skip and list as already-handled.
+
+> An `Interest: AI 顧問服務` inquiry is **/sales-inbound**'s: it logs the lead and drafts the first
+> reply, so this skill leaves it alone (the Step 1 fallback query already excludes it). Website
+> forms with any other interest (e.g. 團隊訓練) stay here.
+
+For each thread needing a draft, extract: sender name + email · subject · the inquirer's actual
+question(s) (there may be several) · inbound language (Step 3).
+
+---
+
+## Step 3 — Detect the inbound language
+
+From the latest inbound message body:
+- More than ~30% CJK (Han) characters → draft in **Traditional Chinese (zh-TW)**.
+- Otherwise → **English**.
+
+If bilingual/ambiguous, default to the language of the opening greeting ("Hi" → EN, "你好" → zh-TW),
+and match the language of the inquirer's **most recent** message.
+
+---
+
+## Step 4 — Identify the intent
+
+For each question the inquirer asked, classify it into **exactly one section** of the KB taxonomy
+(call `mcp__zynkr__list_kb_sections` once per run for the live list + aliases). Pick the **most
+specific** fit, and judge by what the *answer* would be:
+
+- "How much for in-house team training?" → `pricing-quoting` if the answer is a rate;
+  `team-training-enterprise` if the answer is program scope.
+- One thread can yield **multiple** intents (e.g. a pricing Q + a scheduling Q) — split them; each
+  gets its own retrieval pass.
+- If nothing fits, tag `other` — but flag it in the summary so /zynkr-kms can consider a new section.
+
+---
+
+## Step 5 — Match intent → find the answer in the KB (search-then-fetch)
+
+Retrieval is **search-first**, cheap, and repeatable — run it per question:
+
+1. **Once per run**: fetch the two ALWAYS-READ style cards —
+   `mcp__zynkr__get_kb_article("tone-voice-rules")` and
+   `mcp__zynkr__get_kb_article("term-mapping-table")`. Every draft follows their voice rules and
+   the 用語對照表 term mappings (they kill 晶晶體 Chinglish).
+2. **Search**: `mcp__zynkr__search_kb` with 2–4 key terms from the question — nouns and
+   product-specific words, **bilingual** (pricing→報價 費用 price cost; skip filler: "how", "請問",
+   "可以"). Broaden by dropping a term or trying synonyms if the first pass is thin.
+3. **Fetch**: `mcp__zynkr__get_kb_article` on the best 1–3 hits. A qa card arrives with its cited
+   fact cards resolved inline — that's the full answer, current numbers included. A fact card hit
+   gives you the canonical numbers directly.
+4. **Weak or ambiguous results → browse the section**: `mcp__zynkr__list_kb_articles` with the
+   intent's `section_id` (from `list_kb_sections`) and scan titles for the closest question, then
+   fetch it. If the intent was ambiguous, re-classify and try the other section the same way.
+
+**The KB is the only source of truth.** Don't pad answers with generic "best practice" advice that
+isn't in the KB — Peter wants drafts that sound like *him*, not a generic support bot.
+
+---
+
+## Step 6 — Decide confidence, then draft / notify
+
+Ask: *Does the KB answer each question the inquirer asked?*
+
+> **Pricing supplied in conversation:** if the KB has no rate but **Peter gave the exact
+> pricing/quote in the current conversation**, treat that as authoritative and draft the real
+> quote. Still add a light `[[NEEDS PETER]]` note for anything you had to *infer* (currency, whether
+> in-person includes travel/venue/materials, validity period).
+
+### High confidence (KB covers it, or Peter supplied it in-conversation) → write the reply
+
+1. **Greeting** — inquirer's first name if available; match language.
+2. **Acknowledge** the question (one short sentence).
+3. **Answer** — facts pulled straight from the retrieved cards, paraphrased into a natural reply
+   (don't copy headings or bullet markup; resolve cited fact numbers into plain prose).
+4. **Offer follow-up** — short closing line.
+5. **Sign-off** — `Peter` (Peter signs in English even on zh-TW replies).
+
+Tone: friendly + professional, per the `tone-voice-rules` card; apply every `term-mapping-table`
+row (e.g. never "discovery call" in zh-TW — 「線上會議」). Contractions OK in EN. zh-TW: 您 for
+first-time inquirers, 你 only if already on first-name terms. Avoid corporate jargon ("we strive
+to", "as per our policy").
+
+### Low confidence (KB missing / only partial) → holding reply + notify Peter
+
+The reply must be sendable as-is if Peter approves, but Peter must see what's missing. Structure:
+
+1. Greeting + acknowledge.
+2. Honest line: "Let me get back to you on this with the right details" (EN) /
+   "讓我確認一下細節後再回覆您" (zh-TW).
+3. Sign-off.
+
+Then **prepend the body with a `[[NEEDS PETER: ...]]` block** listing: the question(s) the KB didn't
+answer · which sections you checked + terms you searched · a clearly-marked guess if you have
+one · "Delete this block before sending."
+
+```
+[[NEEDS PETER:
+- Inquirer asked about enterprise SSO pricing — searched "SSO", "enterprise", "SAML", "企業";
+  checked pricing-quoting + core-facts, no enterprise-tier fact card
+- Guess: route to a sales conversation, not self-serve
+- Delete this block before sending
+]]
+
+Hi Sharon,
+
+Thanks for reaching out about SSO setup. Let me confirm a few details on our end and I'll get back
+to you within the next day or two with specifics.
+
+Best,
+Peter
+```
+
+---
+
+## Step 7 — Create the draft in Gmail
+
+**Normal threads (a real Support conversation):**
+`mcp__google-workspace__draft_gmail_message` with:
+- `to`: the original sender's email
+- `subject`: prefix the original with `Re: ` (unless it already starts with `Re:`)
+- `body`: your draft (with the `[[NEEDS PETER]]` block on top if low-confidence)
+- `thread_id`: the thread ID — **critical**; it makes the draft a reply inside the thread.
+
+**Website-form notifications (from `website@zynkr.ai`):**
+`mcp__google-workspace__draft_gmail_message` with:
+- `to`: the **customer email parsed from the body** (`Email:` line) — never `website@zynkr.ai`
+- `subject`: a clean customer-facing subject (e.g. `AI 課程報價｜團隊訓練（Zynkr）`)
+- `body`: your draft
+- **Do NOT set `thread_id`** — fresh outbound email to the customer.
+
+If `draft_gmail_message` errors, fall back to `draft_email` (alternate Gmail MCP) only if
+`google-workspace` is unavailable.
+
+---
+
+## Step 8 — Report back to Peter
+
+```
+Processed N threads (Support + website forms):
+
+✅ Drafted with confident answer (M):
+  - [Subject] — [sender] — [queue] — [intent → cards used]
+
+⚠️  Drafted holding reply, NEEDS PETER (K):
+  - [Subject] — [sender] — [queue] — [one-line: what's missing]
+
+⏭️  Skipped (already replied / handled / spam) (J):
+  - [Subject] — [sender] — [reason]
+
+➡️  Owned by /sales-inbound, not drafted (L):
+  - [Subject] — [sender] — [Inbound Sales label | AI 顧問服務 inquiry]
+```
+
+If everything was confident with no NEEDS PETER items, just say so plainly. Also surface when
+relevant: **labels not applied** (label searches empty, fallback found threads → suggest a Gmail
+filter); **sales leads** (a website form under another interest that reads like a consulting lead → mention /sales-inbound).
+
+**Crucially, list the `⚠️ NEEDS PETER` threads explicitly** — these are the open loop that Step 9
+closes once Peter answers them.
+
+---
+
+## Step 9 — The learning loop: hand off to /zynkr-kms
+
+This is what makes the KB self-healing. A `[[NEEDS PETER]]` flag is only half the job — the other
+half is making sure the same question never goes unanswered again.
+
+1. **Peter supplies the answer.** After you flag a gap, Peter either edits your holding draft with
+   the real answer and sends it, or tells you the answer directly in this conversation.
+2. **Once a flagged thread has Peter's real answer**, hand that thread off to **/zynkr-kms** so the
+   answer is captured. Concretely, when Peter says the gap is answered (or you can see his reply on
+   the thread), tell him:
+
+   > "That answer isn't in the KB yet — want me to run **/zynkr-kms** on this thread so the next
+   > identical question auto-drafts?"
+
+   and on his go-ahead, invoke **/zynkr-kms** with that thread (the `Skill` tool, or surface it for
+   Peter to run). Pass along: the thread link, the inquirer's question, and Peter's answer.
+3. **/zynkr-kms does the write side** — it reasons about intent → which section → whether a new
+   fact card is needed, proposes the card, and on Peter's approval writes it via
+   `create_kb_article` / `update_kb_article` (creating a new section first if the intent has
+   none). It then marks the thread `KMS-ingested` so it isn't re-learned.
+
+Result: the gap this skill flagged becomes a KB card, and the next time that question arrives,
+Step 5 finds it and Step 6 drafts a confident reply. **You (read) and /zynkr-kms (write) share one
+KB and work hand in hand.** Do not write to the KB yourself — drafting replies is this skill's job;
+curating the KB is /zynkr-kms's job.
+
+---
+
+## Things to be careful about
+
+- **Never commit Peter to a delivery date, refund, discount, pricing, or feature** not explicitly in
+  the KB *or* supplied by Peter in this conversation. Any such ask with no authoritative source is
+  automatically low-confidence → holding reply.
+- **Price quotes:** even with an authoritative rate, don't invent the *scope* around it —
+  travel fees, materials, minimum hours, multi-day discounts, validity windows. Quote only the rate
+  you were given; flag the rest in `[[NEEDS PETER]]`.
+- **Cite, don't restate-and-drift:** the canonical numbers live in fact cards. Resolve a cited
+  fact into the reply, but if a qa card's body and its cited fact ever disagree, **trust the fact
+  card** and flag the mismatch for /zynkr-kms.
+- **Check card freshness:** cards carry a last-verified date and may carry flags like `HELD` or
+  `NEEDS_PETER` — a flagged card is NOT a confident source; treat it as a gap.
+- **The old Google-Docs KB is a read-only archive** (cutover 2026-07-15) — never pull answers from
+  it; it no longer receives updates and its numbers may be stale.
+- **Website-form notifications:** reply goes to the customer email in the body, as a fresh email (no
+  `thread_id`). In-thread replies silently email `website@zynkr.ai`.
+- **Don't reply on threads Peter already replied to** — Step 2 inspection is the real filter, not the
+  search query (Gmail keeps the label after a reply).
+- **No signatures/footers Peter didn't ask for** (no "Sent from my iPhone", taglines, calendar links
+  unless they're in the KB).
+- **Spam / out-of-scope** (vendor pitch, recruiter) → skip, don't draft; mention it in the summary.
+- **One draft per thread.** If a draft already exists, don't create a second — list it as
+  already-drafted.
+- **Search-first, don't bulk-read.** `search_kb` + a few `get_kb_article` fetches is the standard
+  read. If you find yourself paging through whole sections for every thread, re-classify the
+  intent or improve your search terms instead.
+
+---
+
+## When the KB returns nothing across the whole run
+
+If retrieval comes up empty for every thread, draft holding replies for everything with
+`[[NEEDS PETER]]` blocks (this is still useful triage) and tell Peter in the summary — that's a
+signal the KB has a coverage gap that /zynkr-kms should fill once he answers.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

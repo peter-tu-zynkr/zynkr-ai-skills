@@ -1,0 +1,179 @@
+---
+name: zynkr-recruiter
+sheetId: "7.07"
+description: "End-to-end recruiting pipeline — JD authoring, resume screening, interview design with scorecard, and calibration / final decision — bilingual (Chinese-English) outputs throughout."
+category: people-talent
+project: zynkr-recruiter
+platform: claude
+status: Done
+visibility: public
+author: Jane Liao
+input: "A hiring need from a hiring manager — anywhere from rough notes to a full JD + resume stack"
+process: "Stage 1 JD architecture → Stage 2 resume screening with hybrid weighted scoring → Stage 3 competency-based interview design + scorecard → Stage 4 calibration & final decision recording"
+output: "JD draft (YAML), candidate fit scores with HR Decision Summary, bilingual interview kit + scorecard, and a final decision sheet with bilingual candidate communication templates"
+synergy: []
+type: agent
+skills: ["recruiter-jd-architect", "recruiter-resume-screener", "recruiter-interview-question", "recruiter-calibrator"]
+house-style: bound
+
+---
+
+# Recruiting Pipeline
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill zynkr-recruiter
+```
+
+Run the full hiring loop — from rough role notes to a calibrated hire/no-hire decision — through four specialized agents. Use this skill at any entry point in the loop; the orchestrator will route to the right agent and pass artifacts forward.
+
+---
+
+## Step 1 — Identify entry point
+
+Ask the user:
+
+```
+Where are you in the hiring process?
+1. Starting from scratch — only have rough role notes
+2. Have a JD — ready to screen candidates
+3. Have shortlisted candidates — ready to design interviews
+4. Interviews done — ready to calibrate and decide
+```
+
+Use the answer to determine the starting stage. Skip earlier stages if their artifacts are already provided.
+
+---
+
+## Step 2 — Stage 1: JD Architecture (subagent)
+
+Display:
+
+```
+---------------------------------------------
+Stage 1: JD Architecture (The RoleCrafter)
+---------------------------------------------
+```
+
+Launch the `recruiter-jd-architect` agent (`./agents/recruiter-jd-architect.md`) using the Agent tool.
+
+The agent will collect: role context → daily tasks → success metrics → requirements → reporting line → career level → work mode → optional salary → optional stakeholder alignment.
+
+Output a structured JD in YAML with version label. Store as `JD_BLUEPRINT`.
+
+---
+
+## Step 3 — Stage 2: Resume Screening (subagent)
+
+Display:
+
+```
+---------------------------------------------
+Stage 2: Resume Screening (Hybrid Weighted Scoring)
+---------------------------------------------
+```
+
+Ask the user to provide candidate resumes (text or file). Optionally collect 2–3 sentences about company culture and a target shortlist size.
+
+Launch the `recruiter-resume-screener` agent (`./agents/recruiter-resume-screener.md`), passing `JD_BLUEPRINT` and the resumes.
+
+The agent runs three layers of evaluation:
+1. **Hard Skill Gate** — caps Relevance if must-have skills missing
+2. **Domain Fit Check** — caps Relevance for cross-function mismatches
+3. **Hybrid Weighted Scoring** — Relevance / Value / Behavior / Career / Brand with adaptive weights
+
+Threshold = 60. Output: ranked candidates with HR Decision Summary per candidate. Store as `CANDIDATE_PROFILES`.
+
+---
+
+## Step 4 — Stage 3: Interview Question Design + Scorecard (subagent)
+
+Display:
+
+```
+---------------------------------------------
+Stage 3: Interview Design (Competency + Scorecard)
+---------------------------------------------
+```
+
+For each shortlisted candidate, launch the `recruiter-interview-question` agent (`./agents/recruiter-interview-question.md`), passing `JD_BLUEPRINT` and the candidate's `Candidate Strength Profile` from Stage 2.
+
+The agent produces:
+1. Competency model (5–7 items)
+2. Interview round assignment
+3. Competency-based question bank (behavioral / situational / technical / culture) with probes and 1–5 anchors
+4. Candidate-specific risk questions (6-dimension risk model)
+5. Weighted scoring rubric with behavioral anchors
+6. Bilingual scorecard ready for HR
+
+Store as `INTERVIEW_KIT_<candidate>`.
+
+**Important:** This agent does NOT score candidates. Scoring happens after interviews, in Stage 4.
+
+---
+
+## Step 5 — Stage 4: Calibration & Decision (subagent)
+
+Display:
+
+```
+---------------------------------------------
+Stage 4: Calibration & Final Decision
+---------------------------------------------
+```
+
+After interviews complete, ask the user to provide:
+- Interview transcripts (if available)
+- Each interviewer's independent scores and notes
+- Whether AI should extract evidence only, or also draft calibration summaries
+
+Launch the `recruiter-calibrator` agent (`./agents/recruiter-calibrator.md`), passing `JD_BLUEPRINT`, `INTERVIEW_KIT_<candidate>`, and the interview artifacts.
+
+The agent produces:
+1. Behavioral evidence per competency (extracted from transcripts)
+2. Pre-calibration review (score discrepancies, contradictions)
+3. Calibration meeting discussion guide
+4. Final decision sheet (Hire / No Hire / Hold with rationale, risks, mitigations)
+5. Bilingual communication templates (internal to recruiter + external to candidate)
+
+Store as `FINAL_DECISION_<candidate>`.
+
+---
+
+## Step 6 — Hand-off and follow-up
+
+Compile per-candidate deliverables:
+- JD Blueprint (Stage 1)
+- Resume Screening summary (Stage 2)
+- Interview kit + scorecard (Stage 3)
+- Final decision sheet (Stage 4)
+
+Ask:
+```
+Next steps:
+1. Send candidate communications (internal + external templates)
+2. Move shortlisted candidates to onboarding handoff
+3. Iterate on a specific stage (e.g., refresh JD, add candidates, redo calibration)
+```
+
+---
+
+## Rules
+
+- All deliverables must be bilingual (Chinese-English, side by side)
+- Never invent candidate evidence not in the transcript
+- Never modify the original scorecard during calibration
+- Stage 3 designs questions only; Stage 4 evaluates — keep them separate
+- Threshold for shortlist is 60; below threshold, suggest contract or alternative roles instead of forcing hire
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

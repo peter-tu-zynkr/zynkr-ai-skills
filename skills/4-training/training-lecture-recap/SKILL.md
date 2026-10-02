@@ -1,0 +1,161 @@
+---
+name: training-lecture-recap
+description: "Turn a video file or transcript into a reader-friendly lecture recap structured into five fixed sections — Summary, Theme, Q&A, Tools, Call to Action — while strictly avoiding any reference-outline detail leakage."
+category: training
+project: training-lecture-recap
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "4.08"
+originalName: "處理影片回顧"
+input: "A Fireflies meeting (id/URL/title — preferred, already transcribed), a video file, a video URL, or the verbatim transcript of a recorded lecture/livestream."
+process: "Transcribe the video (if not already a transcript), remove filler words, map the cleaned content to the reference outline structure, then render the recap"
+output: "A reader-friendly recap document with five sections: Summary, Theme, Q&A, Tools, Call to Action"
+synergy: []
+house-style: bound
+
+---
+
+# Lecture Recap Writer
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill training-lecture-recap
+```
+
+Turn a recorded lecture, livestream, or workshop into a publishable five-section recap. Use this skill when you have a video or transcript and need a reader-friendly summary in the canonical Zynkr recap format. **Different from sibling skills**:
+- `training-lecture-transcript` polishes the raw transcript itself (preserves every line).
+- `training-process-video` produces four parallel workstreams (slides, social posts, etc.) — not a single doc.
+- `training-lecture-recap` (this skill) produces **one** narrative recap doc with five fixed sections.
+
+---
+
+## Step 1 — Collect inputs
+
+Ask the user for:
+1. **Source** — one of:
+   - **A Fireflies meeting (prefer this)** — a meeting id, an
+     `app.fireflies.ai/view/<id>` URL, or just the title and roughly when it ran
+     ("上週那場 Claude Code 講座"). Anything Fred sat in on is already transcribed,
+     so this skips the whole transcription step below. Resolve with
+     `mcp__fireflies__fireflies_search(query="keyword:\"Claude Code\" from:2026-09-01")`
+     and confirm the row by title + date before fetching.
+   - Video file (`.mp4`, `.mov`, `.m4a`, `.wav`)
+   - Video URL (YouTube, Vimeo, etc.)
+   - Transcript text (paste or file path)
+2. **Lecture context** — speaker name, topic, target audience (1–2 sentences)
+3. **Recap outline** (optional) — a reference structure or session outline if available
+
+Store as `SOURCE`, `CONTEXT`, `OUTLINE_REF` (may be empty).
+
+---
+
+## Step 2 — Get a clean transcript
+
+Branch by input type:
+
+- **Fireflies meeting** → `mcp__fireflies__fireflies_get_transcript(transcriptId="<id>")`.
+  Returns speaker-labelled, timestamped sentences already — no ASR pass needed, so
+  go straight to the cleanup below. `mcp__fireflies__fireflies_get_summary` also
+  gives keywords and action items, handy for the Q&A and Call-to-Action sections.
+  ⚠️ Free plan = **50 API requests per day**, one per call — search once, fetch once.
+  ⚠️ `audio_url` / `video_url` come back empty on the free plan; text only. If the
+  recap genuinely needs the media, fall back to the Video file branch.
+- **Already a transcript** → proceed to Step 3
+- **Video file** → transcribe locally or via the user's preferred ASR tool (suggest `whisper` or `training-lecture-transcript` skill for the cleanup pass)
+- **Video URL** → ask the user to download or provide the transcript; this skill does not fetch external media
+
+Once you have raw transcript text:
+1. Remove obvious filler words (嗯、啊、那個、就是, "um", "uh", "like")
+2. Normalize speaker labels if present
+3. Preserve direct quotes from the speaker — these become Q&A material
+
+Store as `CLEAN_TRANSCRIPT`.
+
+---
+
+## Step 3 — Map content to the five sections
+
+Walk through `CLEAN_TRANSCRIPT` and bucket content into the five canonical sections. Strict rule: **if a reference outline was provided in `OUTLINE_REF`, use it only to structure section order — never copy detail text from the outline**. Detail comes from the transcript only.
+
+### Section structure
+
+**1. Summary (摘要)** — 2–3 sentences capturing the lecture's central message. Reader-friendly, third-person.
+
+**2. Theme (主題)** — The lecture's argument or framework. 3–5 bullets, each one main point with a one-sentence explanation drawn from the transcript.
+
+**3. Q&A** — Either:
+   - Actual audience Q&A from the recording, OR
+   - Inferred Q&A: pull 3–5 questions a reader would likely ask, then answer them using direct quotes from the speaker.
+   Format: `Q: ... / A: <quote or paraphrase from the lecture>`
+
+**4. Tools (工具)** — Concrete tools, frameworks, books, or references the speaker mentioned. Bullet list with one-line context per item.
+
+**5. Call to Action (行動呼籲)** — 1–2 sentences. What does the lecture invite the reader to do next? Pull from the speaker's actual closing remarks if present; otherwise infer the most natural reader action.
+
+---
+
+## Step 4 — Output
+
+Render in zh-TW unless the lecture is in English (then English). Use this template:
+
+```
+# 講座回顧：<lecture title>
+
+> Speaker: <name>  ·  Audience: <audience>
+
+## 摘要 / Summary
+<2–3 sentences>
+
+## 主題 / Theme
+- **<point 1>** — <explanation>
+- **<point 2>** — <explanation>
+- **<point 3>** — <explanation>
+
+## Q&A
+**Q:** <question>
+**A:** <answer drawn from transcript>
+
+(repeat 3–5 times)
+
+## 工具 / Tools
+- **<tool name>** — <one-line context>
+
+## 行動呼籲 / Call to Action
+<1–2 sentences>
+```
+
+---
+
+## Step 5 — Quality checks before delivery
+
+Before handing the recap to the user, verify:
+- [ ] Summary is under 80 words
+- [ ] Theme has 3–5 bullets, no overlap with Summary
+- [ ] Q&A pulls from actual transcript content, not invented
+- [ ] No detail copied verbatim from `OUTLINE_REF`
+- [ ] All speaker quotes are accurate (paraphrase if you can't preserve verbatim)
+- [ ] CTA is concrete and actionable, not generic
+
+---
+
+## Rules
+
+- Never invent statements the speaker did not make
+- Never copy reference outline text into the body — outline is for ordering only
+- Always preserve the speaker's voice — if they're casual, the recap is casual; if formal, formal
+- Filler-word removal is editorial — do not change meaning
+- When uncertain about a fact mentioned in the lecture, mark with `[unclear in source]` rather than guessing
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

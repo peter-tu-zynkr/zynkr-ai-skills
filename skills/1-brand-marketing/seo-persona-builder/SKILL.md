@@ -1,0 +1,94 @@
+---
+name: seo-persona-builder
+sheetId: "1.15"
+description: "First leg of the SEO content pipeline: reads brand material (from the SEO knowledge-base folder or a brand-material pack) and builds personas / consumer profiles of the target readers and prospects, to serve as the basis for downstream keyword and topic work. Triggers when the user says '幫我建立 SEO 人物誌', '先做受眾輪廓', '開始 SEO 流程', or hands over a brand-material pack. Does personas only — no keyword work, no article writing."
+category: brand-marketing
+project: seo-persona-builder
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "Brand material (brand culture, website content, industry background, product lineup, best-selling products) — from the SEO knowledge-base Drive folder or a brand-material pack"
+process: "Read brand material → extract 1–3 prospect personas per the persona-rubric (including pain points, decision-making role, buying journey) → get human review approval → output the handoff packet"
+output: "1–3 consumer personas + handoff packet, passed to seo-question-miner for common-question ideation"
+synergy: ["seo-question-miner"]
+handoff: ["seo-question-miner"]
+house-style: bound
+
+---
+
+# SEO Persona Builder
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-persona-builder
+```
+
+This is the first leg of the Zynkr SEO content pipeline, corresponding to the "Positioning — build prospect personas" node in the v2 flow diagram. It reads brand material and produces personas focused primarily on B2B decision-makers (HR / L&D / operations / transformation leads), with professional workers as a secondary focus, so that the downstream keyword research and topic selection all have a clear audience. It is responsible for personas only; once they are produced it hands off and does not proceed downstream on its own.
+
+---
+
+## Resources you'll use
+
+> **Knowledge source**: The rubrics/templates used by this skill are read preferentially from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, searched by name); when unavailable, fall back to the local `./references/`. See `seo-article-pipeline/seo-pipeline-config.md` for the lookup table.
+
+- **SEO knowledge-base folder ID**: `<your-seo-kb-folder-id>` (brand material is in the root, seed knowledge is in the `02 Seed Knowledge` subfolder, and each article's working files live in their own subfolder)
+- **Google account**: `<your-google-workspace-account>`
+- **MCP server**: `google-workspace` (Drive reads)
+- **Evaluation criteria**: `./references/persona-rubric.md`
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+---
+
+## Step 1 — Obtain brand material
+
+Priority order:
+1. If the user has already attached a "brand-material pack," use it directly.
+2. Otherwise, use `search_drive_files` to search for brand material documents (brand culture / website content / industry background / product lineup / best-selling products) in `<your-seo-kb-folder-id>`, then read them with `get_drive_file_content`.
+3. If neither exists, ask the user for a brand-material pack (see the brand-material pack template in `seo-article-pipeline`), **asking before doing**.
+
+## Step 2 — Extract personas
+
+Following the fields in `./references/persona-rubric.md`, produce 1–3 prospect personas. Each persona must include: role and job title, organizational context, core pain points (mapped against the knowledge / cognition / execution three-gap framework), how they currently solve it, buying-journey stage, and what words they would search with. **Do one thing per round, and always number the options.**
+
+## Step 3 — Human review approval (HITL)
+
+List the personas for the user and ask: "Are these personas correct? Which one needs adding, removing, or adjusting? (Please enter the number)." This corresponds to the "user review and approval" gate in the flow diagram — **do not hand off before confirmation**.
+
+## Step 4 — Output the handoff packet and save
+
+After confirmation:
+- Save the personas into this article's working subfolder under `<your-seo-kb-folder-id>` (durable record).
+- Output the handoff packet:
+
+```
+✅ 人物誌已確認
+
+SEO_PACKET ▸ Persona
+- 目標人物誌：<逐一列出，含痛點與搜尋語言>
+- 主要鎖定：<B2B 決策者 / 專業工作者>
+- 三鴻溝定位：<知識 / 認知 / 執行>
+
+人物誌已確認，可交棒給 seo-question-miner 發想常見問題與種子關鍵字。
+```
+
+## Outputs
+
+1–3 consumer personas (stored in the Drive working subfolder) + a `SEO_PACKET ▸ Persona` handoff block.
+
+## Limitations
+
+Does not do keyword research and does not write articles. When brand material is insufficient, ask only the single most critical follow-up question, and never fabricate brand facts.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

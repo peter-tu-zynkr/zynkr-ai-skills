@@ -1,0 +1,96 @@
+---
+name: zynkr-content-writer
+sheetId: "1.01"
+category: "brand-marketing"
+project: "zynkr-content-writer"
+platform: "claude"
+status: "Done"
+visibility: public
+author: "Peter Tu"
+input: "Article topic or idea — can be vague, an outline, a draft, or completed copy at any stage"
+process: "7-stage pipeline orchestrated by /zynkr-content-writer — ideation, style selection, drafting, editing, reader perspective scoring, title generation, CTA writing"
+output: "Publication-ready article with SEO-optimized title and CTA, produced incrementally stage by stage"
+synergy: []
+---
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Zynkr Writing Agent is a modular, multi-stage article writing pipeline built entirely on Claude Code skills and agents. It orchestrates 7 specialized agents that guide an article from initial idea through publication-ready copy with CTAs. All agent prompts are written in Traditional Chinese (zh-TW); the orchestrator responds in whatever language the user writes in.
+
+## Architecture
+
+```
+Entry: /zynkr-content-writer skill → SKILL.md orchestrator
+  ↓ detects user's current stage from input
+  ↓ routes via Task tool to one of 7 agents:
+
+Stage 0: content-idea  — Socratic dialogue for vague ideas
+Stage 1: content-style-select     — Picks from 10 structure templates (read from Drive)
+Stage 2: content-draft            — Writes ~400 words/section per turn
+Stage 3: content-editor             — Editorial review + forbidden-word check
+Stage 3.5: content-reader       — 100-point scoring (optional)
+Stage 4: content-title    — 10 SEO-optimized title candidates
+Stage 5: content-cta                 — 3 CTA options from 6 predefined types
+```
+
+**Key design rules:**
+- Agents are stateless and independent — each receives full context from the previous stage
+- The orchestrator never auto-chains stages; it always asks the user before advancing
+- Entry point detection uses a decision tree (no content → Stage 0, topic + thoughts → Stage 1, confirmed outline → Stage 2, completed draft → Stage 3+)
+
+## Key File Locations
+
+| What | Path |
+|------|------|
+| Orchestrator | `.claude/skills/write-article/SKILL.md` |
+| Agent definitions | `.claude/agents/*.md` (7 files) |
+| Guide/reference docs | `.claude/skills/write-article/references/*.md` (12 files) |
+| Eval outputs | `write-article-workspace/eval-{0,1,2}/` |
+
+Guide files are stage-specific reference material that map to the pipeline:
+- `stage-0-socratic.md` → Stage 0
+- `stage-1-style-selection.md`, `stage-1-article-structure.md` → Stage 1
+- `stage-2-article-draft.md`, `stage-2-style-guide.md` → Stage 2
+- `stage-3-editor.md`, `stage-3-editor-guide.md` → Stage 3
+- `stage-3-5-content-reader.md` → Stage 3.5
+- `stage-4-article-title.md`, `stage-4-seo-list.md` → Stage 4
+- `stage-5-cta-writing.md`, `stage-5-cta-selection.md` → Stage 5
+
+## Running
+
+```bash
+claude    # then invoke /zynkr-content-writer
+```
+
+Or with a topic: `/zynkr-content-writer 我想寫一篇關於AI工具的文章`
+
+Individual agents can also be triggered directly by providing appropriate content (e.g., pasting a draft auto-routes to the editor agent).
+
+## Evaluation
+
+Evals live in `write-article-workspace/` (gitignored). Each eval folder contains:
+- `eval_metadata.json` — input/output config
+- `grading.json` — assertions and pass/fail breakdown
+- `outputs/transcript.md` — execution log
+
+Run evals via the skill-creator plugin's `prepare_eval.py` script (see `.claude/settings.local.json` for the allowed command).
+
+## Conventions
+
+- Agent files use YAML frontmatter (`name`, `description`, `model`) followed by a Markdown system prompt
+- All agents default to `model: sonnet`
+- CTA links and SEO keyword lists are hardcoded in the agent prompts and guide files — update them there directly when they change
+
+## Knowledge source of truth — edit the Docs, not the prompts
+
+Article structure, style guide, editor guide and forbidden words are **owned by Google Docs** in the Drive folder `[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`). Agents read them at runtime via `get_doc_as_markdown` and fall back to their embedded copies only when Drive is unreachable. See the "Knowledge Sources" table in `.claude/skills/write-article/SKILL.md` for the Doc IDs.
+
+Consequences:
+
+- To change writing behaviour, **edit the Doc** — no code change or redeploy needed.
+- `references/*.md` and the agents' embedded sections are **mirrors**. When a Doc changes, re-sync both.
+- The structure/style Docs are tabbed and `get_doc_as_markdown` returns all tabs as `#` sections (`# 最終產出` is the guide; `# 指令工程` is the generator prompt). The editor Doc stacks versions newest-first — only the top block is live.
+- The retired `wordcheckbe.zeabur.app/api/rules` endpoint is unreachable; forbidden words now come from 《[3.2] 禁用詞清單》.

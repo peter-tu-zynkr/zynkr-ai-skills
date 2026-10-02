@@ -1,0 +1,139 @@
+---
+name: content-translator
+description: "Translate English (or any source language) into natural, conversational Traditional Chinese using Taiwanese expressions and tone. Removes the 'translation smell' that comes from word-for-word renderings. Also supports a reverse zh-TW → English mode for producing English 'flagship' versions of SEO articles (used by seo-article-pipeline for AEO reach in English-dominant AI engines)."
+category: brand-marketing
+project: content-translator
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "1.13"
+originalName: "寫作助理 ─ 翻譯蒟蒻"
+input: "Text in English or another language (plain text, paragraph, document, or code-block-free passage)"
+process: "Translate into natural conversational Traditional Chinese using Taiwanese expressions and tone; localize idioms, units, and references; preserve any code fences untouched"
+output: "Fluent, localized Traditional Chinese (Taiwan) text that sounds like everyday spoken or written language, not machine-translated"
+synergy: []
+house-style: bound
+
+---
+
+# zh-TW Translator (翻譯蒟蒻)
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill content-translator
+```
+
+Translate text into natural Traditional Chinese (Taiwan) — the kind a Taiwanese writer would actually publish. Use this skill when source content is in English, simplified Chinese, or any other language, and you need it to read like it was originally written for a Taiwanese audience, not translated. Particularly suited for articles, newsletters, social posts, documentation, and mixed code+prose content.
+
+---
+
+## Step 1 — Identify the source and surface
+
+Detect:
+1. **Source language** — usually English, but may be zh-CN, Japanese, etc.
+2. **Surface type** — prose, social post, technical doc, code-comment-heavy text, mixed
+3. **Tone target** — formal (article, doc), conversational (newsletter, social), or unspecified (default to conversational)
+4. **Code blocks** — if any ```fenced``` blocks exist, mark them off-limits
+
+If the user didn't specify tone, infer from surface type. Ask only if genuinely ambiguous.
+
+---
+
+## Step 2 — Translate with Taiwanese voice
+
+Apply these rules while translating:
+
+### Vocabulary
+- Use Taiwan-specific terms, not zh-CN equivalents:
+  - `軟體` not `软件`, `滑鼠` not `鼠标`, `網路` not `网络`, `品質` not `质量`
+  - `行銷` not `营销`, `資訊` not `信息`, `視訊` not `视频`
+- Prefer concrete Taiwanese phrasing over literal renderings:
+  - "Best practices" → `常見作法 / 最佳實務`, not `最好的做法`
+  - "Stakeholder" → `利害關係人`, not `利益相關者`
+  - "Onboarding" → `入職 / 上手流程` (context-dependent)
+
+### Tone
+- Avoid translation smell — drop unnecessary 主詞 (subject pronouns) when context allows
+- Replace English connector words with Chinese equivalents that flow naturally:
+  - "However" → `不過 / 但是 / 話說回來`, not `然而` (formal-only)
+  - "Therefore" → `所以 / 因此`, not `故而`
+- Use 句子節奏 (rhythm) — short sentences for emphasis, longer for explanation
+- Conversational mode: add particles 啊、吧、欸、喔 sparingly where natural
+- Formal mode: keep particles minimal, but still avoid stiff translation patterns
+
+### Idioms and references
+- Localize idioms — `kill two birds with one stone` → `一石二鳥 / 一舉兩得`, not literal
+- Localize cultural references — `the Super Bowl` may need a `(美式足球年度冠軍賽)` gloss for general audience
+- Keep brand names, product names, and code identifiers in original form
+
+### Units and formats
+- Convert imperial → metric where natural (miles → 公里) **only** if the source isn't quoting a specific value
+- Date formats: `2026-05-25` or `2026 年 5 月 25 日`, not `5/25/2026`
+- Currency: keep original currency symbol but add `(約 NT$ X)` if the user is Taiwan audience and the original wasn't TWD
+
+### Code and structural elements
+- ` ```fenced``` ` blocks: **never translate** — copy verbatim
+- Inline `code` references: keep in original
+- Code comments: translate the comment text, keep the code
+
+---
+
+## Step 3 — Self-check before delivery
+
+Read your translation aloud (mentally). Flag and fix:
+- [ ] Any sentence that sounds like 翻譯腔 (translation smell) — rewrite
+- [ ] Any zh-CN-style vocabulary that slipped in — replace with zh-TW
+- [ ] Any English word left untranslated that has a clear Chinese equivalent (except brand/code/proper nouns)
+- [ ] Any cultural reference that won't land for a Taiwan audience — gloss or localize
+- [ ] Length — is it ±15% of the source word count? Drastic shrink/grow usually means mistranslation
+
+---
+
+## Step 4 — Output
+
+Return:
+1. **The translation** (clean, no explanations inline)
+2. **Notes** (optional, only if there are choices the user might want to revisit):
+   - Localizations made (e.g., "Changed 'Black Friday' to '雙11' for Taiwan audience — revert if not desired")
+   - Ambiguous source phrases with the interpretation chosen
+   - Unconfident technical terms
+
+If the source was code+prose, present the translated version with code blocks intact.
+
+---
+
+## Reverse mode — zh-TW → English flagship (SEO/AEO)
+
+Triggered when the user (or `seo-article-pipeline`) asks for an **English flagship version** of a zh-TW SEO article. This is localization for an English-reading / AI-engine audience, not literal translation.
+
+- **Localize, don't transliterate**: render the argument the way a native English SEO writer would publish it. Keep the article's named frame (translate it to a crisp English term and use it consistently).
+- **Preserve AEO structure**: keep the answer-first opening, H2/H3 hierarchy, FAQ block, comparison tables, and lists — these are what AI engines cite. Translate the FAQ Q&A so each answer is self-contained and quotable.
+- **Keyword intent over literal keyword**: map the zh-TW target keyword to the natural English search phrase for the same intent (don't word-for-word the Chinese keyword). Place it in the H1, first paragraph, and ≥1 H2.
+- **Meta + title**: produce an English meta description (~150–160 chars) and title (≤60 chars, no trailing period); carry the schema-relevant FAQ across.
+- **Voice**: practical, first-hand, no hype — match Zynkr's English brand voice; keep real author byline (E-E-A-T).
+- **Keep**: brand/product names, code identifiers, and technical acronyms as-is.
+
+Output the English flagship article + its meta/title, ready to hand to `seo-article-finalizer` for English schema/links.
+
+---
+
+## Rules
+
+- Default to zh-TW even if the user didn't specify — that's this skill's whole purpose. Switch to **Reverse mode** only when an English version is explicitly requested.
+- Never translate code; never translate fenced code blocks
+- Never leave English words in the output unless they are: brand names, code identifiers, or technical acronyms with no Chinese standard (`API`, `SDK`, `MVP`)
+- Never use simplified Chinese characters in zh-TW output
+- If asked to translate Chinese-to-Chinese (zh-CN → zh-TW), do the conversion plus a vocabulary pass, not just character conversion
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

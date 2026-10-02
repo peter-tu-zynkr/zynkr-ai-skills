@@ -1,0 +1,159 @@
+---
+name: slide-page-splitter
+description: "The second leg of the slide-assistant three-leg relay: take the storyline approved by the previous leg (SLIDE_PACKET ▸ Storyline) and, following paging principles, slice it into a page-by-page slide list — deciding which beat each page maps to, what title it carries, how many bullet points it holds, and how dense its information should be. Trigger me immediately when the user hands over a ▸ Storyline handoff packet, or says 「幫我分頁」, 「把故事線切成投影片」, 「每頁放什麼」, 「規劃投影片頁數」, 「slide 分頁設定」. I only handle paging and per-page content allocation, handing off once ▸ Pages is produced; I do not design layout or visuals, nor render .pptx (that's slide-visual-selector and the slide-pptx skill), and I do not go back and rewrite the storyline (that's slide-storyline-designer)."
+category: brand-marketing
+project: slide-page-splitter
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+sheetId: "1.26"
+originalName: "品牌行銷助理 ─ 分頁設定"
+input: "The SLIDE_PACKET ▸ Storyline handoff packet from slide-storyline-designer (presentation goal, audience and context, core claim through-line, narrative arc beats, logic check)"
+process: "Expand each beat into one or more pages per paging principles → for each page set a title (carrying its own conclusion), content bullets, page type, and information density → enforce the per-page information cap → human review to keep/delete/merge → hand off"
+output: "An ordered page list SLIDE_PACKET ▸ Pages, handed to slide-visual-selector to choose layout and visuals"
+synergy: ["slide-storyline-designer", "slide-visual-selector"]
+handoff: ["slide-visual-selector"]
+house-style: bound
+
+---
+
+# Slide Page Splitter
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill slide-page-splitter
+```
+
+This is the **second leg** of the Zynkr slide-assistant three-leg relay (legacy 1.13 《品牌行銷助理 ─ 分頁設定》). The full relay chain:
+
+```
+zynkr-slide（總指揮，選用）─ 一路帶著 SLIDE_PACKET ▸ Brief
+        ▼
+slide-storyline-designer (1.25)
+        │  SLIDE_PACKET ▸ Storyline
+        ▼
+slide-page-splitter (1.26)   ← 你在這
+        │  SLIDE_PACKET ▸ Pages
+        ▼
+slide-visual-selector (1.27)
+        │  SLIDE_PACKET ▸ Visuals (render-ready)
+        ▼
+slide-pptx 技能  → 算繪成 .pptx
+```
+
+**Core idea: the storyline is the "line," the slides are the "points."** The audience can absorb only one key point per page, so paging is not about pouring text evenly into boxes — it's about deciding, for each beat, "how many pages to split it into, which single conclusion each page focuses on, and how much information to pack in before it overflows."
+
+- **Takes in**: `SLIDE_PACKET ▸ Storyline` (the output of the previous leg, slide-storyline-designer).
+- **Puts out**: `SLIDE_PACKET ▸ Pages` — an ordered slide skeleton with a clear responsibility per page, so the next leg doesn't have to guess content and can focus purely on choosing layouts.
+
+I don't touch visuals, and I don't rewrite the story (see ## Limitations).
+
+---
+
+## Resources you'll use
+
+- **Paging principle cards**: see the built-in guidelines in Step 2 and Step 3 below (one point per page, per-page information cap, titles that carry their own conclusion). If `paging-principles.md` / `slide-density-rubric.md` exist under `./references/`, read those first as a finer-grained rubric; if they're unavailable, use the built-in guidelines in this document — **do not stall over a missing file**.
+- **Brand assets**: the paging stage **does not** need to touch brand colors/fonts (that's the visual leg's job); but if ▸ Storyline carries audience/occasion information, adjust the level of detail per page accordingly (external pitches should be lean; internal updates/training can be denser).
+- **Save location**: this presentation's working subfolder (it shares the same SLIDE_PACKET durable record with 1.25 and 1.27).
+
+---
+
+## Step 1 — Receive the storyline handoff packet
+
+Read the previous leg's `SLIDE_PACKET ▸ Storyline` and confirm all five fields are present (field names follow the relay contract verbatim): **presentation goal, audience and context, core claim (through-line), narrative arc (beats), logic check**.
+
+- If the user **did not provide** ▸ Storyline, first ask them to paste it, or go run `slide-storyline-designer` first — **do not invent a storyline yourself, and do not jump ahead to paging**. A storyline conjured out of thin air will skew the foundation of the entire deck.
+- If the ▸ Storyline's "logic check" flagged unresolved jumps/gaps, report back to the user first: "The storyline still has gap X; I'd suggest filling it in before paging, or would you like me to page it as-is?" **Confirm before acting**, to avoid carrying the problem into the slides — paging cannot rescue a broken storyline.
+
+> **If an upstream `SLIDE_PACKET ▸ Brief` (produced by `zynkr-slide`) is present**: first read the "per-leg emphasis ▸ paging (leg 2)" directives along with `頁數預算` and the default density, and use them as weights for this leg's judgment — treat `頁數預算` as the **target (not a hard cap)** for splitting pages, and the default density as the starting density for Step 3. If the ▸ Brief's "mode" value is express, this leg's human review (Step 4) switches to **non-blocking**: still list the page list for the user and note "you can stop / modify at any time," but if there's no major problem, auto-advance and hand off without pausing to wait for item-by-item confirmation; when the "mode" value is guided, **or there is no ▸ Brief**, keep Step 4's original per-page blocking HITL. If the ▸ Brief conflicts with this leg's principles, this leg's principles and the user's ruling take precedence. **When there is no ▸ Brief, this leg runs entirely on the standalone Step 1–5 flow, and none of the above weights apply.**
+
+## Step 2 — Expand each beat into pages (decide "how many pages to split")
+
+Process each beat in order, applying the **three paging principles** to decide how many pages it becomes:
+
+1. **One point per page**: if a beat carries only a single key message → 1 page. If a beat contains multiple parallel points (e.g., three major benefits, four steps) → split it into "1 overview page + N expansion pages" or "1 list page," depending on the volume of information. **Better to add a page than to put two points on one page** — the audience's attention only has room for one thing per page.
+2. **Titles carry their own conclusion**: write each page's title as a **complete claim sentence**, not a noun label. Write "Response time dropped 40% after rollout" instead of "Results"; write "Three reasons the current process can't hold up" instead of "Pain points." The audience should grasp the page's conclusion just from the title.
+3. **Align with the narrative rhythm**: **add a title page at the start** of the beat sequence, **add a section page at major transitions between segments**, and **add a closing page at the end**. These are "skeleton pages" the storyline doesn't have but the deck needs — they give the audience a sense of signposting.
+
+At the same time, tag each page with a **page type** (strictly use the contract enum: `title / section / content / data / quote / closing`):
+
+| Page type | When to use (criteria) |
+|---|---|
+| `title` | The very first page: presentation topic + speaker/occasion. Corresponds to a one-sentence version of the through-line. |
+| `section` | Entering a new major segment (a cross-beat transition); gives the audience a "where are we now" signpost. |
+| `content` | The workhorse page: argument, bullet points, concept explanation. Most pages are this type. |
+| `data` | The page's key message **stands on numbers / comparisons / trends** (growth, share, before/after, KPIs). |
+| `quote` | Use a customer testimonial, authoritative citation, or memorable line to carry emotion/credibility. |
+| `closing` | The ending: call to action (CTA), next steps, contact info, callback to the through-line. |
+
+> The key to telling `content` vs `data` apart: does the page still stand once you remove the numbers? If not → `data`. This tag helps the next leg (1.27) pick a data-chart layout faster, but **the layout is decided by 1.27; I only tag the page type, I don't choose the archetype**.
+
+## Step 3 — Configure each page's content (decide "how much per page")
+
+Fill in each page's **content bullets** and **information density**, applying the **per-page information cap**:
+
+- **Content bullet cap**: a content page should follow a principle of **3–5 bullets**, each readable in one line (about ≤ 1.5 lines). More than 5 bullets → go back to Step 2 to split the page or merge like items. `title` / `section` / `quote` / `closing` usually have just 1 main-message sentence.
+- **Hierarchy cap**: bullets go at most two levels deep (main point + sub-point); **no three-level nesting** — a slide is not a Word outline, and the deeper the nesting, the harder it is for the audience to keep reading.
+- **Information density** tag (the basis for the next leg to decide whitespace and font size); pick one of three levels:
+  - `低`: 1 memorable line or 1 big number (big-statement / quote / data with a single-metric feel).
+  - `中`: 3–5 bullets, or one comparison, or a single simple chart (most content/data pages).
+  - `高`: tables, multi-step processes, dense information requiring side-by-side comparison (note: high-density pages should be checked for whether they ought to be split further).
+- **Fixed fields per page** (strictly aligned to the contract, field names must not change): `{頁碼, 對應 beat, 頁面類型, 標題, 內容要點, 資訊密度}`. `對應 beat` must be backfilled with the source beat name; skeleton pages (title / section / closing and other pages the storyline doesn't have, added by this leg) are marked `—`, so the trace back to the storyline doesn't break the chain; only when a closing calls back to the whole deck may it be marked 「全場」.
+
+When done, run a **global check**: page numbers are continuous, every beat has a corresponding page, no single page holds two points, and the title list read on its own is a complete storyline (this is the final sanity check — **the titles are the outline**).
+
+## Step 4 — Human review (HITL)
+
+List the complete page list to the user **numbered page by page**, explicitly asking three things, and ask them to reply by number:
+
+1. Which pages to **keep / delete**? (Which pages are actually redundant?)
+2. Which pages to **merge / split**? (Which pages are too crowded, which too empty?)
+3. Are the titles' **conclusions** written correctly? (Is there any page whose title fails to capture what that page actually wants to say?)
+
+**Do not hand off without the user's confirmation.** After adjusting per their reply, if the changes are large, list it again for them to review.
+
+## Step 5 — Hand off and save
+
+After confirmation, save the page list into this presentation's working subfolder (durable record, the same SLIDE_PACKET as 1.25 / 1.27), and output the handoff packet:
+
+```
+✅ 分頁已確認
+
+SLIDE_PACKET ▸ Pages
+- 分頁清單（有序）：
+  - 第 1 頁 | 對應 beat：— | 頁面類型：title | 標題：<一句話主題> | 內容要點：<講者/場合> | 資訊密度：低
+  - 第 2 頁 | 對應 beat：— | 頁面類型：section | 標題：<段落結論句> | 內容要點：<路標說明> | 資訊密度：低
+  - 第 3 頁 | 對應 beat：<beat 名> | 頁面類型：content | 標題：<自帶結論的主張句> | 內容要點：① … ② … ③ … | 資訊密度：中
+  - 第 4 頁 | 對應 beat：<beat 名> | 頁面類型：data | 標題：<數字結論句> | 內容要點：<關鍵指標/對照> | 資訊密度：中
+  - …
+  - 第 N 頁 | 對應 beat：全場 | 頁面類型：closing | 標題：<行動呼籲句，回扣 through-line> | 內容要點：<下一步/聯絡> | 資訊密度：低
+- 套用的分頁原則：一頁一個重點；單頁要點上限 3–5 條、層級至多兩層；標題自帶結論（標題串起來即大綱）。
+
+分頁與每頁內容已確認，可交棒給 slide-visual-selector (1.27) 選版式與視覺。
+```
+
+> The field names (頁碼／對應 beat／頁面類型／標題／內容要點／資訊密度) and the page-type enum (`title / section / content / data / quote / closing`) must be **verbatim identical** to the relay contract, otherwise the next leg 1.27 can't pick it up. After saving, you may proactively prompt the user: "Paging is finalized — shall we move on to visual selection (slide-visual-selector, the third leg)?" If slide-visual-selector isn't installed yet, prompt them to install it before continuing the relay.
+
+## Outputs
+
+An ordered page list `SLIDE_PACKET ▸ Pages` with a clear responsibility per page: each page carries `{頁碼, 對應 beat, 頁面類型, 標題, 內容要點, 資訊密度}`, plus the applied paging principles. Handed to `slide-visual-selector` (1.27) to choose layout and visuals.
+
+## Limitations
+
+- **Only does paging and per-page content allocation** — how many pages to split, what/how much goes on each page, titles, and information density. The output is "slide pages," not "narrative beats."
+- **Does not choose the layout archetype, specify visual elements or page layout, or apply brand colors/fonts**: that's slide-visual-selector (1.27)'s job; I only tag the page type (`title / section / content / data / quote / closing`), I don't touch the layout enum (`title / big-statement / bulleted-list / …`).
+- **Does not render .pptx**: rendering is done by feeding 1.27's ▸ Visuals into the installed slide-pptx skill.
+- **Does not go back and rewrite the storyline**: beats, through-line, and narrative arc belong to slide-storyline-designer (1.25); if I find a gap in the story while paging, I only report it and suggest a fix, asking the user to go back to the previous leg — I don't alter the narrative on my own.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

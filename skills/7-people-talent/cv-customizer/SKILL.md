@@ -1,0 +1,235 @@
+---
+name: cv-customizer
+sheetId: "7.01"
+description: "5-phase CV optimization workflow — job analysis, story extraction, fit scoring, career progression analysis, and CV rewrite with Google Doc output."
+category: people-talent
+project: cv-customizer
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "Job description (text, URL, or file) and candidate CV/resume"
+process: "5-phase pipeline — job decoding, SCQA story extraction, fit scoring, career progression analysis, and section-by-section CV rewrite"
+output: "Optimized CV as a Google Doc, with fit scores and progression report"
+synergy: []
+type: agent
+skills: ["cv-job-decoder", "cv-story-extractor", "cv-fit-scorer", "cv-progression", "cv-rewrite"]
+house-style: bound
+
+---
+
+# CV Customizer
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill cv-customizer
+```
+
+Orchestrate a 5-phase CV optimization workflow: analyze the target job, extract candidate stories, score fit, analyze career progression, and rewrite the CV — then output as a Google Doc. Use this skill when applying for a specific role and you have both a job description and a CV ready to tailor.
+
+---
+
+## Step 1 — Collect inputs
+
+Ask the user for:
+1. **Job Description**: paste text directly, or provide a URL / file path
+2. **Current CV / Resume**: paste text directly, or provide a file path
+
+**Detect input type:**
+- If pasted text -> use directly
+- If file path (.txt, .md, .pdf, .docx) -> read the file
+- If URL -> use WebFetch to retrieve the page content and extract the JD
+
+Store both inputs as `JD_TEXT` and `CV_TEXT` for use across all phases.
+
+---
+
+## Step 2 — Phase 1: Unpack What the Company Wants (subagent)
+
+Display:
+```
+---------------------------------------------
+Phase 1: Unpack What the Company Wants
+---------------------------------------------
+Analyzing job description...
+```
+
+Launch the `cv-job-decoder` agent using the Agent tool:
+- Pass the full `JD_TEXT` as the prompt
+- Wait for completion
+
+Display the structured output (Role Context Summary, Skills Table, KPI Mapping, ATS Keywords).
+
+Then ask:
+```
+Does this analysis look accurate? (Yes / Adjust)
+```
+
+- If "Adjust": ask what to change, re-run or manually correct
+- If "Yes": store the output as `PHASE1_OUTPUT`, proceed to Phase 2
+
+---
+
+## Step 3 — Phase 2: Contextualized Story Extraction (interactive)
+
+Display:
+```
+---------------------------------------------
+Phase 2: Story Extraction (SCQA)
+---------------------------------------------
+```
+
+Read the instructions from:
+`./agents/cv-story-extractor.md`
+
+Execute the Phase 2 flow **in the main conversation**:
+1. Compare `CV_TEXT` against `PHASE1_OUTPUT` skill priorities
+2. Identify 1-3 underrepresented skills
+3. For each skill, guide the user through SCQA (Situation, Complication, Question, Answer)
+4. Confirm each story summary with the user
+5. Collect all stories as `PHASE2_OUTPUT`
+
+---
+
+## Step 4 — Phase 3: Fit Scoring & Benchmarking (interactive)
+
+Display:
+```
+---------------------------------------------
+Phase 3: Candidate Fit Scoring
+---------------------------------------------
+```
+
+Read the instructions from:
+`./agents/cv-fit-scorer.md`
+
+Execute the Phase 3 flow **in the main conversation**:
+1. Score the CV across 4 dimensions (Relevance, Value, Narrative, ATS) — each 1-5
+2. Present each dimension one at a time, wait for user acknowledgment
+3. Show benchmark comparison table
+4. Present action summary
+5. Store as `PHASE3_OUTPUT`
+
+---
+
+## Step 5 — Phase 4: Career Progression Analysis (subagent)
+
+Display:
+```
+---------------------------------------------
+Phase 4: Career Skill Progression Analysis
+---------------------------------------------
+Analyzing career trajectory...
+```
+
+Launch the `cv-progression` agent using the Agent tool.
+Pass all accumulated context in the prompt:
+```
+## Context from Prior Phases
+
+### Phase 1 Output:
+[PHASE1_OUTPUT]
+
+### Phase 2 Output (SCQA Stories):
+[PHASE2_OUTPUT]
+
+### Phase 3 Output (Fit Scores):
+[PHASE3_OUTPUT]
+
+### Candidate CV:
+[CV_TEXT]
+
+---
+
+Analyze the career progression following your 4-checkpoint chain.
+```
+
+Wait for completion. Display the full progression report.
+
+---
+
+## Step 6 — Phase 5: Rewrite & Final Quality Check (interactive)
+
+Display:
+```
+---------------------------------------------
+Phase 5: CV Rewrite & Quality Check
+---------------------------------------------
+```
+
+Read the instructions from:
+`./agents/cv-rewrite.md`
+
+Execute the Phase 5 flow **in the main conversation**, using all prior phase outputs:
+1. Rewrite Executive Summary -> Accept / Modify / Skip
+2. Rewrite each Work Experience role -> Accept / Modify / Skip
+3. Rewrite Skills section -> Accept / Modify / Skip
+4. Review Education -> Accept / Modify / Skip
+5. Final polish and changes summary table
+
+Assemble the final CV content as `FINAL_CV`.
+
+---
+
+## Step 7 — Output to Google Doc
+
+Display:
+```
+---------------------------------------------
+Creating Google Doc...
+---------------------------------------------
+```
+
+1. Use `mcp__google-workspace__create_doc` to create a new Google Doc:
+   - `user_google_email`: `<your-google-workspace-account>`
+   - Title: `CV - [Candidate Name] - [Target Role] - [Date]`
+
+2. Use `mcp__google-workspace__batch_update_doc` to write the final CV content into the doc, following the template structure:
+   - Header (name, contact info)
+   - Executive Summary
+   - Work Experience (each role with bullets)
+   - Education
+   - Skills
+
+3. Use `mcp__google-workspace__get_drive_shareable_link` to get the doc URL.
+
+4. Display completion summary:
+
+```
+---------------------------------------------
+CV Customizer Complete
+---------------------------------------------
+
+Target: [Company] - [Role]
+
+Phase Results:
+  [1] Job Analysis      - [key insight]
+  [2] Story Extraction  - [N] SCQA stories captured
+  [3] Fit Score         - [N]/20 overall
+  [4] Progression       - [N] priority rewrites identified
+  [5] CV Rewrite        - [N] sections rewritten
+
+Google Doc: [URL]
+---------------------------------------------
+```
+
+---
+
+## Error Handling
+
+- If Phase 1 subagent fails, display the error and ask the user to provide more JD details
+- If the user wants to skip a phase, allow it and note what context will be missing downstream
+- If Google Doc creation fails, fall back to displaying the final CV as formatted text in the conversation
+- Never silently swallow errors — always surface them clearly
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

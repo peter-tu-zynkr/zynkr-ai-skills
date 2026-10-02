@@ -1,0 +1,271 @@
+---
+name: ops-workflow-design
+sheetId: "5.03"
+description: "Read, draft, edit, and lint Lucid charts using Peter's FE/BE/DB three-layer architecture convention. Triggers whenever the user shares a `lucid.app` URL with no further direction, asks to diagram/chart/visualize a process or workflow, asks to 'read' or 'summarize' an existing Lucid diagram, asks to add/modify nodes on a Lucid chart, or asks whether a chart follows the Zynkr convention. Should fire eagerly on phrases like '幫我畫流程圖', 'draw this workflow', 'diagram this', 'visualize this process', 'turn this into a Lucid chart', '/ops-workflow-design', or any pasted Lucid URL. Bridges the human-facing Shape × Color principles (`5.0 product/architecture_principles_guidebook.md`, `5.0 product/color-shape-principles.md`) to the Lucid MCP tools (`mcp__lucid__fetch`, `mcp__lucid__lucid_create_diagram_from_specification`, `mcp__lucid__lucid_add_block`, `mcp__lucid__lucid_add_line`, `mcp__lucid__lucid_edit_item`). Use even when the user does not name 'Lucid' explicitly — if they want a process flow drawn or interpreted, this skill applies."
+category: product
+project: ops-workflow-design
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "A Lucid document URL/id, OR a natural-language process description, OR a chart-edit request."
+process: "Decide intent (read/draft/edit/validate). Apply FE/BE/DB three-layer model, swimlane scaffold, and Shape × Color encoding. Use Lucid MCP tools to fetch, create, or modify charts."
+output: "Either a structured semantic narrative of an existing chart, OR a new/edited Lucid diagram (returns the edit URL), OR a lint report against the convention."
+synergy: []
+house-style: bound
+
+---
+
+# Ops Workflow Design
+
+Bridges Peter's FE/BE/DB architecture convention to live Lucid charts. Four jobs:
+
+1. **Read** — given a Lucid URL, fetch the JSON, decode the semantics, narrate the workflow.
+2. **Draft** — given a process description in plain text, produce a new Lucid chart that follows the convention.
+3. **Edit** — given an existing chart + a change request, add/modify nodes without breaking the convention.
+4. **Validate** — lint a chart against the rules in `references/validation.md` (V1–V14).
+
+---
+
+## 0) Required reading (do this before acting)
+
+The skill is a **bridge**, not the source of truth. The conventions are codified in references — read them so you can recover the *why* when judgment calls come up.
+
+| File | Read when |
+|---|---|
+| `references/architecture-principles.md` | Always — the FE/BE/DB three-layer mental model, decision flow, golden rules, anti-patterns. |
+| `references/shape-color-principles.md` | When you need a concise restatement of Shape × Color (shapes = semantic, colors = ownership/execution/storage). |
+| `references/encoding-table.md` | Always when you draft, edit, or read — the semantic-concept → Lucid `BlockClass` + `FillColor` lookup. |
+| `references/scaffold.md` | Always when you draft — the canonical 3-lane × 2-sublane swimlane scaffold + starter spec. |
+| `references/validation.md` | Always when you lint, and as a self-check after every draft/edit. |
+| `references/worked-examples.md` | When you want a concrete read example or draft example to model your output after. |
+| `references/process-step-card.md` | Always when you read or draft — the shared step format (number · Input · Process · Output · layer · Reads · Writes · Knowledge) every step is reported in, and the numbering the nodes carry. Shared with `ops-transformation` and `ops-flow-optimization`. |
+
+At runtime, also fetch:
+
+- `lucid://diagram-specification` via `mcp__lucid__get_mcp_resource` — the current Lucid Standard Import JSON schema. **Always fetch fresh; don't embed from memory.**
+- `lucid://endpoint-styles` — valid arrow/endpoint styles (use `Equilateral Arrow` by default; that's what both canonical Lucid templates use).
+
+External canonical references (links, not content):
+
+- **Human-canonical convention docs** (Drive, cloud-canonical since 2026-06-11): `[5.1] Lucid Workflow Engineering conventions` — <https://drive.google.com/drive/folders/1R4DfLi07Z5SaYBB4Q8-8QuKMjh7o0JYm>
+  - `[5.1.1] Architecture principles guidebook` — `<your-architecture-canon-doc>` (the architecture canon; a company fact, read from Atlas — see below)
+  - `[5.1.2] Color & shape principles` — <https://drive.google.com/file/d/1KauyMMbGrYcsoaStv6dzHBrl-md1D8jv/view>
+  - `[5.1.3] Lucid LLM guidebook` — <https://drive.google.com/file/d/1_COxoO-_0bQjfDYaFZsFBdeNOvqNSgBa/view>
+  - Local mirrors: `6.0 tech/engineering-conventions/` (read-only; edit the Drive copies)
+- Course origin (background only, no longer canonical): Google Doc Ch5 "Process re-design" — <https://docs.google.com/document/d/14uvozN-ZAymS4oxSiGPWXXtykg_MEQ48XNjYSGfCtI8/edit#heading=h.4a2agfampqmy>
+- Canonical baseline chart `[@] Architecture template`: doc id `bb9ba9aa-b4c2-4ad2-a432-87f6a805c4e0` — <https://lucid.app/lucidchart/bb9ba9aa-b4c2-4ad2-a432-87f6a805c4e0/edit>
+
+> **`<your-architecture-canon-doc>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.architecture-canon`, on the `zynkr-atlas` MCP server; the value is the `value:` line, and its `url:` line is the link). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; until then work from the local copy `references/architecture-principles.md`, and never open a link with the blank still in it.
+
+---
+
+## 1) Decide which job you're doing
+
+Read the user's message and pick one:
+
+| User says (or implies) | Job | Go to |
+|---|---|---|
+| Pastes a `lucid.app/lucidchart/<id>/...` URL with no direction | **Read** | §2 |
+| "Read / interpret / summarize this chart" | **Read** | §2 |
+| "Draw / diagram / chart / visualize this process" | **Draft** | §3 |
+| "Turn this workflow / SOP into a Lucid chart" | **Draft** | §3 |
+| "Add X to this chart" / "change node Y" | **Edit** | §4 |
+| "Lint / check / does this follow our convention?" | **Validate** | §5 |
+
+If ambiguous (e.g., they paste a URL *and* a process description), ask one clarifying question: "Read the existing chart, or draft a new one from your description?"
+
+---
+
+## 2) READ — Lucid JSON → semantic narrative
+
+1. Extract the doc id from the URL: `lucid.app/lucidchart/<id>/...`.
+2. Call `mcp__lucid__fetch` on the id. If the result is too large, fetch region by region (use `page_index` and `region_index` from the metadata returned).
+3. Identify lanes: find every node with `BlockClass: AdvancedSwimLaneBlock`. The `TextAreas` entries keyed `Primary_0/1/2` give the lane labels. `childrenIds` lists the nodes inside each lane.
+4. Tag every non-lane node: read its `BlockClass` + `FillColor` → look up the semantic role in `references/encoding-table.md`.
+5. Walk `edges[]`. `sourceId` + `targetId` give direction. Edge `label` (e.g., "Yes"/"No") = decision branches.
+6. Produce the structured summary in this exact order — the user is reading top-down:
+   - **Outcome**: what the chart starts and ends with (look at `Terminator` nodes).
+   - **Steps** — one **process step card** per step node, in execution order (`references/process-step-card.md`). The spine is the solid-edge path from Start to End; nodes on a branch are carded right after the gate that leads to them. Use the node's own step number if its label carries one, and list any gaps in the numbering in one line (steps the chart leaves to its source document); if the nodes carry no numbers, number them 1, 2, 3… and say so. Each card: `number · label — when · layer` (when, if the label carries a time; layer from the node's lane and colour: Front end · external / internal, Backend · human, Backend · rules, Backend · AI, with `(gate)` on decisions), then Input · Process · Output from the node and its edges — mark an inferred field `(inferred)` and write `not shown on the chart` rather than inventing one (say it once above the cards when no node carries it, e.g. a template with generic labels) — then **Reads / Writes**: every edge between the step and a store node (green `DatabaseBlock` or durable `DocumentBlock`), **solid or dashed** — an arrowhead at the store is a Write, an arrowhead at the step is a Read, two-headed is both, no arrowhead is `unclear` (say so); `none` when there are none — and **Knowledge**: every edge between the step and a node in the `Knowledge base knowledge` sub-lane (or any dark-green `DocumentBlock`), named as the node is, with retrieved / enforced and a link only where the chart says them; `none` when there are none. The same arrowhead rule applies: arrowhead at the step means it relies on the source (`Knowledge:`); arrowhead at the source means it maintains it (`Writes:`, marked `(knowledge)`). Do **not** group the steps by layer: the reader needs each step's FE / BE / DB on the step itself.
+   - **Decision gates**: each `DecisionBlock` with its labelled branches, by step number.
+   - **Store directory**: the bottom lane, data stores first, then knowledge sources (`references/process-step-card.md` §4). Each store once — written by / read by (step numbers); each knowledge source once — read by and maintained by (step numbers). A Backend · AI step with no knowledge edge is worth flagging: it answers from the model alone. If the chart draws one store twice on purpose (e.g. last week's and this week's copy of a log), merge them into one entry and say so instead of reporting two half-used stores. `(new | exists)`, what it holds and the join key only where the chart says them. A store nothing writes or nothing reads is worth flagging.
+7. **Lint while reading** using `references/validation.md`. If anything trips a rule, list it at the end as "Convention notes" with the affected node id + label.
+
+End with the edit URL so the user can open the chart.
+
+A full worked read example is in `references/worked-examples.md` (Example 1).
+
+---
+
+## 3) DRAFT — process description → Lucid chart
+
+1. **Extract the layers** by applying the decision flow in `references/architecture-principles.md` §4.1 to each step the user described:
+   - Surface check → FE External, FE Internal, or non-FE?
+   - Execution check → human (HITL), deterministic, or LLM?
+   - Persistence check → durable (green DB), ephemeral (light green), or none?
+   - Knowledge check → retrieval (RAG dark green) or anchored policy?
+2. **Write a process step card for every step** (`references/process-step-card.md`) before drawing anything: a number, a clear Input · Process · Output, the layer from step 1, the stores it Reads and Writes, and the knowledge sources it relies on (`none` when it uses none). If you can't fill Input, Process and Output, stop and ask the user for clarification — better one targeted question than a wrong chart. **Keep the source's step numbers**: if the process came from `ops-transformation`, `ops-flow-optimization` or a process document that already numbers its steps (1.1, 3.2…), use those numbers unchanged; if it has none, assign them (beat or stage `.` step) and hand the list back with the chart. The cards' Reads / Writes are exactly the edges you will draw to the `Data base data table` sub-lane, and their Knowledge lines the edges to the `Knowledge base knowledge` sub-lane — one dark-green node per source; draw those edges thin dashed grey in the presentation register (§9) — so writing them first is also how you find every store and source before step 3. Keep each source's link on the card and in the store directory.
+3. **Place each step in a lane** using `references/scaffold.md`. If a step doesn't fit any lane cleanly, that's a smell — re-check step 1.
+4. **Pick shape + color** from `references/encoding-table.md`. Don't guess hex values; copy them from the table.
+5. **Build in stages — the 7-step layering protocol** (learned on `[1.6] Slide production`, 2026-06-12). Construct the chart in this fixed order; when the user is reviewing along, ship each structural stage for a look before adding the next:
+   1. **Draw the entire process** — every step Start → End in a single `Process` lane: process steps,
+      decision gates, HITL sign-offs, alt paths. Use final shapes + colours from this first pass so later
+      stages only add lanes, never recolour. **Decide the spine here (V14):** one path runs left to right,
+      one node per column; every *other* path leaves as a labelled `offPageLink` exit with its own chart.
+      Choosing this late is a re-architecture, not a nudge — pick the path the skill spends its detail on.
+   2. **Decouple human vs machine** — split into `Process · human (HITL)` above `Process · machine (AI + rules)`.
+   3. **Ingest user input & output** — add the FE lane on top with the manual input/output touchpoints (red family; darker = input, lighter = output). Start/End move into this lane.
+   4. **Ingest database & knowledge** — add the bottom lane `Data base / knowledge base` with its two sub-lanes, `Data base data table` and `Knowledge base knowledge` (`references/scaffold.md`); each knowledge node is a dark-green document labelled `[RAG] <name> v<version>`; wire the dashed grey plumbing (saves, retrievals) — one edge per RAG source into its consuming stage, and one from any step that maintains a source into that source.
+   5. **Make the lines straight** — align node bounding boxes on shared axes (same centre-x for vertical runs, same centre-y for horizontal runs) so connectors run exactly straight wherever applicable; keep bends only for genuine direction changes.
+   6. **Check column colour coding** — the first column (lane headers) must be readable: light header fill + dark title text. Do **not** use a dark `headerFill` (e.g. `#3a3f4b`); the small vertical titles drown in it. Judge from the PNG, not the JSON.
+   7. **Align font size** — every node and edge label on `fontSize` 10. The create-spec does not reliably carry font size — pin each node after create via `lucid_edit_item` (`font_size: 10`).
+
+   Stages 1–4 are structure; 5–7 are the polish pass. **Interactive mode** (user reviews layer by layer): the lane container can't be restructured in place, so ship each structural stage as a `vK` bump of the same `[N.M]` title and offer to trash the intermediates once the final lands. **One-shot mode**: build the full spec in stage order 1–4, then run 5–7 before returning.
+6. **Build the spec** (read §8 first — the Standard-Import reality: flat lanes, lowercase types, font size):
+   - First, fetch `lucid://diagram-specification` if you haven't this session.
+   - Start from the scaffold spec in `references/scaffold.md` (3 stacked lanes with sub-lane labels; the create tool renders them **flat**, so encode the FE/BE sub-grouping in each lane title).
+   - Add nodes in execution order. Use `Terminator` shapes for explicit Start and End.
+   - **Set every node's text to `fontSize` 10** — short labels auto-grow huge otherwise (the canonical template uses 10).
+   - Every `DecisionBlock` must emit **labeled** branches ("Yes"/"No" or specific outcome names — never unlabeled).
+7. **Pre-flight the JSON, then call `mcp__lucid__lucid_create_diagram_from_specification`** with the spec. Before sending, validate (§8): lane widths sum to the pool dimension, every edge endpoint references a real shape id, every node's `y` lands in its intended lane band.
+8. **Polish pass (stages 5–7)** — after create: nudge bounding boxes onto shared axes until connectors run straight, confirm lane-header legibility, pin every node to font 10 with `lucid_edit_item`.
+9. **Self-lint** using `references/validation.md`, then **export a PNG** (`mcp__lucid__lucid_export_document_as_PNG`) and eyeball it — fix overlaps and label collisions with `mcp__lucid__lucid_edit_item` before returning. Ship by eye, not by faith.
+10. **Return the edit URL** + a one-paragraph narrative of what you built + **the step cards and the store directory** from step 2, numbered exactly as the nodes are. The user wants to spot-check without opening Lucid, and to read the chart and its cards side by side.
+
+**Step numbers go on the nodes.** Put each step's number on the first line of its node label for process, HITL and front-end nodes, and inline (`1.2 · Last week closed out?`) for decision diamonds, whose text area is smaller. In the create-spec, use HTML: `<b>1.1</b><br>Diff vs last week`. **`lucid_edit_item` renders HTML literally**, so when you relabel through it (the polish pass, an EDIT) send plain text — `1.1`, a real newline, then the label — never tags. Stores and knowledge nodes carry no number — the store directory says which steps touch them. Make step nodes about 220 wide (the scaffold default is ~160 × 120) and 120–140 high, so the extra line does not shrink the label. If a step is deliberately left off the chart (housekeeping that would clutter the spine), say which numbers are doc-only in the "How to read" panel.
+
+A worked draft example (CSV upload → AI extract → reviewer approve → InvoiceLog → notify) is in `references/worked-examples.md` (Example 2).
+
+---
+
+## 4) EDIT — modify an existing chart
+
+1. **Read first** (§2 minimally) so you understand the current structure. Skipping this is how nodes end up in the wrong lane.
+2. **Identify the target lane** for the new/modified node using `references/scaffold.md`.
+3. **Apply the change**:
+   - Add a node: `mcp__lucid__lucid_add_block` with `shapeType` + `FillColor` from `references/encoding-table.md`. Provide explicit coordinates that place it inside the correct lane (read existing nodes' `BoundingBox` to stay aligned).
+   - Add an edge: `mcp__lucid__lucid_add_line`. **These tools use Capitalized style names** (`None`, `Equilateral Arrow`) — *not* Standard Import's lowercase (`none`, `arrow`) — and `lucid_add_block` takes a `BlockClass` (e.g. `DocumentBlock`, `ProcessBlock`), not a Standard-Import `type`. Prefer `endpoint*_auto_link: true` for shape-to-shape lines. **Label every Decision branch.**
+   - Modify a node (color, label, lane move): `mcp__lucid__lucid_edit_item` — labels as plain text (`1.1`, a newline, the name); this tool renders HTML tags literally.
+   - Delete: `mcp__lucid__lucid_delete_items` — only when explicitly requested.
+   - **Numbers:** a new step node gets a step number on its first line, per `references/process-step-card.md` §1 (keep the parent number, renumber only the children it displaces, and relabel those nodes too). Write its step card — Input · Process · Output, layer, Reads / Writes / Knowledge — before you add it.
+4. **Re-lint** with `references/validation.md`. Any new violation = revert and re-plan.
+5. Return: the edit URL + a one-line summary of what changed + the card of every step you added or changed, and the `old → new` number map if anything was renumbered.
+
+---
+
+## 5) VALIDATE — lint against the convention
+
+1. **Read** the chart (§2).
+2. **Walk every rule** in `references/validation.md` (V1–V14; V11–V13 are soft readability checks, V14 is hard).
+3. **Output format**:
+
+```
+Lint of <doc_id> · <title>
+- V<rule#> — <node_id> (<label>): <short description of violation>
+...
+Clean / N violations
+```
+
+If clean, say so explicitly — don't pad. If violations, group by severity (hard rule = ship-blocker; soft observation = nice-to-have).
+
+---
+
+## 6) Anti-patterns the LLM most often falls into
+
+These are the failure modes seen most often. Catching them at draft/edit time saves a re-do:
+
+- **A matrix instead of a spine.** Stacking each alternative path as its own row inside one lane makes a grid
+  the reader has to scan in two dimensions. One path is the spine; the rest are off-page exits. See V14.
+- **Cylinders everywhere.** `DatabaseBlock` = durable system-of-record only. RAG / knowledge = green `DocumentBlock` (dark green). See V1.
+- **Decision colored dark-blue because "the LLM decides."** Wrong. LLM *suggests*, deterministic gate *enforces*. Decisions stay purple. See V3.
+- **Dropping the swimlane scaffold "because the flow is simple."** The scaffold is mandatory. Even tiny flows use it. See V8.
+- **Unlabeled Decision branches.** Always label ("Yes"/"No" or named outcomes). See V6.
+- **HITL with no audit trail.** Manual operations must reach a durable DB downstream — that's how the convention enforces auditability. See V4.
+- **Embedding the Lucid Standard Import JSON spec from memory.** It changes; always `get_mcp_resource("lucid://diagram-specification")`.
+- **Adding `ProcessBlock`s to the FE lane.** FE captures and displays; business meaning belongs to BE. Move it. See V2.
+- **Default font on nodes.** Short labels auto-grow to giant text and the chart looks ransom-note. Pin every node to `fontSize` 10. See §8.
+- **Dark lane headers.** A dark `headerFill` (e.g. `#3a3f4b`) swallows the small vertical lane titles. Light header fill + dark text. See V13.
+- **Needless elbow bends.** If two connected nodes can share an axis, align their bounding boxes so the connector runs straight. See V13.
+- **Shipping without looking.** Always `lucid_export_document_as_PNG` and eyeball before returning — overlaps and label collisions only show visually. See §8.
+- **Collapsing distinct knowledge into one node "to look clean."** Keep *which* RAG source feeds *which* stage as separate dashed edges; merging them hides real couplings. See §9.
+
+---
+
+## 7) Output style
+
+- Be terse. The user reads what you say, not your deliberations.
+- When returning a created/edited chart, **always include the edit URL** as the last line.
+- When reading, lead with the outcome (Start → End) before details — the user wants the gestalt first.
+- Steps are always shown as numbered step cards (Input · Process · Output · layer · Reads · Writes · Knowledge), never as separate FE / BE / DB lists — a reader should learn whether a step touches the database from the step itself.
+- When linting, "clean" is a complete answer. Don't pad.
+
+---
+
+## 8) Standard Import construction notes (the MCP reality)
+
+`lucid_create_diagram_from_specification` does **not** reproduce the canonical template's native nested swimlanes. Build with these facts:
+
+- **Lanes render flat.** The Standard-Import `swimLanes` container makes one flat band per lane — no nested sub-lanes. To keep the FE/BE/DB scaffold, use **one lane per sub-band** and encode the grouping in the title (`Front-end · External user`, `Front-end · Internal user`, `Backend · Manual process (HITL)`, `Backend · State machine / AI assistant`, …). Order stays FE → BE → DB top-to-bottom (V8).
+- **Types are lowercase** in the create-spec JSON: `terminator`, `process`, `decision`, `database`, `document`, `manualInput`, `manualOperation`, `offPageLink`. The `fetch` / `add_block` world uses `BlockClass` names (`ProcessBlock`, `DocumentBlock`, …) — don't mix the two vocabularies. `encoding-table.md` lists both.
+- **`lineType` is a THIRD vocabulary, and it is the easiest one to get wrong.** In the create-spec JSON a
+  line's `lineType` accepts only `straight` · `elbow` · `curved`. `lucid_edit_item`'s `line_shape` accepts a
+  *different* set — `curve` · `cyclical` · `diagonal` · `elbow`. **`diagonal` is edit-only**: putting it in a
+  create-spec returns a bare `400 Bad or malformed request` that names no field, so the whole create fails
+  with nothing to grep. Author diagonals as `straight` in the spec, or set them afterwards with
+  `line_shape: "diagonal"`.
+- **`vertical: false`** for horizontal rows; each lane's `width` is its row *height*, and the **widths must sum to the pool `boundingBox.h`**. Place each node with a `boundingBox.y` inside its band; use `assistedLayout: false` for deterministic placement.
+- **`fontSize` 10 on every node** (see §3). Short labels balloon otherwise. The create-spec does not reliably carry font size — pin every node after create via `lucid_edit_item` (`font_size: 10`).
+- **Colours via `style.fill.color`** — copy hexes from `encoding-table.md`. No emoji in text (renders as black boxes); `·`, `—`, `/`, `.` are fine.
+- **No native legend / "diagram key" primitive.** Build a legend as **filled rectangles whose own text is the label** (one colour chip per role). An empty rectangle shows a `Text` placeholder in exports — always put the label *inside* the chip, not in a separate text box beside an empty swatch.
+- **Pre-flight validate the JSON** — cheap, and saves a bad create. Parse it, then check: lane-width sum
+  equals the pool dimension · every line endpoint id exists · every node `y` sits inside one band rather
+  than straddling two · no two nodes overlap · every `lineType` is one of the three legal values · **no
+  column holds more than 3 nodes counted across all lanes (V14)**. The last one is the check that catches
+  a matrix before it is drawn, which is the only cheap time to catch it.
+- **Then verify visually**: export a PNG, look, and nudge with `lucid_edit_item` (Capitalized styles — see §4). The create tool **keeps the shape `id`s you authored**, so you can target nodes by those ids afterward.
+
+## 9) Two registers: audit-detail vs presentation-clean
+
+Charts serve two audiences. Decide which register before drafting (ask if unsure):
+
+- **Audit-detail** (engineering / "unpack what's under the hood"): every write, every RAG source, full plumbing. Denser is fine.
+- **Presentation-clean** (stakeholders / "make it human-readable / 視覺友善"): the spine reads at a glance.
+
+For the **clean register**, apply these moves (modelled on Lucid's stock "AI process diagram" template):
+
+1. **Add a legend** (colour-chip key) — the single biggest readability win; viewers shouldn't have to memorise the colour code.
+2. **Add a one-paragraph "How to read this" panel** beside the flow.
+3. **One node per real step, generously spaced**, grid-aligned (sign-offs directly above their stage; stores directly below) — **and ≤3 nodes per column, counted across all lanes (V14)**.
+4. **Short labels** (verb+noun, ≤4 words). Push detail into the legend / overview.
+5. **Label only decisions and gate outcomes.** Demote plumbing (saves / loads / consults) to thin **dashed grey** lines so they recede beneath the main flow.
+6. **Light lane headers with dark, legible titles, one strong colour per role, no empty lanes** (drop or merge a lane with nothing in it — e.g. collapse an empty `External user` band).
+
+Keep the convention intact in **both** registers: the clean version still uses the same Shape × Colour semantics and lints clean — it just spends its complexity budget on clarity instead of completeness. **Don't drop information that changes meaning** (e.g. *which* RAG source feeds *which* stage) — keep those as distinct dashed edges, not one generic node.
+
+## 10) Chart file naming & foldering
+
+All flow charts live in the Lucid process-flows folder (folder id `422779259`). Title every chart:
+
+`[N.M] <Process name> (<qualifier>) vK`
+
+- **`[N.M]`** — `N` is the Zynkr LOB taxonomy digit (0 strategy · 1 brand-marketing · 2 sales-consultant · 3 operations · 4 training · 5 product · 6 tech · 7 people-talent · 8 finance-admin · 9 legal). `M` is the next free sequence number within that LOB — check the folder before assigning; never reuse a number. Client consulting charts go under `2`.
+- **Process name** — noun phrase ≤5 words, zh-TW or English to match the audience, no trailing 。
+- **`(qualifier)`** — optional scope/variant in parens: `(AI knowledge)`, `(manual lane)`, `(presentation)`.
+- **`vK`** — bump for real revisions of the same process. **Never `_updated`** — a revision either bumps `vK` or supersedes in place; a new file is only for a genuinely different process.
+- **`[@]`** — reserved prefix for meta/template assets that belong to no LOB (e.g. `[@] Architecture template`), matching the Drive convention.
+- **One process = one file.** Registers (audit-detail vs presentation-clean) and lane-by-lane build stages are pages inside the same document, not sibling files. (MCP caveat: the create tool can't add pages or restructure lanes in an existing doc — when building stage-by-stage per §3.5, ship each stage as a `vK` bump of the same `[N.M]` title and offer to trash the intermediates once the final lands.)
+
+After `lucid_create_diagram_from_specification`, always set the final title and move the doc into the folder via `lucid_update_document` — create-time non-ASCII titles can garble (render as `?`), while the update call handles UTF-8 correctly. Note the folder may 403 on `lucid_list_folder_contents`; use `search` (results carry `parent` folder ids) to see what numbers are taken.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

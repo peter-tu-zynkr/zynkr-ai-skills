@@ -1,0 +1,445 @@
+---
+name: sales-specialist
+sheetId: "2.02"
+description: "Business card pipeline — OCR extraction, schema normalization, Zynkr platform contact + company creation, company research, and personalized follow-up email drafting. Takes business-card IMAGES specifically — the OCR pass is the point. When the lead signal already arrives as text (a DM thread, an event feedback row, a website enquiry), use sales-outbound instead; for a WHOLE event survey sheet, use sales-client-sourcing."
+category: sales-consultant
+project: sales-specialist
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "Business card image(s) — single or batch"
+process: "OCR via Claude Vision → schema normalization → user review → Zynkr platform write (contact + company + 名片 note) → company research → follow-up email draft → Gmail save"
+output: "Contact + company on the Zynkr platform (platform.zynkr.ai/contacts), a 名片 note holding the rest of the card, and a personalized follow-up email saved to Gmail Drafts"
+synergy: []
+type: agent
+skills: ["sales-follow-up-mail"]
+house-style: bound
+
+---
+
+# Sales Specialist
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-specialist
+```
+
+Automate the full post-trade-show workflow: extract contact info from business card images, land them on the Zynkr platform, research each company, and draft personalized follow-up emails. Use this skill after a conference, expo, or networking event where you've collected business cards and want them turned into working CRM records plus drafts ready to send before context fades.
+
+**Not this skill when — the signal is already text.** What this skill owns is the OCR pass
+from a photographed card. A DM thread, an event feedback row or a website enquiry goes to
+`/sales-outbound`; a WHOLE event survey sheet goes to `/sales-client-sourcing`. Everything
+downstream (CRM write, research, follow-up draft) is the same either way — only the parser
+differs.
+
+---
+
+## Step 0 — Load Config
+
+Read the config file at:
+`./sales-specialist-config.md`
+
+Read the contact schema at:
+`./references/contact-schema.md`
+
+Store:
+- `EMAIL_SIGNATURE` — signature block from config
+- `SCHEMA_FIELDS` — the 12-field list: name, title, company, email, phone, mobile, website, address, linkedin, industry, notes, card_date
+- `CRM_PROJECT_ID` — Supabase project id from config (the Zynkr platform)
+- `CONTACT_SQL` — the contents of `./references/contact-insert.sql` (read it now; you'll fill its placeholders per contact in Step 4)
+
+**If `CRM_PROJECT_ID` is missing or `TBD`:**
+```
+⚠️  Zynkr platform project id not configured yet.
+Set CRM_PROJECT_ID in sales-specialist-config.md before continuing.
+```
+Stop and ask the user — without it there is nowhere to write the cards.
+
+---
+
+## Step 1 — Card Intake
+
+Display:
+```
+---------------------------------------------
+📇 Business Card Pipeline
+---------------------------------------------
+Phase: Card Intake
+---------------------------------------------
+```
+
+Ask the user:
+```
+Please share your business card image(s).
+You can paste one image or multiple at once for batch processing.
+```
+
+Detect intake mode:
+- **Single card** — 1 image → proceed to Step 2
+- **Batch** — multiple images → process all in Step 2, then review all at once in Step 3
+
+Store images as `CARD_IMAGES[]`.
+
+---
+
+## Step 2 — OCR & Extract
+
+Display:
+```
+---------------------------------------------
+Extracting contact info from card(s)...
+---------------------------------------------
+```
+
+For each card image, use Claude Vision to extract all visible text and map it to the 12-field schema:
+
+**Extraction rules:**
+- Read every element on the card: name, title, company, logos, contact details, addresses, URLs, QR code domain (if visible), social handles
+- Map each piece of data to the correct schema field
+- If a field is not present on the card, set it to `—`
+- For `industry`: infer from company name/website if not explicitly stated; use a short label (e.g., "SaaS", "製造業", "零售", "FinTech")
+- For `card_date`: default to today's date unless user specifies otherwise
+- If text is ambiguous (e.g., could be phone or fax), use field label context clues on the card
+
+Store extracted data as `CONTACTS[]` — one object per card with all 12 fields.
+
+---
+
+## Step 3 — Schema Review
+
+Display:
+```
+---------------------------------------------
+Review Extracted Contact Info
+---------------------------------------------
+```
+
+For each contact, display a clean table:
+
+```
+| Field      | Extracted Value |
+|------------|-----------------|
+| name       | [value]         |
+| title      | [value]         |
+| company    | [value]         |
+| email      | [value]         |
+| phone      | [value]         |
+| mobile     | [value]         |
+| website    | [value]         |
+| address    | [value]         |
+| linkedin   | [value]         |
+| industry   | [value]         |
+| notes      | [value]         |
+| card_date  | [value]         |
+```
+
+For batch mode, display all contacts in a numbered list (`Contact 1 of N`, etc.).
+
+Ask:
+```
+Does this look correct?
+- Type [OK] to proceed
+- Type [EDIT field=value] to correct a field (e.g., EDIT email=david@company.com)
+- Type [ADD note=...] to append to the notes field
+```
+
+Accept corrections until user types `OK`. Update `CONTACTS[]` with confirmed data.
+
+---
+
+## Step 3.5 — Website Lookup (auto-fill if missing)
+
+For each contact where `website` is `—` or blank:
+
+Run a WebSearch query: `"[company name]" official website`
+
+Parse the top result for the company's official domain. Apply these rules:
+- Accept only the company's own domain (skip directories like twincn.com, iyp.com.tw, etc.)
+- If a clear official site is found, set `website` to the full URL (e.g., `https://example.com`)
+- If no clear official site found, leave `website` as `—`
+
+Display the result inline (no separate confirmation step needed):
+```
+🌐 Website found: [URL] (auto-filled)
+```
+or:
+```
+🌐 Website: not found — left blank
+```
+
+Update `CONTACTS[]` with the resolved website before proceeding to the platform write.
+
+---
+
+## Step 4 — Zynkr Platform Write
+
+Display:
+```
+---------------------------------------------
+Writing to the Zynkr platform...
+---------------------------------------------
+```
+
+The **Zynkr platform is the only destination** for a card. Everything lands at
+`https://platform.zynkr.ai/contacts`, where the funnel is actually worked — there
+is no spreadsheet copy to keep in sync, and no field is dropped on the way:
+
+| Card field | Lands in |
+|---|---|
+| name | `crm_contacts.last_name` (whole, as printed) |
+| title | `crm_contacts.title` |
+| email | `crm_contacts.email` (the dedup key) |
+| mobile | `crm_contacts.phone` — the number you'd actually use |
+| company | `crm_companies.name` (find-or-create) |
+| website | `crm_companies.domain` (scheme/`www.` stripped by the SQL) |
+| industry | `crm_companies.industry` |
+| address | `crm_companies.address` |
+| phone (office) | `crm_companies.phone` — belongs to the company, not the person |
+| linkedin · notes · card_date | a `名片` note on the contact (`crm_activities`) |
+
+> Earlier versions of this skill also appended a row to a `B2B Customer List`
+> Google Sheet, because `crm_contacts` had no home for 7 of the 12 fields. It has
+> since grown `domain` / `industry` / `address` / `phone` on the company side, so
+> the platform now holds the whole card and the Sheet write has been retired. The
+> old Sheet stays readable as the historical record — just don't append to it.
+
+Run this **autonomously** for every confirmed contact (no extra approval gate —
+they already signed off in Step 3). For each contact in `CONTACTS[]`:
+
+**1. Clean the values.** Translate the `—` sentinel (and any blank) to an empty
+string for every field before using it. The platform should never store a literal `—`.
+
+**2. Use the name as printed.** The contacts page renders a contact as
+`last_name + first_name`, so to show the name exactly as it appears on the card,
+put the **whole** name in `{{FULL_NAME}}` (it maps to `last_name`) and leave
+`first_name` empty — don't split it into 姓/名. If the card prints both a Chinese
+and a romanized name (e.g. `王大明 / David Wang`), use the Chinese name if present,
+otherwise the romanized one — and store it whole (`王大明`, or `David Wang`).
+
+**3. Keep both numbers.** Pass the mobile as `{{MOBILE}}` and the office line as
+`{{PHONE}}` — they go to the contact and the company respectively, so neither is
+lost. If the card shows only one number, pass it as `{{MOBILE}}` and leave
+`{{PHONE}}` empty; the SQL falls back so the contact always has a number.
+
+**4. Fill and run the SQL.** Take `CONTACT_SQL` (loaded in Step 0 from
+`./references/contact-insert.sql`) and substitute the placeholders, **doubling any
+single quote** (`O'Brien` → `O''Brien`).
+
+> **`<your-company-contact-email>` (the CRM owner the contact is filed under) is a company fact — read it from Atlas first** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line) and put the value into the SQL before running it. If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run the insert with the blank still in it.
+
+An unfilled owner fails with a NOT NULL error (usually on `workspace_id`).
+
+| Placeholder      | Value |
+|------------------|-------|
+| `{{FULL_NAME}}`  | the name as printed (Chinese side if bilingual) |
+| `{{EMAIL}}`      | `email` (empty string if the card had none) |
+| `{{TITLE}}`      | `title` |
+| `{{MOBILE}}`     | `mobile` (or the only number on the card) |
+| `{{PHONE}}`      | `phone` — the office line (empty if the card has one number) |
+| `{{COMPANY}}`    | `company` (empty string if blank) |
+| `{{WEBSITE}}`    | `website` as printed — pass the full URL, the SQL normalizes it |
+| `{{ADDRESS}}`    | `address` |
+| `{{INDUSTRY}}`   | `industry` (inferred in Step 2 if not printed) |
+| `{{LINKEDIN}}`   | `linkedin` |
+| `{{NOTES}}`      | `notes` |
+| `{{CARD_DATE}}`  | `card_date` (`YYYY-MM-DD`) |
+
+Run it with `mcp__supabase__execute_sql`, `project_id` = `CRM_PROJECT_ID`. One
+statement does all of it: find-or-create the company, backfill any company column
+that is still empty (**never** overwriting a value a human curated), insert the
+contact **only if the email isn't already on the platform** with the baked-in
+defaults (`lifecycle_stage=lead`, `legal_basis=consent`, `lead_status=other`,
+owner = Peter), and attach the 名片 note.
+
+**5. Read the result and report.**
+- One row back (a `contact_id`) → created. Display:
+  ```
+  ✓ [Contact Name] @ [Company] — added → https://platform.zynkr.ai/contacts/[contact_id]
+  ```
+- Zero rows back → a contact with this email already exists (de-duped). Display:
+  ```
+  ⏭️ [Contact Name] — already on the platform (matched by email), skipped
+  ```
+  Note this also means **no note was written** for that card — the note is attached
+  to a newly created contact only, so a re-scan never stacks duplicate notes.
+
+If the insert errors, surface it, keep the card in `CONTACTS[]` so it can be
+retried at the end, and continue with the rest of the pipeline — the follow-up
+email shouldn't be blocked by a platform hiccup. Because this is now the only
+destination, an unretried failure means the card is **not recorded anywhere**: say
+so explicitly in the Step 8 summary rather than reporting the contact as processed.
+
+---
+
+## Step 5 — Company Research
+
+Display:
+```
+---------------------------------------------
+Researching Company...
+---------------------------------------------
+[Company Name]
+```
+
+For each contact, run 3 WebSearch queries in sequence:
+
+1. **Company overview**: `"[company name]" company overview products services`
+2. **Recent news**: `"[company name]" news 2024 OR 2025`
+3. **Industry context**: `[industry] Taiwan market trends 2025` (or adjust region based on company location)
+
+Synthesize the search results into a `RESEARCH_SUMMARY` for each contact:
+
+```
+## Company: [Company Name]
+
+### Overview
+[2–3 sentences: what they do, business model, size/stage]
+
+### Recent News
+- [key item 1]
+- [key item 2]
+
+### Personalization Hook
+[The single most relevant/interesting detail to reference in the follow-up email]
+```
+
+Display the research summary to the user. Ask:
+```
+Research looks good? [OK] or [EDIT] to add/change context.
+```
+
+---
+
+## Step 6 — Follow-up Email Draft
+
+Display:
+```
+---------------------------------------------
+Drafting Follow-up Email...
+---------------------------------------------
+[Contact Name] @ [Company]
+```
+
+For each contact, launch the `followup-email-writer` agent using the Agent tool.
+
+Pass the following in the prompt:
+```
+## Contact Info
+[all 12 fields from CONTACTS[i]]
+
+## Company Research Summary
+[RESEARCH_SUMMARY for this contact]
+
+## Meeting Context
+[CONTACTS[i].notes — or "No specific notes" if empty]
+
+## Language
+[Detect from card: if Chinese characters on card → zh-TW; otherwise → en]
+
+## Email Signature
+[EMAIL_SIGNATURE from config]
+```
+
+Wait for the agent to complete. Display the drafted email.
+
+Ask:
+```
+Email looks good?
+- [OK] → save to Gmail Drafts
+- [SEND] → send immediately
+- [EDIT subject=...] / [EDIT body=...] → adjust the email
+- [SKIP] → skip this contact's email
+```
+
+Accept edits until user approves.
+
+---
+
+## Step 7 — Save to Gmail Drafts / Send
+
+For each approved email:
+
+**If user chose [OK] (save as draft):**
+Use `mcp__gmail__draft_email`:
+- `to`: contact email from `CONTACTS[i]`
+- `subject`: subject line from agent output
+- `body`: email body from agent output
+- `from`: `<your-google-workspace-account>`
+
+**If user chose [SEND]:**
+Use `mcp__gmail__send_email`:
+- `to`: contact email from `CONTACTS[i]`
+- `subject`: subject line from agent output
+- `body`: email body from agent output
+- `from`: `<your-google-workspace-account>`
+
+Display confirmation per contact:
+```
+✓ [Contact Name] — email saved to Drafts / sent
+```
+
+---
+
+## Step 8 — Pipeline Summary
+
+Display final completion summary:
+
+```
+=============================================
+📇 Business Card Pipeline — Complete
+=============================================
+
+Processed: [N] contact(s)
+
+[Contact 1 Name] @ [Company]
+  ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
+  ✓ 名片 note attached
+  ✓ Email drafted / sent
+
+[Contact 2 Name] @ [Company]
+  ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
+  ✓ 名片 note attached
+  ✓ Email saved to Drafts
+  ...
+
+Contacts: https://platform.zynkr.ai/contacts
+=============================================
+```
+
+If any card shows `✗ FAILED`, list those cards again underneath and offer to retry
+the platform write — a failed card exists nowhere but the image it came from.
+
+---
+
+## Progress Indicator
+
+Show this line at the top of each phase:
+
+```
+📇 Intake → Extract → Review → Website → Platform → Research → Email → Done
+```
+
+Use `▶` for current phase, `✓` for completed, `○` for upcoming.
+
+---
+
+## Error Handling
+
+- If OCR fails to extract a field: mark it `?` and flag it in the review table
+- If the platform write fails: surface the error and continue the pipeline, but keep the card flagged. It is the only destination, so a failed card is recorded nowhere — always offer to retry at the end, and never report it as processed.
+- If WebSearch returns no results: note "No recent news found" and proceed to email with overview only
+- If Gmail draft/send fails: display the error; offer to copy email text to clipboard instead
+- Never silently skip a step — always surface errors clearly
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

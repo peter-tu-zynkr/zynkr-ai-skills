@@ -1,0 +1,284 @@
+---
+name: admin-video-document
+description: "Files loose meeting recordings sitting in a Google Drive recording inbox into the right category sub-folder, with an approval gate. For each loose video it groups the same-prefix siblings (the ` - Notes by Gemini` Doc, ` - Chat` .txt, any .srt) into one unit, reads the Gemini Notes to classify which sub-folder it belongs in, shows the user a filing plan to approve, then moves the whole group and logs the move to a `Video Index` sheet. If nothing fits it proposes a new sub-folder. Trigger on /admin-video-document, '整理錄影檔', '歸檔錄影', '歸檔影片到資料夾', '整理錄影資料夾', 'file my recordings', 'sort the recording folder', 'organise the recordings folder', or when the user points at the recording inbox and wants the videos filed."
+category: operations
+sheetId: "3.06"
+project: admin-video-document
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "None — recordings root and Video Index are constants below. Reads videos loose at the root AND reconciles against Fireflies so unsaved meetings still get indexed."
+process: "snapshot inbox → group siblings into recording units → read Notes to classify → APPROVAL GATE → move whole group → log to Video Index → report"
+output: "Each approved recording unit moved into its category sub-folder (video + Notes + Chat + SRT together), one new row per unit in the Video Index sheet, and a zh-TW run report."
+synergy: []
+house-style: bound
+
+---
+
+# admin-video-document — 錄影歸檔助理
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill admin-video-document
+```
+
+A Google Drive **recording inbox** is where Meet/Zoom recordings land loose at the
+top level, mixed in with the category sub-folders they belong in. This skill does
+the *judgement + move* for you: it figures out what each recording is about (from
+its Gemini Notes), proposes which sub-folder it goes in, **waits for you to
+approve**, then moves the recording together with its companion files and logs the
+move to the Video Index.
+
+It is **approval-gated by design** — moving files is hard to eyeball after the
+fact, so nothing is moved or created before you say go. It is also **idempotent**:
+a re-run only sees what is still loose at the root, so already-filed recordings
+naturally drop out — safe to run any time.
+
+---
+
+## Constants — don't re-derive these
+
+> **The recordings folder and the Video Index sheet below are company facts — read each from Atlas** (`get_knowledge` with the key in the Atlas key column, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, a key is missing, or there is no `value:` line, ask for it; never run with a blank still in it.
+
+| Thing | Value | Atlas key |
+|---|---|---|
+| Google account (all Drive/Sheets tools) | `<your-google-workspace-account>` | — your own account, not in Atlas |
+| Recordings root folder ID | `<your-recordings-folder-id>` | `company.recordings-folder` |
+| Video Index spreadsheet ID | `<your-video-index-sheet-id>` | `company.video-index-sheet` |
+
+All Drive/Sheets operations run as `<your-google-workspace-account>`.
+
+Sub-folder destinations are **discovered at runtime** (Step 1) — never hardcode the
+list, because the user adds folders over time. Classification heuristics live in
+`references/classification-guide.md`.
+
+---
+
+## Step 1 — Snapshot the inbox
+
+Call `mcp__google-workspace__list_drive_items` on the recordings root folder
+(`folder_id = <your-recordings-folder-id>`, `page_size = 200`). Split the
+children into two buckets:
+
+- **Sub-folders** — every child with `mimeType = application/vnd.google-apps.folder`.
+  These are the valid filing destinations. Keep each one's name + ID.
+- **Loose files** — everything else sitting at the root. These are the filing
+  candidates.
+
+Ignore two things outright: the Video Index spreadsheet itself, and any
+`application/vnd.google-apps.shortcut` items (shortcuts, not real files).
+
+### Step 1b — Reconcile against Fireflies
+
+Drive only sees meetings somebody remembered to save. Fireflies sees every meeting
+Fred joined, so a session can be fully transcribed and still be absent from the
+recordings root. Sweep it once:
+
+```
+mcp__fireflies__fireflies_get_transcripts(limit=50, fromDate="<window-start>", format="text")
+```
+
+For each row, match against the loose files + existing sub-folders by **date +
+title**. Classify:
+
+- **Matched** — a Drive recording exists. Attach the `transcriptId` so Step 6 can
+  write the Fireflies permalink (`https://app.fireflies.ai/view/<id>`) into the
+  Video Index alongside the Drive link.
+- **Fireflies-only** — transcribed but never saved to Drive. These have **no file
+  to move**, so they are an index-only row, not a filing candidate. Surface them
+  in the Step 4 plan under a separate **「僅 Fireflies，無影片檔」** heading so Peter
+  sees the gap; never create a folder or fabricate a file for them.
+
+⚠️ **Request budget.** The free plan allows **50 API requests per day** and every
+call spends one. This is **one** `fireflies_get_transcripts` call for the whole
+reconcile — do not call `fireflies_get_transcript` per row; this skill files and
+indexes videos, it never needs the transcript body.
+
+⚠️ `audio_url` / `video_url` are empty on the free plan, so a Fireflies-only row
+can never become a Drive recording automatically. Saying so is the point of the
+heading above.
+
+---
+
+## Step 2 — Group loose files into recording units
+
+Recordings usually arrive as a triplet that shares a name prefix, e.g.:
+
+```
+Team Weekly Meeting - 2026/06/04 14:26 CEST - Recording      (video/mp4)
+Team Weekly Meeting - 2026/06/04 14:26 CEST - Notes by Gemini (Google Doc)
+Team Weekly Meeting - 2026/06/04 14:26 CEST - Chat            (text/plain)
+```
+
+Build **recording units** by grouping loose files on a *group key*:
+
+- Derive the group key by stripping the trailing ` - Recording`,
+  ` - Notes by Gemini`, or ` - Chat` token from the name. Match any `.srt` file
+  that shares the same prefix into the same group.
+- Each unit's **anchor** is the video file (`video/mp4` or `video/quicktime`).
+  The Notes Doc / Chat / SRT are its **companions** and move with it.
+- A standalone video with no ` - Recording` suffix (e.g. `AI 業務系統 Demo`,
+  `MECE AI 應用 (Lecturer)`, `Rescue time 用法`) is its own single-file unit.
+- If a loose Notes/Chat file has no matching video at root, leave it alone (don't
+  invent a unit for it) — note it in the final report as an orphan.
+
+---
+
+## Step 3 — Classify each unit
+
+For each recording unit, decide the best-fit destination among the Step 1
+sub-folders. Use `references/classification-guide.md` for what each `[N]` folder
+is for and the title heuristics.
+
+1️⃣ **If the unit has a `- Notes by Gemini` Doc** → read it with
+`mcp__google-workspace__get_doc_content` (fall back to
+`mcp__claude_ai_Google_Drive__read_file_content`). Combine the meeting summary
+with the title to choose the folder. This is the high-confidence path.
+
+2️⃣ **If there is no Notes Doc** (standalone video, or video-only group) →
+classify from the title alone and mark confidence as **低 (low)**.
+
+3️⃣ **If nothing fits** with reasonable confidence → mark the unit as a
+**🆕 新資料夾 proposal** and suggest a short folder name in the existing naming
+style (e.g. `[N.0] <topic>` or `[@] <topic>`). **Do not create it yet.**
+
+**Watch for client / consult meetings hiding behind a generic title.** A
+recording can *look* like an internal meeting (e.g. a partner weekly, `<Name> /
+You`, `<Name> <> You`) but actually be a **sales / consulting engagement with
+a client**. Tells: the Notes are about a prospect's business, a demo for them, a
+pilot, pricing, or a proposal; or the other party is a known client (cross-check
+the Video Index — e.g. a name already filed under the sales/consult folder).
+When it's a client engagement, route it into the **nested `Consult` folder inside
+the sales/consult sub-folder** (one folder per client cohort, files numbered `[N]`
+— see Step 5 numbering rule), NOT the People or Weekly-meeting folder. If
+unsure, surface it at the gate with the client name in 依據 so the user can confirm.
+
+Record for each unit: the chosen folder (or 🆕 proposal), a confidence
+(高 / 中 / 低), and a one-line 依據 (reason) — what in the Notes/title drove it.
+For a destination that uses `[N]` numbering, also note the next number you'd
+assign and the proposed new filename (Step 5).
+
+---
+
+## Step 4 — Present the filing plan — APPROVAL GATE ⟵ stop here
+
+Show the user **one zh-TW table**, one row per recording unit, then stop and wait.
+
+| # | 錄影單元 | 檔案 | 建議資料夾 | 信心 | 依據 |
+|---|---|---|---|---|---|
+| 1 | Team Weekly Meeting - 2026/06/04 | 影片＋Notes＋Chat（3） | [8.0] Weekly meeting | 高 | 團隊週會逐字稿 |
+| 2 | … | … | … | … | … |
+
+- 「建議資料夾」shows the existing folder name, or `🆕 新資料夾：<name>` for a proposal.
+- 「檔案」lists what moves together (影片 / Notes / Chat / SRT) and the count.
+- After the table, ask the user how to proceed:
+  1️⃣ 全部照建議歸檔
+  2️⃣ 我要改某幾列的目標資料夾（請告訴我列號 → 資料夾）
+  3️⃣ 跳過某幾列（先不動）
+
+**Nothing moves, and no folder is created, until the user explicitly approves.**
+Apply any per-row edits or skips they give before executing.
+
+---
+
+## Step 5 — Execute the approved moves
+
+For each **approved** unit:
+
+1. If it targets a 🆕 new folder, create it first:
+   `mcp__google-workspace__create_drive_file` with
+   `mimeType = application/vnd.google-apps.folder`, `name = <approved name>`,
+   `parentId = <your-recordings-folder-id>`. Capture the new folder ID.
+2. Move **every file in the unit** (video + Notes + Chat + SRT) into the target:
+   for each file call `mcp__google-workspace__update_drive_file` with
+   `add_parents = <target folder id>` and
+   `remove_parents = <current parent — the root, OR another sub-folder if you're
+   re-filing>`.
+
+Move all companions to the **same** destination as their video. If a single file
+in a group fails to move, finish the rest and flag the partial in the report.
+
+### Numbered-folder rename rule (e.g. the `Consult` folder)
+
+Some destinations file their contents with a **sequential `[N]` prefix** instead
+of keeping the raw recording name — most notably the **`Consult` folder** under
+the sales/consult sub-folder, where each client engagement is `[N] <Client> (...) -
+<date>` for the video and `[N] <Client>_<…>` for the companion doc (e.g.
+`[1] 王小明 (Pilot Round) - 2025/08/29` + `[1] 王小明_錄影逐字稿`).
+
+When the approved destination is a numbered folder:
+
+1. **List the destination folder** with `mcp__google-workspace__list_drive_items`
+   and find the current **max `[N]`**. The unit's number = max + 1 (stack up).
+2. **Rename every file in the unit to that same `[N]`**, mirroring the folder's
+   existing pattern, in the **same `update_drive_file` call** that moves it (pass
+   `name = …`). Keep the video + companion on one shared number, e.g.
+   `[2] Alex (ExampleCo) - 2026/06/09` (video) and
+   `[2] Alex (ExampleCo)_Notes by Gemini - 2026/06/09` (Notes Doc).
+3. Use the **client/person identity the user gives** (company + name) for `<Client>`;
+   if they haven't named it, infer from the Notes and confirm at the gate.
+
+Plain category folders (`[8.0] Weekly meeting`, `[7.0] People`, …) do **not**
+renumber — keep the original recording name there. Only renumber for folders that
+already follow the `[N] …` convention.
+
+---
+
+## Step 6 — Log each move to the Video Index
+
+Append one row **per recording unit** (keyed on the video) to the Video Index
+sheet (`spreadsheet_id = <your-video-index-sheet-id>`).
+
+1. First read the header + a couple of existing rows with
+   `mcp__google-workspace__read_sheet_values` (`range_name = A1:F5`) to match the
+   column order and the `Folder Path` prefix style currently in use.
+2. Append after the last used row with
+   `mcp__google-workspace__modify_sheet_values`. Columns:
+   `Folder Path · Folder Name · File Name · Drive Link · Created Time · Last Updated`
+   - **Folder Name** = destination sub-folder display name (e.g. `[8.0] Weekly meeting`).
+   - **Folder Path** = best-effort full path, matching the prefix style you read in
+     step 1 of this section, ending in the destination folder name.
+   - **File Name** = the video's name.
+   - **Drive Link** = `https://drive.google.com/file/d/<video_id>/view`.
+   - **Created Time / Last Updated** = use the video's `createdTime` / now if available.
+
+Only log units that actually moved.
+
+---
+
+## Step 7 — Report
+
+Print a zh-TW summary:
+
+- ✅ 已歸檔 N 個錄影單元 → 列出每個 → 哪個資料夾（含一起搬的檔案數）
+- 🆕 新建 M 個資料夾（如有）
+- ⏭️ 跳過 / 待確認的列（如有）
+- 📄 已寫入 Video Index N 列
+- 📥 收件匣還留著的東西（孤兒 Notes/Chat、信心過低、或使用者跳過的）
+
+---
+
+## Why it's built this way
+
+- **Approval-gated, not autonomous.** Moving files is hard to eyeball after the
+  fact, and the user wants to approve. Unlike fully-autonomous intake skills, this
+  one always stops at Step 4. Safety = the gate, not just idempotency.
+- **Group-aware.** A recording is useless without its Notes/Chat next to it, so
+  the unit — not the single file — is what gets filed.
+- **Notes-driven classification.** The Gemini Notes summary is a far stronger
+  signal than the title alone, especially for ambiguous 1:1 / demo titles.
+- **Index stays complete.** Logging every move keeps the Video Index a true
+  record of where each recording lives.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

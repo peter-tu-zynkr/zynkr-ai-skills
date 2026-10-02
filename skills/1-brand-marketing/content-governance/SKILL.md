@@ -1,0 +1,182 @@
+---
+name: content-governance
+sheetId: "1.12"
+description: Put a newsletter in its proper place — reconcile it between Google Docs and the Notion Content DB in EITHER direction (Doc-first OR Notion-first), and file the Doc into the newsletter Drive folder. The goal is that the content ends up correctly placed and cross-linked regardless of which was created first. Use whenever the user shares a Google Doc and/or a Notion Content-DB page and wants them synced, filed, archived, or "put in the right place". Triggers on "幫我放上 Notion", "sync to Notion", "同步到 Notion", "add this to Notion", "幫我歸檔電子報", "file this newsletter", "put this in the right place", "從 Notion 的想法建 Doc", or any message pairing a Doc and/or a Notion page with sync / file / archive intent.
+category: brand-marketing
+project: content-governance
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "A Google Doc URL and/or a Notion Content-DB page (idea/stub) for a newsletter — in either order"
+process: "Detect entry point (Doc-first / Notion-first / both), create whichever anchor is missing, file the Doc into the newsletter Drive folder, assign the issue number, classify Subject tags, and sync full metadata + body into a single deduped Notion Content-DB page — cross-linked"
+output: "A filed Google Doc (newsletter folder, (N) Title) + a deduped Notion Content-DB page with full metadata, cross-linked"
+synergy: []
+house-style: bound
+
+---
+
+# Content Governance — Doc ⇄ Notion reconciler
+
+This skill ships a `references/` directory — the subject taxonomy and its 24 classification rules — so
+it has to be installed as a **directory**, not as a single file. A one-file download leaves the
+taxonomy behind, and §D.4 says what to do when it is missing. Install it with:
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill content-governance
+```
+
+This skill makes one guarantee: **a newsletter ends up in its proper place regardless of where its life cycle started.** Peter sometimes drafts the Google Doc first, sometimes captures the idea in Notion first. Either way, this skill reconciles the two into a single consistent, cross-linked record.
+
+## Hardcoded context
+
+- **Google account**: `<your-google-workspace-account>`
+- **Notion Content DB data source**: `collection://64bd3535-0cb3-4f96-946c-c2240294307c`
+- **Newsletter Drive folder**: `[@] 電子報 (Newsletter)` — ID `1RvIRPNg4Kzp_B-9VFZRTXMX4tRgXpSlN`
+- **Subject taxonomy**: `references/subject-taxonomy.csv` (82 subjects, `taxonomy_version` 1.0)
+  and `references/subject-taxonomy-rules.md` (the 24 classification rules). Both ship with this
+  skill — no absolute path, no Drive access needed. The **editable** source stays the Google Sheet
+  `subject-taxonomy` (`1GByqJ-E1XDo4b9FCfqnQlt_Raje0grEtFo2O-9IQ09s`): change subjects there, then
+  re-export and re-stamp both files per rule **R08**. Never hand-edit the CSV.
+
+## The end-state this skill guarantees (the invariant)
+
+When this skill finishes, all of the following are true:
+
+1. A **Google Doc** exists, named `(N) Title` (recent issues use `(N) 電子報｜Title`), living **inside the newsletter folder**.
+2. A **Notion Content DB page** exists with: `Article name` (clean title), `No.` = N, `Content type` = `["Article"]`, `Subject` (3–5 tags incl. Newsletter — see §D.4 for the one under-classified exception), `Published channel` = `["Newsletter"]`, `Google Doc` = the Doc URL, `Status` (lifecycle-appropriate), `Last Synced` = today, `Author` = `Peter Tu`, and the article **body synced into the page content**.
+3. The two are **cross-linked and consistent** (same title + issue number). Exactly **one** Notion row — never a duplicate.
+
+If part of this is already true, only do the missing parts (the skill is idempotent — safe to re-run).
+
+---
+
+## Step 0 — Detect the entry point
+
+Look at what the user gave you and branch:
+
+| What the user provides | Path |
+|---|---|
+| A **Google Doc URL** only | **§A Doc-first** |
+| A **Notion page URL** (a Content-DB page / idea / stub) only | **§B Notion-first** |
+| **Both** a Doc and a Notion page | **§C Reconcile** |
+| **Neither** (just a topic / pasted text) | Ask: "你已經有 Google Doc 或 Notion 頁面了嗎？還是要我從這個想法開始建立？" If starting fresh, treat as **§B** (create the Notion page, then the Doc). |
+
+Always run the **dedup check (§D.1)** before creating any new Notion page.
+
+---
+
+## §A — Doc-first
+
+1. Fetch the Doc with `mcp__google-workspace__get_doc_content` → body + filename. Get its current folder with `mcp__claude_ai_Google_Drive__get_file_metadata` (read `parentId`).
+2. **File it (§D.2)** — ensure the filename is `(N) Title` and it lives in the newsletter folder. If the name has no `(N)`, assign the next issue number (§D.3).
+3. **Dedup-check Notion (§D.1).** Found → update that page; not found → create one.
+4. **Classify Subject tags (§D.4)** and confirm.
+5. **Write Notion metadata + body (§D.5)**; set `Status` per §D.6.
+6. **Cross-link** — `Google Doc` = the Doc URL.
+
+## §B — Notion-first
+
+1. Fetch the Notion page with `mcp__claude_ai_Notion__notion-fetch` (content + properties).
+   - **Stub fix**: if the whole article is crammed into the `Article name` title and the page body is blank (a capture anti-pattern), first extract a clean title and move the body into the page content (`replace_content`). If there is no real title yet, propose 5 in Peter's style (see §D.7) and let him pick.
+2. **Establish the Doc:**
+   - If the page's `Google Doc` field already holds a URL → that's the Doc; jump to §D.2 to confirm it's filed + named.
+   - If missing → assign the issue number (§D.3), **create** a Google Doc in the newsletter folder named `(N) Title` with the article body (`mcp__google-workspace__create_doc` with `parent_folder_id` if available, else create then file via §D.2), then set the Notion `Google Doc` field to the new URL.
+3. **Classify Subject tags (§D.4)** and confirm.
+4. **Enrich Notion metadata (§D.5)**; set `Status` per §D.6.
+
+## §C — Reconcile (both already exist)
+
+1. Decide the **body source of truth** — default the Google Doc; if Doc and Notion body diverge, ask which wins.
+2. **File the Doc (§D.2)**, **enrich the Notion page (§D.5)**, **cross-link**, and make the **title + issue number consistent** across both.
+
+---
+
+## §D — Shared routines
+
+### D.1 Dedup check
+Before creating a Notion page, search the Content DB with `mcp__claude_ai_Notion__notion-search` (`data_source_url`: the Content DB collection) by **issue number** and by **title**. If a match exists, **update that page** — never create a second row. (We previously created stub pages from raw ideas; this is what catches them.)
+
+### D.2 File the Google Doc
+- Target folder: `1RvIRPNg4Kzp_B-9VFZRTXMX4tRgXpSlN`.
+- Naming: `(N) Title`. The two most recent issues use a `(N) 電子報｜Title` form — match that. Keep the **clean Title**.
+- Move + rename in one call: `mcp__google-workspace__update_drive_file` with `name`, `add_parents` = newsletter folder, `remove_parents` = current `parentId`. Skip the move if it's already in the folder.
+
+### D.3 Assign the issue number
+- `mcp__google-workspace__list_drive_items` on the newsletter folder (`file_type: document`), parse the leading `(N)` from each filename, take **max + 1**.
+- **Confirm with the user** — show the proposed number and the latest existing issue. Issue numbers are sequential and human-visible, so never guess silently.
+
+### D.4 Classify Subject tags
+- Read **both** `references/subject-taxonomy.csv` (the 82 subjects) and
+  `references/subject-taxonomy-rules.md` (how to choose between them). Keyword matching alone is not
+  enough: rule **R03** says the definition and the piece’s core argument decide, and keywords are only
+  a recall hint — a newsletter that mentions Notion but is really about promotion is `Career`, not
+  `Knowledge management`.
+- Parse the CSV as six columns and split `keywords_zh` / `keywords_en` on `" | "` (**R07**) — never on commas.
+- Select the **3–5 most relevant**; **`Newsletter` is always included**. When two subjects both fit,
+  resolve with the 主題界線 rules **R10–R23** (Writing vs Content Writing, Organization vs Process vs
+  Automation, Customer life vs Customer experience, and the rest).
+- **R04 has one bounded form here.** `Newsletter` always qualifies, so the tags are never empty. If no
+  *topical* subject fits alongside it, write `Newsletter` alone, call the piece under-classified, and
+  ask — do **not** pad to three. This is the single documented exception to the 3–5 range above.
+- If the piece needs a subject that does not exist, you may **propose** it — Peter confirms before it
+  joins the taxonomy (**R05**). Never invent a tag that is not in the CSV.
+- **If `references/` is missing** (a single-file install), say so and read the taxonomy from the Google
+  Sheet in **Hardcoded context** instead. Never fall back to guessing tags from memory.
+- Show the tags with their `subject_id` and a one-line reason each, and **wait for approval/adjustment**
+  before writing.
+
+### D.5 Notion property mapping
+If unsure the schema is current, fetch the data source first (`notion-fetch` on the collection) — it has all of these properties:
+
+| Field | Value |
+|-------|-------|
+| `Article name` | Clean title — **no `(N)`, no `電子報｜` prefix** (the `No.` field carries the number) |
+| `No.` | Issue number (number) |
+| `Content type` | `["Article"]` |
+| `Subject` | Confirmed tags, JSON array e.g. `["Newsletter", "Gen AI"]` |
+| `Published channel` | `["Newsletter"]` |
+| `Google Doc` | Full Doc URL |
+| `Status` | Per §D.6 |
+| `date:Last Synced:start` | Today, ISO `YYYY-MM-DD` (+ `date:Last Synced:is_datetime` = 0) |
+| `Author` | `Peter Tu` |
+
+When creating a page or refreshing it from the Doc, also sync the **article body into the page content** (`replace_content`). Use `notion-create-pages` (parent `data_source_id`) for a new page, or `notion-update-page` for an existing one.
+
+### D.6 Status — lifecycle-aware (do NOT hardcode)
+Set `Status` to match where the piece actually is, asking if unclear:
+- **Draft** — written but not sent → the default for a fresh draft.
+- **Ready** — finalized and queued to send.
+- **Published** — actually sent / published. Only then is it correct for `Schedule publish date` to be a real send date (a Content-DB automation stamps it when Status flips to Published).
+
+Never default an unsent draft to Published.
+
+### D.7 Title generation (only if missing)
+If a Notion stub has no real title, read the body and propose **5 options** in Peter's newsletter style (punchy, question- or insight-based, zh-TW). Reference:
+- 為什麼真正厲害的人都在花錢買經驗，而不是只買知識
+- 99% 的創作者，都撐不到寫作開始回報的那一天
+- 做最多、扛最重，卻最容易被忽略：能者過勞不是你的錯
+
+Wait for Peter to pick or supply his own.
+
+---
+
+## Step final — Confirm
+
+Report both anchors so Peter can see the content landed in its proper place:
+- **Notion page URL** (in the Content DB)
+- **Filed Google Doc URL** (in the newsletter folder)
+- The **issue number** and **Status** you set.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

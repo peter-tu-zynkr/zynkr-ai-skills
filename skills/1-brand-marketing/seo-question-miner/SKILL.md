@@ -1,0 +1,88 @@
+---
+name: seo-question-miner
+sheetId: "1.16"
+description: "Second leg of the SEO pipeline: based on the persona, brainstorm the questions your target readers actually ask before buying, then work backward from those questions to seed keywords. Maps to the v2 flowchart step 'brainstorm common questions + interview-answer common questions and list keywords'. Triggers when the user hands over the persona handoff packet or says '發想常見問題' or '挖種子關鍵字'. Only brainstorms questions and seed keywords; it does not do difficulty analysis and does not write articles."
+category: brand-marketing
+project: seo-question-miner
+platform: claude
+status: WIP
+visibility: public
+author: Peter Tu
+input: "The SEO_PACKET ▸ Persona handoff packet from seo-persona-builder"
+process: "Following question-frames, expand pre-purchase questions from each persona's pain points (problem / comparison / use case) → work backward from the questions to seed keywords → human review → handoff"
+output: "A staged (TOFU/MOFU/BOFU) buyer-question list + seed keywords, handed off to seo-angle-finder"
+synergy: ["seo-angle-finder"]
+handoff: ["seo-angle-finder"]
+house-style: bound
+
+---
+
+# SEO Question Miner
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-question-miner
+```
+
+The second leg of the SEO pipeline. Neil Patel's core insight: the best keyword opportunities are hidden in "the questions customers actually ask before buying," not in a search-volume spreadsheet. This skill expands a persona's pain points into real questions, then works backward into seed keywords to feed the downstream keyword research.
+
+---
+
+## Resources you'll use
+
+> **Knowledge source**: The rubrics/templates used by this skill should be read first from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, search by name); when unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
+
+- **Question expansion framework**: `./references/question-frames.md`
+- **SEO knowledge base folder ID**: `<your-seo-kb-folder-id>` (optional reads: Line community questions, support inbox, seed knowledge)
+- **MCP server**: `google-workspace`
+
+> **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
+
+## Step 1 — Receive the persona
+
+Read the `SEO_PACKET ▸ Persona` from the previous leg. If the user hasn't provided one, first ask for it or run `seo-persona-builder`; **do not expand ahead of time**.
+
+## Step 2 — Expand pre-purchase questions
+
+For each persona, use the four frame types in `./references/question-frames.md` (problem, comparison, situational, decision) to expand several questions for each, and tag the funnel stage TOFU / MOFU / BOFU. Optional: use `search_drive_files` to pull real questions from the Line community and support in the knowledge base as supplementary material.
+
+## Step 3 — Work backward to seed keywords
+
+Each question maps to 1–3 conversational seed keywords (these are the starting point the next leg feeds into Ubersuggest / AnswerThePublic, not the final keywords).
+
+## Step 4 — Human review (HITL)
+
+List the questions plus seed keywords and ask the user which to keep / delete (by number). Maps to the flowchart step "user reviews and approves the common questions."
+
+## Step 5 — Hand off and save
+
+Save into this article's working subfolder, output:
+
+```
+SEO_PACKET ▸ Questions
+- TOFU 問題：<...> ｜種子字：<...>
+- MOFU 問題：<...> ｜種子字：<...>
+- BOFU 問題：<...> ｜種子字：<...>
+
+問題與種子關鍵字已確認，可交棒給 seo-angle-finder。
+```
+
+## Outputs
+
+A staged buyer-question list + seed keywords (`SEO_PACKET ▸ Questions`).
+
+## Limitations
+
+Does not do search-volume / difficulty analysis (that's seo-keyword-mapper / seo-demand-validator). Does not write articles.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

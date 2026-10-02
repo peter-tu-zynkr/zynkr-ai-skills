@@ -1,0 +1,304 @@
+---
+name: consult-shadowing-scheduler
+sheetId: "2.13"
+description: >-
+  Close the shadowing-scheduling admin loop for a consulting deal in one pass: read
+  the CRM deal, resolve the client's existing [N] Drive project folder from the deal
+  notes, check Peter's calendar free/busy, propose 3–5 candidate slots, and on Peter's
+  confirm lay down the whole kit — a calendar hold, a "Shadowing — YYYY-MM-DD"
+  subfolder inside the project folder, a client logistics Gmail DRAFT (never sent),
+  a CRM follow-up task, and a deal-notes backlink. Trigger EAGERLY on
+  /consult-shadowing-scheduler or whenever Peter says "排 shadowing 時間", "約跟拍",
+  "安排現場觀察", "幫我跟 <client> 約 shadowing", "schedule the shadowing", "book the
+  shadowing session", "find time to shadow the client", or otherwise wants an on-site
+  observation session scheduled for a consulting engagement — even if he only names
+  the company. Distinct from sales-inbound and consult-project-specialist (they
+  CREATE the project folder and the deal — this skill REUSES those artifacts and
+  never creates a new top-level folder or a new deal). Distinct from
+  consult-brd-writer (which consumes the shadowing transcript AFTER the session
+  happens — this skill only gets the session onto the calendar and preps the client).
+category: sales-consultant
+project: consult-shadowing-scheduler
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "A CRM deal (URL or company name), optionally a preferred date window and session duration"
+process: "get_deal → resolve the client's [N] Drive folder from deal notes (else one name match) → query_freebusy on Peter's calendar → slot-confirm gate → create the calendar hold + shadowing subfolder + logistics Gmail draft + CRM task → backlink + report"
+output: "A confirmed calendar hold, a shadowing subfolder in the client's project folder, a client-ready logistics mail draft (never auto-sent), and a CRM task — all linked on the deal"
+synergy:
+  - "sales-inbound"
+  - "consult-project-specialist"
+  - "consult-brd-writer"
+house-style: bound
+
+---
+
+# Consult Shadowing Scheduler
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill consult-shadowing-scheduler
+```
+
+After a consulting deal is qualified, the next step is a **shadowing session**
+— Peter sits with the client's team and watches the real workflow run. Booking
+it is pure admin friction. This skill collapses it into one pass: read the
+deal, find the client's existing `[N]` project folder, propose free slots from
+Peter's real calendar, then — on his pick — create the calendar hold, the
+dated subfolder, the client logistics mail **as a Gmail draft (hard rule:
+never sent)**, and the CRM task, backlinking everything onto the deal.
+
+It is deliberately **gated, not autonomous**: nothing is created until Peter
+confirms a slot — a wrong-day hold, or an invite accidentally mailed to the
+client, is worse than one follow-up question. Re-runs update, never duplicate.
+
+## How this differs from its neighbours
+
+- **sales-inbound / project-init / consult-project-specialist** — they open the
+  numbered `[N]` folder (project-init at deal won; the other two also create the
+  deal). This skill assumes both exist and only adds a subfolder + activity to
+  them. If there is no 專案資料夾 link and no single folder matches the company,
+  it STOPs and points at them.
+- **consult-brd-writer** — consumes the shadowing transcript AFTER the session;
+  this skill runs before, and its subfolder is where that transcript lands.
+
+## Fixed facts (don't re-derive these)
+
+- **Google account** for all Gmail/Drive/Calendar tools: `<your-google-workspace-account>`
+- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything directly in it
+- **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- Ownership needs no lookup and no hardcoded id: every `mcp__zynkr__*` write is made as you, on your own workspace, and defaults the owner accordingly.
+
+## Scheduling defaults (Peter overrides any of these by just saying so)
+
+**Timezone** `Asia/Taipei` · **working hours** 09:30–17:30 · **slot-search window** next 10 business days · **session duration** 2 hours.
+
+---
+
+## Workflow
+
+### 1 · Resolve the deal
+
+Peter hands over a deal URL or a company name.
+
+- Deal URL → `mcp__zynkr__get_deal(id="<deal uuid>")`
+- Company name → `mcp__zynkr__list_deals(search="<company>")`, then `get_deal`
+  on the match. More than one match → confirm with Peter before acting.
+
+`get_deal` returns `notes`, `contact_id` and `company_id`. The contact name and
+email come from `mcp__zynkr__get_contact(id=…)`, the company name from
+`mcp__zynkr__get_company(id=…)` — the two follow-up reads that replace what the
+old join returned in one row.
+
+Capture the **contact name + email**, and scan `notes` for the 專案資料夾 line
+that sales-inbound, project-init or consult-project-specialist appended
+(`專案資料夾：https://drive.google.com/drive/folders/<folder_id>`). Extract the
+folder id — that `[N]` folder anchors everything this skill creates.
+
+**No 專案資料夾 line → match the folder by name, once.** List the projects parent
+(`mcp__google-workspace__list_drive_items(user_google_email="<your-google-workspace-account>", folder_id="1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t")`)
+and look for a `[N] <Company>（…）` folder whose company part matches the deal's
+company name, ignoring case, spaces and punctuation.
+
+- **Exactly one match** → use it, and tell Peter the deal is missing its backlink
+  (the line format is in `/sales-inbound` step 4d).
+- **None, or more than one** → **STOP.** Tell Peter the deal has no project folder
+  yet and point at `/project-init` (a won deal), `/sales-inbound` (an inbound lead)
+  or `/consult-project-specialist` (a meeting debrief). Never invent a folder here.
+
+### 2 · Collect constraints
+
+Settle: date window · duration · on-site (現場) vs remote (遠端) — the last
+one drives the mail's `{{MODE}}`/`{{LOCATION_OR_LINK}}`. Ask only for what's
+missing; apply the defaults for the rest and **say which defaults applied**
+(e.g. "用預設：台北時區、09:30–17:30、未來 10 個工作天、2 小時").
+
+### 3 · Free/busy → 3–5 candidate slots
+
+```
+mcp__google-workspace__query_freebusy(
+  user_google_email = "<your-google-workspace-account>",
+  time_min = "<window start, RFC3339 +08:00>", time_max = "<window end>",
+  calendar_ids = ["<your-google-workspace-account>"]
+)
+```
+
+Derive **3–5 candidate slots** that fit ALL of: inside working hours on
+business days · full duration, zero overlap with busy blocks · **no same-day
+adjacency to long meetings** (a day carrying a ≥2h meeting gets no slot butted
+against it — shadowing is draining) · spread across days, not stacked on one.
+
+### 4 · GATE — confirm the slot (nothing is created before this)
+
+Present the candidates as a table and stop:
+
+```
+建議時段（Asia/Taipei · 2 小時）：
+| # | 日期 | 時間 | 備註 |
+|---|------|------|------|
+| 1 | 2026-08-12（週三） | 10:00–12:00 | 全天無其他長會議 |
+| 2 | 2026-08-13（週四） | 14:00–16:00 | 上午空、下午僅此段 |
+| 3 | 2026-08-17（週一） | 09:30–11:30 | 新週開場，前後乾淨 |
+
+選一個，或直接給我你要的時段。
+另外：要把客戶（王小明 <jane@example.com>）加進行事曆邀請嗎？
+（加入 = Google 會「立刻」寄邀請信給對方）— 預設：否
+```
+
+Peter picks a number **or supplies his own slot** (his wins, even outside the
+defaults). The **same gate** settles the attendee question: an external
+attendee is emailed the moment the event is created, so the default is **NO**
+— the client hears about the time via the reviewed draft. Explicit yes opts in.
+
+### 5 · Create the kit (in this order)
+
+**a) Calendar hold** — via `mcp__google-workspace__manage_event` (create):
+
+```
+mcp__google-workspace__manage_event(
+  user_google_email = "<your-google-workspace-account>", operation = "create",
+  summary     = "[Shadowing] {{COMPANY}} — 現場跟拍",
+  start_time  = "2026-08-12T10:00:00+08:00", end_time = "2026-08-12T12:00:00+08:00",
+  description = "Deal: https://platform.zynkr.ai/deals/{deal_id}\n專案資料夾: <folder url>",
+  attendees   = []   # the client ONLY if opted in at the gate
+)
+```
+
+Capture the event link. Remote sessions get a Google Meet conference.
+
+**b) Shadowing subfolder** — inside the `[N]` folder, named
+**`Shadowing — YYYY-MM-DD`**. Check for an existing one first (idempotency):
+
+```
+mcp__google-workspace__list_drive_items(user_google_email="<your-google-workspace-account>", folder_id="<[N] folder id>")
+## no "Shadowing — 2026-08-12" folder yet →
+mcp__google-workspace__create_drive_file(
+  user_google_email = "<your-google-workspace-account>",
+  file_name = "Shadowing — 2026-08-12", folder_id = "<[N] folder id>",
+  mime_type = "application/vnd.google-apps.folder", content = " "
+)
+```
+
+This subfolder is where the session's **recording and transcript later land** —
+consult-brd-writer's input home downstream. Note its URL.
+
+**c) Logistics Gmail DRAFT** — read `./references/shadowing-mail-template.md`,
+fill the placeholders from the deal + confirmed slot (zh-TW primary; EN
+variant only if the deal correspondence is in English), then:
+
+```
+mcp__google-workspace__draft_gmail_message(
+  user_google_email = "<your-google-workspace-account>",
+  to      = "<contact email from the deal>",
+  subject = "【Zynkr 顧問】{{COMPANY}} 現場跟拍（Shadowing）安排 — {{SESSION_DATE}}",
+  body    = "<filled template>"
+)
+```
+
+**Hard rule: this mail is a DRAFT, never a send.** Never call any send tool on
+it — Peter reviews and sends it himself.
+
+**d) CRM task + notes backlink** —
+
+**Check before you create.** The old statement was idempotent; `create_task` is
+not, so a re-run would book the session twice. Call
+`mcp__zynkr__list_tasks(filter="all", limit=200)` first and look for a task on
+this deal whose subject is already `跟拍 shadowing @ <YYYY-MM-DD>`. Found →
+skip, and say so. (That listing is capped at 200; if it returns exactly 200,
+you cannot rule out a duplicate — ask Peter rather than guessing.)
+
+Otherwise `mcp__zynkr__create_task(deal_id="<deal_id>",
+subject="跟拍 shadowing @ <YYYY-MM-DD>", body="行事曆：<event url>
+Shadowing 資料夾：<subfolder url>", due_at="<session date>T09:00:00+08",
+confirm=true)`. It is created as you and assigned to you — no ids to look up.
+
+Then append the links to the deal notes. `update_deal` REPLACES `notes`:
+`mcp__zynkr__get_deal(id="<deal_id>")` first, append
+
+```
+Shadowing <YYYY-MM-DD>：
+行事曆：<event url>
+資料夾：<subfolder url>
+```
+
+to what comes back, then `mcp__zynkr__update_deal(id="<deal_id>",
+notes="<combined>", confirm=true)`.
+
+Finally, **offer (ask-only)** a stage nudge: if the deal is still
+`new`/`contacted`, ask whether to move it to `qualified`. On yes, use
+`mcp__zynkr__move_deal_stage(id="<deal_id>", stage="qualified", confirm=true)`
+— **only that tool.** Writing the column directly moves the stage but skips the
+`stage_change` timeline entry and the automation event. Never nudge unasked.
+
+### 6 · Report
+
+```
+Shadowing 已排定：範例科技 — 2026-08-12（週三）10:00–12:00
+
+| 產出 | 狀態 / 連結 |
+|------|------------|
+| 時段 | 2026-08-12 10:00–12:00（Asia/Taipei · 2h）|
+| 行事曆 | <event link>（未邀請客戶）|
+| Shadowing 資料夾 | <subfolder url>（在 [N] 專案資料夾內）|
+| 客戶信 | Gmail 草稿（待 Peter 審閱寄出）|
+| CRM 任務 | 跟拍 shadowing @ 2026-08-12（due 當天）|
+```
+
+Name what still needs a human: sending the draft, and — if the client wasn't
+invited at the gate — telling them the confirmed time.
+
+---
+
+## Idempotency — re-running the same deal + date
+
+A re-run must **update, not duplicate** (sales-inbound's rule): the
+`list_drive_items` check in 5b reuses an existing `Shadowing — YYYY-MM-DD`
+folder; the `NOT EXISTS` guard in 5d makes the task insert a no-op; for the
+event, search the day (`mcp__google-workspace__get_events`) for a `[Shadowing]`
+title on that company and `manage_event`-update it if the time changed, rather
+than creating a second hold. A changed slot supersedes the draft — create the
+new one, tell Peter to delete the old, append a correction line to deal notes.
+
+## Why it's built this way
+
+- **Gated, not autonomous** — a wrong artifact here has external blast radius
+  (a mis-set attendee emails the client instantly). One gate settles both
+  slot and attendee; before it, the skill only reads.
+- **Draft-only client mail** — the mail carries commitments (date, recording
+  consent); Peter's voice check before send is non-negotiable.
+- **Reuses the `[N]` folder** — numbering belongs to sales-inbound /
+  consult-project-specialist; a second authority would fork the sequence.
+- **The dated subfolder is the pipeline seam** — consult-brd-writer reads the
+  transcript from exactly `[N]/Shadowing — YYYY-MM-DD`.
+- **Adjacency rule over raw free/busy** — a technically-free slot after a 3h
+  meeting is a bad shadowing slot; the judgment is encoded, not left to Peter.
+
+## Reference files
+
+- `./references/shadowing-mail-template.md` — the client logistics mail
+  (zh-TW primary + EN variant) with the placeholder table and filling notes.
+
+## Limitations
+
+- Requires a deal whose `[N]` folder can be found, either through the 專案資料夾
+  line in its notes or through a single `[N] <Company>（…）` folder matching its
+  company. Otherwise it stops (by design) rather than create folders or deals itself.
+- Slots come from **Peter's calendar only**; client availability is confirmed
+  via the mail draft, not negotiated live.
+- Session output (recording upload, transcription, the BRD) is
+  consult-brd-writer's territory.
+- The client is never emailed by this skill: the invite only if Peter opts in
+  at the gate, the logistics mail only when he sends the draft.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.
