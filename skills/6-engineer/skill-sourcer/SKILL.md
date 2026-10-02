@@ -8,7 +8,7 @@ platform: claude
 status: WIP
 visibility: public
 author: Peter Tu
-input: "GitHub link, URL, file path, or pasted raw text describing a potential skill"
+input: "GitHub link, URL, file path, or pasted raw text describing a potential skill; or a client's approved [PRD] Doc from /ops-prd-writer"
 output: "Issue created in peter-tu-zynkr/zynkr-skill-idea (label skill-proposal) and added to the skills pipeline GitHub Project with Pipeline Status=proposed, Keep=?. On approval the issue gets the triage-ready label."
 synergy: []
 type: agent
@@ -47,6 +47,12 @@ Accept input in any of these forms:
 - **URL** → fetch and extract skill-relevant content
 - **File path** → read the file directly
 - **Pasted text** → use as-is
+- **A client PRD** — a Google Doc titled `[PRD] <SPEC_ID> — <title>` written by `/ops-prd-writer`, or its spec ID
+  (a client's code such as `ACME-001`, never one of Zynkr's own spec codes `PLAT` · `WEB` · `SKB` · `ACC` ·
+  `CMS` · `KMS` · `ADM` · `LRN` · `ATL`) → **skip Steps 2–7** and follow `references/client-prd-intake.md`,
+  which files, labels and reports on its own. A client build is not an
+  idea: it files a `[Client Build]` issue labelled `client-build`, which `/skill-triager` holds until the workbench
+  is private.
 
 Also check the `inbox/` folder for any dropped files not yet processed.
 

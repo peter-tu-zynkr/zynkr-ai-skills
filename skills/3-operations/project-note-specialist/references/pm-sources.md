@@ -121,8 +121,8 @@ is §3.
         "folder_id": "<folder-id>",   // where a new project folder is created
         "label": "[2.2]"              // the bracket label, for prose and for backlinks
       },
-      "creates_crm_deal": true,       // consult-project-specialist automates creation for this
-                                      // type ONLY; the other two are created by hand / project-init
+      "creates_crm_deal": true,       // this type has a CRM deal: Sales creates it (sales-inbound,
+                                      // sales-outbound) and project-init reads it at deal won
       "kickoff_fields_omitted": [],   // Kickoff header fields this type leaves blank
       "closure_extra_steps": [        // appended to the 復盤 §4 封存檢查表 for this type
         "CRM deal 關閉",

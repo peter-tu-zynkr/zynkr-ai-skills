@@ -112,6 +112,16 @@ Short by design — next Monday's `nudge` quotes it.
 — zynkr-ops-weekly · WB 8/24
 ```
 
+**When nothing was decided** (`SKB-044`): one line instead of three, and no mail. Say what
+happened, not what people should have done. If some items came up without an owner or a date,
+add their count in brackets; with none, leave the brackets out.
+
+```
+今天的會沒有談定的決議（2 件還缺負責人或日期，先列為還沒定案）
+
+— zynkr-ops-weekly · WB 10/5
+```
+
 ---
 
 ## `decisions` — Thu 22:00 (recap mail)

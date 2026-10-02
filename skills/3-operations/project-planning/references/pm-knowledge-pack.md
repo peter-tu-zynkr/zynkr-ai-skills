@@ -155,7 +155,7 @@ health 反映的是「日期 × lifecycle」的當下讀數，一旦允許手填
 
 | 用語 | 使用者 |
 |---|---|
-| `"No updates this week."` | `admin-meeting-note`（3.04）· `project-note-specialist`（3.08）· `consult-project-specialist`（2.05） |
+| `"No updates this week."` | `admin-meeting-note`（3.04）· `project-note-specialist`（3.08） |
 | 「本次無相關內容」 | `consult-session-notes`（2.39） |
 
 前者是給**專案週期**看的（這一週沒有進展），後者是給**單場會議**看的（這場會議沒有談到）——語意不同，強行統一會讓其中一邊說謊。技能沿用自己那一邊的用語即可，不得跨用、也不得替對方改。

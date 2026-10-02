@@ -75,7 +75,7 @@ nothing public itself (that's zynkr-content-writer / social-publish-article).
 ## Hard rules
 
 1. **Never create a competing folder.** No `[N]` folder ⇒ STOP and route to
-   /sales-inbound or /consult-project-specialist (step 1).
+   /sales-inbound (inbound lead) or /project-init (won deal); see step 1.
 2. **Nothing is shared before the step-4 gate.** These words go out under the
    sponsor's name — Peter aligns with the sponsor before anything moves.
 3. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send
@@ -99,7 +99,18 @@ nothing public itself (that's zynkr-content-writer / social-publish-article).
   (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
 - **No folder at all** → STOP (hard rule 1) and point at /sales-inbound or
-  /consult-project-specialist.
+  /project-init 客戶案 (won deal).
+
+**Deployment record first.** When the build has a `[Deployment]` record from
+/skill-deploy (the deal's `notes` carry a `部署紀錄（<SPEC_ID>）：<url>` line, or
+the folder holds the Doc; read it with `get_doc_as_markdown(...,
+include_comments=false)`), its 名稱 is `{{SOLUTION_NAME}}`; then read its
+**production（正式）** section: 入口 gives the address the three start steps
+use, and 日期 is `{{GO_LIVE_DATE}}`. Never take an address from the `[UAT]`
+guide: that is the test site. A production section that still says 「尚未部署」
+means the build isn't live yet: ask before announcing it. A deal with several
+records (one per build) → list them by spec ID and title and ask which build
+this launch announces; never pick one.
 
 Then gather what actually shipped. List the folder
 (`mcp__google-workspace__list_docs_in_folder`) and read what exists — `[UAT]`

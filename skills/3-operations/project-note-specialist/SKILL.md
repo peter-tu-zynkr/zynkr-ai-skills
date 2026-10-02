@@ -21,7 +21,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project-note-specialist
 ```
 
-知識來源：references/pm-knowledge-pack.md · v1 · sha256 15640433fbee
+知識來源：references/pm-knowledge-pack.md · v1 · sha256 b3d4e130fe64
 
 Source: [Google Doc](https://docs.google.com/document/d/1oW7enyJtGfUeRlnl63pxhjJ89dMZQzHlBEOeap7039c/edit)
 
@@ -60,7 +60,7 @@ What this skill decides is what goes *into* each of the pack's four sections:
 | 3 | Current issues or delays, with notes on root causes or dependencies |
 | 4 | Planned actions, decisions needed, or upcoming priorities |
 
-**Empty section → `"No updates this week."`, verbatim.** Pack §7 records this phrasing as a *deliberate fork*, not an inconsistency to tidy: this skill, `admin-meeting-note` (3.04) and `consult-project-specialist` (2.05) speak for a project **week** (nothing moved), while `consult-session-notes` (2.39) says 「本次無相關內容」 for a single **meeting** (it did not come up). The two say different things — never swap one for the other, and never "unify" them.
+**Empty section → `"No updates this week."`, verbatim.** Pack §7 records this phrasing as a *deliberate fork*, not an inconsistency to tidy: this skill and `admin-meeting-note` (3.04) speak for a project **week** (nothing moved), while `consult-session-notes` (2.39) says 「本次無相關內容」 for a single **meeting** (it did not come up). The two say different things — never swap one for the other, and never "unify" them.
 
 ## Rules
 - Reorganize scattered ideas into clear bullet points or short paragraphs.

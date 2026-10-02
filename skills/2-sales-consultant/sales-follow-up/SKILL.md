@@ -18,8 +18,8 @@ description: >-
   on this demo", "寫跟進信", "擬一封 demo 後的跟進信", "幫這場 demo 寫追蹤信並更新
   CRM", "log the demo and draft the follow-up", or otherwise wants the post-demo
   email plus the deal updated. Distinct from sales-outbound (a PRE-meeting DM →
-  new lead + first reply) and consult-project-specialist (documents a meeting
-  into a NEW project + Drive folder): this one takes ONE completed demo
+  new lead + first reply) and project-init (opens the project folder once the
+  deal is won): this one takes ONE completed demo
   transcript on an EXISTING deal and produces a conversion follow-up draft + a
   light deal update — no new lead, no Drive folder, no meeting-to-project.
 category: sales-consultant
@@ -32,7 +32,7 @@ sheetId: "2.10"
 input: "A demo transcript — a Fireflies meeting (id/URL/name; preferred), a Google Doc URL, or pasted — for a prospect with an existing CRM deal + email thread."
 process: "Parse the transcript (pains / what was shown / feedback / next steps) → map pains to solution-page capabilities → draft a threaded Gmail follow-up (never send) → sync the existing deal (demo note, refreshed summary, stage nudge, follow-up task) → report."
 output: "A threaded Gmail follow-up draft in Peter's inbox + an updated CRM deal (demo note, refreshed summary, follow-up task). Doesn't log the email — Gmail sync captures it on send."
-synergy: ["sales-outbound", "consult-project-specialist", "sales-specialist"]
+synergy: ["sales-outbound", "project-init", "sales-specialist"]
 house-style: bound
 
 ---
@@ -67,9 +67,9 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
 
 - **sales-outbound** — PRE-meeting. One pasted DM → a *new* lead (company +
   contact + deal) + a first reply. Use it before a demo exists.
-- **consult-project-specialist** — takes a meeting transcript and stands up a
-  whole *project*: Weekly Update + numbered Drive folder + kickoff Doc. Heavy.
-  Use it when a consulting engagement is starting.
+- **project-init** — stands up the whole *project* once the deal is won:
+  numbered Drive folder + kickoff set + the deal's folder line. Use it when a
+  consulting engagement is starting.
 - **sales-follow-up** (this one) — POST-demo. One completed demo transcript on an
   *existing* deal → a conversion follow-up draft + a *light* deal update. No new
   lead, no Drive folder, no project scaffold.

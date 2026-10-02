@@ -13,9 +13,9 @@ description: >-
   "session summary for the client project" — fire eagerly whenever session material
   belongs to a CLIENT engagement. Distinct from project-note-specialist (the
   generic source skill — ONLY tidies text, files nothing, touches no CRM; for
-  non-engagement notes), consult-project-specialist (creates a NEW deal + folder
-  from a sales meeting; THIS skill updates an EXISTING engagement, never creates
-  either), consult-transcriber (upstream — produces the transcript this skill
+  non-engagement notes), project-init (opens the project folder at deal won;
+  THIS skill updates an EXISTING engagement, never creates a folder or a
+  deal), consult-transcriber (upstream — produces the transcript this skill
   structures), and consult-brd-writer (downstream — consumes the ledger).
 category: sales-consultant
 project: consult-session-notes
@@ -28,7 +28,7 @@ process: "Collect input + resolve the engagement → structure the four-section 
 output: "A filed [Notes] session-summary Doc (four sections + 痛點 ledger) in the engagement folder, linked on the CRM deal"
 synergy:
   - "consult-transcriber"
-  - "consult-project-specialist"
+  - "project-init"
   - "consult-brd-writer"
   - "project-note-specialist"
 house-style: bound
@@ -60,8 +60,8 @@ its source — who said it, or which transcript section.
 
 - **project-note-specialist** — the generic source skill. ONLY tidies text into
   the four sections: files nothing, touches no CRM. For non-engagement notes.
-- **consult-project-specialist** — creates a NEW deal + `[N]` folder from a
-  sales meeting. THIS skill updates an EXISTING engagement, never creates either.
+- **project-init** — opens a client's `[N]` project folder at deal won (Sales
+  creates the deal). THIS skill updates an EXISTING engagement, never creates either.
 - **consult-transcriber** — upstream: produces the transcript this skill structures.
 - **consult-brd-writer** — downstream: consumes the 痛點 ledger (and the rest
   of the discovery pile) to write the BRD; the PRD follows from it (ops-prd-writer).
@@ -75,8 +75,8 @@ its source — who said it, or which transcript section.
 ## Hard rules
 
 1. **Never create a folder or a deal.** No `[N]` folder → STOP and point at
-   /sales-inbound (inbound lead) or /consult-project-specialist (meeting
-   debrief). One numbered workspace per engagement is the 2.x invariant.
+   /sales-inbound (inbound lead) or /project-init 客戶案 (won
+   deal). One numbered workspace per engagement is the 2.x invariant.
 2. **Never invent a pain.** Ledger rows come only from pains actually voiced or
    observed in this session's material; a thin session yields a short ledger.
 3. **Empty summary sections say 「本次無相關內容」** — the per-session adaptation
@@ -117,7 +117,7 @@ Then resolve the engagement (the standard 2.x pattern):
 - **Deal** — from a `…/deals/{id}` URL, or by company name. Prefer
   `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written
-  by sales-inbound / consult-project-specialist); extract the folder id. If
+  by sales-inbound / project-init); extract the folder id. If
   missing, list the parent (`mcp__google-workspace__list_drive_items`,
   folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）`.
 - **No folder at all** → STOP (hard rule 1).

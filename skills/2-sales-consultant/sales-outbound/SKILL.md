@@ -21,8 +21,8 @@ description: >-
   both the CRM record and the reply prepared. Distinct from
   sales-client-sourcing (BATCH-enriches a WHOLE survey Sheet into new columns —
   no CRM records, no email), sales-inbound (a weekly BATCH sweep of inbound
-  website consult EMAILS) and consult-project-specialist (documents ONE
-  sales/consulting MEETING transcript into a project + Drive folder + deal): this
+  website consult EMAILS) and sales-follow-up (ONE completed demo transcript on
+  an EXISTING deal → a follow-up draft): this
   one takes ONE person's signal and produces a lead record + a drafted reply, no
   Drive folder, no meeting parsing.
   Mode B — a five-touch outbound SEQUENCE for someone who has NEVER replied:
@@ -75,7 +75,7 @@ a copied DM / chat thread · a row from an event feedback or registration form �
 a website enquiry · the text off a business card · a forwarded email. What matters
 is that it names a person, carries an email, and shows what they want. It is NOT a
 whole spreadsheet of people (that is `sales-client-sourcing`) and NOT a meeting
-transcript (that is `sales-follow-up` or `consult-project-specialist`).
+transcript (that is `sales-follow-up`).
 
 It runs **autonomously**: parse → enrich → write CRM → check calendar → draft email
 → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
@@ -121,9 +121,9 @@ Gmail 草稿則**看環境**：有可用的 Gmail MCP 就用，沒有就走 Play
   (`website@zynkr.ai` AI 顧問服務 inquiries and the `[2.1] Inbound Sales` label), de-dupes
   them into deals and drafts each first reply by this skill's steps 5–6. Use it for the
   inbox sweep, not a single pasted signal.
-- **consult-project-specialist** — takes ONE sales/consulting **meeting transcript**
-  and documents it as a project: Weekly Update + numbered Drive folder + kickoff
-  Doc + deal. Heavy. Use it after a real meeting.
+- **project-init** — once a deal is won, opens the client project: numbered
+  Drive folder + kickoff set + the deal's folder line. It never creates a deal —
+  the deal comes from here, from sales-inbound or from a demo.
 - **sales-outbound** (this one) — takes ONE person's **interest signal**
   (pre-meeting) and produces a lead record + a drafted reply. No Drive folder, no
   meeting parsing, no Weekly Update.

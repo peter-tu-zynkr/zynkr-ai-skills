@@ -299,7 +299,7 @@ The block is exactly one line, on its own, with the full-width colon:
 專案資料夾：https://drive.google.com/drive/folders/<new folder id from step b>
 ```
 
-That line is the contract: `/consult-shadowing-scheduler`, `/gtm-uat-writer` and `/consult-governance`
+That line is the contract: `/consult-shadowing-scheduler`, `/gtm-uat-writer` and `/project-governance`
 find the client folder by matching it, and `/project-init` writes the same line when it opens a won deal.
 Don't reword it or add text after the URL.
 

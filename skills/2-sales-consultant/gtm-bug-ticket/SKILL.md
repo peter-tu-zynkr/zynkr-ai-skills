@@ -4,7 +4,7 @@ sheetId: "2.16"
 description: >-
   Turn a client bug report — a Gmail thread, a forwarded mail, or pasted text —
   into tracked work in one pass: a well-formed GitHub issue in the right repo
-  (routed via a local bug-routing-config.md), a CRM follow-up task on the
+  (routed via the deployment record or a routing config), a CRM follow-up task on the
   client's deal, and a threaded acknowledgment reply left as a Gmail DRAFT
   (never sent). Trigger on /gtm-bug-ticket or when Peter says "開 bug 單",
   "把這封信開成 issue", "回報這個 bug", "客戶回報問題", "file this bug",
@@ -23,7 +23,7 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "A bug report (Gmail link/thread, forwarded mail, or pasted text), optionally the client/deal if not inferable"
-process: "Parse the report → extract repro/expected/actual + severity → route to a repo via local bug-routing-config.md → approval gate on issue body + target repo → gh issue create → CRM task on the deal + threaded acknowledgment Gmail draft → report"
+process: "Parse the report → extract repro/expected/actual + severity → route via the deployment record, else bug-routing-config.md → gate on issue body + target repo → gh issue create → CRM task on the deal + threaded acknowledgment Gmail draft → report"
 output: "A GitHub issue (URL), a CRM tracking task linked on the deal, and an acknowledgment draft in Peter's inbox — none of it sent or posted without the gate"
 synergy:
   - "zynkr-support"
@@ -80,7 +80,26 @@ company + defect in the issue, person + thread in the CRM task — by design.
 4. **The client sees the issue number only** (問題編號 #12) — never the repo
    path, the issue URL, or any internal tooling detail.
 
-## Configuration — `bug-routing-config.md` (out-of-repo)
+## Configuration — the deployment record, then `bug-routing-config.md` (out-of-repo)
+
+**The deployment record comes first.** When the reported build has a
+`[Deployment]` record from /skill-deploy (the deal's `notes` carry a
+`部署紀錄（<SPEC_ID>）：<url>` line, or the client's `[N]` folder holds the Doc;
+read it with `get_doc_as_markdown(..., include_comments=false)`), its 版本 line
+names the repo, path and version: route there, ahead of the
+client map below. Its 入口 fills the issue's Environment block when the target
+repo is private (step 5).
+
+- **Which section** — a URL in the mail that matches a section's 入口 decides
+  it. Otherwise read staging while the client is still in UAT (the production
+  section says 「尚未部署」) and production after go-live. Name the section at
+  the gate.
+- **Several records on one deal** (one per build) — match the URL or product
+  the mail names against each record's 入口 and title. Still more than one →
+  list them by spec ID and title and ask which build broke; never pick one.
+
+The privacy split doesn't change: the issue carries the company name only,
+never the record's link or anyone's email.
 
 Repo routing lives in a **local** `bug-routing-config.md` maintained outside
 this repo (client repo mappings are business-confidential; ask Peter where his
@@ -99,7 +118,7 @@ copy lives on first run). Read it at the start of every run. Expected shape:
 | website | `peter-tu-zynkr/zynkr-website` |
 | CMS / blog | `peter-tu-zynkr/zynkr-cms` |
 
-**No row matches** (or the config file is missing entirely) → do NOT guess: the
+**No record and no row matches** (or the config file is missing entirely) → do NOT guess: the
 step-5 gate asks Peter to pick a repo and proposes the exact config line for
 him to add himself. This skill **reads** the config; it never edits it.
 
@@ -145,8 +164,11 @@ torn between two levels, take the higher one; the gate corrects it cheaply.
 
 ### 4 · Route to a repo and resolve the deal
 
-**Repo** — apply the config: client-map row first, surface fallback second,
-neither → flag "routing unresolved" for the gate to ask.
+**Repo** — the build's deployment record first (its section, and what to do
+when the deal has several, are in Configuration above; it needs the deal below,
+so resolve the deal first whenever the mail names the company), then the config's
+client-map row, then the surface fallback; none of the three → flag "routing
+unresolved" for the gate to ask.
 
 **Deal** — `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals` when the zynkr
 MCP is connected
@@ -157,9 +179,14 @@ one question, before the gate, not after.
 
 Present, then **wait**:
 
-1. **Target repo** — full name (e.g. `peter-tu-zynkr/zynkr-ai-platform`) and
-   which rule chose it (client row / surface fallback / unresolved → pick one,
-   plus the proposed config line for Peter to add).
+1. **Target repo** — full name (e.g. `peter-tu-zynkr/zynkr-ai-platform`),
+   whether GitHub says it is private (`gh api repos/<owner/repo> --jq .private`),
+   and which rule chose it (deployment record, naming the build and the section
+   read / client row / surface fallback / unresolved → pick one, plus the
+   proposed config line for Peter to add). A repo that isn't private gets the
+   surface name, never the record's 入口, in the Environment block; when the
+   record routes a client build's bug there, say plainly that the issue would
+   be public.
 2. **Issue title** — `[<company>] <symptom>` (e.g. `[宏宇精密] 報價單送出後畫面凍結`).
 3. **The complete issue body** — `./references/issue-template.md` filled in,
    comment blocks deleted.
@@ -246,10 +273,12 @@ Bug 單已建立：[宏宇精密] 報價單送出後畫面凍結
 - **未確認 markers instead of silent reconstruction.** Engineering triages
   differently when a repro step is reported vs inferred; marking the guess
   keeps the issue honest without making thin reports unfileable.
-- **Config-driven routing that the skill never edits.** Client→repo mappings
-  change with every engagement; a local file Peter owns stays current without
-  a repo commit, and proposing (not writing) the missing line keeps him the
-  only author of his own routing table.
+- **Record-first routing that the skill never edits.** The deployment record
+  names the exact repo and version, because /skill-deploy writes it when the
+  build ships. For builds without one, client→repo mappings change with every
+  engagement; a local file Peter owns stays current without a repo commit, and
+  proposing (not writing) the missing line keeps him the only author of his
+  own routing table.
 - **Issue number as the client-facing ticket id.** It's stable, short, and
   meaningful to both sides — without exposing where or how the work is tracked.
 
@@ -274,8 +303,10 @@ Bug 單已建立：[宏宇精密] 報價單送出後畫面凍結
 ## Limitations
 
 - Files and tracks defects only — no diagnosis, no fix, no root-cause guessing.
-- Routing quality equals config quality — an out-of-date `bug-routing-config.md`
-  routes to the gate's ask-Peter path, never to a silent wrong repo.
+- Routing is only as current as its sources: a record /skill-deploy hasn't
+  updated, or an out-of-date `bug-routing-config.md`. The gate names the rule
+  that chose the repo so Peter can catch a stale one; with no match it asks,
+  never guessing a repo.
 - The acknowledgment draft can only thread when the report arrived as a Gmail
   thread; pasted text yields a fresh draft (or none, if no address is known).
 - It answers nothing: if the "bug" turns out to be a how-do-I question, hand

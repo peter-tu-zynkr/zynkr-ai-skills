@@ -46,7 +46,7 @@
 | {{USER_LABEL}} | {{USER_REQ_CURRENT}} | {{USER_REQ_PRIOR}} | {{USER_LAST_USED}} | {{USER_DAYS_SILENT}} | {{USER_STATUS}} |
 
 <!-- 狀態三檔：活躍 · 降溫（本期 < 前期一半） · 流失風險（上線後 14+ 天未使用）。
-     {{USER_LABEL}} 用 email 或姓名（來自 adoption-config.md 或 CRM 聯絡人）；
+     {{USER_LABEL}} 用 email 或姓名（來自部署紀錄、adoption-config.md 或 CRM 聯絡人）；
      對不回 email 的 user_id 以「未識別使用者 #n」呈現，並記入資料覆蓋範圍。 -->
 
 ## 主要功能 Top 3
@@ -98,9 +98,15 @@
 - {{COVERAGE_FIX_1}}
 
 <!-- 本節必填，逐客戶如實寫。常見情況：
-     - 助理是以 Claude 技能交付（不是 platform.zynkr.ai 功能）→
-       crm_ai_usage 完全沒有這個客戶的資料列 → 平台遙測整體無法衡量，
+     - 部署紀錄的執行方式是 Claude 技能（或沒有 workspace_id 的 web app）→
+       crm_ai_usage 本來就看不到 → 平台遙測整體無法衡量，
        只能靠客戶自述或工作成果旁證；解法 = 把客戶 onboard 到平台。
+     - 執行方式是 platform workspace 卻沒有任何資料列 → 這是發現，不是覆蓋缺口：
+       期間內沒人用，或這些功能沒寫遙測；照實寫，不要推給 Claude 技能。
+     - 沒有部署紀錄又沒有資料列 → 最可能是以 Claude 技能交付；寫「可能」，
+       並建議補上這個建置的部署紀錄。
+     - 有欄位不是取自部署紀錄（取自 adoption-config.md 或 CRM 聯絡人）→ 逐欄寫明來源；
+       交易有多個建置時，config 列可能屬於別的建置，那些欄位寫「無法衡量」。
      - adoption-config.md 缺此客戶列（或整個檔案不存在）→ 使用者集合
        改用 CRM 交易聯絡人 email（fallback），可能少列或多列實際使用者；
        解法 = 補齊 config 的 workspace_id／user_emails 對照列。

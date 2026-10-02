@@ -15,7 +15,7 @@ description: >-
   brief", "run the GM pass", "哪些 P0 delay 了", "KPI 有沒有 off target", "H2 進度盤點", "幫我盤一下
   H2 專案", or any ask for a company-level (not one project's) week/month focus, progress
   roll-up, or KPI variance. BOUNDARY — do NOT hijack: /project-status-update (one project's
-  weekly status email from its own tracker), /consult-status-report and /consult-governance
+  weekly status email from its own tracker), /project-client-status and /project-governance
   (consulting portfolio), /admin-governance (file-level Drive↔local index drift),
   /admin-meeting-prep (per-meeting packets), /skill-finder (which skill for a task),
   /planning-tracker-sync (the TEAM weekly tracker block, nudges and snapshots — it consumes this
@@ -33,7 +33,7 @@ author: Peter Tu
 input: "Optional sub-command (week | progress [LOB] | send) and an optional 'as of' date; identifiers come from the private config (~/.config/zynkr/gm.json) or the rendered routine prompt."
 process: "Anchor on today → load private config → idempotency check → read the SOR chain in precedence order (script-first) → derive per-item state + per-owner rollup → compose the fixed-shape brief, every number cited → draft or send → report."
 output: "Weekly GM brief in English as an HTML email: runway · ≤3 decision cards, each with options and a link to the closing cell · two clocks · P0/P1 by LOB · owners · KPI · decisions"
-synergy: [admin-governance, project-status-update, consult-governance, skill-finder, curate-livestream-transcripts, admin-meeting-prep, planning-tracker-sync, planning-evidence-pack]
+synergy: [admin-governance, project-status-update, project-governance, skill-finder, curate-livestream-transcripts, admin-meeting-prep, planning-tracker-sync, planning-evidence-pack]
 house-style: bound
 
 ---

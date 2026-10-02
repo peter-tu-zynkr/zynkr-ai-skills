@@ -12,8 +12,8 @@ description: >-
   hands over discovery notes or a transcript wanting a requirements document
   out of it — fire eagerly even if he never says the letters "BRD". Distinct
   from sales-discovery (CONDUCTS the interviews; this skill consumes their
-  output), from consult-project-specialist (logs ONE meeting as a project +
-  deal, writes no requirements doc), and from ops-prd-writer (writes the
+  output), from project-init (opens the project folder at deal won, writes no
+  requirements doc), and from ops-prd-writer (writes the
   buildable PRD once the client has signed THIS skill's BRD).
 category: sales-consultant
 project: consult-brd-writer
@@ -26,7 +26,7 @@ process: "Acquire sources → extract as-is / to-be / requirements → outline a
 output: "A client-grade [BRD] Google Doc in the client's [N] folder; once the client signs it, ops-prd-writer turns it into the PRD"
 synergy:
   - "sales-discovery"
-  - "consult-project-specialist"
+  - "project-init"
   - "consult-shadowing-scheduler"
   - "ops-transformation"
   - "ops-prd-writer"
@@ -57,8 +57,8 @@ first, the prose second.
 
 - **sales-discovery** — CONDUCTS the pain-point / vision interviews and produces
   the discovery summaries. This skill sits downstream and consumes them.
-- **consult-project-specialist** — documents ONE meeting into a project folder +
-  CRM deal, no requirements doc; it creates the workspace this skill writes INTO.
+- **project-init** — opens the client's project folder at deal won (or reuses the
+  inbound one), no requirements doc; it creates the workspace this skill writes INTO.
 - **ops-transformation** — its `assess` entry point files an `[Assessment]` during
   Consult: the numbered as-is process, the diagnosis and the knowledge and data
   gaps. This skill takes the BRD's as-is flow from it, keeping the step numbers.
@@ -75,7 +75,7 @@ first, the prose second.
 ## Hard rules
 
 1. **Never create a competing folder.** If the client has no `[N]` folder yet, STOP
-   and route to /sales-inbound or /consult-project-specialist (step 1).
+   and route to /sales-inbound (inbound lead) or /project-init (won deal); see step 1.
 2. **Never generate the full document before the step-3 gate is approved.**
 3. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the doc
    to the client, use `mcp__google-workspace__draft_gmail_message`. Never send.
@@ -105,12 +105,12 @@ Then resolve the CRM deal and the Drive folder:
 - **Deal** — from a `…/deals/{id}` URL, or by company name. Prefer
   `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written by
-  sales-inbound / consult-project-specialist); extract the folder id from it. If
+  sales-inbound / project-init); extract the folder id from it. If
   missing, list the parent (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by company name.
 - **No folder at all** → STOP. Tell Peter this client has no project workspace yet
-  and point at /sales-inbound (inbound lead) or /consult-project-specialist
-  (meeting debrief). Hard rule 1: never create a competing folder.
+  and point at /sales-inbound (inbound lead) or /project-init 客戶案 (won
+  deal). Hard rule 1: never create a competing folder.
 
 Finally, list the folder
 (`mcp__google-workspace__list_docs_in_folder(user_google_email="<your-google-workspace-account>", folder_id="<folder id>")`)
@@ -266,7 +266,7 @@ team continues with `/ops-transformation redesign`, then `/ops-prd-writer`.
 ## Limitations
 
 - Consumes discovery material; it will not interview anyone (sales-discovery)
-  or bootstrap a missing workspace (sales-inbound / consult-project-specialist).
+  or bootstrap a missing workspace (sales-inbound / project-init).
 - Requirements come only from the provided sources — thin discovery yields a thin
   BRD with more open questions at the gate; it never invents requirements.
 - It writes the BRD only. The buildable PRD is `/ops-prd-writer`'s, after the

@@ -15,7 +15,7 @@ description: >-
   "adoption". Distinct from project-status-update (the INTERNAL tracker-Sheet
   weekly for a course/project — no client telemetry), from gtm-uat-writer
   (proves the delivery WORKS once, at handoff; THIS skill measures whether the
-  client keeps USING it after go-live), and from consult-status-report (the
+  client keeps USING it after go-live), and from project-client-status (the
   client-facing weekly EMAIL — it can embed this skill's usage block, but the
   telemetry analysis happens here).
 category: sales-consultant
@@ -25,11 +25,11 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "A client (deal URL or company name) + a reporting window (default: last 4 weeks vs the 4 before)"
-process: "Resolve client → map to workspace/users via adoption-config.md (fallback: deal contact emails) → introspect + read-only SELECTs on crm_ai_usage → compute adoption metrics + trends → render the Doc into the [N] folder + backlink the deal → optional draft email"
+process: "Resolve client → workspace/users from the deployment record, else adoption-config.md, else deal contacts → introspect + read-only SELECTs on crm_ai_usage → compute metrics + trends → Doc into the [N] folder + deal backlink → optional draft email"
 output: "An adoption report Doc (metrics, weekly trend, per-user detail, risks and nudges, data-coverage caveats) linked on the CRM deal, plus an optional Gmail draft"
 synergy:
   - "gtm-uat-writer"
-  - "consult-status-report"
+  - "project-client-status"
   - "project-status-update"
 house-style: bound
 
@@ -81,7 +81,35 @@ operator**: reads telemetry, never touches it; 無法衡量 beats an estimate.
    (`mcp__google-workspace__draft_gmail_message`), only on Peter's yes in
    step 8 — never send.
 
-## Configuration — the local `adoption-config.md`
+## Configuration — the deployment record, then the local `adoption-config.md`
+
+**The deployment record comes first.** When /skill-deploy has filed a
+`[Deployment]` Doc for this build (the deal's `notes` carry a
+`部署紀錄（<SPEC_ID>）：<url>` line, or the `[N]` folder holds the Doc), read it
+with `get_doc_as_markdown(..., include_comments=false)` and take its
+**production（正式）** section field by field: 執行方式 and its `workspace_id`
+give `workspace_id`, 可使用的人 gives `user_emails`, 遙測 features gives
+`features`, and 日期 gives `go_live`. The config row below is one per client,
+not per build, so a field the record leaves 「未提供」 is taken from it only when
+the deal carries this one build; with several builds the row may describe
+another one, so the field stays unknown. Either way, 資料覆蓋範圍 names every
+field that didn't come from the record. A production section that still says
+「尚未部署」 means the build hasn't gone live, so say that instead of reporting.
+
+執行方式 says what telemetry can exist:
+
+- `platform workspace` → measure as below.
+- `Claude skill` → `crm_ai_usage` sees nothing by design: say so at the top of
+  the report instead of reporting zero adoption.
+- `web app` → measured only when the record itself names a `workspace_id`.
+  Without one it is unmeasured, reported like a Claude skill; never borrow the
+  config row's workspace, which may belong to another build.
+
+**Several records on one deal** (one per build) → list them by spec ID and
+title and ask which build this report covers. Never pick one, and never merge
+two builds into one report.
+
+The local file below is the fallback for builds with no record.
 
 Client → telemetry mapping lives in a **local** `adoption-config.md` outside
 this repo (workspace ids, user emails and go-live dates are client
@@ -106,15 +134,20 @@ create it (the five fields above, one row per client).
   `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals` when the zynkr MCP is
   connected; fallback SQL via `mcp__supabase__execute_sql`:
   `SELECT id, name, notes, contact_id FROM crm_deals WHERE name ILIKE '%<company>%' ORDER BY created_at DESC;`
-- **Config row** — look the company up in `adoption-config.md` (ladder above):
-  take `workspace_id`, `user_emails`, `features`, `go_live`. Without a row: use
+- **Deployment record** — once the deal and the folder below are resolved, look
+  for the build's `[Deployment]` record (Configuration above; several → ask).
+  Found → take its production fields (Configuration above).
+- **Config row** — for a build with no record, and for a field the record
+  leaves open when the deal carries this one build: look the company up in
+  `adoption-config.md` (ladder above) and take `workspace_id`, `user_emails`,
+  `features`, `go_live`. Without a row: use
   the deal's contact emails from `crm_contacts` as the user set and resolve
   `workspace_id` via the platform's workspace-membership tables (introspect for
   names — read-only). No workspace resolves → coverage-caveat case; continue.
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written
-  by sales-inbound / consult-project-specialist); extract the folder id, or
+  by sales-inbound / project-init); extract the folder id, or
   list the parent folder and match `[N] Company（…）`. No `[N]` folder at all →
-  STOP and route to /sales-inbound or /consult-project-specialist; never
+  STOP and route to /sales-inbound (inbound lead) or /project-init (won deal); never
   create a competing folder.
 
 ### 2 · Introspect `crm_ai_usage`
@@ -133,7 +166,7 @@ Columns as verified 2026-08: `id` · `workspace_id` · `user_id` · `feature` ·
 
 All via `mcp__supabase__execute_sql(project_id="uomieoqlkazknjgmfdda", ...)`.
 Default window: last 4 complete ISO weeks vs the 4 before — pull 8 weeks in one
-pass. Config `features` present → add `AND feature = ANY('{...}')`; else report
+pass. `features` known (record or config) → add `AND feature = ANY('{...}')`; else report
 the whole workspace.
 
 **a) Per-user weekly activity** (feeds the trend table + user detail):
@@ -181,13 +214,22 @@ id mapping to no known email shows as 未識別使用者 #n — never guess who 
 
 ### 5 · Coverage check
 
-Diff **expected vs observed** before writing narrative: expected users (config
-`user_emails` or fallback contact emails) vs `user_id`s seen; expected
+Diff **expected vs observed** before writing narrative: expected users (the
+record's or config's `user_emails`, or fallback contact emails) vs `user_id`s seen; expected
 `features` vs features seen; **zero rows for the workspace** (or none resolved)
-→ the classic case: the assistant was delivered as **Claude skills**, not
-platform features, so `crm_ai_usage` cannot see it. Everything found goes into
-資料覆蓋範圍 — what IS measurable, what ISN'T, why, and the concrete step that
-closes each gap (onboard the client onto platform.zynkr.ai; add their row to
+→ name the cause the record gives, never a guess:
+
+- 執行方式 `Claude skill`, or a `web app` with no workspace → expected:
+  `crm_ai_usage` cannot see it.
+- `platform workspace` → the build is live there, so zero rows are a finding
+  (nobody used it in the window, or its features write no telemetry). Report
+  it as such.
+- No record → delivery as **Claude skills** is the likeliest cause. Say
+  "likely", and that a deployment record would settle it.
+
+Everything found goes into 資料覆蓋範圍 — what IS measurable, what ISN'T, why,
+and the concrete step that closes each gap (onboard the client onto
+platform.zynkr.ai; file the build's deployment record; add their row to
 `adoption-config.md`). A zero-coverage client still gets a report — one that
 says exactly that, not empty tables presented as "no adoption".
 
@@ -273,7 +315,7 @@ A compact artifact table, then the headline in prose:
 ## Inference defaults (Peter overrides by just saying so)
 
 - **Window** → last 4 complete ISO weeks vs the 4 before ("last quarter" → 13 vs 13).
-- **Feature scope** → config `features` when present; whole workspace otherwise.
+- **Feature scope** → the record's or config's `features` when known; whole workspace otherwise.
 - **At-risk threshold** → 14 days silent post go-live.
 - **Report language** → zh-TW; user labels = email (or CRM contact name).
 - **Email step** → OFF; asked in step 8, executed only on a yes, draft only.
@@ -293,8 +335,8 @@ A compact artifact table, then the headline in prose:
 - `request_count` measures invocations, not business value; pair the numbers
   with a qualitative client check-in before renewal conversations.
 - Requires an existing deal + `[N]` folder (bootstrapping is sales-inbound /
-  consult-project-specialist's job). One client per run — a portfolio sweep is
-  one run per client.
+  project-init's job). One client per run — a portfolio sweep is
+  one run per client — and one build per run when a deal carries several.
 
 ## House style
 

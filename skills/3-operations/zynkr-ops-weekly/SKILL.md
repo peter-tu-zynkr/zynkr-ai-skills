@@ -10,8 +10,8 @@ description: >-
   write a clearly-marked auto-summary block), `chase` (Tue 09:30 — @ the owners who did not
   post), `agenda` (Wed 17:00 — re-sweep for late arrivals, then produce carry-over, overdue,
   KPI-off-target and the ≤3 decisions the Thursday meeting must actually make), and `decisions`
-  (Thu 22:00 — post the resolutions back to the space, send the recap mail, write the decisions
-  register, and assert the send actually happened), and `tidy` (Fri 09:00 — keep the newest
+  (Thu 22:00 — post the resolutions back to the space, record them in the Weekly Ledger, send the
+  recap mail and assert it actually went out), and `tidy` (Fri 09:00 — keep the newest
   auto block under each department, archive the stacked older copies to the 封存 tab, and carry
   still-open items forward one per line), and `snapshot` (Fri 18:00, catching up through Sun —
   copy every Main Tracker item into the machine-owned Weekly Ledger once per ISO week). Routing is never hardcoded: it is read at
@@ -23,7 +23,7 @@ description: >-
   publish the meeting's decisions. BOUNDARY — do NOT hijack: /zynkr-gm (the founder's own
   company-level Monday brief, reads this Doc but never writes it), /project-status-update (one
   project's status email from its own tracker), /planning-tracker-sync (the H2 tracker block and
-  its own nudges), /consult-status-report (client-facing consulting status), /admin-meeting-prep
+  its own nudges), /project-client-status (client-facing consulting status), /admin-meeting-prep
   (per-meeting packets for external meetings). This skill owns two artefacts — the weekly
   operations Doc's current week section, with one channel loop around it, and the Weekly Ledger.
 category: operations
@@ -76,7 +76,7 @@ rewrites prose in a doc people are actively editing is a bot nobody trusts by we
 | **Tue 09:30** | `chase` | skill | Owners in the Doc − people who posted → @ the difference |
 | Wed 17:00 | `agenda` | skill | Re-sweep for late arrivals, then carry-over · overdue · KPI · ≤3 decisions |
 | **Thu 21:00** | — | team | The weekly meeting. Discuss exceptions and decisions only; edit the Doc live |
-| **Thu 22:00** | `decisions` | skill | Resolutions → space (3 lines) + recap mail + decisions register + **assert the send** |
+| **Thu 22:00** | `decisions` | skill | Resolutions → space (3 lines) + Weekly Ledger + recap mail + **assert the send**; no decisions → one line, no mail |
 | Thu 23:00 | `scaffoldNextWeek` | **Apps Script** | Duplicate the newest week section, re-stamp next Thursday. Runs **after** `decisions` — see Step 4.1 |
 | **Fri 09:00** | `tidy` | skill | Keep the newest auto block per department, archive the rest to the 封存 tab, carry still-open items one per line |
 | Fri 18:00 (to Sun 23:00) | `snapshot` | skill | Copy every Main Tracker item into the Weekly Ledger, once per ISO week. Monday's recap compares two of these to say what changed |
@@ -358,6 +358,14 @@ longer put a recap of a week that never happened in front of the whole team.
 
    Like `rollup` step 6, **this step never decides `status`**: a failure adds
    `ledger-decisions-failed;<reason>` to `delivered=` and the beat carries on.
+1c. **No resolutions is a result, not a failure** (`SKB-044`). When step 1 finds no resolution with
+   an owner and a date, still run step 1b (it records the open items, or `[]` when there are
+   none), then post the **one-line** no-decisions message (`references/message-templates.md`)
+   instead of step 2's three lines, and skip steps 3 and 4: no mail goes out, because nothing was
+   decided and Monday's recap carries the overdue items. Receipt `status=ok delivered=no-decisions;chat-verified` plus whatever step 1b added.
+   Never hold the post, never report `failed` and never wait for the Doc to fill in later: this
+   beat already runs after the meeting. On 2026-10-01 a run held everything and gave up after three
+   attempts, so the team heard nothing that week.
 2. `send_message` — three lines to the space. Short, because next Monday's `nudge` quotes it.
 3. `send_gmail_message` — the full recap to **the owner-chip emails read in Step 2**, not to a
    list maintained here. Contents: decisions · owner · date / overdue and carry-over / KPI
@@ -584,6 +592,7 @@ ZYNKR-OPS-WEEKLY-RESULT: mode=agenda week=2026-W36 status=partial delivered=doc-
 ZYNKR-OPS-WEEKLY-RESULT: mode=nudge week=2026-W36 status=failed delivered=none;mcp-timeout
 ZYNKR-OPS-WEEKLY-RESULT: mode=tidy week=2026-W41 status=ok delivered=9-archived;8-kept;38-carried;3-closed
 ZYNKR-OPS-WEEKLY-RESULT: mode=tidy week=2026-W38 status=failed delivered=none;scaffold-did-not-fire
+ZYNKR-OPS-WEEKLY-RESULT: mode=decisions week=2026-W41 status=ok delivered=no-decisions;chat-verified;0-rows;Decisions(none);Weeks!M3
 ZYNKR-OPS-WEEKLY-RESULT: mode=snapshot week=2026-W40 status=ok delivered=55-items;Snapshot!A2:P56;Weeks!A2
 ZYNKR-OPS-WEEKLY-RESULT: mode=snapshot week=2026-W40 status=ok delivered=already-snapshotted;Weeks!A2
 ZYNKR-OPS-WEEKLY-RESULT: mode=snapshot week=2026-W41 status=failed delivered=none;tracker-changed-during-run

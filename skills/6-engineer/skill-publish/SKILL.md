@@ -79,6 +79,11 @@ Ask the user (or auto-detect from context):
 
 Skip the dedup/classify chain entirely — the issue already carries those decisions.
 
+**A client build** (the matched issue is labelled `client-build`, titled `[Client Build] …`, or carries
+`**Intake**: client-prd` in its body — any one) lands only in the private workbench. Before the
+dispatch, `gh api repos/peter-tu-zynkr/zynkr-skill-builder --jq .private` must answer `true`; anything else → stop
+and say it is held. The dispatch's payload would otherwise print the skill into a public workflow log.
+
 **Mode B — Fresh intake (fallback):** No prior pipeline item exists. Run the full classify + dedup + propose chain (Steps 2b–4b below) before landing the artifact.
 
 ---
@@ -97,6 +102,11 @@ The issue already exists; the SKILL.md is the body that fills it. Almost no skil
    ```bash
    gh issue comment <num> --repo peter-tu-zynkr/zynkr-skill-idea --body "Skill artifact attached via \`/skill-publish\`. Dispatched \`publish-skill.yml\` — PR will follow shortly."
    ```
+
+   Then make sure the issue **body** carries the two lines `/skill-triager` Option D looks for. Read the body
+   (`gh issue view <num> --repo peter-tu-zynkr/zynkr-skill-idea --json body --jq .body`) and, when they're
+   missing, append `**Built via**: skill-publish` and `**Built Skill URL**: skills/<N-cat>/<slug>/SKILL.md` and
+   write it back with `gh issue edit <num> --body-file <file>`. Without them, confirm-ship can't find the file.
 
 7. Skip to Step 6 (sync READMEs after PR merges).
 
@@ -162,6 +172,10 @@ Pick **one** of the three payload shapes — `skill_md_url`, `skill_md_b64`, or 
 - Skill is a single SKILL.md, content already on GitHub (other repo, gist, raw URL) → `skill_md_url`.
 - Skill is a single SKILL.md, only local → `skill_md_b64`.
 - Skill has additional files (`references/`, `scripts/`, `assets/`) — **the common case for Peter-authored skills** → `bundle_b64`.
+
+**A client build adds `-F "client_payload[visibility]=client"` to whichever shape it sends.** `publish-skill.yml`
+then skips the whole job while the repo is public, so the payload never reaches a run log even if the hold above
+was missed.
 
 **Shape 1 — `skill_md_url`** (single file, remote):
 
@@ -295,6 +309,9 @@ Report it as one line — `Knowledge: 5 files (2 Knowledge/<slug> required)` or
 When you're done with `/skill-publish`, tell the user:
 
 > "Published via dispatch. PR opened (URL: <pr_url>). After the PR merges, run `/skill-triager` and pick **Option D — `confirm-ship`** on this issue to close the loop. The triager will run its read-only verifications (`gh api contents` and the full `skills-index.json`, plus `/api/skills` for a public skill), then document the skill in the Skills Index Sheet and the Drive `[6.2]` mirror (a knowledge folder only if it ships files besides its SKILL.md), before flipping `Pipeline Status=shipped` and offering to install it into your local `~/.claude/skills/` via `npx skills add … --skill <slug>` — publishing to the marketplace alone does **not** make the skill invocable in your own Claude Code session."
+
+For a **client build**, say instead that the triager ships it like a team skill and skips the
+install offer, because the client gets its own copy. Once it is deployed, `/skill-deploy` records where it runs.
 
 **Completion checklist (mode-dependent):**
 

@@ -17,7 +17,7 @@ description: >-
   prepared ahead — even if he only gives the client's name or the calendar
   subject line. This is the PREP skill (build the briefing before the call).
   Distinct from cv-customizer (rewrites a CV against one specific job description)
-  and from consult-project-specialist / sales-inbound (which track SALES /
+  and from sales-inbound / project-init (which track SALES /
   advisory engagements as CRM deals, not 1-on-1 career coaching clients). When
   Peter has a career-coaching session coming up and wants to walk in prepared,
   prefer this skill.
@@ -60,7 +60,7 @@ to pause is if you genuinely can't find the client's materials (see Step 1).
 - **cv-customizer** — rewrites ONE CV against ONE job description through a 5-phase
   pipeline. Use it when the client has picked a specific role and wants the résumé
   tailored. career-consult is upstream of that: prep for the *conversation*.
-- **consult-project-specialist / sales-inbound** — track SALES / advisory
+- **sales-inbound / project-init** — track SALES / advisory
   engagements as CRM deals + project folders. A career-coaching client is **not** a
   CRM deal; their record is the prep Doc in the 職涯諮詢 folder, nothing in Supabase.
 

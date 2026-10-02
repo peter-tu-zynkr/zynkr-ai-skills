@@ -28,7 +28,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 ## 這個技能讀什麼（固定事實，不要再推導）
 
-- 知識來源：references/pm-knowledge-pack.md · v1 · sha256 15640433fbee
+- 知識來源：references/pm-knowledge-pack.md · v1 · sha256 b3d4e130fe64
 - `references/pm-sources.md` §1 — 八個 PMO 正本 ID 與模板資料夾的正確名稱；§2 — `~/.config/zynkr/pm.json` adapter 契約；§2.1 — 逐鍵說明；§3 — 可直接複製的 `pm.json.example`
 - `references/pm-sheet-schema.json`（管控表分頁與標頭）· `references/pm-status-crosswalk.json`（五個軸），兩者都透過技能自帶的 `scripts/pm-schema.py` 讀，不用眼睛比對
 
@@ -127,6 +127,8 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 
 然後問一句：是要續建缺少的檔案，還是這其實是另一個案子、要改名？兩份同名專案資料夾一旦出現，之後每一個讀 `folder_id` 的技能都會開始讀錯——重複比缺漏難修得多。
 
+**沿用 `[N]` 資料夾時（Step 2.1），還要列出資料夾裡面。** 父資料夾的同名比對看不到這一層：沿用的資料夾名稱常常不含專案名稱。裡面已經有 `[專案管控表]` 或 `[Kickoff] <專案名稱>` ⇒ 這個案子開過了：停，照上表把既有的 PMO 文件印出來，問是**只補缺的那幾份**，還是停在這裡。只補缺的時，Step 4（含 4.3 改核心目標、清範例列）、Step 5、Step 6 都只對這次新複製的文件做，已存在的文件一字不動——用中的 `[專案管控表]` 再被播一次 `X.0` 列，完成度就算錯了（Step 6 的說明）；Step 7 照常檢查回連。inbound 時期的啟動文件（`— 專案啟動`、`[Kickoff] … — 專案脈絡與會議紀錄`）不算，照 Step 2.1 第 4 點處理。
+
 ## Step 4 — 複製模板、開子資料夾、清空範例列
 
 ### 4.1 · 建資料夾並複製五份模板
@@ -192,7 +194,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 
 **`客戶案` 另外回連到交易，兩處都要寫：**
 
-1. **交易的 `notes` 欄加一行 `專案資料夾：https://drive.google.com/drive/folders/<資料夾 id>`。** 這是其他技能找客戶資料夾的唯一管道：`/consult-shadowing-scheduler`、`/gtm-uat-writer`、`/consult-brd-writer`、`/consult-session-notes`、`/consult-solution-planning`、`/consult-flow-design` 都只讀這一行，`/consult-governance` 的 I1 也查它，而 CRM 沒有讀回備註的工具。寫法照 `/sales-inbound` 的回連：
+1. **交易的 `notes` 欄加一行 `專案資料夾：https://drive.google.com/drive/folders/<資料夾 id>`。** 這是其他技能找客戶資料夾的唯一管道：`/consult-shadowing-scheduler`、`/gtm-uat-writer`、`/consult-brd-writer`、`/consult-session-notes`、`/consult-solution-planning`、`/consult-flow-design` 都只讀這一行，`/project-governance` 的 I1 也查它，而 CRM 沒有讀回備註的工具。寫法照 `/sales-inbound` 的回連：
    1. `mcp__zynkr__get_deal(id)` 讀出目前的 `notes`。
    2. 已經有指向**同一個**資料夾的 `專案資料夾：` 行 ⇒ 不動。已經有一行指向**別的**資料夾 ⇒ 停下來把兩個連結都列出來問，不要再加第二行。
    3. 新值＝原本的 `notes` 原封不動，接一個空行，再接上面那一行。**`update_deal` 會整欄覆蓋**，所以一定要先讀、再接、再寫，絕不只送新的那一行。

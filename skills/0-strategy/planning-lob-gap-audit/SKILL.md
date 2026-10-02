@@ -18,7 +18,7 @@ description: >-
   "文件缺口盤點", "做一份 heal plan", "哪些 SOP 過時了", "audit the ops docs
   against the H2 plan", "LOB gap audit", "gap audit and heal plan for <LOB>".
   Distinct from admin-governance (local _INDEX.md ↔ Drive INDEX sync — metadata
-  only, all LOBs, weekly), from consult-governance (the consulting ENGAGEMENT
+  only, all LOBs, weekly), from project-governance (the consulting ENGAGEMENT
   portfolio — a pattern source only), and from planning-suite-reconciler (WRITES
   the plan addendum this skill only READS — this skill writes no addenda).
 category: strategy
@@ -34,7 +34,7 @@ synergy:
   - "planning-suite-reconciler"
   - "planning-tracker-sync"
   - "admin-governance"
-  - "consult-governance"
+  - "project-governance"
   - "zynkr-kms"
 house-style: bound
 
@@ -63,7 +63,7 @@ report-only, quotes evidence for every finding, and names owner + owning skill p
 - **admin-governance** (3.05) — the report-only pattern source: it diffs Drive
   `modifiedTime` against local `_INDEX.md` lines, all LOBs, weekly, metadata only. This
   skill reads Doc CONTENT for one LOB and routes index lines to admin-governance.
-- **consult-governance** (2.45) — the other report-only sweep, over the consulting
+- **project-governance** (2.45) — the other report-only sweep, over the consulting
   engagement portfolio. Pattern borrowed (findings → 建議動作 → owning skill → 未檢查).
 - **planning-suite-reconciler** (0.08) — upstream: it WRITES the dated Refresh addendum
   in each plan Doc. This skill READS that addendum as the plan's current truth; a plan

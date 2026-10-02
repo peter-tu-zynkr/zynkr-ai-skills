@@ -17,7 +17,7 @@ description: >-
   without naming a skill, or hands over sales input and wants the whole job done
   rather than one step of it. Distinct from zynkr-gm (the company-level GM brief
   across every LOB — this one is the sales pipeline only, and never writes a
-  weekly narrative), consult-status-report and consult-governance (the
+  weekly narrative), project-client-status and project-governance (the
   consulting portfolio), and zynkr-skills (which routes the whole skill
   ecosystem, not within sales).
 category: sales-consultant
@@ -75,7 +75,7 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
   runway, KPI variance and a decisions register. `sales-manager` is the **sales pipeline
   only** and deliberately writes **no weekly narrative**: two skills narrating the same
   week is the failure mode. When Peter wants "這週公司要幹嘛", that is `/zynkr-gm`.
-- **`/consult-status-report`, `/consult-governance`** — the consulting portfolio and its
+- **`/project-client-status`, `/project-governance`** — the consulting portfolio and its
   hygiene sweep. Different pipeline, different objects.
 - **`/zynkr-skills`** — routes the whole skill ecosystem. This one routes *within* sales.
 - **The five children** — each is still a first-class entry point. When Peter names a

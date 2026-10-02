@@ -42,6 +42,7 @@ Pattern-match the user's input against the table below. **First match wins.** He
 | `https://github.com/peter-tu-zynkr/zynkr-skill-idea/issues/<N>` or `#<N>` referring to an idea-repo issue | `pipeline-issue-ref` |
 | User says "qa `<slug>`", "check this skill", "健檢", "does this pass QA", "review this skill" — OR drops a SKILL.md with an explicit QA/review verb | `qa-request` |
 | A folder path or file path that resolves to a `SKILL.md` on disk | `local-skill-md` |
+| A Google Doc titled `[PRD] …` (check a Doc's title before falling through to `google-doc`), or a client spec ID such as `ACME-001` with a build verb ("build ACME-001", "build this PRD", "這份 PRD 可以開工了"). Zynkr's own spec codes (`PLAT` · `WEB` · `SKB` · `ACC` · `CMS` · `KMS` · `ADM` · `LRN` · `ATL`) are internal specs, never a client PRD | `client-prd` |
 | `https://docs.google.com/document/...` | `google-doc` |
 | `.srt` / `.vtt` extension OR `youtu.be` / `youtube.com/watch` URL OR words like "transcript", "字幕", "逐字稿" | `transcript` |
 | Image of a business card (jpg/png/heic) or words like "business card", "名片" | `sales-specialist` |
@@ -82,12 +83,14 @@ Switch on `(input-type, state)` using the table below. Auto-invoke means use the
 | Input × State | Action | Confidence |
 |---|---|---|
 | `external-skill-url`, no prior state | Invoke `/skill-sourcer <URL>` | High → auto |
+| `client-prd` | Invoke `/skill-sourcer` with the PRD: its client-PRD intake files a `[Client Build]` issue labelled `client-build` | High → auto |
+| `pipeline-issue-ref` for a client build (labelled `client-build`, titled `[Client Build] …`, or `**Intake**: client-prd` in its body — any one) + `triage-ready` | Invoke `/skill-triager`; it holds a client build while the workbench is public | High → auto |
 | `pipeline-issue-ref`, label = `triage-ready` | Invoke `/skill-triager` (cue Option A) | High → auto |
 | `pipeline-issue-ref`, label = `building`, on-disk file absent | Nudge: "Run `/skill-author` on branch `skill/<slug>` to write the body" — don't auto-invoke; authoring needs you in the loop | High → nudge |
 | `local-skill-md`, slug matches an open `triage-ready` or `building` issue | Invoke `/skill-qa <path>` FIRST. On **PASS** → chain to `/skill-publish` (continuation mode). On **ERROR** → stop, surface the QA report, don't publish. On **WARN-only** → list warnings, ask "publish anyway?" then chain. | High → auto (QA → publish on PASS) |
 | `local-skill-md`, no matching open issue | Invoke `/skill-qa <path>` FIRST, then `/skill-publish` (fresh-intake mode) on PASS (same ERROR/WARN handling). | High → auto (QA → publish on PASS) |
 | `pipeline-issue-ref`, PR merged + slug in the full index (a public skill: also on `/api/skills`) + Project Build Status = `ready-to-ship` (or open issue still has `building` label) | Invoke `/skill-triager` (cue Option D `confirm-ship`) | High → auto |
-| `pipeline-issue-ref`, Project Pipeline Status = `shipped` | Render: "Already shipped — live at `https://www.zynkr.ai/ai-skills-marketplace` (slug `<slug>`)." — or, for a team skill, "Already shipped — team skill on workbench `main` (slug `<slug>`)." Then, if `~/.claude/skills/<slug>/` is absent, offer `npx skills add … --skill <slug>` so it's invocable locally (marketplace-live ≠ installed in your session). | High → no-op (offer local install if missing) |
+| `pipeline-issue-ref`, Project Pipeline Status = `shipped` | Render: "Already shipped — live at `https://www.zynkr.ai/ai-skills-marketplace` (slug `<slug>`)." — or, for a team skill, "Already shipped — team skill on workbench `main` (slug `<slug>`)." Then, if `~/.claude/skills/<slug>/` is absent, offer `npx skills add … --skill <slug>` so it's invocable locally (marketplace-live ≠ installed in your session) — never for a client build, which the client receives as its own copy. | High → no-op (offer local install if missing) |
 | `pipeline-issue-ref`, Project = `parked` / `rejected` | Render the state, ask if user wants to revive | Medium → ask |
 
 ### QA inputs (standalone — any skill, any lifecycle stage)

@@ -18,7 +18,7 @@ house-style: bound
 
 # Weekly Project Status Update
 
-知識來源：references/pm-knowledge-pack.md · v1 · sha256 15640433fbee
+知識來源：references/pm-knowledge-pack.md · v1 · sha256 b3d4e130fe64
 
 You run a project tracked in a Google Sheet. The `專案管理總表` tab is the live task list; the `專案狀態看板` tab is a hand-formatted executive dashboard. This skill closes the gap: it reads the raw tracker, does the reasoning a human would do (what's late, what's blocked, how far along), and produces the dashboard **as a weekly HTML email draft** — so you only have to skim and hit send.
 

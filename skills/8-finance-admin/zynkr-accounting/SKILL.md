@@ -14,7 +14,7 @@ description: >-
   "銀行對帳單來了", "monthly close", "對一下上個月的帳", or whenever Peter hands over a 台北富邦
   對帳單 PDF with no further direction. BOUNDARY — do NOT hijack: /zynkr-gm (the company-level
   weekly GM brief; it reads runway, it does not keep the books), /planning-tracker-sync (the H2
-  tracker), /consult-status-report (one consulting engagement). This skill owns exactly one
+  tracker), /project-client-status (one consulting engagement). This skill owns exactly one
   thing: turning a month of bank activity into ledger rows and a report. It writes to the
   Transactions tab and nowhere else, and it never touches the Financial Model tab.
 category: finance-admin

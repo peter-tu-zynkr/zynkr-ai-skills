@@ -75,7 +75,7 @@ Liao) · recap structure from `training-lecture-recap` (4.08).
 ## Hard rules
 
 1. **Never create the `[N]` folder.** No folder → STOP and route to
-   /sales-inbound (inbound lead) or /consult-project-specialist (meeting debrief).
+   /sales-inbound (inbound lead) or /project-init 客戶案 (won deal).
 2. **Client-facing email is ALWAYS a Gmail draft** —
    `mcp__google-workspace__draft_gmail_message` for invites, sponsor mails,
    D-1 confirmations, and the recap send. Never send.
@@ -94,7 +94,7 @@ Liao) · recap structure from `training-lecture-recap` (4.08).
 **Deal** — from a `…/deals/{id}` URL or a company name. Preferred:
 `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`. 
 **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written by
-sales-inbound / consult-project-specialist); extract the `[N]` folder id. If
+sales-inbound / project-init); extract the `[N]` folder id. If
 the line is missing, list the parent (`mcp__google-workspace__list_drive_items`,
 folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by
 name. **No folder at all → STOP** (hard rule 1).
@@ -102,6 +102,18 @@ name. **No folder at all → STOP** (hard rule 1).
 **Session facts** — date, audience (affected teams or 全員), mode (現場/線上),
 scope (what's being introduced — usually the engagement's live deliverables,
 per the deal notes). Ask one question only for what can't be inferred.
+
+**Deployment record** — when the build has a `[Deployment]` record from
+/skill-deploy (a `部署紀錄（<SPEC_ID>）：<url>` line in the deal's `notes`, or the
+Doc in the `[N]` folder), read it now with
+`get_doc_as_markdown(..., include_comments=false)` and take its
+**production（正式）** section: 入口 gives the tool's entry, and 認證交付方式 and
+存取說明 give its 帳號 note (how to sign in, never a password) in the recap's 工具
+section in step 5. A production section that still says 「尚未部署」 has no entry
+yet: ask, and never take one from the staging section. Several
+records on the deal → list them by spec ID and title and ask which builds this
+session introduces (it can be more than one; each gets its own 工具 line).
+Never pick on your own.
 
 **Invite text** — check the `[N]` folder for a `[Comms]` 說明會邀請 Doc
 (`mcp__google-workspace__list_docs_in_folder`) — gtm-launch-comms files it
@@ -147,8 +159,11 @@ zh-TW transcript, files it into the `[N]` folder, and links it on the deal.
 From the transcript + the D-0 QA list, fill
 `./references/session-recap-template.md` (delete its placeholder-guide
 comment): 摘要 / 主題 / Q&A / 工具 / 行動呼籲 — aimed at client staff, zh-TW.
-Detail comes only from the transcript and QA list; unanswered questions stay
-listed, marked 追蹤中. No transcript → build from live notes and say so.
+Detail comes only from the transcript and QA list, with one exception: the
+工具 section's 入口 and 帳號 notes come from the deployment record's
+production section when there is one (step 1). Unanswered questions stay
+listed, marked 追蹤中. No transcript →
+build from live notes and say so.
 
 ### 6 · GATE — recap approval
 
@@ -271,8 +286,9 @@ skills/3-operations/guest-lecturer-program/ skills/4-training/training-lecture-r
 - One session per run; a multi-site rollout with several 說明會 is one run each.
 - Stage state is derived from artifacts; a session organized entirely
   off-tooling (no drafts, no calendar event) needs Peter to state the stage.
-- Recap detail comes only from the transcript + collected QA — thin sources
-  yield a thin recap, flagged as such, never padded.
+- Recap detail comes only from the transcript + collected QA (except the 工具
+  section's 入口 and 帳號 notes, taken from the deployment record) — thin
+  sources yield a thin recap, flagged as such, never padded.
 
 ## House style
 

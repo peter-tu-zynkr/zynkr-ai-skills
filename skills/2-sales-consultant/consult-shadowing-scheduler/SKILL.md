@@ -12,8 +12,8 @@ description: >-
   "安排現場觀察", "幫我跟 <client> 約 shadowing", "schedule the shadowing", "book the
   shadowing session", "find time to shadow the client", or otherwise wants an on-site
   observation session scheduled for a consulting engagement — even if he only names
-  the company. Distinct from sales-inbound and consult-project-specialist (they
-  CREATE the project folder and the deal — this skill REUSES those artifacts and
+  the company. Distinct from sales-inbound and project-init (they CREATE the
+  project folder, sales-inbound the deal too — this skill REUSES those artifacts and
   never creates a new top-level folder or a new deal). Distinct from
   consult-brd-writer (which consumes the shadowing transcript AFTER the session
   happens — this skill only gets the session onto the calendar and preps the client).
@@ -28,7 +28,7 @@ process: "get_deal → resolve the client's [N] Drive folder from deal notes (el
 output: "A confirmed calendar hold, a shadowing subfolder in the client's project folder, a client-ready logistics mail draft (never auto-sent), and a CRM task — all linked on the deal"
 synergy:
   - "sales-inbound"
-  - "consult-project-specialist"
+  - "project-init"
   - "consult-brd-writer"
 house-style: bound
 
@@ -54,9 +54,8 @@ client, is worse than one follow-up question. Re-runs update, never duplicate.
 
 ## How this differs from its neighbours
 
-- **sales-inbound / project-init / consult-project-specialist** — they open the
-  numbered `[N]` folder (project-init at deal won; the other two also create the
-  deal). This skill assumes both exist and only adds a subfolder + activity to
+- **sales-inbound / project-init** — they open the numbered `[N]` folder
+  (project-init at deal won; sales-inbound also creates the deal). This skill assumes both exist and only adds a subfolder + activity to
   them. If there is no 專案資料夾 link and no single folder matches the company,
   it STOPs and points at them.
 - **consult-brd-writer** — consumes the shadowing transcript AFTER the session;
@@ -91,7 +90,7 @@ email come from `mcp__zynkr__get_contact(id=…)`, the company name from
 old join returned in one row.
 
 Capture the **contact name + email**, and scan `notes` for the 專案資料夾 line
-that sales-inbound, project-init or consult-project-specialist appended
+that sales-inbound or project-init appended
 (`專案資料夾：https://drive.google.com/drive/folders/<folder_id>`). Extract the
 folder id — that `[N]` folder anchors everything this skill creates.
 
@@ -103,8 +102,8 @@ company name, ignoring case, spaces and punctuation.
 - **Exactly one match** → use it, and tell Peter the deal is missing its backlink
   (the line format is in `/sales-inbound` step 4d).
 - **None, or more than one** → **STOP.** Tell Peter the deal has no project folder
-  yet and point at `/project-init` (a won deal), `/sales-inbound` (an inbound lead)
-  or `/consult-project-specialist` (a meeting debrief). Never invent a folder here.
+  yet and point at `/project-init` (a won deal) or `/sales-inbound` (an inbound
+  lead). Never invent a folder here.
 
 ### 2 · Collect constraints
 
@@ -267,7 +266,7 @@ new one, tell Peter to delete the old, append a correction line to deal notes.
 - **Draft-only client mail** — the mail carries commitments (date, recording
   consent); Peter's voice check before send is non-negotiable.
 - **Reuses the `[N]` folder** — numbering belongs to sales-inbound /
-  consult-project-specialist; a second authority would fork the sequence.
+  project-init; a second authority would fork the sequence.
 - **The dated subfolder is the pipeline seam** — consult-brd-writer reads the
   transcript from exactly `[N]/Shadowing — YYYY-MM-DD`.
 - **Adjacency rule over raw free/busy** — a technically-free slot after a 3h

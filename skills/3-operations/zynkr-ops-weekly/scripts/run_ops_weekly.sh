@@ -118,9 +118,7 @@ SNAP_TOOLS="Read,Write,Bash(python3:*),mcp__google-workspace__read_sheet_values,
 DENY_OTHERS="mcp__google-workspace__draft_gmail_message,mcp__google-workspace__create_spreadsheet,mcp__google-workspace__create_sheet,mcp__google-workspace__resize_sheet_dimensions,mcp__google-workspace__format_sheet_range,mcp__google-workspace__manage_conditional_formatting,mcp__google-workspace__move_sheet_rows,mcp__google-workspace__append_table_rows,mcp__google-workspace__create_drive_file,mcp__google-workspace__update_drive_file,mcp__google-workspace__copy_drive_file,mcp__google-workspace__trash_file,mcp__google-workspace__manage_drive_access,mcp__google-workspace__set_drive_file_permissions,mcp__google-workspace__create_doc,mcp__claude_ai_Gmail,mcp__claude_ai_Google_Drive,mcp__claude_ai_Google_Calendar,mcp__claude_ai_Notion,mcp__claude_ai_Canva,mcp__claude_ai_Lucid,mcp__claude_ai_Claude_Docs,mcp__gmail,mcp__notion,mcp__lucid,mcp__supabase,mcp__vercel,mcp__cms,mcp__zynkr,mcp__zynkr-atlas,mcp__fireflies,mcp__kit,mcp__plugin_playwright_playwright"
 SNAP_DENY="Edit,NotebookEdit,Agent,$CHAT_WRITE,$DOC_WRITE,$MAIL,$DENY_OTHERS"
 # `rollup` and `decisions` also record what they read in the Ledger (SKB-044 2.2, 2.3), so each
-# gains one Sheets write and a deny list without the tools it needs. No time limit yet: successful
-# rollups have taken two to four and a half hours while every Doc read pulls all 331k characters
-# (SKB-044 2.6).
+# gains one Sheets write and a deny list without the tools it needs.
 LEDGER_WRITE="Write,Bash(python3:*),mcp__google-workspace__modify_sheet_values"
 ROLLUP_DENY="Edit,NotebookEdit,Agent,$CHAT_WRITE,$MAIL,$DENY_OTHERS"
 DECISIONS_DENY="Edit,NotebookEdit,Agent,$DENY_OTHERS"
@@ -130,14 +128,23 @@ RECAP_DENY="Edit,NotebookEdit,Agent,$CHAT_WRITE,$DOC_WRITE,mcp__google-workspace
 
 LIMIT=0; DENY=""; PROMPT="/zynkr-ops-weekly $MODE"
 
+# Time limits (SKB-044 2.6a, set 2026-10-02 from the runs logged since August). A normal run takes
+# minutes: nudge 5, chase 4, agenda up to 17, decisions 6, tidy up to 15. The long runs were hangs:
+# a nudge stuck 174 minutes on a Docs API timeout, a decisions run stuck 176 minutes on a network
+# error, a decisions run that only had to confirm an earlier one took 68. The retry after each
+# finished in minutes. So each limit is two to four times the longest normal run, and a run that
+# reaches it is retried on the next tick like any other failure. decisions gets 20 minutes so three
+# attempts still fit between 22:00 and 23:59. rollup has none yet: every Doc read pulls all 331k
+# characters and its successful runs have taken hours (SKB-044 2.6).
 case "$MODE" in
-  nudge|chase) TOOLS="$READ_CORE,$CHAT_WRITE" ;;
+  nudge)       TOOLS="$READ_CORE,$CHAT_WRITE"; LIMIT=1200 ;;
+  chase)       TOOLS="$READ_CORE,$CHAT_WRITE"; LIMIT=900 ;;
   rollup)      TOOLS="$READ_CORE,$DOC_WRITE,$LEDGER_WRITE"; DENY="$ROLLUP_DENY" ;;
-  agenda)      TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE" ;;
-  decisions)   TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE,$MAIL,$LEDGER_WRITE"; DENY="$DECISIONS_DENY" ;;   # the only beat that may mail
+  agenda)      TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE"; LIMIT=2400 ;;
+  decisions)   TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE,$MAIL,$LEDGER_WRITE"; DENY="$DECISIONS_DENY"; LIMIT=1200 ;;   # the only beat that may mail
   # Doc only: it never posts and never mails. The Drive export is the one read that renders the
   # Done/Drop status chips its step 7 needs (SKB-039).
-  tidy)        TOOLS="$READ_CORE,$DOC_WRITE,mcp__google-workspace__get_drive_file_content" ;;
+  tidy)        TOOLS="$READ_CORE,$DOC_WRITE,mcp__google-workspace__get_drive_file_content"; LIMIT=2700 ;;
   # The week is passed in, never recomputed mid-run; a non-default config is passed on so a
   # rehearsal writes to the rehearsal Ledger. 30 minutes: a normal run takes a few.
   snapshot)    TOOLS="$SNAP_TOOLS"; DENY="$SNAP_DENY"; LIMIT=1800

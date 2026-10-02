@@ -13,7 +13,7 @@ process: "Stage 1 pain-point discovery with 5D problem exploration, then Stage 2
 output: "Structured Needs Definition Summary and Strategic Discovery Summary, ready for downstream process mapping or pain-point validation"
 synergy:
   - "sales-research"
-  - "consult-project-specialist"
+  - "project-init"
 type: agent
 skills: ["sales-discovery-pains", "sales-discovery-vision"]
 house-style: bound

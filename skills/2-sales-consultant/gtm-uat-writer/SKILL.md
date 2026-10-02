@@ -22,7 +22,7 @@ platform: claude
 status: Done
 visibility: public
 author: Peter Tu
-input: "The PRD Doc (URL, or found in the client's [N] folder) + the deployed assistant's name/URL and access notes"
+input: "The PRD Doc (URL, or found in the client's [N] folder) + the [Deployment] record from /skill-deploy, or the assistant's URL and access notes"
 process: "Parse the PRD's spec ID, D-level, AC-n/Verify lines and Out-of-scope → derive one client-runnable scenario per AC (D3 adds negative cases) → scenario-table gate → generate the guide Doc in the [N] folder → CRM task + backlink → report"
 output: "A client-facing UAT guide Google Doc (scenarios, pass/fail checklist, bug-report instructions, sign-off block) linked on the CRM deal"
 synergy:
@@ -54,6 +54,8 @@ upstream in /ops-prd-writer, not in improvised acceptance criteria here.
 
 - **ops-prd-writer** — WRITES the PRD this skill consumes. If the client has
   no `[PRD]` doc, or its structure is broken, route there; this skill only reads.
+- **skill-deploy** — WRITES the `[Deployment]` record this skill takes the
+  test site, account and access notes from (step 2).
 - **gtm-bug-ticket** — downstream of the UAT round: it parses the bug mails
   the client sends while testing. This skill's 問題回報方式 section is what
   shapes those mails (發生了什麼 / 預期看到什麼 / 操作步驟 / 截圖), so the two
@@ -113,8 +115,20 @@ invented ACs or guessed Verify steps.
 
 ### 2 · Collect the deployment facts
 
-The guide describes a live system, so gather (from the conversation, the PRD's
-Design sketch, or by asking Peter — one consolidated question, not a drip):
+The guide describes a live system. **Read the deployment record first.** The
+deal's `notes` carry a `部署紀錄（<SPEC_ID>）：<url>` line written by
+/skill-deploy (match the spec ID parsed in step 1); otherwise search the `[N]`
+folder for a `[Deployment]` Doc whose title carries that spec ID. Read it with
+`get_doc_as_markdown(..., include_comments=false)` (an open comment would
+otherwise land in the client's guide) and take its 名稱 as the assistant name,
+then its **staging（測試）** section: 入口 is the assistant URL, and 測試帳號,
+認證交付方式 and 存取說明 fill the access facts. A staging section that still says
+「尚未部署」 has no URL yet: stop and ask, as below.
+
+Only what the record lacks (or every fact, when there is no record) is gathered
+the old way — from the conversation, the PRD's Design sketch, or by asking
+Peter, in one consolidated question, not a drip — and the report says which
+facts the record was missing:
 
 - **Assistant name + URL** — what the client opens (e.g. `https://<client-app>.vercel.app`).
 - **Test account** — the login the client tests with. In all examples and in the
@@ -274,7 +288,7 @@ A compact artifact table, then the headline in prose:
 ## Limitations
 
 - Consumes a PRD; it will not write one (ops-prd-writer), conduct discovery,
-  or bootstrap a missing `[N]` workspace (sales-inbound / consult-project-specialist).
+  or bootstrap a missing `[N]` workspace (sales-inbound / project-init).
 - Scenario quality is bounded by the PRD's Verify lines — vague Verify upstream
   yields a judgment-call translation here, flagged at the gate rather than hidden.
 - One PRD per run: a guide covers exactly one spec ID. Two specs = two runs and

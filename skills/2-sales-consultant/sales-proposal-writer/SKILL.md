@@ -29,7 +29,7 @@ sheetId: "2.47"
 input: "A CRM deal id or name, plus the client's own material — a requirement sheet, discovery/meeting notes, a transcript, or a prior proposal version to revise."
 process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into a recurring lane and a build lane → price each line at the NT$10,000/hr anchor → publish as 交付文件 → CRM note. Revisions: comment → apply → resolve → checksum → sync."
 output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note carrying the pricing rationale and the internal→external module mapping, and a handoff to sales-follow-up."
-synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "consult-project-specialist"]
+synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "project-init"]
 house-style: bound
 type: agent
 ---

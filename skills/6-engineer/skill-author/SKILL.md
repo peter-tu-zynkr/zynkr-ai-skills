@@ -58,6 +58,12 @@ If nothing resolves, ask once: **"Point me at the stub — a path, slug, or `ski
 > hand-create the folder. The scaffold carries the issue link and the branch name that
 > `/skill-publish` later reads.
 
+> **A client build** (its issue is labelled `client-build`, titled `[Client Build] …`, or carries
+> `**Intake**: client-prd` in its body — any one) is written only in the private workbench. Before
+> touching it, `gh api repos/peter-tu-zynkr/zynkr-skill-builder --jq .private` must answer `true`; anything else →
+> stop, because every file here would be public. Its spec is the client's PRD (the issue links it; read it with
+> `get_doc_as_markdown`): every `AC-n` is behaviour the skill must have.
+
 ## Step 2 — Read the contract before writing anything
 
 Two files govern the result. Read them; do not work from memory:

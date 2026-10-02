@@ -53,10 +53,19 @@ receipt says `status=ok`** and `claude` exited 0. Any other run counts an attemp
 on the next tick while its window is still open; after three attempts it writes `.gaveup` and
 stops for the week. A missed beat is better than a beat that fires into the wrong day.
 
-**Time limit.** `snapshot` runs under a 30-minute limit. When it is reached, the runner ends the
-run and everything it started, logs `TIMEOUT`, and counts a failed attempt. Without a limit a hung
-run blocks every later tick, because launchd never starts a second copy of the runner while one is
-still going. The other beats get limits once their normal run times are measured (`SKB-044` Phase 2).
+**Time limits.** Every beat but `rollup` runs under a limit: `recap` and `snapshot` 30 minutes,
+`nudge` and `decisions` 20, `chase` 15, `agenda` 40, `tidy` 45. When one is reached, the runner
+ends the run and everything it started, logs `TIMEOUT`, and counts a failed attempt, so the next
+tick retries it. Without a limit a hung run blocks every later tick, because launchd never starts
+a second copy of the runner while one is still going.
+
+They were set on 2026-10-02 (`SKB-044` 2.6a) from the runs logged since August. A normal run takes
+minutes: `nudge` 5, `chase` 4, `agenda` up to 17, `decisions` 6, `tidy` up to 15. The long runs
+were hangs: a `nudge` stuck 174 minutes on a Docs API timeout, a `decisions` run stuck 176 minutes
+on a network error, and the retry after each finished in minutes. Each limit is two to four times
+the longest normal run. `decisions` gets 20 minutes so three attempts still fit between 22:00 and
+23:59. `rollup` gets none until its Doc reads stop pulling all 331k characters (`SKB-044` 2.6):
+its successful runs have taken hours.
 
 ## Least privilege
 

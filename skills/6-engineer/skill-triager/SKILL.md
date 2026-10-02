@@ -47,7 +47,10 @@ gh issue list \
   --limit 50
 ```
 
-Show the user a numbered list: `#<num> — <title> (created <date>)`.
+Show the user a numbered list: `#<num> — <title> (created <date>)`. Mark a **client build** with
+**(client build)**: it was filed from a client's approved PRD by `/skill-sourcer`'s client-PRD intake. An issue is a
+client build when it is labelled `client-build`, titled `[Client Build] …`, or carries `**Intake**: client-prd` in its
+body. Any one of the three is enough; a missing label never makes it an ordinary idea.
 
 If the queue is empty, report that and ask whether to also pull `skill-proposal`-labelled issues without the `triage-ready` label (these are issues that were created some other way and haven't been through `/skill-sourcer`). If yes, repeat the query with `--label skill-proposal --search 'no:label triage-ready'` semantics.
 
@@ -87,7 +90,10 @@ The build repo is always `peter-tu-zynkr/zynkr-skill-builder`. (`peter-tu-zynkr/
 Read the intake source **off the issue body** — it changes the recommended decision in Step 3:
 
 - **`/skill-sourcer`** (raw idea) → Step 3 defaults to **Option A `assign-build`** (the build hasn't happened yet). This is the default when the body carries no build markers.
-- **`/skill-publish`** (built artifact) → Step 3 defaults to **Option D `confirm-ship`**. Recognised by a `**Built via**: skill-publish` line and a `**Built Skill URL**:` line in the body; the SKILL.md is already in-tree and the triager just verifies and closes the loop.
+- **client PRD** (a client build, Step 1, with no `**Built via**` line yet) → Step 3 defaults to **Option A**,
+  which holds the build while the workbench is public. The PRD, deal and client folder are linked in the body; the
+  acceptance criteria stay in the PRD.
+- **`/skill-publish`** (built artifact) → Step 3 defaults to **Option D `confirm-ship`**. Recognised by a `**Built via**: skill-publish` line and a `**Built Skill URL**:` line in the body; the SKILL.md is already in-tree and the triager just verifies and closes the loop. A client build with these lines comes here too, and ships as a client build (Option D).
 
 If the body says `**Built via**: skill-publish` but carries no `**Built Skill URL**:`, flag it: the publisher hasn't committed the artifact yet, and `confirm-ship` needs a committed file to verify against.
 
@@ -101,6 +107,18 @@ Present the four options below. Wait for the user. The recommended default is se
 
 The issue is ready to go into the build pipeline.
 
+0. **A client build waits for a private workbench.** For a client build (any of the three markers in Step 1), ask
+   GitHub first:
+   ```bash
+   gh api repos/peter-tu-zynkr/zynkr-skill-builder --jq .private
+   ```
+   Anything but `true` (`false`, an error, no answer) means **hold**: don't dispatch, because the scaffold would put a
+   client's build in a public repo. Comment
+   `Held: a client build is built only in the private workbench (SKB-038 flip pending, SKB-054).`, leave
+   `triage-ready` on, and stop. On `true`, carry on. Every dispatch for a client build carries
+   `-F "client_payload[visibility]=client"` (step 5), so `pickup-approved-issue.yml` skips the whole job if the repo
+   is public after all. A web-app build (its body names another **Build Repo**) is built in that repo: record the
+   decision as a comment and dispatch nothing.
 1. **Confirm `Build Target`** with the user — defaults to the resolved slug, but the user can override (e.g. nest path like `engineer/video-use`).
 2. **Ask the build mode:**
    > "Build mode? **rescaffold** (custom Zynkr skill body — for skills we'll implement ourselves) or **lift-and-shift** (mirror the upstream README as-is, set `status: Done` — for external skills we want to track without re-authoring)?"
@@ -215,10 +233,11 @@ The artifact is **already built and committed** (typical for `/skill-publish` in
    gh issue comment <num> --repo peter-tu-zynkr/zynkr-skill-idea \
      --body "confirm-ship: in main at \`<path>\` · team skill, in the workbench index · indexed in the Skills Index Sheet + Drive [6.2]"
    ```
-7. **Label swap on issue:**
+7. **Label swap on issue** — remove whichever of `triage-ready` and `building` the issue carries (an Option A build
+   carries `building`; a `/skill-publish` fresh intake carries `triage-ready`), then add `shipped`:
    ```bash
    gh issue edit <num> --repo peter-tu-zynkr/zynkr-skill-idea \
-     --remove-label triage-ready --add-label shipped
+     --remove-label building --add-label shipped        # or --remove-label triage-ready
    ```
 8. **Close the issue:**
    ```bash
@@ -235,6 +254,10 @@ The artifact is **already built and committed** (typical for `/skill-publish` in
    ```
    That is the public shelf. For a **team** skill swap in the workbench URL, `https://github.com/peter-tu-zynkr/zynkr-skill-builder` — that install works only for workbench collaborators.
    On the user's OK, run it and confirm `~/.claude/skills/<slug>/SKILL.md` exists. Skip the offer for non-Claude skills (platform `gpt` / `gemini`) or if the user declines — the ship itself already succeeded regardless.
+
+**A client build** (any of the three markers in Step 1) ships like a team skill: no zynkr.ai check in step 4, the team wording in
+steps 6 and 8. Skip step 9: a client build is delivered to the client, not installed here. End by pointing at
+`/skill-deploy`, which records where the build runs once it is deployed (staging first, for UAT).
 
 **Why this is different from `assign-build`:** no `repository_dispatch` is fired — the in-tree SKILL.md is already picked up by `ingest-skills.yml` on push, so its index row already exists by the time triage runs (and, for a public skill, the shelf publishes it on its own schedule). Triage's job here is **bookkeeping + verification**, not orchestration.
 

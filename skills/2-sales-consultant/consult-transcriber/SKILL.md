@@ -84,7 +84,7 @@ engagement, which phase, which folder, and the CRM breadcrumb.
    parent paths (a standalone install has no siblings), never re-implement
    their steps here. If a base skill is missing, STOP (step 2) — don't improvise.
 2. **Never create the `[N]` folder.** No folder → STOP and route to
-   /sales-inbound or /consult-project-specialist. The ONE folder this skill
+   /sales-inbound (inbound lead) or /project-init (won deal). The ONE folder this skill
    may create is a genuinely-absent `Shadowing — YYYY-MM-DD` subfolder (step 1).
 3. **Override the optimizer's delivery.** training-srt-optimizer's own final
    step uploads to the TRAINING business's Drive folder — that upload is
@@ -102,11 +102,11 @@ engagement, which phase, which folder, and the CRM breadcrumb.
 **Deal** — from a `…/deals/{id}` URL or a company name. Preferred:
 `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`. 
 **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written by
-sales-inbound / consult-project-specialist); extract the `[N]` folder id. If
+sales-inbound / project-init); extract the `[N]` folder id. If
 the line is missing, list the parent (`mcp__google-workspace__list_drive_items`,
 folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by
 name. **No folder at all → STOP** and point at /sales-inbound (inbound lead)
-or /consult-project-specialist (meeting debrief) — hard rule 2.
+or /project-init 客戶案 (won deal) — hard rule 2.
 
 **Phase** — discovery call (訪談) or shadowing? Infer from what Peter said and
 the recording's filename/date; ask one question if genuinely ambiguous.
