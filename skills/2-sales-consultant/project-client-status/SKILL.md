@@ -1,0 +1,341 @@
+---
+name: project-client-status
+sheetId: "2.44"
+description: >-
+  Generate the weekly CLIENT-FACING status email for ONE consulting
+  engagement. Reads the CRM deal's tasks / activities / notes plus the newest
+  [Notes] / [Plan] / [BRD] / [UAT] docs in the client's numbered [N] Drive
+  folder, derives health / progress / blockers / next milestone, renders the
+  專案狀態看板-style HTML dashboard, and creates a Gmail DRAFT addressed to
+  the deal's client contact — NEVER auto-sends. Trigger on
+  /project-client-status or when Peter says "客戶週報", "顧問案週報",
+  "寫給客戶的進度報告", "客戶進度信", "draft the client status update",
+  "status email for <client>", "engagement weekly for the client" — any
+  weekly/status ask that NAMES a client or engagement. Distinct from
+  consult-session-notes (files ONE session into a [Notes] Doc; this skill READS
+  those docs as evidence), from gtm-adoption-reporter (post-go-live usage
+  TELEMETRY report as a Doc, not a weekly email), and from project-governance
+  (the internal sweep across ALL engagements; it writes nothing).
+  BOUNDARY: bare "週報" /
+  "weekly report" / "project weekly update" WITHOUT client context stays with
+  project-status-update (the internal tracker-Sheet weekly), which also owns
+  ALL scheduled / cron / recurring weekly runs — this skill is Peter-invoked
+  per engagement and must not hijack those triggers.
+category: sales-consultant
+project: project-client-status
+platform: claude
+status: Done
+visibility: public
+author: Peter Tu
+input: "The engagement (deal URL / company name); optional 'as of' date and language override"
+process: "Resolve engagement + live client contact → read CRM tasks/activities/notes + recent [N]-folder docs → diff vs last week → derive health/progress/blockers/milestone → client-facing tone pass → render HTML → Gmail DRAFT to the client → deal note + report"
+output: "A styled 專案狀態看板 HTML weekly as a Gmail DRAFT to the client contact (never auto-sent), plus the deal-note record and a to-Peter summary of what to review before sending"
+synergy:
+  - "consult-session-notes"
+  - "gtm-adoption-reporter"
+  - "project-governance"
+  - "project-status-update"
+house-style: bound
+
+---
+
+# Project Client Status
+
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project-client-status
+```
+
+Every live engagement owes the client a weekly "where are we" — re-reading the
+deal's tasks, session notes and plan docs, then translating vendor-side
+reality into client-appropriate language. This skill does that end-to-end for
+ONE engagement: read the CRM deal (tasks · activities · notes) and the newest
+`[Notes]`/`[Plan]`/`[BRD]`/`[UAT]` docs in the `[N]` folder, derive health /
+progress / blockers / next milestone, render the 專案狀態看板 HTML dashboard,
+and leave a Gmail DRAFT addressed to the deal's client contact.
+
+The output is a **draft, never a send** — the source skill's rule, elevated: an
+internal weekly with a wrong 🔴 costs a correction; a wrong 🔴 **sent to a
+client** is an incident. Peter reviews, edits, and hits send himself.
+
+## How this differs from its neighbours
+
+- **project-status-update** (3.09) — the SOURCE of this fork: the INTERNAL
+  tracker-Sheet weekly to internal recipients. It owns every bare "週報" /
+  "weekly report" / "project weekly update" trigger and ALL scheduled / cron
+  weekly runs (swap this snippet's `--skill` value to `project-status-update`
+  to install it). This skill answers only when a client/engagement is named.
+- **consult-session-notes** — files ONE session into a `[Notes]` Doc; this
+  skill READS those docs as the week's progress evidence.
+- **gtm-adoption-reporter** — post-go-live usage TELEMETRY report (a Doc,
+  monthly-ish). This skill is the during-delivery weekly EMAIL.
+- **project-governance** — the internal weekly sweep across ALL engagements'
+  folders and deals; it writes nothing and does not track this weekly. A stale
+  session record it flags is often the first sign this weekly is due.
+
+## Fixed facts (don't re-derive these)
+
+- **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
+- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, where numbered project folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- **Renderer**: `./scripts/render_dashboard_email.py` · **JSON contract**: `./references/dashboard_schema.json`
+
+## Hard rules
+
+1. **DRAFT, never send** — more load-bearing than in the source skill: a wrong
+   health verdict mailed to a client is an incident. If Peter says "send it",
+   still draft and ask for explicit confirmation on the draft.
+2. **The recipient is resolved live from the CRM every run** (deal → contact
+   name + email) — never remembered from a prior run, never hardcoded.
+3. **No invented progress or blockers.** Thin evidence ⇒ 資料不足-style
+   phrasing in that section + a flag to Peter in step 9 — never pad.
+4. **Scheduled / unattended weekly runs stay with project-status-update.** This
+   skill runs only when Peter invokes it on a named engagement.
+5. **Never create a folder.** No `[N]` folder ⇒ STOP and point at
+   /sales-inbound (inbound lead) or /project-init (won deal).
+
+---
+
+## Workflow
+
+### 1 · Resolve the engagement, the client contact, and the week
+
+- **Deal** — from a `…/deals/{id}` URL via `mcp__zynkr__get_deal`, or by company
+  name via `mcp__zynkr__list_deals(search="<company>")`
+- **Client contact (live, hard rule 2)** — the deal's `contact_id`, read with
+  `mcp__zynkr__get_contact(id="<contact_id>")`.
+  No contact or no email ⇒ STOP and ask Peter — never guess an address.
+- **Folder** — extract the folder id from the `專案資料夾：<url>` backlink in
+  the deal's notes; if missing, list the parent
+  (`mcp__google-workspace__list_drive_items`, folder_id
+  `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
+  None ⇒ STOP (hard rule 5).
+- **Week** — anchor on today (or the "as of" date); window = Monday→Sunday
+  containing it; ISO label for the subject (e.g. `2026-W32`).
+
+### 2 · Read the deal's activity timeline
+
+- **Tasks** — `mcp__zynkr__list_tasks(filter="all", limit=200)`, then keep the
+  rows whose `deal_id` is this deal (title, status, due date). The tool has no
+  per-deal filter, so the filtering is yours to do.
+- **The engagement log** — `mcp__zynkr__get_deal(id=…)` → `notes`. This is the
+  running log the whole 2.x suite appends to, and it carries the narrative:
+  every doc, folder and session backlink each skill has written.
+- ⚠️ **The activity timeline is not readable over the MCP.** There is no
+  `list_activities` tool — `meeting` and `note` rows can be *written*
+  (`log_meeting`, `create_note`) but not read back. So this report is built from
+  tasks plus the deal notes, not from the timeline. If a session was logged as a
+  meeting and never written into `notes`, this report will not see it. Say so
+  when the week looks emptier than expected rather than reporting silence as
+  fact.
+- **Normalize status before reasoning** (source-skill discipline): trim +
+  lowercase, map onto FOUR buckets — `Done`（`完成`/`✓`）· `WIP`（`進行中`）·
+  `Not started`（blank/`未開始`/`todo`）· `Drop`（`放棄`/`dropped`）. `Drop` is a
+  bucket of its own, not a flavour of `Not started`: a dropped task leaves the
+  % denominator in step 5 instead of inflating it. `取消` is **not** a fifth
+  value and **not** a synonym for `Drop` — 鐵律 3 pins the vocabulary at four —
+  so a task carrying it is a data error: flag the row to Peter, keep it counted
+  as unresolved (inside the denominator, outside `done`) until the CRM row is
+  corrected to `Drop`, and never promote it to a drop on your own reading.
+  Anything else unmappable gets the same treatment — flagged to Peter, not
+  guessed, not shown raw to the client.
+  **Upstream authority for this whole bucket step**:
+  `docs/pm-shared/pm-knowledge-pack.md` **§2.2 裁決二** — it fixes the four legal
+  values (`Done` / `WIP` / `Not started` / `Drop`), rules that **only `dropped`
+  leaves the denominator**, and rules that an illegal value such as `取消` is a
+  **data error** that stays *inside* the denominator, *outside* `done`, and is
+  named in the report. Machine-readable as `rules.percent_complete` +
+  `rejected_values` in `docs/pm-shared/pm-status-crosswalk.json`. This skill is
+  deliberately **not** in the PM family: it keeps no copy of the pack, follows
+  the rule, and cites it.
+
+### 3 · Read the [N] folder's recent docs
+
+`mcp__google-workspace__list_docs_in_folder(user_google_email="<your-google-workspace-account>", folder_id="<folder id>")`,
+then read what informs THIS week:
+
+- `[Notes]` docs newer than the last report — the week's actual progress and
+  blocker material (their Blockers / What's Next sections map almost 1:1).
+- `[Plan]` / `[BRD]` — phase structure, scope, committed milestone dates.
+- `[UAT]` — acceptance / go-live dates, pass-fail state.
+
+Skim for dated facts (what happened, who's waiting on whom); don't ingest
+whole docs into the email.
+
+### 4 · Diff against last week's report
+
+Because this skill only drafts, the previous weekly usually lives in Drafts:
+`mcp__google-workspace__search_gmail_messages(user_google_email="<your-google-workspace-account>", query='in:drafts subject:"[週報] <company>"')`,
+then peek `in:sent` for one Peter already sent. From the newest match, derive
+the week-over-week movement (tasks closed, blockers cleared/added, milestone
+shifts). Nothing found = first run: omit `weekly_diff`, open the mail as the
+first weekly — never fabricate movement.
+
+### 5 · Reason into the dashboard JSON
+
+Build the payload per `./references/dashboard_schema.json`. The derivation
+discipline is inherited from the source skill, reshaped for CRM data:
+
+- **Health** — 🔴 `DELAYED`: a committed milestone / UAT / go-live date passed
+  unmet, or a task gating one is overdue. 🟡 `AT_RISK`: due-this-week items
+  not started, the engagement stalled since the last report, or progress
+  blocked on a client-side ask. 🟢 `ON_TRACK`: nothing overdue, current-phase
+  tasks moving. The `summary` names its evidence (task, doc, date) — auditable.
+- **% complete** — `% = done / (total − dropped)`. Dropped tasks (the `Drop`
+  bucket from step 2) leave the denominator; counting them as `Not started` is
+  the bug this replaces — it inflated the denominator and understated the
+  client's progress. Phase-weight if the `[Plan]` defines phases (a
+  half-finished phase contributes its true fraction, never rounded up).
+  Dropped items are **listed separately, never silently gone**: one
+  `decisions[]` entry each（範圍調整：<任務> 本期不做）with the date and the
+  reason it was dropped, plus a line in the step-9 report to Peter. A `取消`
+  or otherwise illegal status is the mirror case and is **not** symmetric with
+  a drop: it stays in `total`, never counts toward `done`, and is named in the
+  step-9 report — removing it would flatter the number the same way the old
+  `Drop → Not started` fold understated it. No CRM tasks yet, or
+  `total − dropped = 0` ⇒ omit the stage card (never divide by zero, never
+  print a silent 0%). Upstream rule for **both** halves — the dropped-leaves
+  rule and the illegal-value-stays rule — is
+  `docs/pm-shared/pm-knowledge-pack.md` §2.2 裁決二, machine-readable as
+  `rules.percent_complete` + `rejected_values` in
+  `docs/pm-shared/pm-status-crosswalk.json` — this skill is not in the PM
+  family and keeps no copy of that pack; it follows the rule and cites it.
+- **Next milestone** — the nearest unmet dated commitment: earliest open task
+  due date, or the UAT / go-live date from the docs.
+- **Blockers** — only from evidence (task notes, `[Notes]` blockers, deal
+  notes); thin evidence ⇒ 資料不足 handling per hard rule 3.
+- **Dates** — never guess a year or back-fill a missing date; an unparseable
+  date is excluded from overdue math and flagged to Peter (a bad guess can
+  fabricate a false 🔴 — the source skill's hardest-won rule).
+
+### 6 · Client-facing tone pass
+
+The fork's second point. Re-read every JSON string as the client will:
+
+- **No internal candor** — no vendor-side cost/effort grumbles, no internal
+  tool or system names, no colleague shorthand.
+- **Blockers become asks** — 「等待貴司提供測試帳號」, never a complaint.
+- **Language** — zh-TW by default; EN when the engagement corresponds in EN.
+- **Thin sections stay neutral** — 「本週未收到新進度資訊」, not an alarming blank.
+- **Phrasing only, never the verdict** — a 🔴 stays 🔴, said professionally.
+  Source-faithful beats flattering, here more than anywhere.
+
+### 7 · Render the HTML
+
+```bash
+python3 ./scripts/render_dashboard_email.py dashboard.json --out email.html
+```
+
+The script owns all styling; if it errors, the JSON doesn't match the schema —
+fix the JSON, not the script. Read `email.html` back for step 8.
+
+### 8 · Create the Gmail DRAFT — never send
+
+Subject: `[週報] {{COMPANY}} — {{PROJECT}} {{YYYY-Www}}`（e.g. `[週報] 宏宇精密 — 報價流程自動化 2026-W32`）
+
+```
+mcp__google-workspace__draft_gmail_message(
+  user_google_email = "<your-google-workspace-account>",
+  to      = "<client contact email resolved live in step 1 — never a remembered address>",
+  subject = "<subject>",
+  body    = "<full contents of email.html>",
+  body_format = "html"
+)
+```
+
+cc: none by default. Confirm a `Draft ID` comes back. If a draft for the same
+ISO week already exists (step 4 saw it), update/replace it instead of stacking
+duplicates. Hard rule 1: this step never sends.
+
+### 9 · Deal note + report to Peter
+
+Append to the deal's notes — `mcp__zynkr__update_deal` preferred; SQL fallback:
+
+`mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
+
+1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
+2. build the new value: the existing notes, then a blank line, then the block below
+3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+Call it once without `confirm` to preview, then again with `confirm=true`. Never
+send `notes` without the existing text in front of it — the field is overwritten,
+not appended, and skipping the read loses every earlier backlink.
+
+Then report to Peter: the health verdict + one-line reason, what moved vs last
+week, the draft's subject + recipient, which tasks were dropped out of the %
+denominator (and whether each has a Change & Decision Log record), any `取消`
+or otherwise unmappable status left sitting in the denominator as a data error,
+and **what needs his edit before sending** (資料不足 sections, excluded dates,
+tone judgment calls). Then stop — Peter sends.
+
+---
+
+## Why it's built this way
+
+- **A fork, not a config switch.** The source's tracker-Sheet data source is
+  structural — steps 2–3 replace it wholesale with CRM + folder reads. Two
+  skills keep the trigger boundary in descriptions where the router sees it.
+- **The renderer is copied, not referenced.** Standalone installs have no
+  sibling folders, so the script and schema ship inside this skill. The JSON
+  contract is the interface; Provenance's re-sync line covers renderer drift.
+- **Draft-only is elevated, not inherited by habit.** A wrong internal verdict
+  costs a correction; a wrong client one costs trust — hence hard rule 1.
+- **Live recipient resolution.** Contacts change mid-engagement; a remembered
+  address is a mis-send waiting to happen. The CRM is the only source.
+- **Tone pass as its own step.** Deriving the truth and phrasing it for a
+  client are different jobs; fusing them lets phrasing pressure bend verdicts.
+
+## Inference defaults (Peter overrides by just saying so)
+
+- **As-of date** → today; week window = Mon→Sun containing it.
+- **Language** → zh-TW; EN when the engagement's correspondence is in EN.
+- **Recipient** → the deal's primary contact; **cc** → none.
+- **Subject** → `[週報] {{COMPANY}} — {{PROJECT}} {{YYYY-Www}}`.
+- **Health on thin evidence** → carry last week's verdict + flag to Peter; no
+  prior report AND nothing to reason from ⇒ STOP and say so (fail loud — a
+  fabricated dashboard is worse than a visible gap).
+- **weekly_diff on first run** / **stage card with zero CRM tasks** → omitted.
+
+## Provenance
+
+Forked from `project-status-update` (3.09) @ e35a1f57 (2026-08-03) — consult
+adaptation; diverges by design.
+Re-sync check: `git log --oneline e35a1f57..origin/main -- skills/3-operations/project-status-update/`
+→ review hits → port or waive with a dated line here.
+
+Two files copied from the source at the same commit:
+
+- `./scripts/render_dashboard_email.py` — header comment marks the copy; only
+  functional divergence is the client-safe footer (the source footer named its
+  internal tracker Sheet, which must never reach a client).
+- `./references/dashboard_schema.json` — identical except an added
+  `_provenance` key (JSON carries no comments).
+
+## Reference files
+
+- `./references/dashboard_schema.json` — the step-5 ↔ renderer contract. Write
+  final, reader-facing copy into every field; the script prints text verbatim.
+
+## Limitations
+
+- One engagement per run. "Weeklies for all clients" = N invocations — and the
+  internal course weekly belongs to project-status-update, not here.
+- Evidence-bound: a week with no CRM movement and no new docs yields a thin,
+  honest report with 資料不足 notes — never an invented busy one.
+- The diff baseline is the newest `[週報]` mail in Drafts/Sent; a deleted
+  unsent draft falls back to the older sent mail (or none).
+- No self-scheduling (no cron / launchd) — scheduled weeklies belong to
+  project-status-update by design.
+- Reports state, never changes it — no task-status updates, no deal-stage moves.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.
