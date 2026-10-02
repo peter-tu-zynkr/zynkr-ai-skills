@@ -462,6 +462,9 @@ describe('a rename keeps its place: renamed_from, backed by the same sheetId', (
     // The old folder is still in the stage: nothing was renamed.
     const stillThere = { dir: gone.dir, slug: 'consult-governance', name: 'consult-governance', sheetId: '9.99' };
     assert.deepEqual(held([stillThere, renamed], [gone]), ['project-governance']);
+    // The old folder's path is still in the stage, now holding another skill: it did not leave.
+    const reused = { dir: gone.dir, slug: 'other-name', name: 'other-name', sheetId: '9.99' };
+    assert.deepEqual(held([reused, renamed], [gone]), ['project-governance']);
     // The old folder moved to another category (and lost the id): the move claims it.
     const moved = { ...stillThere, dir: 'skills/3-y/consult-governance' };
     assert.deepEqual(held([moved, renamed], [gone]), ['project-governance']);
