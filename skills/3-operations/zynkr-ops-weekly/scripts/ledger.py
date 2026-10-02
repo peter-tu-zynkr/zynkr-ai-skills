@@ -13,8 +13,9 @@ those files back. The model never works out a range, a row number or a cell valu
     ledger.py snapshot check   --dir D           -> the Weeks commit call, only if all checks pass
     ledger.py snapshot confirm --dir D           -> the receipt's delivered= value
     ledger.py block start --tab T --week W --rows R.json [--config PATH]
-    ledger.py block plan|check|confirm --dir D   -> one beat's rows into its weekly block of tab T,
-                                                    committed by that beat's cell in the Weeks row
+    ledger.py block plan|check|confirm --dir D   -> one beat's rows into its weekly block of tab T
+                                                    (Reports, Decisions, Proposals, Updates),
+                                                    committed by that beat's cells in the Weeks row
     ledger.py rows reports --reports reports.json --routing routing.json --week W
                                                  -> rollup's parsed posts as Reports rows
     ledger.py rows decisions --input decisions.json --week W --meeting YYYY-MM-DD --source URL
@@ -63,12 +64,22 @@ DECISIONS_HEADER = ["week", "會議日期", "類型", "內容", "負責人", "�
 # Phase 2 widens Weeks: each beat that writes a weekly block owns a status cell and a time cell
 # in the week's row. Empty = never recorded; "ok" over an empty block = recorded, and none.
 WEEKS_BEAT_HEADER = ["reports", "reports_at", "decisions", "decisions_at"]           # K–N
-TABS = [("Weeks", WEEKS_HEADER + WEEKS_BEAT_HEADER), ("Updates", UPDATES_HEADER),
-        ("Snapshot", SNAPSHOT_HEADER), ("Reports", REPORTS_HEADER), ("Decisions", DECISIONS_HEADER)]
-COLS = {"Weeks": "N", "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "H"}
+# Phase 3: what `propose` suggests, and what the owner's reply and `apply` made of each row.
+# 決定 is the reply (核准 / 退回 / 未回覆); 結果 is the row's fate (would-apply in shadow mode,
+# applied, skipped:<why>, 退回, 未回覆).
+PROPOSALS_HEADER = ["week", "proposed_at", "n", "#", "項目", "欄位", "現值", "建議值", "原因", "證據",
+                    "來源", "信心", "決定", "決定_at", "結果"]                                 # A–O
+WEEKS_P3_HEADER = ["proposals", "proposals_at", "applied", "applied_at"]              # O–R
+WEEKS_FULL = WEEKS_HEADER + WEEKS_BEAT_HEADER + WEEKS_P3_HEADER                       # A–R
+TABS = [("Weeks", WEEKS_FULL), ("Updates", UPDATES_HEADER),
+        ("Snapshot", SNAPSHOT_HEADER), ("Reports", REPORTS_HEADER), ("Decisions", DECISIONS_HEADER),
+        ("Proposals", PROPOSALS_HEADER)]
+COLS = {"Weeks": "R", "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "H", "Proposals": "O"}
 # tab -> (rows per week, header, its Weeks status column, its Weeks time column)
 BLOCKS = {"Reports": (20, REPORTS_HEADER, "K", "L"),
-          "Decisions": (20, DECISIONS_HEADER, "M", "N")}
+          "Decisions": (20, DECISIONS_HEADER, "M", "N"),
+          "Proposals": (40, PROPOSALS_HEADER, "O", "P"),
+          "Updates": (40, UPDATES_HEADER, "Q", "R")}
 
 CATEGORY_RE = re.compile(r"^\d+\.0$")
 WEEK_RE = re.compile(r"^(\d{4})-W(\d{2})$")
@@ -534,8 +545,8 @@ def blk_start(tab, week, rows_path, config=None, now=None, base=None):
     r = weeks_row(k)
     calls = [info_call(run, cfg["ledger"], "li"),
              read_call(run, cfg["ledger"], "%s!A1:%s1" % (tab, COLS[tab]), "bh"),
-             read_call(run, cfg["ledger"], "Weeks!A1:N1", "wh"),
-             read_call(run, cfg["ledger"], "Weeks!A%d:N%d" % (r, r), "wr")]
+             read_call(run, cfg["ledger"], "Weeks!A1:R1", "wh"),
+             read_call(run, cfg["ledger"], "Weeks!A%d:R%d" % (r, r), "wr")]
     return {"dir": d, "week": week, "tab": tab, "rows": len(rows), "calls": calls}
 
 
@@ -551,12 +562,14 @@ def blk_plan(d):
     bh = parse_values(load_result(os.path.join(d, "bh.txt")), run["ledger"], "%s!A1:%s1" % (tab, COLS[tab]))
     if not bh or pad(bh[0], len(header)) != header:
         raise Refuse(4, "%s header changed" % tab)
-    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:N1")
-    if not wh or pad(wh[0], 14) != WEEKS_HEADER + WEEKS_BEAT_HEADER:
-        raise Refuse(4, "Weeks header is not the Phase 2 header (A–N); run the Phase 2 setup")
+    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:R1")
+    need = ord(BLOCKS[tab][3]) - 64                 # the Weeks header must reach this block's own cells
+    if not wh or pad(wh[0], need) != WEEKS_FULL[:need]:
+        raise Refuse(4, "Weeks header does not reach %s (needs A–%s); run the %s setup"
+                     % (tab, BLOCKS[tab][3], "Phase 3" if need > 14 else "Phase 2"))
     r = run["weeks_row"]
-    wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], "Weeks!A%d:N%d" % (r, r))
-    if wr and pad(wr[0], 14)[0] not in ("", run["week"]):
+    wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], "Weeks!A%d:R%d" % (r, r))
+    if wr and pad(wr[0], 18)[0] not in ("", run["week"]):
         raise Refuse(4, "Weeks row %d belongs to %s, not %s — was the epoch changed?" % (r, wr[0][0], run["week"]))
     first, last, rows, end = run["first"], run["last"], run["rows"], col_letter(len(header))
     ops = []
@@ -1100,8 +1113,8 @@ def selftest():
         def fmt_b(sid, rng, rows):
             return fmt(sid, rng, rows)
 
-        def run_block(sheet, rows_path, mangle=None):
-            st = blk_start("Reports", "2026-W41", rows_path, cfgb, "2026-10-06T09:40:00+08:00",
+        def run_block(sheet, rows_path, mangle=None, tab_name="Reports"):
+            st = blk_start(tab_name, "2026-W41", rows_path, cfgb, "2026-10-06T09:40:00+08:00",
                            base=os.path.join(tmpb, "runs"))
             d = st["dir"]
             for c in st["calls"]:
@@ -1137,17 +1150,19 @@ def selftest():
             m = re.match(r"^Weeks!([A-Z])(\d+):([A-Z])(\d+)$", a["range_name"])
             row = int(m.group(2))
             while len(sheet["Weeks"]) < row:
-                sheet["Weeks"].append([""] * 14)
-            w = pad(sheet["Weeks"][row - 1], 14)
+                sheet["Weeks"].append([""] * 18)
+            w = pad(sheet["Weeks"][row - 1], 18)
             w[ord(m.group(1)) - 65:ord(m.group(3)) - 64] = a["values"][0]
             sheet["Weeks"][row - 1] = w
             open(ck["readback"]["save"], "w", encoding="utf-8").write(
                 fmt_b("LED", ck["readback"]["args"]["range_name"], [w[ord(m.group(1)) - 65:ord(m.group(3)) - 64]]))
             return blk_confirm(d)
 
-        def fresh_b():
-            return {"__tabs__": {"Weeks": (100, 14), "Reports": (500, 9), "Decisions": (500, 8)},
-                    "Weeks": [weeks_hdr], "Reports": [REPORTS_HEADER], "Decisions": [DECISIONS_HEADER]}
+        def fresh_b(hdr=None):
+            return {"__tabs__": {"Weeks": (100, 26), "Reports": (500, 9), "Decisions": (500, 8),
+                                 "Proposals": (2100, 15), "Updates": (2100, 14)},
+                    "Weeks": [hdr or weeks_hdr], "Reports": [REPORTS_HEADER], "Decisions": [DECISIONS_HEADER],
+                    "Proposals": [PROPOSALS_HEADER], "Updates": [UPDATES_HEADER]}
 
         sb = fresh_b()
         res = run_block(sb, rows_p)
@@ -1172,6 +1187,26 @@ def selftest():
             fails.append("a block was written without the Phase 2 Weeks header")
         except Refuse as e:
             check("block refuses the old Weeks header", e.code, 4)
+        # Phase 3 blocks: Proposals (O–P) and Updates (Q–R) need the A–R header; Reports does not
+        prow = [["2026-W41", "2026-10-09T10:05:00+08:00", "1", "1.10", "item", "狀態", "未開始", "進行中",
+                 "原因", "Decisions!A22", "決議", "高", "", "", ""]]
+        prop_p = os.path.join(tmpb, "prop.json")
+        json.dump(prow, open(prop_p, "w"), ensure_ascii=False)
+        try:
+            run_block(fresh_b(), prop_p, tab_name="Proposals")
+            fails.append("a Proposals block was written without the Phase 3 Weeks header")
+        except Refuse as e:
+            check("Proposals refuses the Phase 2 Weeks header", e.code, 4)
+        sp = fresh_b(WEEKS_FULL)
+        rp = run_block(sp, prop_p, tab_name="Proposals")
+        check("Proposals block delivered", rp["delivered"], "1-rows;Proposals!A42:O42;Weeks!O3")
+        check("Proposals Weeks cells", sp["Weeks"][2][14:16], ["ok", "2026-10-06T09:45:00+08:00"])
+        check("Proposals leaves the other beats' cells alone", sp["Weeks"][2][:14], [""] * 14)
+        ru = run_block(fresh_b(WEEKS_FULL), empty_p, tab_name="Updates")
+        check("empty Updates block commits Q", ru["delivered"], "0-rows;Updates(none);Weeks!Q3")
+        check("Reports still works under the Phase 3 header", run_block(fresh_b(WEEKS_FULL), rows_p)["delivered"],
+              "2-rows;Reports!A22:I23;Weeks!K3")
+        check("Proposals block slot W41", block_slot("Proposals", 1), (42, 81))
         wrong_p = os.path.join(tmpb, "wrong.json")
         json.dump([["2026-W40"] + [""] * 8], open(wrong_p, "w"))
         refuses("block row from another week", 3, blk_start, "Reports", "2026-W41", wrong_p, cfgb,
@@ -1253,6 +1288,8 @@ def _write_cfg(tmp, tracker_id, ledger_id):
 # ── mutation check: each one-line breakage must turn the selftest red ────────
 MUTATIONS = [
     # (name, [(old, new), ...]) — every pair is applied; each old text must occur exactly once
+    ("Phase 3 blocks accept the Phase 2 header", [
+        ("need = ord(BLOCKS[tab][3]) - 64", "need = min(14, ord(BLOCKS[tab][3]) - 64)")]),
     ("truncation not detected", [
         ('raise Refuse(3, "read was truncated', 'pass  # raise Refuse(3, "read was truncated'),
         ("if len(rows) != n:", "if False:")]),

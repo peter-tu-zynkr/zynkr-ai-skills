@@ -3,7 +3,7 @@ name: zynkr-ops-weekly
 sheetId: "3.19"
 description: >-
   The weekly operations loop that keeps a Google Chat space and a weekly operations Google Doc
-  in sync. Eight scheduled modes run one beat each: `recap` (Mon 09:00 — mail last week's tracker
+  in sync. Ten scheduled modes run one beat each: `recap` (Mon 09:00 — mail last week's tracker
   changes, call-outs, decisions and blockers, read from the Weekly Ledger, never the Doc), `nudge` (Mon 09:00 — post the four-line
   template plus last week's decisions), `rollup` (Tue 09:00 — read the week's `#週報` posts,
   route each one to its department heading using the owner person-chips already in the Doc, and
@@ -14,7 +14,10 @@ description: >-
   recap mail and assert it actually went out), and `tidy` (Fri 09:00 — keep the newest
   auto block under each department, archive the stacked older copies to the 封存 tab, and carry
   still-open items forward one per line), and `snapshot` (Fri 18:00, catching up through Sun —
-  copy every Main Tracker item into the machine-owned Weekly Ledger once per ISO week). Routing is never hardcoded: it is read at
+  copy every Main Tracker item into the machine-owned Weekly Ledger once per ISO week), `propose`
+  (Fri 10:00 — suggest the week's tracker changes from the Ledger and mail the owner one numbered
+  list to approve by reply) and `apply` (Fri 18:00 through Sun — read that reply and record each
+  decision; in shadow mode nothing reaches the tracker). Routing is never hardcoded: it is read at
   run time from the Doc's own owner chips, so changing the Doc changes both the routing and the
   recap-mail recipient list. Trigger EAGERLY on "/zynkr-ops-weekly", "營運週報", "週報彙整",
   "把大廳的週報整理進 Doc", "roll up the chat updates", "誰還沒回報", "補件提醒", "週四議程",
@@ -34,7 +37,7 @@ visibility: public
 author: Peter Tu
 input: "A mode (one beat from The cadence table, or status) and an optional 'as of' date; all identifiers come from the private config at ~/.config/zynkr/ops-weekly.json."
 process: "Anchor on today → resolve the target Thursday (Monday's posts belong to the NEXT Thursday) → load config → check idempotency → read routing from the Doc's owner chips → sweep Chat by createTime → parse the four lines → write a marked block → assert delivery."
-output: "Per mode: a Chat post, a marked 〔自動彙整〕 block per department in this week's Doc section, the Wednesday agenda, a recap email, and a Friday tracker snapshot."
+output: "Per mode: a Chat post, a marked 〔自動彙整〕 block per department in this week's Doc section, the Wednesday agenda, a recap email, a Friday tracker snapshot, and a Friday approval mail."
 synergy: [zynkr-gm, project-status-update, planning-tracker-sync, ops-flow-optimization, admin-governance]
 executed_by: internal-user
 house-style: bound
@@ -79,7 +82,10 @@ rewrites prose in a doc people are actively editing is a bot nobody trusts by we
 | **Thu 22:00** | `decisions` | skill | Resolutions → space (3 lines) + Weekly Ledger + recap mail + **assert the send**; no decisions → one line, no mail |
 | Thu 23:00 | `scaffoldNextWeek` | **Apps Script** | Duplicate the newest week section, re-stamp next Thursday. Runs **after** `decisions` — see Step 4.1 |
 | **Fri 09:00** | `tidy` | skill | Keep the newest auto block per department, archive the rest to the 封存 tab, carry still-open items one per line |
+| Fri 10:00 | `propose` | skill | Suggest this week's tracker changes from the Ledger's decisions and reports; record them; mail the owner one 【待核准】 list |
+| Fri → Sun 22:00 | — | owner | Reply to that mail: 「全部核准」 · 「核准 1 3」 · 「退回 2」. `apply` confirms in the thread what it recorded |
 | Fri 18:00 (to Sun 23:00) | `snapshot` | skill | Copy every Main Tracker item into the Weekly Ledger, once per ISO week. Monday's recap compares two of these to say what changed |
+| Fri 18:00 (to Sun 23:00) | `apply` | skill | Read the owner's reply and record each decision. Shadow mode: nothing is written to the tracker yet |
 
 `chase` must run **after** `rollup` — it cannot know who is missing until the roll-up has
 resolved who posted. Both beats sit on Tuesday morning so that the Doc's Thursday section is
@@ -123,6 +129,7 @@ This repository is public. The method is here; the **identifiers are not**. At r
 | `reporters` | the emails expected to post each week (6 people; excludes non-reporting members) |
 | `sources.main_tracker` · `sources.okr_kpi_tracker` | sheets read to backfill metrics and overdue items. `main_tracker.tab` is the tab `snapshot` copies; `main_tracker.cycle` (`2026H2`) keeps one half-year's item numbers apart from the next |
 | `sources.ledger.id` · `sources.ledger.epoch_week` | the machine-owned Weekly Ledger, and the ISO week its row layout counts from. **Never change `epoch_week` after the first snapshot**: every week's rows are computed from it |
+| `routine.apply_mode` | what `apply` does with an approved change: `shadow` (record it, write nothing to the tracker) unless it says exactly `live`. `live` is refused until Phase 3b ships |
 | `routine.recap_audience` | who gets the Monday recap: `owner` (the account alone) while it is new, `team` (every reporter) once the owner has seen it work. Missing means `owner` |
 | `sources.state_rules.path` | optional; where zynkr-gm's `derive_state.py` lives. Default `~/.claude/skills/zynkr-gm/scripts/derive_state.py` |
 | `routine.*` | how the eight beats are scheduled — mechanism, model, timezone, per-beat windows. See `references/scheduling.md` |
@@ -156,7 +163,10 @@ stop resolving.
 | `references/wording.md` | **Always, before writing any zh-TW the team will read** — house voice, per `/content-translator` |
 | `references/scaffold.md` | Installing or debugging the Apps Script half |
 | `references/ledger.md` | `snapshot`, or anything that reads the Weekly Ledger — the layout, the commit order, how to read one week back |
+| `references/proposal-rules.md` | `propose` — what may be suggested, on what evidence, and what `check` refuses |
 
+`propose` reads `references/proposal-rules.md`, `ledger.md`, `wording.md` and the approval section of
+`message-templates.md`; `apply` reads `ledger.md`. Neither touches the Doc or Chat.
 `snapshot` reads only `references/ledger.md`: it touches no Doc, no Chat and no prose, so the
 "Always" rows above do not apply to it. `recap` reads `references/ledger.md`, `wording.md` and the
 recap section of `message-templates.md`, and nothing about the Doc or Chat.
@@ -176,7 +186,7 @@ Resolve today in `Asia/Taipei`. Compute:
 - **The target Thursday** — the Doc names its sections by **Thursday** date (`Aug 27`,
   `Aug 20`, …), but the team reports on **Monday**.
 
-`snapshot` needs only the ISO week key. The runner passes it as `week=`; it has no target
+`snapshot`, `propose` and `apply` need only the ISO week key. The runner passes it as `week=`; they have no target
 Thursday and no window, so the off-by-one below does not apply to it.
 
 > **Monday's posts belong to the Thursday that is coming, not the one that just passed.**
@@ -195,6 +205,9 @@ for this ISO week:
   `— zynkr-ops-weekly · <week>` footer). Found → stop and report "already ran".
 - `rollup` — look for a `〔自動彙整 <week>` stamp inside the target Thursday section. Found →
   do not write a second block; re-run in *append-new-only* mode (Step 4.4).
+- `propose` — the Ledger's `Weeks` O cell plus the recorded approval thread. `proposals.py pages`
+  answers `already`, or `resume` when the rows are recorded but the mail is not.
+- `apply` — the Ledger's `Weeks` Q cell. `proposals.py apply-decide` answers `already-applied`.
 - `snapshot` — the Ledger's `Weeks` row for the ISO week. `ledger.py snapshot pages` answers
   `already` when that row reads `ok`, and nothing is written.
 - `tidy` — idempotent by construction, so no marker is needed: once a group holds a single
@@ -564,6 +577,119 @@ save each result unchanged, and write the TL;DR. Skip Steps 2 and 3.
 **Who receives it** is `routine.recap_audience`, decided by the owner, never by this run: `owner`
 sends it to the account alone, `team` to every address in `reporters`.
 
+### 4.10 `propose` (Fri 10:00, after `tidy`)
+
+Suggests this week's changes to the Main Tracker and mails them to the owner for sign-off
+(`SKB-044` Phase 3). It reads the tracker and this week's `Decisions` and `Reports` blocks in the
+Ledger — never the Doc — and writes **only the Ledger** and **one mail to the owner**. It never
+writes the tracker: that is `apply`'s job, after the owner has said yes. Skip Steps 2 and 3. Read
+`references/proposal-rules.md` before writing a single proposal.
+
+`scripts/proposals.py` works out every range and checks every proposal; make its printed calls
+exactly and save each result unchanged, as in 4.7.
+
+1. **The week.** Use the `week=` argument the runner passes. If a `config=<path>` argument is
+   present, add `--config <path>` to `start`.
+2. `python3 scripts/proposals.py start --week <W>` → make the six printed calls, save each result,
+   keep the `dir`.
+3. `python3 scripts/proposals.py pages --dir <dir>`.
+   - `"already": true` → this week's proposals are recorded and mailed. Receipt `status=ok` with the
+     `delivered` it prints.
+   - `"resume": true` → the proposals are recorded but the mail never went out. Skip to step 7
+     with the `mail` and `sent_search` it printed: never propose a second time.
+   - Otherwise make the printed tracker reads and save each one.
+4. `python3 scripts/proposals.py context --dir <dir>` → the items and this week's evidence rows,
+   each with its Ledger cell (`Decisions!A42`), also saved as `context.json`.
+5. **Propose.** Following `references/proposal-rules.md`, write a JSON list to `proposals.json` in
+   the run folder, one object per suggested change: `{"#", "欄位", "建議值", "原因", "證據", "信心"}`.
+   `證據` lists the `ref`s the change rests on. Nothing to suggest is a fine answer: save `[]`.
+6. `python3 scripts/proposals.py check --dir <dir> --input <dir>/proposals.json`. A refusal names
+   the proposal and the rule: fix that proposal or drop it, and run `check` again. Exit 5 means
+   the mail would be too long to read back (the thread `apply` reads quotes it whole): drop the
+   weakest proposals. It writes `rows.json` (`rows_path`), and when there are rows, the mail.
+   Then record the rows: `python3 scripts/ledger.py block start --tab Proposals --week <W> --rows
+   <rows_path>`, `block plan`, `block check`, `block confirm`, making every printed call exactly,
+   as in `rollup` step 6. Pass the file `check` wrote; never retype rows. **The Ledger record
+   comes before the mail, always.** No rows → receipt `status=ok`, `delivered=no-proposals` once
+   `confirm` passes; nothing is mailed.
+7. **Mail it, once.** Make the `sent_search` call and save the result, then run
+   `python3 scripts/proposals.py sent --dir <dir>`:
+   - `{"found": false}` → `send_gmail_message` to exactly `mail.to`, with exactly `mail.subject`, the
+     contents of `mail.body_path` as the body, `body_format="html"` and `include_signature=false`.
+     Then make the same `sent_search` call again (same save path) and run `sent` again. If the send
+     call itself returned an error, run `python3 scripts/proposals.py sent --dir <dir>
+     --send-failed` instead (nothing went out, so the next attempt may send) and receipt
+     `status=failed`, `delivered=send-failed` with the error.
+   - `{"calls": [...]}` → make the call (it fetches the thread), save it, run `sent` again. It
+     checks the subject and that the mail in Sent is, word for word, the mail `check` wrote.
+   - `{"found": true}` → receipt `status=ok` with its `delivered`.
+   - Exit 6 → the mail is not in Sent yet, an earlier attempt sent it within the hour, or it went
+     out different from the mail `check` wrote. Never send again in this run: receipt
+     `status=failed`, `delivered=send-not-verified` with the reason. A later attempt resumes at
+     step 3 and finds it.
+   - Exit 3 → the search or thread result is not what `sent` expects, or two approval mails are in
+     Sent; receipt `status=failed` with the reason.
+
+**Rules for this mode.** Every change goes through `check`. Never write the Main Tracker, never
+send the mail to anyone but `mail.to`, never send it before `block confirm` has passed, and never
+send it twice: only `sent` says when to send. **Any refusal from `proposals.py` is a
+`status=failed` receipt with its reason**, and you write nothing to fix it: never a Ledger block of
+your own, never a file in the state folder (`approval.json` and its neighbours are the script's,
+and a refusal that names one is addressed to the owner).
+
+### 4.11 `apply` (Fri 18:00 → Sun 23:00, after `snapshot`)
+
+Reads the owner's reply to this week's 【待核准】 mail and records each decision. **Phase 3a runs in
+shadow mode** (`routine.apply_mode` is `shadow` unless it says exactly `live`): it writes the
+decisions into the Ledger and writes nothing to the Main Tracker. The live write is Phase 3b;
+until it ships, `apply-start` and `apply-decide` refuse `live`. Skip Steps 2 and 3. It needs no
+stamp from `propose`: it reads this week's `Weeks` row itself.
+
+1. **The week**, as in 4.10.
+2. `python3 scripts/proposals.py apply-start --week <W>` → make the printed calls exactly (the
+   thread fetch carries `include_analysis`, which is how drafts are seen), save each result, keep
+   the `dir`. When it printed a Gmail search instead of a thread fetch (no thread was recorded),
+   run `python3 scripts/proposals.py apply-thread --dir <dir>` and make the fetch it prints;
+   `"found": false` → go on to step 3, which reports the missing mail.
+3. `python3 scripts/proposals.py apply-decide --dir <dir>`, then by its `status`:
+   Every `write` below is the same block write: `python3 scripts/ledger.py block start --tab <tab>
+   --week <W> --rows <rows_path>`, then `block plan`, `block check` and `block confirm`, making
+   every printed call exactly. Pass the file `apply-decide` wrote; never retype rows.
+   - `waiting` → no decision yet: `no-reply-yet`, `draft-open` (a reply draft is open in the
+     thread), `asked-to-restate`, or `reply-unreadable`. A `send` call comes with
+     `reply-unreadable` (asking the owner to restate) and with `draft-open;noted` (telling the owner
+     a draft is holding things up): make it exactly once, and when it went through, run
+     `python3 scripts/proposals.py apply-sent --dir <dir>` so the next look does not send it again.
+     Receipt `status=waiting` with its `delivered`, adding `;sent` when the send went through. The
+     runner looks again in two hours, and from Sunday 21:00 on every tick.
+   - `failed` → `approval-mail-not-found`, `approval-mail-differs;…` (the mail in the thread is not
+     the mail that was sent), `proposals-changed;…` (the Proposals block was edited after the
+     mail) or `confirmation-disagrees-with-the-Proposals-block`: receipt `status=failed` with its
+     `delivered`. Send nothing, write nothing.
+   - `ok` → nothing left to decide. With a `write` (the empty `Updates` block of a week with no
+     proposals, or of a week whose confirmation went out before its `Updates` write landed), write
+     it first. Receipt `status=ok` with its `delivered`.
+   - `recheck` → a decision to record: write its one `write` (the `Proposals` block), then make the
+     `then` calls (that block and the thread, read again), save each result, and run
+     `apply-decide` again. It answers `confirm`, or `recheck` once more when the owner replied
+     while you were writing.
+   - `confirm` → make its `send` call exactly once: the confirmation, in the thread, listing what
+     was recorded. That message is what makes the week's decision final. When it went through,
+     write its `write` (the `Updates` block, which marks the week applied in `Weeks`), then receipt
+     `status=ok`, its `delivered` plus `;confirmed`. If the send fails, write nothing more and
+     receipt `status=partial` with the reason: the week stays unapplied and the next look decides
+     and confirms again.
+   - Any refusal (a non-zero exit) → receipt `status=failed` with its reason. Write nothing to fix
+     it: never a Ledger block of your own, never a file in the state folder.
+
+**Rules for this mode.** The owner's newest reply that says anything beyond thanks decides, until
+the confirmation is in the thread; after it, replies change nothing. `Weeks` Q (applied) is written
+only after the confirmation, so a decision in the `Proposals` block without it is provisional and
+nothing reads it as applied. A row the reply does not name stays 未回覆 and is not applied. A reply
+that is unreadable, asks a question, or approves anything while saying more than thanks decides
+nothing and gets one restate request. Never write the Main Tracker in shadow mode, and never send
+anything except the `send` call `apply-decide` printed.
+
 ## Step 5 — Report, and receipt the run
 
 Every run ends with a compact report: mode, ISO week, target Thursday, records parsed, who is
@@ -601,7 +727,19 @@ ZYNKR-OPS-WEEKLY-RESULT: mode=recap week=2026-W42 status=ok delivered=already-se
 ZYNKR-OPS-WEEKLY-RESULT: mode=recap week=2026-W42 status=ok delivered=notice-sent
 ```
 
-For `snapshot` and `recap` the runner also checks that the receipt names the week it passed, so a backfill of
+`apply` alone may receipt `status=waiting` (no decision yet): it stamps nothing, clears the attempt
+count, and the runner looks again two hours later.
+
+```
+ZYNKR-OPS-WEEKLY-RESULT: mode=propose week=2026-W42 status=ok delivered=approval-mail;5-rows;thread-1a2b3c
+ZYNKR-OPS-WEEKLY-RESULT: mode=propose week=2026-W42 status=ok delivered=no-proposals
+ZYNKR-OPS-WEEKLY-RESULT: mode=apply week=2026-W42 status=waiting delivered=no-reply-yet
+ZYNKR-OPS-WEEKLY-RESULT: mode=apply week=2026-W42 status=waiting delivered=reply-unreadable;sent
+ZYNKR-OPS-WEEKLY-RESULT: mode=apply week=2026-W42 status=ok delivered=shadow;4-approved;1-rejected;0-pending;confirmed
+ZYNKR-OPS-WEEKLY-RESULT: mode=apply week=2026-W42 status=partial delivered=shadow;4-approved;1-rejected;0-pending;confirm-send-failed
+```
+
+For `snapshot`, `recap`, `propose` and `apply` the runner also checks that the receipt names the week it passed, so a backfill of
 another week can never mark this one done.
 
 This line is not decoration and it is not for humans. `run_ops_weekly.sh` parses it and stamps
@@ -624,10 +762,17 @@ silent Monday and a half-failed Wednesday in W36 before this line existed.
   Docs REST API — only copied. Rebuilding loses the routing table. Copy, or do nothing.
 - **Never write to a past section.** If the target Thursday is behind today, stop and report.
 - **Never invent a metric.** Cite the cell, or leave the slot empty.
-- **Never treat mail as an input.** Every mode reads state from the Doc and the tracker.
+- **Never treat mail as an input** — with one designed exception: `apply` reads the owner's reply
+  to this week's 【待核准】 mail, in the recorded thread, through `proposals.py`, and answers only in
+  that thread (one restate request, one confirmation). Everything else reads state from the Doc,
+  the tracker and the Ledger.
 - **Fail loud on config.** Placeholder id → stop; a wrong id writes into someone else's file.
-- **Never write the Main Tracker.** No mode writes it today. `snapshot` reads it and writes only
-  the Ledger, through the calls `ledger.py` prints.
+- **Never write the Main Tracker.** No mode writes it in Phase 3a. `snapshot` and `propose` read it
+  and write only the Ledger, through the calls the scripts print; `apply` in shadow mode records the
+  owner's decisions in the Ledger only. The live write (Phase 3b) waits for the hook that blocks
+  every other beat from the tracker, and for the owner's yes.
+- **Nothing is proposed without evidence, and nothing is applied without a reply.** Every proposal
+  passes `proposals.py check`; a row the owner's reply does not name stays 未回覆.
 - **The recap writes nothing and mails once.** It reads the Ledger, sends one mail to the
   audience the config names, and never adds a recipient or writes a cell.
 - **A week is snapshotted only when its `Weeks` row reads `ok`.** Rows in `Snapshot` without that

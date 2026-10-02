@@ -129,10 +129,10 @@ def r_start(runner_week, config=None, now=None, base=None):
         n += 1
     d = d + ("" if n == 1 else "-%d" % n)
     os.makedirs(d)
-    rng = "Weeks!A%d:N%d" % (1 + k, 2 + k) if k >= 1 else "Weeks!A2:N2"
+    rng = "Weeks!A%d:R%d" % (1 + k, 2 + k) if k >= 1 else "Weeks!A2:R2"
     run = dict(cfg, dir=d, runner_week=runner_week, week=target, k=k, weeks_range=rng)
     save_run(run)
-    calls = [read_call(run, cfg["ledger"], "Weeks!A1:N1", "wh"), read_call(run, cfg["ledger"], rng, "wr")]
+    calls = [read_call(run, cfg["ledger"], "Weeks!A1:R1", "wh"), read_call(run, cfg["ledger"], rng, "wr")]
     return {"dir": d, "week": target, "label": wb_label(target), "calls": calls}
 
 
@@ -148,16 +148,17 @@ def snapshot_ok(row, week, cycle):
 
 def r_blocks(d):
     run = load_run(d)
-    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:N1")
-    if not wh or pad(wh[0], 14) != ledger.WEEKS_HEADER + ledger.WEEKS_BEAT_HEADER:
+    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:R1")
+    if not wh or pad(wh[0], 14) != ledger.WEEKS_FULL[:14]:
         raise Refuse(4, "Weeks header is not the Phase 2 header (A–N)")
+    phase3 = pad(wh[0], 18) == ledger.WEEKS_FULL
     wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], run["weeks_range"])
     k = run["k"]
     if k >= 1:
-        prev_row = pad(wr[0], 14) if len(wr) > 0 else [""] * 14
-        row = pad(wr[1], 14) if len(wr) > 1 else [""] * 14
+        prev_row = pad(wr[0], 18) if len(wr) > 0 else [""] * 18
+        row = pad(wr[1], 18) if len(wr) > 1 else [""] * 18
     else:
-        prev_row, row = None, pad(wr[0], 14) if wr else [""] * 14
+        prev_row, row = None, pad(wr[0], 18) if wr else [""] * 18
     if not snapshot_ok(row, run["week"], run["cycle"]):
         run.update(notice=True, reason="no committed snapshot for %s" % run["week"])
         save_run(run)
@@ -180,16 +181,18 @@ def r_blocks(d):
         pages["p"] = block_pages("p", prev_row)
     for name, rng in pages["s"] + pages.get("p", []):
         calls.append(read_call(run, run["ledger"], rng, name))
-    for tab, col, cell in (("Reports", "I", 10), ("Decisions", "H", 12)):
-        if row[cell] == "ok":
+    for tab, col, cell in (("Reports", "I", 10), ("Decisions", "H", 12), ("Proposals", "O", 14)):
+        if row[cell] == "ok" and (phase3 or cell < 14):
             first, last = ledger.block_slot(tab, k)
             rng = "%s!A%d:%s%d" % (tab, first, col, last)
             pages[tab] = rng
             calls.append(read_call(run, run["ledger"], rng, tab.lower()))
-    run.update(notice=False, row=row, prev_row=prev_row if prev_ok else None, pages=pages)
+    run.update(notice=False, row=row, prev_row=prev_row if prev_ok else None, pages=pages,
+               applied=phase3 and row[16] == "ok")
     save_run(run)
     return {"notice": False, "week": run["week"], "calls": calls,
-            "first_snapshot": not prev_ok, "reports": row[10] == "ok", "decisions": row[12] == "ok"}
+            "first_snapshot": not prev_ok, "reports": row[10] == "ok", "decisions": row[12] == "ok",
+            "proposals": "Proposals" in pages}
 
 
 def read_block(run, key, wrow):
@@ -262,6 +265,13 @@ def r_build(d, today):
                                             "部門": r[3], "卡關": r[7]})
         reports["posted"] = sorted(posters)
         reports["missing"] = [run["names"].get(e) or e.split("@")[0] for e in run["reporters"] if e not in posters]
+    proposals = {"recorded": "Proposals" in run["pages"], "applied_ran": bool(run.get("applied")), "rows": []}
+    if proposals["recorded"]:
+        prows = parse_values(load_result(os.path.join(d, "proposals.txt")), run["ledger"], run["pages"]["Proposals"])
+        for r in (pad(x, 15) for x in prows):
+            if r[0] == run["week"]:
+                proposals["rows"].append({"n": r[2], "#": r[3], "項目": r[4], "欄位": r[5], "現值": r[6],
+                                          "建議值": r[7], "決定": r[12], "結果": r[14]})
     changes = []
     if diff:
         changes = [c for c in diff["changed"] if not c["cosmetic"]]
@@ -272,7 +282,7 @@ def r_build(d, today):
              "undated": [x for x in flagged("UNDATED") if by_id[x["#"]]["priority"] in ("P0", "P1")],
              "propose_done": flagged("PROPOSE_DONE"), "paused": flagged("PAUSED"),
              "unknown_status": flagged("UNKNOWN_STATUS"),
-             "decisions": decisions, "reports": reports,
+             "decisions": decisions, "reports": reports, "proposals": proposals,
              "links": {"tracker": run["tracker_url"], "doc": run["doc_url"], "ledger": run["ledger_url"]}}
     json.dump(facts, open(os.path.join(d, "facts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     run.update(built=True)
@@ -282,7 +292,8 @@ def r_build(d, today):
             "overdue": [x["#"] for x in facts["overdue"]], "ends_soon": [x["#"] for x in facts["ends_soon"]],
             "undated": [x["#"] for x in facts["undated"]], "propose_done": [x["#"] for x in facts["propose_done"]],
             "decided": len(decisions["decided"]), "open_decisions": len(decisions["open"]),
-            "blockers": len(reports["blockers"]), "facts": os.path.join(d, "facts.json"),
+            "blockers": len(reports["blockers"]), "proposals": len(proposals["rows"]) if proposals["recorded"] else None,
+            "facts": os.path.join(d, "facts.json"),
             "tldr": "write at most 3 lines to tldr.json (a JSON list); each must cite an item # from facts.items"}
 
 
@@ -355,6 +366,24 @@ def render_html(facts, tldr):
                                               for x in dec["decided"]))
         if dec["open"]:
             o.append("<p>還沒定案</p><ul>%s</ul>" % "".join(li(esc(x["內容"])) for x in dec["open"]))
+    pr = facts.get("proposals") or {}
+    if pr.get("recorded"):
+        o.append("<h3>上週的變更提案</h3>")
+        prs = pr["rows"]
+
+        def pline(x):
+            return li("#%s %s — %s：%s → %s" % (esc(x["#"]), esc(x["項目"]), esc(FIELD.get(x["欄位"], x["欄位"])),
+                                              esc(x["現值"] or "（空白）"), esc(x["建議值"])))
+        if not prs:
+            o.append("<p>上週沒有變更提案</p>")
+        elif not pr["applied_ran"]:
+            o.append("<p>提案記下了，但週末沒有記到核准結果（可能沒有回覆，或套用那一步沒有跑完），%d 件都沒有套用</p>" % len(prs))
+        else:
+            for key, title in (("would-apply", "試行中：核准了，但試行期間不寫進總表。如果套用，會改這些"),
+                               ("applied", "已套用到總表"), ("退回", "退回"), ("未回覆", "回覆裡沒寫到，這次不套用")):
+                xs = [x for x in prs if x["結果"] == key]
+                if xs:
+                    o.append("<p><b>%s（%d 件）</b></p><ul>%s</ul>" % (title, len(xs), "".join(pline(x) for x in xs)))
     o.append("<h3>卡關</h3>")
     rep = facts["reports"]
     if not rep["recorded"]:
@@ -527,7 +556,7 @@ def selftest():
                     got.pop()
                 open(c["save"], "w", encoding="utf-8").write(fmt(rng, got))
 
-        def ledger_sheet(weeks_rows, w40rows, w41rows, rep=None, dec=None):
+        def ledger_sheet(weeks_rows, w40rows, w41rows, rep=None, dec=None, props=None, header=None):
             snap = [ledger.SNAPSHOT_HEADER] + [[""] * 16] * 200
             for i, r in enumerate(w40rows):
                 snap[1 + i] = r
@@ -539,8 +568,11 @@ def selftest():
             decisions = [ledger.DECISIONS_HEADER] + [[""] * 8] * 40
             for i, r in enumerate(dec or []):
                 decisions[21 + i] = r
-            return {"Weeks": [ledger.WEEKS_HEADER + ledger.WEEKS_BEAT_HEADER] + weeks_rows,
-                    "Snapshot": snap, "Reports": reports, "Decisions": decisions}
+            proposals = [ledger.PROPOSALS_HEADER] + [[""] * 15] * 90
+            for i, r in enumerate(props or []):
+                proposals[41 + i] = r
+            return {"Weeks": [header or (ledger.WEEKS_HEADER + ledger.WEEKS_BEAT_HEADER)] + weeks_rows,
+                    "Snapshot": snap, "Reports": reports, "Decisions": decisions, "Proposals": proposals}
 
         rep = [["2026-W41", "2026-10-05T01:00:00Z", "a@example.com", "#Sales", "做完 A", "做 B", "", "等報價", "tagged"]]
         dec = [["2026-W41", "2026-10-08", "決議", "1.02 改月底交", "Ann", "2026-10-30", "1.02", "x"],
@@ -615,6 +647,39 @@ def selftest():
         n4 = r_notice(st4["dir"])
         check("notice goes to the owner only", n4["to"], "owner@example.com")
 
+        # Phase 3: last week's proposals, decided in shadow mode
+        def prow(n, num, field, cur, new, decision, result):
+            return ["2026-W41", "2026-10-09T10:20:00+08:00", n, num, "item " + num, field, cur, new, "r", "Decisions!A22",
+                    "會議", "高", decision, "2026-10-10T09:00:00+08:00" if decision != "未回覆" else "", result]
+
+        props = [prow("1", "1.02", "狀態", "進行中", "完成", "核准", "would-apply"),
+                 prow("2", "1.10", "結束", "2026-09-30", "2026-10-31", "退回", "退回"),
+                 prow("3", "1.01", "狀態", "進行中", "暫停", "未回覆", "未回覆")]
+        w41p = wrow("2026-W41", w41, "ok", "ok") + ["ok", "2026-10-09T10:21:00+08:00", "ok", "2026-10-10T09:05:00+08:00"]
+        sheet6 = ledger_sheet([wrow("2026-W40", w40), w41p], w40, w41, rep, dec, props, ledger.WEEKS_FULL)
+        st6 = r_start("2026-W42", cfgp, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
+        serve(st6["calls"], sheet6)
+        b6 = r_blocks(st6["dir"])
+        check("recap reads the proposals", b6["proposals"], True)
+        serve(b6["calls"], sheet6)
+        check("recap counts the proposals", r_build(st6["dir"], "2026-10-12")["proposals"], 3)
+        body6 = open(r_render(st6["dir"], None)["body_path"], encoding="utf-8").read()
+        check("recap lists what would have been applied", "如果套用，會改這些（1 件）" in body6, True)
+        check("recap shows the would-apply row", "#1.02 item 1.02 — 狀態：進行中 → 完成" in body6, True)
+        check("recap lists the rejected row", "退回（1 件）" in body6, True)
+        check("recap lists the unmentioned row", "回覆裡沒寫到，這次不套用（1 件）" in body6, True)
+        w41q = list(w41p)
+        w41q[16:18] = ["", ""]
+        sheet7 = ledger_sheet([wrow("2026-W40", w40), w41q], w40, w41, rep, dec, props, ledger.WEEKS_FULL)
+        st7 = r_start("2026-W42", cfgp, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
+        serve(st7["calls"], sheet7)
+        serve(r_blocks(st7["dir"])["calls"], sheet7)
+        r_build(st7["dir"], "2026-10-12")
+        body7 = open(r_render(st7["dir"], None)["body_path"], encoding="utf-8").read()
+        check("no apply record: says nothing was applied, and does not guess why",
+              "沒有記到核准結果（可能沒有回覆，或套用那一步沒有跑完），3 件都沒有套用" in body7, True)
+        check("Phase 2 Ledger: no proposals section", "上週的變更提案" in body, False)
+
         # a block that does not match its Weeks digest is refused
         bad = [list(r) for r in w41]
         bad[0][14] = "完成"
@@ -650,6 +715,8 @@ MUTATIONS = [
     ("recap defaults to the team", [('audience = raw.get("routine", {}).get("recap_audience") or "owner"',
                                       'audience = raw.get("routine", {}).get("recap_audience") or "team"')]),
     ("machine evidence in the mail", [('esc(x["why"])))', 'esc("；".join(x["evidence"]))))')]),
+    ("proposals section dropped", [('if row[cell] == "ok" and (phase3 or cell < 14):', 'if row[cell] == "ok" and cell < 14:')]),
+    ("no apply run shown as decided", [('elif not pr["applied_ran"]:', 'elif False:')]),
     ("notice mailed to the team", [('return {"subject": subject, "to": run["account"],', 'return {"subject": subject, "to": ",".join(run["reporters"]),')]),
 ]
 

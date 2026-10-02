@@ -24,9 +24,10 @@
 #   stamped done. Both were recorded as successes. The beat therefore has to say, in a line this
 #   script can parse, what it actually delivered; see SKILL.md Step 5.
 #
-# Usage: run_ops_weekly.sh [--dry-run] [--mode=recap|nudge|rollup|chase|agenda|decisions|tidy|snapshot|status]
+# Usage: run_ops_weekly.sh [--dry-run] [--mode=recap|nudge|rollup|chase|agenda|decisions|tidy|propose|snapshot|apply|status]
 #
-# Rehearsal overrides: ZYNKR_OPS_WEEKLY_CONFIG, ZYNKR_OPS_WEEKLY_STATE, ZYNKR_OPS_WEEKLY_LOG. Never force a
+# Rehearsal overrides: ZYNKR_OPS_WEEKLY_CONFIG, ZYNKR_OPS_WEEKLY_STATE, ZYNKR_OPS_WEEKLY_LOG, and
+# ZYNKR_OPS_WEEKLY_NOW (an ISO time the beat selector uses instead of the clock). Never force a
 # beat against the real state folder before that week's unforced run: an ok receipt stamps the week.
 set -uo pipefail
 export PATH="/Users/petertu/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -52,10 +53,11 @@ log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >> "$LOG"; }
 [ -f "$CFG" ] || { log "FATAL config missing: $CFG"; exit 1; }
 
 # ── Which beat, if any, is due right now in Taipei? ──────────────────────────
-SEL="$(python3 - "$FORCE" "$STATE_DIR" <<'PY'
+SEL="$(python3 - "$FORCE" "$STATE_DIR" "${ZYNKR_OPS_WEEKLY_NOW:-}" <<'PY'
 import sys, os, datetime, zoneinfo
-force, state = sys.argv[1], sys.argv[2]
-now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Taipei"))
+force, state, fixed = sys.argv[1], sys.argv[2], sys.argv[3]
+tz = zoneinfo.ZoneInfo("Asia/Taipei")
+now = datetime.datetime.fromisoformat(fixed).astimezone(tz) if fixed else datetime.datetime.now(tz)
 y, w, dow = now.isocalendar()
 week = f"{y}-W{w:02d}"
 done    = lambda m: os.path.exists(os.path.join(state, f"{week}.{m}.done"))
@@ -65,6 +67,15 @@ gaveup  = lambda m: os.path.exists(os.path.join(state, f"{week}.{m}.gaveup"))
 # the back of a `rollup` that gave up, or it will name people whose posts were never
 # parsed at all.
 settled = lambda m: done(m) or gaveup(m)
+# `apply` waits for the owner to answer the approval mail. A waiting receipt stamps nothing, so
+# without this the beat would start Claude every 30 minutes all weekend; it looks again 2 hours after
+# the stamp was last written (its mtime). The mail promises that a reply before Sunday 22:00 counts,
+# so from Sunday 21:00 every tick looks: the last looks are 22:05 and 22:35, before 23:00.
+def waiting(m):
+    p = os.path.join(state, f"{week}.{m}.waiting")
+    if not os.path.exists(p) or (dow == 7 and now.strftime("%H:%M") >= "21:00"):
+        return False
+    return now.timestamp() - os.path.getmtime(p) < 7200
 if force:
     print(f"{force}|{week}|forced (--mode)"); raise SystemExit
 hm = now.strftime("%H:%M")
@@ -87,11 +98,21 @@ BEATS = [("recap",     1, "09:00", "20:00", None),
          # Saturday and Sunday catch up a closed lid on Friday evening. Sunday stops at 23:00 so
          # no run is still going when the ISO week (and with it the rows the Ledger uses) changes
          # at Monday 00:00 Taipei. NO APOSTROPHES in this heredoc: bash 3.2 then fails to parse.
+         # `propose` (SKB-044 Phase 3) mails the owner the suggested tracker changes for the week. It
+         # comes after tidy, reads the Ledger and the tracker, and writes only the Ledger.
+         ("propose",   5, "10:00", "17:30", None),
          ("snapshot",  5, "18:00", "23:59", None),
          ("snapshot",  6, "00:00", "23:59", None),
-         ("snapshot",  7, "00:00", "23:00", None)]
+         ("snapshot",  7, "00:00", "23:00", None),
+         # `apply` records the owner reply to that mail. Listed after snapshot so the week is captured
+         # first. No prerequisite: it reads the Ledger for this week (Weeks column O) itself, so a
+         # propose that recorded and mailed but then gave up still has its answer read. In shadow
+         # mode it writes nothing to the tracker.
+         ("apply",     5, "18:00", "23:59", None),
+         ("apply",     6, "00:00", "23:59", None),
+         ("apply",     7, "00:00", "23:00", None)]
 for mode, d, s, e, req in BEATS:
-    if dow != d or not (s <= hm <= e) or settled(mode):
+    if dow != d or not (s <= hm <= e) or settled(mode) or waiting(mode):
         continue
     if req and not done(req):
         print(f"|{week}|{mode} held: {req} has not run this week"); raise SystemExit
@@ -125,6 +146,11 @@ DECISIONS_DENY="Edit,NotebookEdit,Agent,$DENY_OTHERS"
 # `recap` reads the Ledger and sends one mail. It writes nothing, so even the Sheets write is denied.
 RECAP_TOOLS="Read,Write,Bash(python3:*),mcp__google-workspace__read_sheet_values,mcp__google-workspace__get_spreadsheet_info,mcp__google-workspace__send_gmail_message,mcp__google-workspace__search_gmail_messages,mcp__google-workspace__get_gmail_message_content"
 RECAP_DENY="Edit,NotebookEdit,Agent,$CHAT_WRITE,$DOC_WRITE,mcp__google-workspace__modify_sheet_values,$DENY_OTHERS"
+# `propose` and `apply` (SKB-044 Phase 3) read the tracker and the Ledger, write only Ledger blocks the
+# scripts plan, and mail only the owner: the approval mail, and in apply one restate request when a
+# reply cannot be read. Neither may post to Chat or touch the Doc.
+P3_TOOLS="Read,Write,Bash(python3:*),mcp__google-workspace__read_sheet_values,mcp__google-workspace__get_spreadsheet_info,mcp__google-workspace__modify_sheet_values,mcp__google-workspace__send_gmail_message,mcp__google-workspace__search_gmail_messages,mcp__google-workspace__get_gmail_thread_content"
+P3_DENY="Edit,NotebookEdit,Agent,$CHAT_WRITE,$DOC_WRITE,$DENY_OTHERS"
 
 LIMIT=0; DENY=""; PROMPT="/zynkr-ops-weekly $MODE"
 
@@ -152,6 +178,12 @@ case "$MODE" in
                [ -n "${ZYNKR_OPS_WEEKLY_CONFIG:-}" ] && PROMPT="$PROMPT config=$CFG" ;;
   recap)       TOOLS="$RECAP_TOOLS"; DENY="$RECAP_DENY"; LIMIT=1800
                PROMPT="/zynkr-ops-weekly recap week=$WEEK"
+               [ -n "${ZYNKR_OPS_WEEKLY_CONFIG:-}" ] && PROMPT="$PROMPT config=$CFG" ;;
+  propose)     TOOLS="$P3_TOOLS"; DENY="$P3_DENY"; LIMIT=1800
+               PROMPT="/zynkr-ops-weekly propose week=$WEEK"
+               [ -n "${ZYNKR_OPS_WEEKLY_CONFIG:-}" ] && PROMPT="$PROMPT config=$CFG" ;;
+  apply)       TOOLS="$P3_TOOLS"; DENY="$P3_DENY"; LIMIT=1200
+               PROMPT="/zynkr-ops-weekly apply week=$WEEK"
                [ -n "${ZYNKR_OPS_WEEKLY_CONFIG:-}" ] && PROMPT="$PROMPT config=$CFG" ;;
   status)      TOOLS="$READ_CORE" ;;
   *) log "FATAL unknown mode: $MODE"; exit 2 ;;
@@ -220,21 +252,38 @@ rm -f "$OUT"
 
 case "$RECEIPT" in
   *status=ok*) VERDICT="ok" ;;
+  *status=waiting*) VERDICT="waiting" ;;
   "")          VERDICT="no-receipt (claude exit=$STATUS)" ;;
   *)           VERDICT="receipt not ok: $RECEIPT" ;;
 esac
-# `snapshot` and `recap` must receipt the very week they were given, so a run about another week
-# can never stamp this one done.
-if { [ "$MODE" = "snapshot" ] || [ "$MODE" = "recap" ]; } && [ "$VERDICT" = "ok" ]; then
-  case "$RECEIPT" in
-    *"mode=$MODE week=$WEEK status=ok"*) ;;
-    *) VERDICT="receipt names another mode or week: $RECEIPT" ;;
-  esac
+# `snapshot`, `recap`, `propose` and `apply` must receipt the very week they were given, so a run about
+# another week can never stamp this one done.
+case "$MODE" in
+  snapshot|recap|propose|apply)
+    if [ "$VERDICT" = "ok" ] || [ "$VERDICT" = "waiting" ]; then
+      case "$RECEIPT" in
+        *"mode=$MODE week=$WEEK status=$VERDICT"*) ;;
+        *) VERDICT="receipt names another mode or week: $RECEIPT" ;;
+      esac
+    fi ;;
+esac
+# Only `apply` may wait (for the owner reply). Waiting stamps nothing and burns no attempt; the
+# selector looks again two hours later. Any other beat that says waiting has simply not delivered.
+# A waiting run also clears the attempt count: it reached the thread and read it, so failures before
+# it say nothing about the next look, and three passing glitches across a weekend must not end it.
+if [ "$VERDICT" = "waiting" ]; then
+  if [ "$MODE" = "apply" ] && [ $STATUS -eq 0 ]; then
+    date '+%Y-%m-%dT%H:%M:%S%z' > "$STATE_DIR/$WEEK.$MODE.waiting"
+    rm -f "$STATE_DIR/$WEEK.$MODE.attempts"
+    log "WAIT  mode=$MODE week=$WEEK  $RECEIPT (looks again in 2 hours)"
+    exit 0
+  fi
+  VERDICT="receipt not ok: $RECEIPT"
 fi
 
 if [ "$VERDICT" = "ok" ] && [ $STATUS -eq 0 ]; then
   date '+%Y-%m-%dT%H:%M:%S%z' > "$STATE_DIR/$WEEK.$MODE.done"
-  rm -f "$STATE_DIR/$WEEK.$MODE.attempts"
+  rm -f "$STATE_DIR/$WEEK.$MODE.attempts" "$STATE_DIR/$WEEK.$MODE.waiting"
   log "OK    mode=$MODE week=$WEEK  $RECEIPT"
   exit 0
 fi

@@ -41,5 +41,8 @@
 - `routine.recap_audience` decides who receives the Monday recap: `owner` (the account alone) or
   `team` (every address in `reporters`). A missing or unknown value means `owner`, so the team only
   ever receives a recap the owner switched on.
+- `routine.apply_mode` decides what `apply` does with an approved change: `shadow` records the
+  decision in the Ledger and writes nothing to the Main Tracker; only the exact value `live` writes
+  (Phase 3b, refused until it ships). Anything else, or nothing, means `shadow`.
 - Rehearsal: a copy of this file whose `sources.ledger.id` points at a throwaway Ledger, passed
   with `ZYNKR_OPS_WEEKLY_CONFIG`. Delete both afterwards.

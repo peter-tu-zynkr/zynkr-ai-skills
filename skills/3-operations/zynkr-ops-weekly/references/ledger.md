@@ -15,16 +15,21 @@ can never corrupt the history.
 
 | Tab | Columns | Written by |
 |---|---|---|
-| `Weeks` | A–J: week · status · snapshot_at · cycle · tracker_id · items · first_row · last_row · digest · note. K–N (Phase 2): reports · reports_at · decisions · decisions_at | `snapshot` writes A–J last; `rollup` writes K–L, `decisions` M–N, each as its own commit |
-| `Updates` | 週 · 時間 · cycle · # · 項目 · 欄位 · 舊值 · 新值 · 原因 · 證據 · 來源 · 提議 · 核准 · proposal | Phase 3 `apply` (empty until then) |
+| `Weeks` | A–J: week · status · snapshot_at · cycle · tracker_id · items · first_row · last_row · digest · note. K–N (Phase 2): reports · reports_at · decisions · decisions_at. O–R (Phase 3): proposals · proposals_at · applied · applied_at | `snapshot` writes A–J last; `rollup` writes K–L, `decisions` M–N, `propose` O–P, `apply` Q–R, each as its own commit |
+| `Updates` | 週 · 時間 · cycle · # · 項目 · 欄位 · 舊值 · 新值 · 原因 · 證據 · 來源 · 提議 · 核准 · proposal | `apply`, 40 rows a week, written last and only once the owner's decision is confirmed in the thread; empty in shadow mode. Its `Weeks` Q cell is what "applied" means |
+| `Proposals` (Phase 3) | week · proposed_at · n · # · 項目 · 欄位 · 現值 · 建議值 · 原因 · 證據 · 來源 · 信心 · 決定 · 決定_at · 結果 | `propose` writes the rows, 40 a week; `apply` rewrites them with the owner's 決定 and the 結果 (would-apply in shadow mode · applied · skipped · 退回 · 未回覆). That rewrite is a block write too, so it re-stamps `Weeks` O–P: after `apply`, `proposals_at` is when the decisions were recorded, and each row's `proposed_at` keeps when it was proposed. A 決定 is provisional until `Weeks` Q reads `ok`: `apply` writes the `Updates` block (and with it Q) only after its confirmation is in the approval thread |
 | `Snapshot` | week · snapshot_at · cycle, then the tracker's 13 columns exactly as named | `snapshot` |
 | `Reports` (Phase 2) | week · posted_at · owner · 部門 · 上週 · 本週 · 數字 · 卡關 · format | `rollup`, one row per poster |
 | `Decisions` (Phase 2) | week · 會議日期 · 類型 · 內容 · 負責人 · 期限 · 關聯 # · 來源 | `decisions`; 類型 is 決議, or 待決 when the owner or the date is missing |
 
 A beat's cell pair in the `Weeks` row is how a reader tells "none" from "never recorded": an empty
 status cell means the beat never recorded the week, while `ok` over an empty block means it
-recorded it and there was nothing. Later phases add their own tabs (proposals, evidence) when they
-are built.
+recorded it and there was nothing. Phase 4 adds its own tab (evidence) when it is built.
+
+**Weekly blocks.** `Reports` and `Decisions` hold 20 rows a week, `Proposals` and `Updates` 40;
+week k owns rows 2 + size·k … 1 + size·(k + 1). `ledger.py block` writes any of them, checks the
+`Weeks` header reaches its own cells (A–N for the Phase 2 blocks, A–R for the Phase 3 ones), reads
+the block back, and commits the beat's cell pair last.
 
 ## Layout v1: every week has fixed rows
 
@@ -97,6 +102,12 @@ tools that no scheduled run should hold.
 write their header rows RAW exactly as `schema` prints them; write `Weeks!K1:N1` (reports ·
 reports_at · decisions · decisions_at). `ledger.py block` refuses to write until the `Weeks` header
 reads A–N, so a half-done setup cannot be written into.
+
+**Phase 3 setup (once, before installing Phase 3a).** `create_sheet` → `Proposals`; write its header
+row RAW exactly as `schema` prints it and freeze row 1; grow `Proposals` and `Updates` to 2,100 rows
+(a year of 40-row weeks); write `Weeks!O1:R1` (proposals · proposals_at · applied · applied_at).
+`ledger.py block` refuses the Phase 3 blocks until the `Weeks` header reads A–R; the Phase 2 blocks
+need only A–N, so `rollup` and `decisions` keep working while the setup is half done.
 
 **Growing the grid.** `ledger.py` warns when fewer than eight weeks of rows remain, and refuses a
 week whose block would not fit (exit 5). Add rows to the end of `Snapshot` with

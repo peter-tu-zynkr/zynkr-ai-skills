@@ -124,6 +124,47 @@ add their count in brackets; with none, leave the brackets out.
 
 ---
 
+## `propose` — Fri 10:00 (the 【待核准】 mail, to the owner only)
+
+`scripts/proposals.py check` renders it from the checked rows; never compose it by hand.
+
+Subject: `【待核准】WB 10/12 那週 · 5 件（2026-W42）` — the ISO key is in the subject on purpose:
+`apply` finds the thread by it.
+
+Body, in order:
+
+1. One line: how many changes, and how to answer — 「全部核准」、「核准 1 3」、「退回 2」或「全部核准 退回 2」.
+2. One line on how a reply is read: write only 核准, 退回 and the numbers (a thanks is fine), never
+   「除了 2 都核准」; an approving reply that asks a question or says anything else gets asked to
+   restate; `apply` confirms in the thread what it recorded, and until that confirmation a newer
+   complete reply replaces an older one; replies before Sunday 22:00 count; rows the reply does
+   not name are not applied.
+3. While `routine.apply_mode` is `shadow`: **試行中** — approved rows are recorded, not written, and
+   Monday's recap shows what would have changed.
+4. The table: 編號 · 項目 · 欄位 · 現在 → 建議 (a 備註 row shows only 「加一行：<the new line>」) ·
+   為什麼 · 證據 (the decision or report, in its own words) · 把握.
+5. The footer marker `〔zynkr-ops-weekly〕 待核准 <ISO week>`.
+
+The mail goes out as HTML, and the send adds a flattened text copy of it; that copy is what `sent`
+and `apply` read. `sent` requires it to be, word for word, the mail `check` wrote and records its
+hash with the rows'; `apply` requires the thread's mail and the week's Ledger rows to match those
+hashes (or, when no thread was recorded, the mail to be the one the Ledger rows render), so a value
+changed on the way never reaches a decision. Each row's 編號 and `#item` sit side by side in it (`4#1.03`), which names a missing
+row. `check` refuses a mail whose text runs past 6,000 characters: every reply quotes it.
+
+`apply` writes in the thread only as plain text starting with the marker, which is how the next run
+tells its own messages from the owner's:
+
+- **When a reply cannot be read** (once per reply): what it could not read, the four example
+  replies, and the range of row numbers.
+- **When a reply draft has stayed open two hours** (once a week): that nothing is recorded until it
+  is sent or deleted.
+- **When a reply is recorded**: the reply's time, then 核准 · 退回 · 沒寫到、這次不套用 as row
+  numbers, and that later replies change nothing this week. This message is what makes the
+  week's decision final.
+
+---
+
 ## `decisions` — Thu 22:00 (recap mail)
 
 Subject: `【營運週報】2026-08-27（WB 8/24）— 決議 3 件 · 逾期 2 件`

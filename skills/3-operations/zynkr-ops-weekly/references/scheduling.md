@@ -45,7 +45,9 @@ needs re-timing. With no beat due the script exits in milliseconds without start
 | `agenda` | Wed | 17:05 | 23:00 | |
 | `decisions` | Thu | 22:05 | 23:59 | After the 21:00 meeting, before the 23:00 scaffold |
 | `tidy` | Fri | 09:05 | 20:00 | The first morning after the Thursday scaffold |
+| `propose` | Fri | 10:05 | 17:30 | After `tidy`, which comes first in the list. 30-minute limit |
 | `snapshot` | Fri → Sun | Fri 18:05 | Sun 23:00 | Saturday and Sunday catch up a closed lid. It stops at 23:00 so no run is still going when the ISO week changes at Monday 00:00 |
+| `apply` | Fri → Sun | Fri 18:05 | Sun 23:00 | After `snapshot`. No prerequisite: it reads this week's `Weeks` row itself, so a `propose` that recorded and mailed but then gave up still has its answer read. Waits for the owner reply: a `waiting` receipt stamps nothing and clears the attempt count (a run that read the thread proves the beat works, so failures before it do not add up to giving up); the next look is two hours after the `.waiting` stamp was last written (its mtime), and from Sunday 21:00 every tick looks, because the mail promises that replies before 22:00 count. 20-minute limit |
 
 A window is a **catch-up range**, not a repeat: the beat runs at most once per ISO week. The
 stamp (`~/.local/state/zynkr/ops-weekly/<ISO-week>.<beat>.done`) is written **only when the run's
@@ -53,7 +55,7 @@ receipt says `status=ok`** and `claude` exited 0. Any other run counts an attemp
 on the next tick while its window is still open; after three attempts it writes `.gaveup` and
 stops for the week. A missed beat is better than a beat that fires into the wrong day.
 
-**Time limits.** Every beat but `rollup` runs under a limit: `recap` and `snapshot` 30 minutes,
+**Time limits.** Every beat but `rollup` runs under a limit: `recap`, `snapshot` and `propose` 30 minutes, `apply` 20,
 `nudge` and `decisions` 20, `chase` 15, `agenda` 40, `tidy` 45. When one is reached, the runner
 ends the run and everything it started, logs `TIMEOUT`, and counts a failed attempt, so the next
 tick retries it. Without a limit a hung run blocks every later tick, because launchd never starts
