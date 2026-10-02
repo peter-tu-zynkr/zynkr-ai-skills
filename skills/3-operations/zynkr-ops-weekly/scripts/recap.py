@@ -28,7 +28,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import timedelta
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ledger  # noqa: E402
@@ -76,6 +76,44 @@ def load_all(path=None):
                tracker_url="https://docs.google.com/spreadsheets/d/%s/edit" % cfg["tracker"],
                ledger_url="https://docs.google.com/spreadsheets/d/%s/edit" % cfg["ledger"])
     return cfg
+
+
+# ── call-outs in the team's words ─────────────────────────────────────────
+def as_date(v):
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(v or ""))
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+
+
+def md(d):
+    return "%d/%d" % (d.month, d.day)
+
+
+def why(state, row, today):
+    """One zh-TW reason, built from the row itself. derive_state's evidence strings are English
+    and machine-shaped; they stay in the run report, never in the team's mail (wording.md)."""
+    start, end = as_date(row.get("start")), as_date(row.get("end"))
+    if state == "UNDATED":
+        missing = [name for name, d in (("開始", start), ("結束", end)) if d is None]
+        return "、".join(missing) + ("都還沒排" if len(missing) == 2 else "還沒排")
+    if state == "OVERDUE":
+        if row.get("status") == "進行中" and end and end < today:
+            return "結束日 %s 已過 %d 天" % (md(end), (today - end).days)
+        if start and start < today:
+            return "原訂 %s 開始，還沒開始" % md(start)
+        return "已經過期"
+    if state == "ENDS_SOON":
+        return ("%s 到期，還有 %d 天" % (md(end), (end - today).days)) if end else "快到期"
+    if state == "PROPOSE_DONE":
+        note = " ".join(str(row.get("note") or "").split())
+        return "備註寫「%s」，狀態還是%s" % (note[:40] + ("…" if len(note) > 40 else ""), row.get("status") or "")
+    if state == "UNKNOWN_STATUS":
+        return "狀態寫成「%s」，不在清單裡" % (row.get("status") or "")
+    return ""
 
 
 # ── steps ────────────────────────────────────────────────────────────────────
@@ -196,8 +234,11 @@ def r_build(d, today):
     st = derive(run, rows, prev, today)
     by_id = {r["id"]: r for r in st["rows"]}
 
+    today_d = as_date(today)
+
     def flagged(state):
-        return [{"#": r["id"], "項目": r["item"], "負責人": r["owner"], "evidence": r["evidence"]}
+        return [{"#": r["id"], "項目": r["item"], "負責人": r["owner"], "why": why(state, r, today_d),
+                 "evidence": r.get("evidence", [])}
                 for r in st["rows"] if state in r["states"]]
 
     decisions = {"recorded": "Decisions" in run["pages"], "decided": [], "open": []}
@@ -294,13 +335,14 @@ def render_html(facts, tldr):
         rows += [li("#%s %s — 從表上移除了" % (esc(r["#"]), esc(r["項目"]))) for r in facts["removed"]]
         o.append("<ul>%s</ul>" % "".join(rows))
     o.append("<h3>要注意的</h3>")
-    notes = []
+    groups = []
     for key, title in (("overdue", "逾期"), ("ends_soon", "兩週內到期"), ("undated", "P0/P1 還沒排日期"),
                        ("propose_done", "備註說做完了，狀態還沒改"), ("unknown_status", "狀態寫法不在清單裡")):
-        for x in facts[key]:
-            notes.append(li("%s · #%s %s（%s）— %s" % (title, esc(x["#"]), esc(x["項目"]), esc(x["負責人"] or "沒有負責人"),
-                                                   esc("；".join(x["evidence"])))))
-    o.append("<ul>%s</ul>" % "".join(notes) if notes else "<p>沒有逾期、快到期或缺日期的項目</p>")
+        if facts[key]:
+            items = "".join(li("#%s %s（%s）— %s" % (esc(x["#"]), esc(x["項目"]), esc(x["負責人"] or "沒有負責人"),
+                                                     esc(x["why"]))) for x in facts[key])
+            groups.append("<p><b>%s（%d 件）</b></p><ul>%s</ul>" % (title, len(facts[key]), items))
+    o.append("".join(groups) if groups else "<p>沒有逾期、快到期或缺日期的項目</p>")
     o.append("<h3>上週談定的事</h3>")
     dec = facts["decisions"]
     if not dec["recorded"]:
@@ -438,7 +480,8 @@ def selftest():
             "out=[]\n"
             "for r in rows:\n"
             "  st=['OVERDUE'] if r['狀態']=='進行中' and r['結束']<today and r['結束'][:1]=='2' else []\n"
-            "  out.append({'id':r['#'],'item':r['項目（正規化）'],'priority':r['Priority'],'owner':r['負責人'],'states':st,'evidence':['結束 '+r['結束']] if st else []})\n"
+            "  d=lambda v: v if v[:1]=='2' else None\n"
+            "  out.append({'id':r['#'],'item':r['項目（正規化）'],'priority':r['Priority'],'owner':r['負責人'],'states':st,'evidence':['end '+r['結束']+' overdue'] if st else [],'start':d(r['開始']),'end':d(r['結束']),'status':r['狀態'],'note':r['備註']})\n"
             "print(json.dumps({'rows':out,'summary':{},'today':today}))\n")
         cfgp = os.path.join(tmp, "cfg.json")
         json.dump({"google_account": "owner@example.com", "reporters": ["a@example.com", "b@example.com"],
@@ -525,6 +568,13 @@ def selftest():
         check("recap names the blocker by display name", "Ann：等報價" in body, True)
         check("recap lists who did not post", "上週沒交週報：b" in body, True)
         check("recap escapes html", "<script>" not in body, True)
+        check("recap call-out in the team's words", "#1.10 item 1.10（Ann）— 結束日 9/30 已過 12 天" in body, True)
+        check("recap call-outs grouped with a count", "逾期（1 件）" in body, True)
+        check("no machine evidence in the mail", "overdue" in body, False)
+        check("why: both dates missing", why("UNDATED", {"start": None, "end": None}, date(2026, 10, 5)), "開始、結束都還沒排")
+        check("why: end missing", why("UNDATED", {"start": "2026-09-07", "end": None}, date(2026, 10, 5)), "結束還沒排")
+        check("why: ends soon", why("ENDS_SOON", {"end": "2026-10-10"}, date(2026, 10, 5)), "10/10 到期，還有 5 天")
+        check("why: not started", why("OVERDUE", {"status": "未開始", "start": "2026-07-01"}, date(2026, 10, 5)), "原訂 7/1 開始，還沒開始")
 
         # without recap_audience = team, the recap goes to the owner alone
         cfg_owner = os.path.join(tmp, "cfg-owner.json")
@@ -599,6 +649,7 @@ MUTATIONS = [
     ("notice path skipped", [('    if not snapshot_ok(row, run["week"], run["cycle"]):', "    if False:")]),
     ("recap defaults to the team", [('audience = raw.get("routine", {}).get("recap_audience") or "owner"',
                                       'audience = raw.get("routine", {}).get("recap_audience") or "team"')]),
+    ("machine evidence in the mail", [('esc(x["why"])))', 'esc("；".join(x["evidence"]))))')]),
     ("notice mailed to the team", [('return {"subject": subject, "to": run["account"],', 'return {"subject": subject, "to": ",".join(run["reporters"]),')]),
 ]
 
