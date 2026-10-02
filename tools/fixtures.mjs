@@ -57,7 +57,8 @@ function filesUnder(root, base = root) {
 /**
  * A skill for buildStage. `visibility: undefined` leaves the key out; `extra` is more frontmatter;
  * `files` maps a path inside the folder to its text, or to { content, exec }; `dirName` names its
- * folder when that is not the slug.
+ * folder when that is not the slug; `sheetId` pins its id, which by default follows the slug, so the
+ * same skill keeps its id from one stage to the next and a rename can keep the old one.
  */
 export const skill = (slug, spec = {}) => ({ slug, cat: '1-brand-marketing', visibility: 'public', ...spec });
 
@@ -74,7 +75,7 @@ export function buildStage(skills, { sha = WB.a, committedAt = '2026-09-28T10:00
     const frontmatter = [
       '---',
       `name: ${name}`,
-      `sheetId: "1.${String(i + 1).padStart(2, '0')}"`,
+      `sheetId: "${s.sheetId ?? `id-${s.slug}`}"`,
       ...(s.visibility === undefined ? [] : [`visibility: ${s.visibility}`]),
       ...(s.extra ? [s.extra] : []),
       'description: >-',

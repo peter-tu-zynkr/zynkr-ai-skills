@@ -13,7 +13,9 @@
  *      anything else, and names are CLI-safe and unique.
  *   d. Every payload row sits in exactly one public folder. repo_url, github_url and
  *      install_command are derived here and overwrite whatever the stage carried.
- *   e. A folder the shelf does not hold yet waits for --promote (AC-12).
+ *   e. A folder the shelf does not hold yet waits for --promote (AC-12), unless it is a skill the
+ *      shelf already publishes under another folder: moved between categories, or renamed (its
+ *      manifest says `renamed_from: <old name>` and keeps the old folder's sheetId).
  *   f. A stage under half the shelf waits for --allow-shrink.
  *   g. The stage must be newer than the shelf's last `Workbench-Commit:` trailer (AC-10).
  *   h. prune: a scheduled run prunes, a dispatch reports unless told `true` (AC-11).
@@ -153,7 +155,8 @@ function scalar(raw) {
 /**
  * The top-level scalar keys of a `---` frontmatter block: { keys: Map, dupes: Set }, or null when
  * the file has none. Indented lines (folded descriptions, lists) are skipped; only name,
- * visibility and install_command are read, and a repeated one is reported in `dupes`.
+ * visibility, install_command, sheetId and renamed_from are read, and a repeated one is reported
+ * in `dupes`.
  */
 export function parseFrontmatter(text) {
   const lines = text.replace(/^﻿/, '').split(/\r?\n/);
@@ -412,9 +415,22 @@ export function derivePayload(payload, manifest, owners) {
 
 // ── e, f. promotion and shrink ───────────────────────────────────────────────
 
+/** One frontmatter key as a non-empty string; missing, empty or repeated → null. */
+const keyOf = (fm, key) => {
+  const v = fm && !fm.dupes.has(key) ? fm.keys.get(key) : null;
+  return typeof v === 'string' && v !== '' ? v : null;
+};
+
+/** A manifest's sheetId: the skill's pinned id, which a rename keeps. */
+export const sheetIdOf = (fm) => keyOf(fm, 'sheetId');
+
+/** A manifest's `renamed_from`: the name the skill had before a rename, written by whoever renamed it. */
+export const renamedFromOf = (fm) => keyOf(fm, 'renamed_from');
+
 /**
  * The skill folders on the shelf now: the topmost folders under skills/ holding a SKILL.md or
- * CLAUDE.md, each with the frontmatter names its manifests carry: [{ dir, names: Set }].
+ * CLAUDE.md, each with the frontmatter names and sheetIds its manifests carry:
+ * [{ dir, names: Set, ids: Set }].
  */
 export function shelfSkills(shelfRoot) {
   const found = [];
@@ -423,12 +439,15 @@ export function shelfSkills(shelfRoot) {
     const manifests = entries.filter((e) => e.isFile() && MANIFEST_NAMES.has(e.name));
     if (rel !== 'skills' && manifests.length) {
       const names = new Set();
+      const ids = new Set();
       for (const e of manifests) {
         const fm = parseFrontmatter(fs.readFileSync(path.join(abs, e.name), 'utf8'));
         const name = fm && !fm.dupes.has('name') ? fm.keys.get('name') : null;
         if (typeof name === 'string' && name) names.add(name);
+        const id = sheetIdOf(fm);
+        if (id) ids.add(id);
       }
-      found.push({ dir: rel, names });
+      found.push({ dir: rel, names, ids });
       return;
     }
     for (const e of entries) if (e.isDirectory()) visit(path.join(abs, e.name), `${rel}/${e.name}`);
@@ -444,6 +463,18 @@ export function shelfSkills(shelfRoot) {
  * when the shelf holds a folder of the same folder name that the stage no longer has, whose
  * manifest carries the same frontmatter name. A new skill that only reuses a public folder name is
  * held like any other: folder names are not unique across categories, names are.
+ *
+ * A renamed skill stays published too, when two things agree: its manifest says which public
+ * skill it was (`renamed_from: <old name>`), and that skill's shelf folder carries the same pinned
+ * sheetId. A sheetId alone is not enough: the workbench can hand a retired skill's id to a new one,
+ * so a retirement and a new skill in one run would pass as a rename. The old folder must also have
+ * left the stage and be no other folder's category move; the id must be carried by no other stage
+ * folder; and one old folder renames into one new folder only. Anything less certain — no mark, a
+ * mark the id does not back, an id or an old folder two folders claim — is held for the owner as
+ * before (D-76). `renamed` lists { skill, from } with `from` the shelf folder it replaces.
+ *
+ * `skills` are manifest.skills entries; publish() adds `sheetId` and `renamedFrom` from each one's
+ * manifest.
  */
 export function planPromotion(skills, shelf, promote = '') {
   const paths = new Set(shelf.map((h) => h.dir));
@@ -455,20 +486,45 @@ export function planPromotion(skills, shelf, promote = '') {
         path.posix.basename(h.dir) === path.posix.basename(s.dir) &&
         h.names.has(s.name),
     );
+  const movedTo = (h) =>
+    skills.some((t) => path.posix.basename(t.dir) === path.posix.basename(h.dir) && h.names.has(t.name));
+  const renameOf = (s) => {
+    if (!s.renamedFrom || !s.sheetId) return null;
+    if (skills.filter((t) => t.sheetId === s.sheetId).length !== 1) return null;
+    const holders = shelf.filter((h) => h.names.has(s.renamedFrom) && h.ids.has(s.sheetId));
+    if (holders.length !== 1) return null;
+    const [h] = holders;
+    // Gone from the stage, and not already explained as a category move of another stage folder.
+    return !stageDirs.has(h.dir) && !movedTo(h) ? h.dir : null;
+  };
+  const isNew = (s) => !paths.has(s.dir) && !movedFrom(s);
+  const claims = skills.filter(isNew).map(renameOf).filter(Boolean);
+  const renamedFrom = (s) => {
+    const from = renameOf(s);
+    return from && claims.filter((c) => c === from).length === 1 ? from : null;
+  };
   const all = promote.trim() === 'all';
   const named = new Set(all ? [] : promote.split(',').map((s) => s.trim()).filter(Boolean));
   const kept = [];
   const held = [];
   const promoted = [];
+  const renamed = [];
   for (const s of skills) {
-    if (paths.has(s.dir) || movedFrom(s)) kept.push(s);
-    else if (all || named.has(s.slug)) {
+    if (!isNew(s)) {
+      kept.push(s);
+      continue;
+    }
+    const from = renamedFrom(s);
+    if (from) {
+      kept.push(s);
+      renamed.push({ skill: s, from });
+    } else if (all || named.has(s.slug)) {
       kept.push(s);
       promoted.push(s);
     } else held.push(s);
   }
   const unmatched = [...named].filter((n) => !skills.some((s) => s.slug === n)).length;
-  return { kept, held, promoted, unmatched };
+  return { kept, held, promoted, renamed, unmatched };
 }
 
 /** (f): a stage that would leave fewer than half the shelf's folders needs --allow-shrink. */
@@ -613,12 +669,21 @@ export function stageIndex(shelfRoot, desired) {
   return git(shelfRoot, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
 }
 
-export function commitMessage({ manifest, kept, plan, held, rewoundFrom = null }) {
+/** The mirror's adds and removes with renames taken out: a rename is reported once, as a rename. */
+export function netOfRenames(plan, renamed = []) {
+  const to = new Set(renamed.map((r) => r.skill.dir));
+  const from = new Set(renamed.map((r) => r.from));
+  return { added: plan.added.filter((s) => !to.has(s.dir)), removed: plan.removed.filter((d) => !from.has(d)) };
+}
+
+export function commitMessage({ manifest, kept, plan, held, renamed = [], rewoundFrom = null }) {
   const slugs = (entries) => entries.map((s) => s.slug).join(', ');
+  const { added, removed } = netOfRenames(plan, renamed);
   const lines = [];
-  if (plan.added.length) lines.push(`Added: ${slugs(plan.added)}`);
+  if (added.length) lines.push(`Added: ${slugs(added)}`);
+  if (renamed.length) lines.push(`Renamed: ${renamedWords(renamed).join(', ')}`);
   if (plan.changed.length) lines.push(`Changed: ${slugs(plan.changed)}`);
-  if (plan.removed.length) lines.push(`Removed: ${plan.removed.map((d) => path.posix.basename(d)).join(', ')}`);
+  if (removed.length) lines.push(`Removed: ${removed.map((d) => path.posix.basename(d)).join(', ')}`);
   if (plan.loose) lines.push(`Removed ${plural(plan.loose, 'file')} outside every skill folder`);
   if (held.length) lines.push(`Held until promoted: ${slugs(held)}`);
   if (rewoundFrom) lines.push(`Rewound from ${rewoundFrom.slice(0, 7)}, dispatched with allow_rewind`);
@@ -630,6 +695,9 @@ export function commitMessage({ manifest, kept, plan, held, rewoundFrom = null }
     '',
   ].join('\n');
 }
+
+/** `old-folder → new-slug` for each rename. */
+export const renamedWords = (renamed) => renamed.map((r) => `${path.posix.basename(r.from)} → ${r.skill.slug}`);
 
 /** Commit as the Actions bot and push plainly. A rejected push is a refusal, so nothing is posted. */
 export function commitAndPush(shelfRoot, message, { allowEmpty = false } = {}) {
@@ -746,7 +814,11 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   const rows = derivePayload(payload, manifest, owners); // d
   const shelf = shelfSkills(opts.shelf);
   const shelfDirs = shelf.map((h) => h.dir);
-  const promotion = planPromotion(manifest.skills, shelf, opts.promote); // e
+  const staged = manifest.skills.map((s) => {
+    const { fm } = owners.get(s.dir);
+    return { ...s, sheetId: sheetIdOf(fm), renamedFrom: renamedFromOf(fm) };
+  });
+  const promotion = planPromotion(staged, shelf, opts.promote); // e
   checkShrink(promotion.kept.length, shelfDirs.length, opts.allowShrink); // f
   const last = lastWorkbenchCommit(opts.shelf);
   const order = await ordering({ last, next: manifest.workbench_sha, token: env.WORKBENCH_READ_TOKEN, fetchImpl }); // g
@@ -768,12 +840,18 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   const posted = rows.filter((r) => !heldDirs.has(r.dir)).map((r) => r.row);
   const body = buildBody({ manifest, prune, allowShrink: opts.allowShrink, rows: posted });
   const plan = planMirror(opts.shelf, manifest, promotion.kept, shelfDirs);
+  const net = netOfRenames(plan, promotion.renamed);
+  const counts =
+    `added ${net.added.length}` +
+    (promotion.renamed.length ? ` · renamed ${promotion.renamed.length}` : '') +
+    ` · changed ${plan.changed.length} · removed ${net.removed.length}`;
   const slugsOf = (entries) => entries.map((s) => s.slug);
 
   const short = manifest.workbench_sha.slice(0, 7);
   log(`stage: workbench ${short} (committed ${manifest.workbench_committed_at}), ${plural(manifest.skills.length, 'skill')}, ${plural(rows.length, 'row')}`);
   log(`order: ${ORDER_WORDS[order]}${last && order !== 'identical' ? ` (${last.slice(0, 7)})` : ''}`);
   if (promotion.promoted.length) log(`promoted: ${slugsOf(promotion.promoted).join(', ')}`);
+  if (promotion.renamed.length) log(`kept under a new name (renamed_from, same sheetId): ${renamedWords(promotion.renamed).join(', ')}`);
   if (promotion.held.length) log(`held until promoted: ${slugsOf(promotion.held).join(', ')}`);
   if (promotion.unmatched) log(`note: promote names ${plural(promotion.unmatched, 'slug')} that the stage does not hold`);
 
@@ -782,9 +860,11 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
     '',
     `- Workbench commit \`${short}\`, committed ${manifest.workbench_committed_at}: ${ORDER_WORDS[order]}`,
     `- Prune: \`${prune}\``,
-    `- Skills on the shelf after this run: ${promotion.kept.length} ` +
-      `(added ${plan.added.length} · changed ${plan.changed.length} · removed ${plan.removed.length})`,
+    `- Skills on the shelf after this run: ${promotion.kept.length} (${counts})`,
   ];
+  if (promotion.renamed.length) {
+    summary.push(`- Kept under a new name (renamed_from, same sheetId): ${renamedWords(promotion.renamed).map((w) => `\`${w}\``).join(', ')}`);
+  }
   if (promotion.held.length) {
     summary.push(
       `- **Held until promoted** (dispatch with \`promote\`): ${slugsOf(promotion.held).map((s) => `\`${s}\``).join(', ')}`,
@@ -798,11 +878,12 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
       order,
       prune,
       copy: promotion.kept.map((s) => s.dir),
-      added: slugsOf(plan.added),
+      added: slugsOf(net.added),
       changed: slugsOf(plan.changed),
-      removed: plan.removed,
+      removed: net.removed,
       held: slugsOf(promotion.held),
       promoted: slugsOf(promotion.promoted),
+      renamed: promotion.renamed.map((r) => ({ from: r.from, to: r.skill.dir })),
       body: JSON.parse(body),
     };
     log(JSON.stringify(planJson, null, 2));
@@ -823,9 +904,16 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   // later run would compare against the abandoned commit and go red as diverged again.
   const rewound = REWINDS.has(order);
   if (changed || rewound) {
-    const message = commitMessage({ manifest, kept: promotion.kept, plan, held: promotion.held, rewoundFrom: rewound ? last : null });
+    const message = commitMessage({
+      manifest,
+      kept: promotion.kept,
+      plan,
+      held: promotion.held,
+      renamed: promotion.renamed,
+      rewoundFrom: rewound ? last : null,
+    });
     commit = commitAndPush(opts.shelf, message, { allowEmpty: !changed });
-    log(`shelf: added ${plan.added.length} · changed ${plan.changed.length} · removed ${plan.removed.length}; pushed ${commit.slice(0, 7)}`);
+    log(`shelf: ${counts}; pushed ${commit.slice(0, 7)}`);
   } else log('shelf: no change to commit');
 
   const answer = await postToSite({ url: siteUrl, body, secret, sourceSha: manifest.workbench_sha, fetchImpl }); // j
