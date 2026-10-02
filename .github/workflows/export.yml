@@ -13,6 +13,10 @@ name: Export to the shelf
 # trigger a fork can reach: the export environment holds WORKBENCH_READ_TOKEN and
 # SKILLS_SYNC_HMAC_SECRET. GitHub disables the schedule after 60 days without repository activity:
 # `gh workflow enable export.yml -R peter-tu-zynkr/zynkr-ai-skills`, then dispatch once.
+# On 2026-10-02 this schedule fired once and then stopped, so a job on the owner's Mac dispatches
+# with prune: true (never promote) within 15 minutes of each new green stage, and does nothing
+# while SHELF_LIVE is not 'true'. If GitHub's schedule recovers, both together are harmless:
+# one concurrency group, and writes only on change.
 on:
   schedule:
     # Every 15 minutes, off the hour on purpose: GitHub drops scheduled runs under load and names the

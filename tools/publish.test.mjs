@@ -5,7 +5,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SECRET, SITE, TOKEN, WB, buildStage, deps, git, head, makeShelf, network, placeOnShelf, skill, writeFile } from './fixtures.mjs';
 import { Refusal, SHELF_URL } from './common.mjs';
-import { checkShrink, main, parseFrontmatter, planPromotion, publish, pruneValue } from './publish.mjs';
+import {
+  checkShrink,
+  main,
+  parseFrontmatter,
+  planPromotion,
+  publish,
+  pruneValue,
+  renamedFromOf,
+  sheetIdOf,
+} from './publish.mjs';
 
 const opts = (stage, shelf, more = {}) => ({
   stage: stage.root,
@@ -370,7 +379,7 @@ describe('promotion (AC-12)', () => {
     assert.match(git(remote, ['log', '-1', '--format=%B', 'main']), /^Added: gamma$/m);
   });
 
-  const onShelf = (dir, name) => ({ dir, names: new Set([name]) });
+  const onShelf = (dir, name, id = null) => ({ dir, names: new Set([name]), ids: new Set(id ? [id] : []) });
 
   test('all promotes every folder; a folder moved between categories stays published', () => {
     const stageSkills = [
@@ -418,6 +427,103 @@ describe('promotion (AC-12)', () => {
     const tree = git(remote, ['ls-tree', '-r', '--name-only', 'main']);
     assert.match(tree, /^skills\/3-operations\/alpha\/SKILL\.md$/m);
     assert.doesNotMatch(tree, /^skills\/(1-brand-marketing|5-product)\//m);
+  });
+});
+
+describe('a rename keeps its place: renamed_from, backed by the same sheetId', () => {
+  const onShelf = (dir, name, ...ids) => ({ dir, names: new Set([name]), ids: new Set(ids) });
+  const gone = onShelf('skills/2-z/consult-governance', 'consult-governance', '2.45');
+  const renamed = {
+    dir: 'skills/2-z/project-governance',
+    slug: 'project-governance',
+    name: 'project-governance',
+    sheetId: '2.45',
+    renamedFrom: 'consult-governance',
+  };
+  const held = (skills, shelf) => planPromotion(skills, shelf, '').held.map((s) => s.slug);
+
+  test('the mark and the id agree on one folder that left the stage: kept without a promote', () => {
+    const plan = planPromotion([renamed], [gone], '');
+    assert.deepEqual(plan.held, []);
+    assert.deepEqual(plan.promoted, []);
+    assert.deepEqual(plan.renamed, [{ skill: renamed, from: gone.dir }]);
+    // Named in promote as well: still a rename, not a promotion, and not an unmatched name.
+    const named = planPromotion([renamed], [gone], 'project-governance');
+    assert.deepEqual([named.promoted, named.renamed.length, named.unmatched], [[], 1, 0]);
+  });
+
+  test('anything less certain is held for the owner (D-76)', () => {
+    // A retired skill's id handed to a new skill: the same sheetId, but no mark.
+    assert.deepEqual(held([{ ...renamed, renamedFrom: null }], [gone]), ['project-governance']);
+    // A mark the id does not back, or a mark naming no shelf skill.
+    assert.deepEqual(held([{ ...renamed, sheetId: '2.46' }], [gone]), ['project-governance']);
+    assert.deepEqual(held([{ ...renamed, sheetId: null }], [gone]), ['project-governance']);
+    assert.deepEqual(held([{ ...renamed, renamedFrom: 'never-public' }], [gone]), ['project-governance']);
+    // The old folder is still in the stage: nothing was renamed.
+    const stillThere = { dir: gone.dir, slug: 'consult-governance', name: 'consult-governance', sheetId: '9.99' };
+    assert.deepEqual(held([stillThere, renamed], [gone]), ['project-governance']);
+    // The old folder moved to another category (and lost the id): the move claims it.
+    const moved = { ...stillThere, dir: 'skills/3-y/consult-governance' };
+    assert.deepEqual(held([moved, renamed], [gone]), ['project-governance']);
+    // Two stage folders carry the id: neither is known to be the skill.
+    const twin = { ...renamed, dir: 'skills/3-y/twin', slug: 'twin', name: 'twin', renamedFrom: null };
+    assert.deepEqual(held([renamed, twin], [gone]), ['project-governance', 'twin']);
+    // Two shelf folders carry the name and the id: which one it replaces is unknown.
+    assert.deepEqual(held([renamed], [gone, onShelf('skills/3-y/consult-governance', 'consult-governance', '2.45')]), [
+      'project-governance',
+    ]);
+    // One old folder carrying two ids (a stray second manifest) claimed by two new folders: both held.
+    const both = onShelf('skills/2-z/consult-governance', 'consult-governance', '2.45', '2.46');
+    const second = { ...renamed, dir: 'skills/2-z/brand-new', slug: 'brand-new', name: 'brand-new', sheetId: '2.46' };
+    assert.deepEqual(held([renamed, second], [both]), ['project-governance', 'brand-new']);
+  });
+
+  test('a repeated sheetId or renamed_from key counts as none', () => {
+    assert.equal(sheetIdOf(parseFrontmatter('---\nname: a\nsheetId: "2.45"\nsheetId: "2.46"\n---\n')), null);
+    assert.equal(sheetIdOf(parseFrontmatter('---\nname: a\nsheetId: "2.45"\n---\n')), '2.45');
+    assert.equal(sheetIdOf(parseFrontmatter('---\nname: a\n---\n')), null);
+    assert.equal(renamedFromOf(parseFrontmatter('---\nname: a\nrenamed_from: b\nrenamed_from: c\n---\n')), null);
+    assert.equal(renamedFromOf(parseFrontmatter('---\nname: a\nrenamed_from: b  # was b\n---\n')), 'b');
+  });
+
+  test('end to end: published without a promote, one Renamed line, the old folder gone', async () => {
+    const { shelf, remote } = makeShelf();
+    placeOnShelf(
+      shelf,
+      buildStage([skill('alpha'), skill('consult-governance', { sheetId: '2.45' })]),
+      ['alpha', 'consult-governance'],
+      WB.a,
+    );
+    const stage = buildStage(
+      [skill('alpha'), skill('project-governance', { sheetId: '2.45', extra: 'renamed_from: consult-governance', agents: ['helper'] })],
+      { sha: WB.b },
+    );
+    const net = network();
+    const d = deps(net);
+    const result = await publish(opts(stage, shelf, { promote: '' }), d);
+    assert.deepEqual(result.promotion.held, []);
+    assert.deepEqual(bodyOf(net).skills.map((r) => r.slug), ['alpha', 'project-governance', 'project-governance-helper']);
+    const tree = git(remote, ['ls-tree', '-r', '--name-only', 'main']);
+    assert.match(tree, /^skills\/1-brand-marketing\/project-governance\/SKILL\.md$/m);
+    assert.doesNotMatch(tree, /consult-governance/);
+    const message = git(remote, ['log', '-1', '--format=%B', 'main']);
+    assert.match(message, /^Renamed: consult-governance → project-governance$/m);
+    assert.doesNotMatch(message, /^(Added|Removed):/m);
+    assert.ok(d.out.includes('kept under a new name (renamed_from, same sheetId): consult-governance → project-governance'));
+    assert.ok(d.out.some((l) => /^shelf: added 0 · renamed 1 · changed 0 · removed 0; pushed /.test(l)));
+    assert.match(d.summary(), /after this run: 2 \(added 0 · renamed 1 · changed 0 · removed 0\)/);
+  });
+
+  test('end to end: a retired skill and a new one with its id in one run — the new one is held', async () => {
+    const { shelf, remote } = makeShelf();
+    placeOnShelf(shelf, buildStage([skill('alpha'), skill('retired-skill', { sheetId: '2.47' })]), ['alpha', 'retired-skill'], WB.a);
+    const stage = buildStage([skill('alpha'), skill('brand-new', { cat: '5-product', sheetId: '2.47' })], { sha: WB.b });
+    const net = network();
+    const result = await publish(opts(stage, shelf, { promote: '', prune: 'true' }), deps(net));
+    assert.deepEqual(result.promotion.held.map((s) => s.slug), ['brand-new']);
+    assert.deepEqual(result.promotion.renamed, []);
+    assert.deepEqual(bodyOf(net).skills.map((r) => r.slug), ['alpha']);
+    assert.doesNotMatch(git(remote, ['ls-tree', '-r', '--name-only', 'main']), /brand-new|retired-skill/);
   });
 });
 
