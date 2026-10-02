@@ -15,7 +15,10 @@ name: Export to the shelf
 # `gh workflow enable export.yml -R peter-tu-zynkr/zynkr-ai-skills`, then dispatch once.
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # Every 15 minutes, off the hour on purpose: GitHub drops scheduled runs under load and names the
+    # top of the hour as the worst time. With '*/15' this schedule fired once in its first 7.5 hours
+    # (2026-10-02); turning the workflow off and on did not wake it.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
     inputs:
       prune:
