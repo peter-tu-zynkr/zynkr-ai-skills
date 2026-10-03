@@ -246,10 +246,11 @@ answers it, and the exact 問題 → 建議動作 line format. In one breath:
 ### 5 · Emit the report
 
 zh-TW, findings-only: one section per engagement **with** findings; quiet
-engagements roll into a single ✅ count line. Shape:
+engagements roll into a single ✅ count line. A folder no deal owns (an I1
+orphan) gets its own `## [N]` section the same way. Shape:
 
 ```
-顧問案健檢 — 2026-10-05（回溯 21 / 14 天）
+顧問案健檢 — 2026-10-05（回溯 21 / 14 天：會議紀錄看 2026-09-14 以後 · CRM 活動看 2026-09-21 以後）
 
 ## [4] 宏宇精密（報價流程自動化）— 2 項發現
 - I3 · 問題：最新的會議紀錄停在 2026-09-05（[Notes] 與 [Kickoff] 都是），已超過 21 天

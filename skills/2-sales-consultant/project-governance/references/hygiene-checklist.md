@@ -80,14 +80,15 @@ that is gone.
 **What it checks.** The folder of a deal at **qualified or later** holds the set
 `/project-init` lays: `[Kickoff] <專案名稱>` and `[專案管控表] …` (with
 `[Charter]`, `[Business Case]` and `[復盤]`). A **`new` or `contacted`** deal's
-folder holds a kickoff or context doc of any convention: `/sales-inbound`'s `<交易名稱> — 專案啟動`, or
-the older `[Kickoff] … — 專案脈絡與會議紀錄`.
+folder holds an inbound kickoff doc: a title ending in `專案啟動`, `啟動文件` or
+`專案脈絡與會議紀錄`, whatever separator comes before it (` — `, `｜`, ` · `).
+`/sales-inbound` writes `<交易名稱> — 專案啟動`; the older ones read
+`[Kickoff] … — 專案脈絡與會議紀錄` or `[Kickoff] …｜專案脈絡與會議紀錄`.
 
 **How.** The step-2 per-folder listing; title-based only — contents are never
-read. The project's `[Kickoff]` is `[Kickoff] <專案名稱>`; an inbound kickoff
-(`<交易名稱> — 專案啟動`, or `[Kickoff] … — 專案脈絡與會議紀錄`) is **not** half of
-the set, exactly as `/project-init` reads it, so such a folder holding only
-that is *Not opened*. Left in an opened project's folder it is expected:
+read. The project's `[Kickoff]` is `[Kickoff] <專案名稱>`, with no such ending;
+an inbound kickoff is **not** half of the set, exactly as `/project-init` reads
+it, so such a folder holding only that is *Not opened*. Left in an opened project's folder it is expected:
 `/project-init` links it from the new `[Kickoff]` and keeps it.
 
 **Violations.**
