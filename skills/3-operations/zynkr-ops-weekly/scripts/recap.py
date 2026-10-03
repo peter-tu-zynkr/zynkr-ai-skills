@@ -70,7 +70,11 @@ def load_all(path=None):
     doc_id = raw.get("doc", {}).get("id") or ""
     # Who gets the recap: "owner" (the account alone, the default) while it is new, "team" (every
     # reporter) once the owner has seen it work. A missing or unknown value never reaches the team.
+    # `recap_team_from` (YYYY-MM-DD) sets the switch ahead: "team" starts with the recap of that
+    # Monday. A date that cannot be read keeps the owner alone.
     audience = raw.get("routine", {}).get("recap_audience") or "owner"
+    team_from = str(raw.get("routine", {}).get("recap_team_from") or "").strip()
+    cfg.update(team_from=(ledger.norm_date(team_from) or "9999-12-31") if team_from else "")
     cfg.update(reporters=reporters, names=names, rules=rules, audience=audience if audience in ("owner", "team") else "owner",
                doc_url=("https://docs.google.com/document/d/%s/edit" % doc_id) if doc_id and "<" not in doc_id else "",
                tracker_url="https://docs.google.com/spreadsheets/d/%s/edit" % cfg["tracker"],
@@ -401,6 +405,16 @@ def render_html(facts, tldr):
     return "".join(o)
 
 
+def audience_for(run):
+    """Who gets this recap: every reporter when the audience is `team` and the recap's Monday is on or
+    after `recap_team_from` (when set); the owner alone otherwise."""
+    if run["audience"] != "team":
+        return "owner"
+    if run.get("team_from") and ledger.monday(run["runner_week"]).isoformat() < run["team_from"]:
+        return "owner"
+    return "team"
+
+
 def r_render(d, tldr_path):
     run = load_run(d)
     if not run.get("built"):
@@ -419,8 +433,9 @@ def r_render(d, tldr_path):
     open(path, "w", encoding="utf-8").write(body)
     run.update(rendered=True, subject=subject)
     save_run(run)
-    to = ",".join(run["reporters"]) if run["audience"] == "team" else run["account"]
-    return {"subject": subject, "to": to, "audience": run["audience"], "body_path": path, "body_format": "html",
+    audience = audience_for(run)
+    to = ",".join(run["reporters"]) if audience == "team" else run["account"]
+    return {"subject": subject, "to": to, "audience": audience, "body_path": path, "body_format": "html",
             "tldr_kept": len(kept), "tldr_dropped": dropped,
             "sent_check": "search in:sent newer_than:3d for this exact subject before sending; send only if absent"}
 
@@ -619,6 +634,23 @@ def selftest():
         r_build(st_o["dir"], "2026-10-12")
         check("recap defaults to the owner", r_render(st_o["dir"], None)["to"], "owner@example.com")
 
+        # the switch set ahead: `team` starts with the recap of the Monday recap_team_from names
+        def to_with(team_from):
+            p = os.path.join(tmp, "cfg-team-from.json")
+            raw_t = json.load(open(cfgp, encoding="utf-8"))
+            raw_t["routine"] = {"recap_audience": "team", "recap_team_from": team_from}
+            json.dump(raw_t, open(p, "w"), ensure_ascii=False)
+            s = r_start("2026-W42", p, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
+            serve(s["calls"], sheet)
+            serve(r_blocks(s["dir"])["calls"], sheet)
+            r_build(s["dir"], "2026-10-12")
+            return r_render(s["dir"], None)["to"]
+
+        check("before the team's first Monday, the owner alone", to_with("2026-10-19"), "owner@example.com")
+        check("from the team's first Monday, everyone", to_with("2026-10-12"), "a@example.com,b@example.com")
+        check("a slash date is read too", to_with("2026/10/12"), "a@example.com,b@example.com")
+        check("a date that cannot be read keeps the owner alone", to_with("next Monday"), "owner@example.com")
+
         # no Reports / Decisions recorded: says so, never "0"
         sheet2 = ledger_sheet([wrow("2026-W40", w40), wrow("2026-W41", w41)], w40, w41)
         st2 = r_start("2026-W42", cfgp, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
@@ -714,6 +746,10 @@ MUTATIONS = [
     ("notice path skipped", [('    if not snapshot_ok(row, run["week"], run["cycle"]):', "    if False:")]),
     ("recap defaults to the team", [('audience = raw.get("routine", {}).get("recap_audience") or "owner"',
                                       'audience = raw.get("routine", {}).get("recap_audience") or "team"')]),
+    ("the team's first Monday ignored", [('if run.get("team_from") and ledger.monday(run["runner_week"]).isoformat() < run["team_from"]:',
+                                          "if False:")]),
+    ("an unreadable first Monday reaches the team", [('(ledger.norm_date(team_from) or "9999-12-31") if team_from else ""',
+                                                      'ledger.norm_date(team_from) or ""')]),
     ("machine evidence in the mail", [('esc(x["why"])))', 'esc("；".join(x["evidence"]))))')]),
     ("proposals section dropped", [('if row[cell] == "ok" and (phase3 or cell < 14):', 'if row[cell] == "ok" and cell < 14:')]),
     ("no apply run shown as decided", [('elif not pr["applied_ran"]:', 'elif False:')]),

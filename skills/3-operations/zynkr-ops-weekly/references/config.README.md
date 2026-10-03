@@ -41,6 +41,9 @@
 - `routine.recap_audience` decides who receives the Monday recap: `owner` (the account alone) or
   `team` (every address in `reporters`). A missing or unknown value means `owner`, so the team only
   ever receives a recap the owner switched on.
+- `routine.recap_team_from` (`YYYY-MM-DD`, optional) sets that switch ahead of time: with
+  `recap_audience: team`, recaps before that Monday still go to the owner alone, and the team gets
+  the recap of that Monday onward. A date that cannot be read keeps the recap with the owner.
 - `routine.apply_mode` decides what `apply` does with an approved change: `shadow` records the
   decision in the Ledger and writes nothing to the Main Tracker; only the exact value `live` writes
   (Phase 3b, refused until it ships). Anything else, or nothing, means `shadow`.

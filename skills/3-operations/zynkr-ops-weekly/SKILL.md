@@ -130,7 +130,7 @@ This repository is public. The method is here; the **identifiers are not**. At r
 | `sources.main_tracker` · `sources.okr_kpi_tracker` | sheets read to backfill metrics and overdue items. `main_tracker.tab` is the tab `snapshot` copies; `main_tracker.cycle` (`2026H2`) keeps one half-year's item numbers apart from the next |
 | `sources.ledger.id` · `sources.ledger.epoch_week` | the machine-owned Weekly Ledger, and the ISO week its row layout counts from. **Never change `epoch_week` after the first snapshot**: every week's rows are computed from it |
 | `routine.apply_mode` | what `apply` does with an approved change: `shadow` (record it, write nothing to the tracker) unless it says exactly `live`. `live` is refused until Phase 3b ships |
-| `routine.recap_audience` | who gets the Monday recap: `owner` (the account alone) while it is new, `team` (every reporter) once the owner has seen it work. Missing means `owner` |
+| `routine.recap_audience` | who gets the Monday recap: `owner` (the account alone) while it is new, `team` (every reporter) once the owner has seen it work. Missing means `owner`. `routine.recap_team_from` (`YYYY-MM-DD`) sets the switch ahead: `team` starts with that Monday's recap |
 | `sources.state_rules.path` | optional; where zynkr-gm's `derive_state.py` lives. Default `~/.claude/skills/zynkr-gm/scripts/derive_state.py` |
 | `routine.*` | how the eight beats are scheduled — mechanism, model, timezone, per-beat windows. See `references/scheduling.md` |
 
@@ -575,7 +575,9 @@ save each result unchanged, and write the TL;DR. Skip Steps 2 and 3.
    `delivered=send-not-found`.
 
 **Who receives it** is `routine.recap_audience`, decided by the owner, never by this run: `owner`
-sends it to the account alone, `team` to every address in `reporters`.
+sends it to the account alone, `team` to every address in `reporters` — from the Monday
+`routine.recap_team_from` names when it is set. `render` works this out and prints `to`; send to
+exactly that.
 
 ### 4.10 `propose` (Fri 10:00, after `tidy`)
 

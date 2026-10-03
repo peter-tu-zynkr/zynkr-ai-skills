@@ -74,7 +74,7 @@ exactly and saves the whole result to `save`.
 only when an `Updates` row with the same cycle, `#`, column and new value falls inside the window
 between the two snapshots; everything else is a manual edit. Monday's recap reads this. `ledger.py --selftest` runs the whole pipeline
 against fake MCP results; `ledger.py --mutate` checks that fourteen deliberate breakages each turn
-the selftest red (`proposals.py --mutate` sixty, `recap.py --mutate` ten).
+the selftest red (`proposals.py --mutate` sixty, `recap.py --mutate` twelve).
 
 ## Exit codes
 

@@ -192,7 +192,8 @@ instead of a change count, and a week whose decisions never reached the Ledger r
 never `決議 0 件`. The ISO key stays out of the subject: it is machine-only.
 
 Recipients: `routine.recap_audience` decides. `owner` while the recap is new, `team` (every
-address in `reporters`) once the owner has seen it work. The mail itself is built by
+address in `reporters`) once the owner has seen it work; `routine.recap_team_from` (a Monday,
+`YYYY-MM-DD`) lets the owner set that switch ahead of time. The mail itself is built by
 `scripts/recap.py render` from the Ledger; the run writes only the TL;DR.
 
 Body sections, in order:

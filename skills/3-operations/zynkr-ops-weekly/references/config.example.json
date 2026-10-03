@@ -68,6 +68,8 @@
     "model": "<model-id>",
     "recap_audience": "owner",
     "$recap_audience": "owner = the account alone (default, and what a missing value means); team = every address in reporters. Switch to team once the owner has seen a recap.",
+    "recap_team_from": "",
+    "$recap_team_from": "Optional YYYY-MM-DD: with recap_audience team, the team starts with that Monday's recap; earlier ones still go to the owner alone. Empty = team at once.",
     "apply_mode": "shadow",
     "$apply_mode": "shadow = apply records the owner's decisions in the Ledger and writes nothing to the Main Tracker (default, and what any other value means); live = writes approved changes (Phase 3b — refused until it ships)."
   },
