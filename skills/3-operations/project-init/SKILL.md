@@ -7,9 +7,9 @@ status: WIP
 visibility: public
 author: Peter Tu
 sheetId: "3.20"
-description: "Stands up a new project from the PMO template set — resolves the filing home from the engagement type, copies the five templates into a new project folder, creates the four sub-folders, clears the example rows (鐵律 2), fills the Kickoff header, seeds 管控表 tab 1 with the five delivery-stage rows, writes the backlinks both ways and prints the pm.json entry to paste (spine + report recipients included). Trigger on /project-init or when the user says 「開新專案」「建立專案資料夾」「幫我開一個案子」「set up a new project」「複製專案模板」「開案」「新專案要什麼檔案」, or hands over a project name plus a 專案類型 (客戶案／課程案／內部案) and wants the PMO file set laid down. For a 客戶案 it opens the engagement at deal won: from the won CRM deal it numbers (or reuses) the client's `[N] Company（Project）` folder, lays the set inside and notes the links on the deal — it never creates a deal; Sales does. Distinct from project-planning (which fills the WBS this skill deliberately leaves empty)."
-input: "專案名稱 · 專案類型 (客戶案／課程案／內部案) · Sponsor · PM · 目標完成日 · 一行核心目標 · for a 客戶案 the won CRM deal; plus ~/.config/zynkr/pm.json for the filing home"
-process: "Verify the pack sha → collect inputs (客戶案: the won deal) → resolve filing_home, number or reuse the [N] folder → pre-flight → copy 5 templates + 4 sub-folders → set 核心目標, CLEAR example rows → seed five X.0 rows → backlink → print pm.json"
+description: "Stands up a new project from the PMO template set — resolves the filing home from the engagement type, copies the five templates into a new project folder, creates the four sub-folders, clears the example rows (鐵律 2), fills the Kickoff header, seeds 管控表 tab 1 with the five delivery-stage rows, writes the backlinks both ways and prints the pm.json entry to paste (spine + report recipients included). Trigger on /project-init or when the user says 「開新專案」「建立專案資料夾」「幫我開一個案子」「set up a new project」「複製專案模板」「開案」「新專案要什麼檔案」, or hands over a project name plus a 專案類型 (客戶案／課程案／內部案) and wants the PMO file set laid down. For a 客戶案 it opens the engagement once the deal is qualified (after the discovery call): from the CRM deal it numbers (or reuses) the client's `[N] Company（Project）` folder, lays the set inside and notes the links on the deal — it never creates a deal; Sales does. Distinct from project-planning (which fills the WBS this skill deliberately leaves empty)."
+input: "專案名稱 · 專案類型 (客戶案／課程案／內部案) · Sponsor · PM · 目標完成日 · 一行核心目標 · for a 客戶案 the CRM deal (qualified or later); plus ~/.config/zynkr/pm.json for the filing home"
+process: "Verify the pack sha → collect inputs (客戶案: the qualified deal) → resolve filing_home, number or reuse the [N] folder → pre-flight → copy 5 templates + 4 sub-folders → set 核心目標, CLEAR example rows → seed five X.0 rows → backlink → print pm.json"
 output: "A project folder holding [Business Case] · [Charter] · [Kickoff] · [專案管控表] · [復盤] plus sub-folders [1]–[4], tab 1 seeded with five stage rows and no tasks, and a pm.json snippet"
 synergy: [project-status-update, project-planning, project-minutes-sync, sales-inbound]
 house-style: exempt — machine artifact — writes config, no prose output
@@ -57,7 +57,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 0. 驗知識包 sha ＋ 載入 adapter
 1. 收齊六個輸入
-2. 解析歸檔家（客戶案：讀成交的 CRM 交易，沿用或編號 `[N]` 資料夾）
+2. 解析歸檔家（客戶案：讀已 qualified 的 CRM 交易，沿用或編號 `[N]` 資料夾）
 3. Pre-flight：同名專案已存在就停
 4. 複製五份模板 ＋ 開四個子資料夾 ＋ **改核心目標、清空範例列**
 5. 填 Kickoff 表頭（依案型）＋ Charter 首頁
@@ -91,7 +91,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 | PM | 專案負責人；同時是五列階段列的 `Owner` |
 | 目標完成日 | **含年份** `YYYY/M/D`（知識包 §4）；沒有年份的日期視為不可讀 |
 | 核心目標 | 一行話，會被寫進管控表 tab 1 第 1 列與 Charter 首頁 |
-| 成交的 CRM 交易 | **只有 `客戶案` 需要**：交易編號（`交易-YYYYMM-NNN`）、交易網址或公司名，見 Step 2.1。客戶／對象從交易讀，不另外問 |
+| CRM 交易（qualified 以後） | **只有 `客戶案` 需要**：交易編號（`交易-YYYYMM-NNN`）、交易網址或公司名，見 Step 2.1。客戶／對象從交易讀，不另外問 |
 
 缺任何一項就**問**，不要替使用者填。特別是核心目標：一句想當然耳的漂亮話會被寫進三份檔案，之後沒人記得那不是使用者說的。`內部案` 另外要問所屬 LOB（Step 2 會用到）。
 
@@ -105,13 +105,13 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 
 **絕不猜資料夾**：不用 Drive 搜尋標題去找「看起來像的那個」，不沿用上次跑到的 ID，不退回任何寫死的預設值。建錯地方的專案，錯誤會一路長進權限與歸檔。
 
-### 2.1 · 客戶案：成交時開案，只讀交易、不建交易
+### 2.1 · 客戶案：qualified 時開案，只讀交易、不建交易
 
-`客戶案` 在**交易成交（won）的那一刻**開案，而且只由本技能開（`SKB-045`，決策 D2）。交易本身由 Sales 建立（`/sales-inbound`、`/sales-outbound`），本技能**只讀交易、絕不建交易**，也不建公司或聯絡人。
+`客戶案` 在**交易標為 `qualified` 的那一刻**開案：探索會議（discovery call）後確認是值得投入的潛在客戶，就在 Zynkr 把交易標成 `qualified`。開案只由本技能做（`SKB-045`，決策 D2；2026-10-03 由成交改為 qualified，因為簽約前的來回討論、workshop 準備、提案與客戶素材都需要一個家）。交易本身由 Sales 建立（`/sales-inbound`、`/sales-outbound`），本技能**只讀交易、絕不建交易**，也不建公司或聯絡人。
 
 1. **找到交易。** 交易網址 `…/deals/<id>` ⇒ `mcp__zynkr__get_deal(id)`。交易編號或公司名 ⇒ `mcp__zynkr__list_deals(search="<編號或公司名>")`，留下編號或公司相符的列，再 `get_deal`。找到不只一筆就列出來問，不要自己挑；一筆都沒有就停，並說「交易要先由 Sales 建立」。CRM 連不上就停並照實回報，不要退回去用公司名猜資料夾。
-2. **確認已成交。** `stage` 不是 `won` ⇒ 停，回報「客戶案在成交時開案；這筆交易目前在 `<stage>`」。只有 Peter 明說要提前開（例如簽約前就要排 shadowing），才照做，並在交付清單第一行標明「交易尚未成交」。
-3. **先找既有的資料夾，再考慮編號。** 舊流程在 inbound 時就替每個詢問開了 `[N]` 資料夾，所以很多成交的交易早已有資料夾：
+2. **確認交易階段。** `qualified`、`proposal`、`won` ⇒ 開案。`new` 或 `contacted` ⇒ 停，回報「客戶案在交易標為 qualified（探索會議後）時開案；這筆交易目前在 `<stage>`」；只有 Peter 明說要提前開，才照做，並在交付清單第一行標明「交易尚未 qualified」。`lost` ⇒ 停，不開案。
+3. **先找既有的資料夾，再考慮編號。** 舊流程在 inbound 時就替每個詢問開了 `[N]` 資料夾，所以很多交易早已有資料夾：
    - 交易的 `notes` 欄裡有 Drive 資料夾連結（`/sales-inbound` 寫的回連）⇒ 確認它在歸檔家 `[2.2]` 底下，就用它。
    - 沒有連結 ⇒ 列出歸檔家**一次**，找名稱含交易公司名的 `[N]` 資料夾。恰好一個 ⇒ 用它並說出來；不只一個 ⇒ 列出來問。
    - 都沒有 ⇒ 編號：`N` ＝ 歸檔家裡資料夾開頭 `[數字]` 的最大值 ＋ 1（沒有任何編號就從 1 開始），建立 `[N] <公司名>（<專案名稱>）`；公司名空白就用 `[N] <專案名稱>`。編號只看**資料夾**，不看檔案。
@@ -252,7 +252,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 - **絕不在解析出來的歸檔家之外建資料夾** — `filing_home` 解析失敗就停，不建「暫時放這裡」的資料夾。
 - **絕不發明任務** — 五列階段列是上限。沒有輸入就沒有任務，寧可交出一張空表。
 - **絕不發明日期** — 目標完成日以外的日期一律留白；沒有年份的日期回報而不是補（知識包 §4）。
-- **客戶案只讀交易、不建交易** — 交易、公司、聯絡人都由 Sales 建立；本技能只在成交後開案。對交易只做兩件事：`notes` 欄先讀再**接一行** `專案資料夾：<url>`（絕不覆蓋原有內容），以及留一則備註。
+- **客戶案只讀交易、不建交易** — 交易、公司、聯絡人都由 Sales 建立；本技能在交易標為 `qualified` 之後才開案。對交易只做兩件事：`notes` 欄先讀再**接一行** `專案資料夾：<url>`（絕不覆蓋原有內容），以及留一則備註。
 - **讀不到就回報** — 設定缺鍵、標頭不吻合、模板正本開不起來，一律據實回報缺漏，不以合理推測填補（知識包 §9）。
 - **絕不憑空補標頭** — `pm-sheet-schema.json` 記 `null` 的分頁就是還沒擷取，報 TODO，不寫入。
 - **絕不寫死收件人** — 週報名單只住 `pm.json` 的 `report_recipients`，本檔只印佔位字串。
@@ -265,4 +265,4 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 | `/project-planning` | Charter 核准後，把五列階段列展開成 WBS |
 | `/project-minutes-sync` | 第一場會議之後，建 `[會議記錄]` 並把 Action Items 對回管控表 `no.` |
 | `/project-status-update` | `pm.json` 片段貼好之後的第一個週報週期 |
-| `/sales-inbound` · `/sales-outbound` | `客戶案` 的 CRM 交易由他們建立（在本技能之前）；成交之後才輪到本技能開案 |
+| `/sales-inbound` · `/sales-outbound` | `客戶案` 的 CRM 交易由他們建立（在本技能之前）；交易標為 `qualified` 之後才輪到本技能開案 |

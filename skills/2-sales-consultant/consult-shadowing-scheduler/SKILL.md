@@ -55,7 +55,7 @@ client, is worse than one follow-up question. Re-runs update, never duplicate.
 ## How this differs from its neighbours
 
 - **sales-inbound / project-init** — they open the numbered `[N]` folder
-  (project-init at deal won; sales-inbound also creates the deal). This skill assumes both exist and only adds a subfolder + activity to
+  (project-init at qualified; sales-inbound also creates the deal). This skill assumes both exist and only adds a subfolder + activity to
   them. If there is no 專案資料夾 link and no single folder matches the company,
   it STOPs and points at them.
 - **consult-brd-writer** — consumes the shadowing transcript AFTER the session;
@@ -102,7 +102,7 @@ company name, ignoring case, spaces and punctuation.
 - **Exactly one match** → use it, and tell Peter the deal is missing its backlink
   (the line format is in `/sales-inbound` step 4d).
 - **None, or more than one** → **STOP.** Tell Peter the deal has no project folder
-  yet and point at `/project-init` (a won deal) or `/sales-inbound` (an inbound
+  yet and point at `/project-init` (a qualified deal) or `/sales-inbound` (an inbound
   lead). Never invent a folder here.
 
 ### 2 · Collect constraints

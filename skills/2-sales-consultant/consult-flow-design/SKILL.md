@@ -80,7 +80,7 @@ documents, the two-chart pairing discipline, the naming, and the CRM record.
    through an invocation of /ops-workflow-design. If it's not installed,
    hard-STOP (step 2). Do not re-derive its convention here.
 3. **Never create a project folder.** No `[N]` folder ⇒ STOP and route to
-   /sales-inbound (inbound lead) or /project-init (won deal).
+   /sales-inbound (inbound lead) or /project-init (qualified deal).
 4. **Never draw before the step-3 narrative confirm.** Charts are expensive
    to redo (the Lucid create tool cannot restructure lanes in place).
 5. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the
@@ -100,7 +100,7 @@ documents, the two-chart pairing discipline, the naming, and the CRM record.
   (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
 - **No folder at all** → STOP. Point at /sales-inbound (inbound lead) or
-  /project-init 客戶案 (won deal). Hard rule 3.
+  /project-init 客戶案 (qualified deal). Hard rule 3.
 - **Sources** — `mcp__google-workspace__list_docs_in_folder` on the `[N]`
   folder; read whatever exists of `[Notes]` session notes, 痛點 ledger,
   `[Plan]`, `[BRD]` via `mcp__google-workspace__get_doc_content`. If the

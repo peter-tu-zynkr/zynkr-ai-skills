@@ -78,7 +78,7 @@ recognize or a score he'd contest poisons everything downstream of it.
 ## Hard rules
 
 1. **Never create a competing folder.** No `[N]` folder for this client ⇒ STOP
-   and route to /sales-inbound (inbound lead) or /project-init (won deal); see step 1.
+   and route to /sales-inbound (inbound lead) or /project-init (qualified deal); see step 1.
 2. **One section at a time.** Never generate the whole plan in one shot — each
    of steps 2–6 ends with Peter confirming before the next begins.
 3. **Score with the rubric, only the rubric.** Every pain gets the 1–5 scale
@@ -108,7 +108,7 @@ Then resolve the engagement:
   missing, list the parent (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
 - **No folder at all** → STOP. This client has no project workspace yet — point
-  at /sales-inbound (inbound lead) or /project-init 客戶案 (won
+  at /sales-inbound (inbound lead) or /project-init 客戶案 (qualified
   deal). Hard rule 1: never create a competing folder.
 
 ### 2 · Persona — confirm

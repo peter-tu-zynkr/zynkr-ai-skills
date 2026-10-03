@@ -62,12 +62,14 @@ sweep that only reports can run every Monday without fear.
   links it from the deal; `/sales-outbound` creates the deal and no folder. Not
   every lead gets a folder, and not every folder is a build project — talks,
   partnerships and coaching land in the same parent.
-- **At deal won** (`SKB-045`), `/project-init 客戶案` reuses the deal's folder or
+- **At qualified** (`SKB-045`: the deal is labelled `qualified` after the
+  discovery call), `/project-init 客戶案` reuses the deal's folder or
   numbers a new `[N]`, lays the project set (`[Kickoff] <專案名稱>`,
   `[專案管控表]`, `[Charter]`, `[Business Case]`, `[復盤]`, and the sub-folders
   `[1] 會議` · `[2] 素材` · `[3] 交付物` · `[4] 封存`) and writes the deal's
-  `專案資料夾：` line. Projects won before then may have only the inbound
-  kickoff doc.
+  `專案資料夾：` line. From then on — `qualified`, `proposal` or `won`,
+  "qualified or later" below — the project should be open. Projects that got
+  there before `/project-init` did this may have only the inbound kickoff doc.
 - **During the work**, `/consult-session-notes` files a `[Notes]` doc per
   session (shadowing notes go into the `Shadowing — YYYY-MM-DD` sub-folders),
   and people paste weekly updates into the `[Kickoff]`. The documents follow
@@ -90,7 +92,7 @@ documents, never from its stage.
 - **project-client-status** — ONE engagement, client-facing, produces a Gmail
   draft. This skill is ALL engagements, internal-only, and writes nothing.
 - **project-init / sales-inbound** — they OWN the fixes this report proposes:
-  `/project-init` opens every client project at deal won (folder, `[N]`
+  `/project-init` opens every client project once its deal is qualified (folder, `[N]`
   numbering, the project set, the deal backlink); `/sales-inbound` opens
   folders for new inbound leads. This skill points at them; it never does
   their job.
@@ -107,17 +109,17 @@ documents, never from its stage.
 1. **Read-only, absolutely.** No Doc creation, no folder moves or renames, no
    CRM writes — not even a deal-note append. The report exists only in the
    chat reply.
-2. **A missing folder is never a task.** A won deal with no folder is listed
-   once (it may not be a client project at all), with `/project-init 客戶案`
-   as the way to open one; an open deal needs no folder. This skill never
-   creates a folder under any circumstances.
+2. **A missing folder is never a task.** A deal at qualified or later with no
+   folder is listed once (it may not be a client project at all), with
+   `/project-init 客戶案` as the way to open one; a `new` or `contacted` deal
+   needs no folder. This skill never creates a folder under any circumstances.
 3. **Every finding carries a 建議動作** naming the owning skill (or the exact
    one-line manual edit) that can actually do it. A problem without a routed
    fix is not a finding, it's noise.
-4. **One cause, one finding.** A won project nobody has opened yet (neither
-   `[Kickoff] <專案名稱>` nor `[專案管控表]` in its folder; an inbound kickoff
-   doc does not count) gets one finding —
-   I1's *Won, not opened* when the deal has no line, I2 when it has one — and
+4. **One cause, one finding.** A project at qualified or later that nobody has
+   opened yet (neither `[Kickoff] <專案名稱>` nor `[專案管控表]` in its folder;
+   an inbound kickoff doc does not count) gets one finding —
+   I1's *Not opened* when the deal has no line, I2 when it has one — and
    I3 and I6 stay quiet for it: they would only repeat the same cause.
 5. **Honesty over completeness.** Anything skipped — a file loose in the
    parent, a folder only a lost deal owns, a deal listing that hit its limit —
@@ -125,7 +127,7 @@ documents, never from its stage.
 
 ## What this skill explicitly does not do
 
-- Does **not** fix anything. /project-init opens client projects at deal won
+- Does **not** fix anything. /project-init opens client projects once the deal is qualified
   (folder, numbering, project set, backlink); /sales-inbound opens folders for
   new inbound leads; /consult-session-notes files `[Notes]`;
   /consult-brd-writer (`[BRD]`), /ops-transformation (`[Assessment]`,
@@ -135,8 +137,9 @@ documents, never from its stage.
 - Does **not** create, move, rename, or trash anything in Drive.
 - Does **not** read Doc *contents* — it audits existence, titles, and
   `modifiedTime` only. An empty `[BRD]` with the right title passes I6.
-- Does **not** audit the sales pipeline. Open deals with no folder are
-  counted in one line, never listed.
+- Does **not** audit the sales pipeline. `new` and `contacted` deals with no
+  folder are counted in one line, never listed; a deal at qualified or later
+  with no folder is listed once, never judged (hard rule 2).
 - Does **not** email anyone. (If a finding ever turns into client-facing
   mail, that runs through the owning skill's Gmail-DRAFT rule — never sent.)
 
@@ -210,11 +213,14 @@ Then sort what you have:
 - **Moved out** — a live deal whose line points at a folder that still exists
   outside the parent (`list_drive_items` on the id answers): archived. One
   已移出 [2.2] line, and nothing else for that deal.
-- **Won, no folder** — any other won deal no folder is attributed to. It may be
-  an event, a beta seat or a program call rather than a client project, so it
-  is never a finding: list every one in a single 未列入 line with the way to
-  open one if it is a client project.
-- **Open, no folder** — the sales pipeline: one count line.
+- **Qualified, no folder** — any other deal at qualified or later that has no
+  `專案資料夾：` line and no folder attributed to it (a line whose folder is
+  gone is I1's *Dangling*, never also listed here). It may be an event, a
+  beta seat or a program call rather than a client project, so it is never a
+  finding: list every one in a single 未列入 line with the way to open one if
+  it is a client project.
+- **Early, no folder** — a `new` or `contacted` deal without one, the sales
+  pipeline: one count line.
 
 `list_deals` returns the newest 100 by activity and is scoped to your own
 workspace, so if the count comes back at exactly 100, say so in the report and
@@ -230,8 +236,8 @@ answers it, and the exact 問題 → 建議動作 line format. In one breath:
 
 | ID | Invariant | Applies to | Window |
 |----|-----------|------------|--------|
-| I1 | deal ↔ folder: a won deal carries the line; no dangling, orphan, forked or ambiguous link | every folder and deal | — |
-| I2 | the kickoff set is in the folder | won: `/project-init`'s set · open: any kickoff doc | — |
+| I1 | deal ↔ folder: a deal at qualified or later carries the line; no dangling, orphan, forked or ambiguous link | every folder and deal | — |
+| I2 | the kickoff set is in the folder | qualified or later: `/project-init`'s set · `new` · `contacted`: any kickoff doc | — |
 | I3 | a fresh session record (`[Notes]`, a kickoff doc, `[1] 會議`) | `proposal` · `won` | 21d |
 | I4 | `[N]` numbering: no gaps, no duplicates, no folder without a number | every folder | — |
 | I5 | the deal shows CRM activity (else 停滯) | open | 14d |
@@ -265,8 +271,8 @@ engagements roll into a single ✅ count line. Shape:
 | 發現（依 invariant）| I1×1 · I2×0 · I3×1 · I4×0 · I5×0 · I6×1 |
 
 未列入：
-- 已成交但沒有專案資料夾：活動合辦（交易-202607-003）· Beta 席位（https://platform.zynkr.ai/deals/…）— 是客戶案的話跑 /project-init 客戶案 開案
-- 12 筆還沒成交、也沒有資料夾的交易（Sales 的 pipeline）
+- 已到 qualified 以後但沒有專案資料夾：活動合辦（交易-202607-003）· Beta 席位（https://platform.zynkr.ai/deals/…）— 是客戶案的話跑 /project-init 客戶案 開案
+- 12 筆還在 new／contacted、也沒有資料夾的交易（Sales 的 pipeline）
 
 本次未檢查：
 - [5] 某某公司（詢價）：只有未成交的交易對到，屬未成交案的資料夾
@@ -292,8 +298,8 @@ that errored mid-sweep. An audit that silently skips is worse than no audit.
 - **Report-only, borrowed from admin-governance.** A weekly ritual must be
   safe to fire without review; the moment a sweep can write, every run needs
   babysitting and the ritual dies. Proposing beats fixing.
-- **Fixes route to owning skills.** project-init owns opening the project at
-  deal won; the writers own their documents. One fix implementation per
+- **Fixes route to owning skills.** project-init owns opening the project once
+  the deal is qualified; the writers own their documents. One fix implementation per
   artifact means the fix logic can't fork — this report is a dispatcher, not
   a second implementation.
 - **The link, not the name.** Folder names come in several shapes, and the
@@ -316,7 +322,11 @@ that errored mid-sweep. An audit that silently skips is worse than no audit.
 - **Scope** → whole portfolio; single-company only when a company is named.
 - **"Open deal"** → any stage that isn't `won` or `lost` per
   `list_deal_stages` (confirm the actual slugs at run time).
-- **"Past discovery" (I3 applies)** → `proposal` or `won`.
+- **"Qualified or later"** → `qualified`, `proposal` or `won`: the stages at
+  which a client project should be open (`SKB-045` D2; it was `won` until
+  2026-10-03).
+- **I3's stages** → `proposal` or `won`. An opened `qualified` project is not
+  checked for session records yet; I5's activity pulse covers it.
 - **Report language** → zh-TW body; invariant IDs stay English (I1–I6).
 - **Sort order** → by engagement number, then invariant ID.
 
@@ -341,8 +351,8 @@ projects past the sale.
   deal's company matches reads as an orphan.
 - Audits titles and `modifiedTime`, never contents — an empty `[BRD]` passes
   I6, and a kickoff doc renamed away from its convention reads as missing.
-- A finished project without a `[復盤]` (projects won before `/project-init`
-  opened them) stays audited until its folder leaves the parent; a `[復盤]`
+- A finished project without a `[復盤]` (projects that got past qualified
+  before `/project-init` opened them) stays audited until its folder leaves the parent; a `[復盤]`
   edited before the end closes a project early, and I3 goes quiet for it.
 - A folder sitting in Drive's trash may read as moved out rather than gone.
 - Activity pulse only sees what the CRM recorded — un-logged calls and

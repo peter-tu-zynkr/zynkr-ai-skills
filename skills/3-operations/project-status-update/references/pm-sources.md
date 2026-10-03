@@ -122,7 +122,7 @@ is §3.
         "label": "[2.2]"              // the bracket label, for prose and for backlinks
       },
       "creates_crm_deal": true,       // this type has a CRM deal: Sales creates it (sales-inbound,
-                                      // sales-outbound) and project-init reads it at deal won
+                                      // sales-outbound) and project-init reads it at qualified
       "kickoff_fields_omitted": [],   // Kickoff header fields this type leaves blank
       "closure_extra_steps": [        // appended to the 復盤 §4 封存檢查表 for this type
         "CRM deal 關閉",

@@ -11,9 +11,10 @@ READ-ONLY — every fix here is a *proposal* routed to the skill that owns it.
 folder. A live deal always outranks a `lost` one; a folder only a lost deal
 claims is listed, not audited, and a lost deal's links are never judged. A
 **closed** project (its `[復盤]` modified after its `[Kickoff]`) gets one
-已結案 line and skips I2, I3 and I6. And one cause gives one finding: a won
-project nobody has opened yet (neither half of the project set) gets I1's
-*Won, not opened* or I2's, and I3 and I6 skip it.
+已結案 line and skips I2, I3 and I6. And one cause gives one finding: a project
+at qualified or later (`qualified`, `proposal` or `won`) that nobody has opened
+yet (neither half of the project set) gets I1's *Not opened* or I2's, and I3
+and I6 skip it.
 
 ## Shared finding format
 
@@ -33,7 +34,7 @@ names the owning skill with a leading `/` when one exists. A deal without a
 
 ## I1 — Deal ↔ folder backlink
 
-**What it checks.** A won deal that owns a folder carries a
+**What it checks.** A deal at qualified or later that owns a folder carries a
 `專案資料夾：<url>` line pointing at it — `/project-init` writes that line when
 it opens the project, and every reader of the folder finds it through the
 line. Every live deal's line points at a folder that exists. Every folder has
@@ -47,11 +48,11 @@ line whose id is not in the parent: list that id
 that is gone.
 
 **Violations** (live deals only — a lost deal's links are history):
-- *Won, not opened*: a won deal without a line, owning a folder by company name
-  that holds neither `[Kickoff] <專案名稱>` nor `[專案管控表]` — `/project-init`
-  never ran on it.
-- *Won, line missing*: as above, but the folder holds the project set — only
-  the line is missing.
+- *Not opened*: a deal at qualified or later without a line, owning a folder by
+  company name that holds neither `[Kickoff] <專案名稱>` nor `[專案管控表]` —
+  `/project-init` never ran on it.
+- *Line missing*: as above, but the folder holds the project set — only the
+  line is missing.
 - *Dangling*: a line whose folder no longer exists. (A folder that still
   exists outside the parent has been moved out — archived — and is not a
   finding: one 已移出 [2.2] line, SKILL.md step 3.)
@@ -69,32 +70,33 @@ that is gone.
 建議動作：跑 /project-init 客戶案 <交易編號>：沿用 [<n>]、補齊專案文件並寫上 專案資料夾 那一行
 建議動作：deal notes 補上 專案資料夾：<folder url>（照 /project-init 的格式先讀再接一行；本技能不寫入）
 建議動作：找回資料夾，或把 deal notes 那一行改成現在的資料夾網址
-建議動作：確認這是哪筆交易：已有交易（任何階段）就在那筆 deal 的 notes 手動補上 專案資料夾：<此資料夾 url>，已成交的再跑 /project-init 客戶案 <交易>（它從這一行沿用資料夾）；還沒有交易就用 /sales-outbound 建交易（它不開資料夾），再手動補上同一行；都不是就把資料夾移出 [2.2]
+建議動作：確認這是哪筆交易：已有交易（任何階段）就在那筆 deal 的 notes 手動補上 專案資料夾：<此資料夾 url>，已到 qualified 以後的再跑 /project-init 客戶案 <交易>（它從這一行沿用資料夾）；還沒有交易就用 /sales-outbound 建交易（它不開資料夾），再手動補上同一行；都不是就把資料夾移出 [2.2]
 建議動作：人工裁決哪個 deal 是本案，從另一個 deal 的 notes 移除 專案資料夾 那一行
 建議動作：人工選定是哪筆交易，在它的 notes 補上 專案資料夾：<folder url>，讓讀資料夾的技能不必猜
 ```
 
 ## I2 — The kickoff set
 
-**What it checks.** A **won** project's folder holds the set `/project-init`
-lays: `[Kickoff] <專案名稱>` and `[專案管控表] …` (with `[Charter]`,
-`[Business Case]` and `[復盤]`). An **open** deal's folder holds a kickoff or
-context doc of any convention: `/sales-inbound`'s `<交易名稱> — 專案啟動`, or
+**What it checks.** The folder of a deal at **qualified or later** holds the set
+`/project-init` lays: `[Kickoff] <專案名稱>` and `[專案管控表] …` (with
+`[Charter]`, `[Business Case]` and `[復盤]`). A **`new` or `contacted`** deal's
+folder holds a kickoff or context doc of any convention: `/sales-inbound`'s `<交易名稱> — 專案啟動`, or
 the older `[Kickoff] … — 專案脈絡與會議紀錄`.
 
 **How.** The step-2 per-folder listing; title-based only — contents are never
 read. The project's `[Kickoff]` is `[Kickoff] <專案名稱>`; an inbound kickoff
 (`<交易名稱> — 專案啟動`, or `[Kickoff] … — 專案脈絡與會議紀錄`) is **not** half of
-the set, exactly as `/project-init` reads it, so a won folder holding only
-that is *Won, not opened*. Left in a won project's folder it is expected:
+the set, exactly as `/project-init` reads it, so such a folder holding only
+that is *Not opened*. Left in an opened project's folder it is expected:
 `/project-init` links it from the new `[Kickoff]` and keeps it.
 
 **Violations.**
-- *Won, not opened*: the deal has its line, but the folder holds neither
-  `[Kickoff] <專案名稱>` nor `[專案管控表]` (without the line, I1 reports it).
-  Projects won before `/project-init` opened them land here once.
-- *Won, half a set*: the folder holds one of the two but not the other.
-- *Open, no kickoff*: an open deal's folder with downstream documents
+- *Not opened*: the deal is at qualified or later and has its line, but the
+  folder holds neither `[Kickoff] <專案名稱>` nor `[專案管控表]` (without the
+  line, I1 reports it). Projects that got past qualified before `/project-init`
+  opened them land here once.
+- *Half a set*: the folder holds one of the two but not the other.
+- *Early, no kickoff*: a `new` or `contacted` deal's folder with downstream documents
   (`[BRD]`, `[Notes]`, …) but no kickoff doc, or an entirely empty folder.
 
 **Fix lines.**
@@ -106,8 +108,9 @@ that is *Won, not opened*. Left in a won project's folder it is expected:
 
 ## I3 — Session-record recency (default window: 21 days)
 
-**What it checks.** Every engagement *past discovery* — stage `proposal` or
-`won` — has a session record modified within the window. A session record is
+**What it checks.** Every engagement at stage `proposal` or `won` has a
+session record modified within the window. An opened `qualified` project is
+not checked yet; I5's activity pulse covers it. A session record is
 any `[Notes]` doc (`/consult-session-notes` files one per session, shadowing
 ones inside `Shadowing — YYYY-MM-DD`), a kickoff doc — the project's
 `[Kickoff]` or an inbound one; people paste updates and meeting notes into
@@ -141,7 +144,7 @@ a folder with no `[N]` prefix.
 **Fix lines.** (Drive renames keep the folder id, so a rename never breaks an
 existing backlink.)
 ```
-建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（成交開案）或 /sales-inbound（新詢問）分配，缺號通常代表資料夾被移走
+建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）或 /sales-inbound（新詢問）分配，缺號通常代表資料夾被移走
 建議動作：在資料夾名稱前補上 [<下一個號碼>]（本技能不改名）
 ```
 
@@ -210,7 +213,8 @@ Add after the fix: 「再確認 [<later>] 有照它寫」.
 
 - Report layout beyond the finding-line format (that lives in SKILL.md step 5).
 - The window defaults (21 / 14) — Peter overrides them per run.
-- The sales pipeline: open deals without a folder are counted, not audited;
-  won deals without a folder are listed, not judged.
+- The sales pipeline: `new` and `contacted` deals without a folder are
+  counted, not audited; deals at qualified or later without a folder are
+  listed, not judged.
 - Any write of any kind. If a fix looks one-keystroke trivial, it still routes
   to the owning skill or to Peter's hands.

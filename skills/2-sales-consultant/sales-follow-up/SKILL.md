@@ -19,7 +19,7 @@ description: >-
   CRM", "log the demo and draft the follow-up", or otherwise wants the post-demo
   email plus the deal updated. Distinct from sales-outbound (a PRE-meeting DM →
   new lead + first reply) and project-init (opens the project folder once the
-  deal is won): this one takes ONE completed demo
+  deal is qualified): this one takes ONE completed demo
   transcript on an EXISTING deal and produces a conversion follow-up draft + a
   light deal update — no new lead, no Drive folder, no meeting-to-project.
 category: sales-consultant
@@ -67,7 +67,7 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
 
 - **sales-outbound** — PRE-meeting. One pasted DM → a *new* lead (company +
   contact + deal) + a first reply. Use it before a demo exists.
-- **project-init** — stands up the whole *project* once the deal is won:
+- **project-init** — stands up the whole *project* once the deal is qualified:
   numbered Drive folder + kickoff set + the deal's folder line. Use it when a
   consulting engagement is starting.
 - **sales-follow-up** (this one) — POST-demo. One completed demo transcript on an
@@ -222,7 +222,7 @@ Then, in order:
    twice. `body` is required; `subject` is the short title on the timeline.
    *(Was raw SQL until 2026-08-16 — `create_note` shipped as PLAT-045 and this write
    now goes through the confirm gate + audit trail + tenant wall like every other one.)*
-2. **Refresh the deal summary** — `mcp__zynkr__update_deal(id=…, notes=<one-paragraph rolling summary>)` (preview → `confirm:true`). Rewrite `notes` from the pre-demo state to a post-demo recap: what happened, pains, that the follow-up mail is drafted, and the next step.
+2. **Refresh the deal summary** — `mcp__zynkr__update_deal(id=…, notes=<new notes>)` (preview → `confirm:true`). Rewrite the summary paragraph from the pre-demo state to a post-demo recap: what happened, pains, that the follow-up mail is drafted, and the next step. **Replace only that paragraph and keep every other line verbatim, in order.** The summary is the field's first paragraph, up to the first blank line; if the field starts with a link line instead of prose, put the new paragraph before it. Other skills append lines below it: the `專案資料夾：<url>` line (`/sales-inbound`, `/project-init`), `部署紀錄（<SPEC_ID>）：<url>`, transcript, BRD, session and UAT links. Readers find the client's folder and deployment record only through those lines, and `update_deal` replaces the whole field, so a line left out is deleted. Read back with `get_deal`: the new paragraph is there and every other line survived.
 3. **Nudge the stage** *only if the call earned it* — `mcp__zynkr__move_deal_stage(id=…, stage=…)`. See *Inference defaults*. Don't force `proposal` unless an actual quote/proposal was discussed; a soft pre-sales follow-up leaves a `qualified` deal at `qualified`.
 4. **Close the stale scheduling task** — `mcp__zynkr__list_tasks(filter="open")`, find the open task on THIS deal about scheduling/chasing the demo (subject mentions demo / 安排 / 追蹤…回覆), and `mcp__zynkr__set_task_status(ids=[…], status="done", confirm:true)`. The demo happened, so it's complete. If no clear match, skip and say so.
 5. **Create the follow-up task** — `mcp__zynkr__create_task(subject=…, body=…, deal_id=…, due_at=<+task_due_days, ISO 8601 UTC 'Z'>, confirm:true)`. Attach to **exactly one parent** (the deal — don't also pass contact_id, it errors). Use UTC `Z` format for `due_at` (e.g. `2026-07-06T01:00:00Z`); an offset like `+08:00` is rejected.
@@ -239,7 +239,10 @@ Demo 跟進已就緒：王小明（範例科技 ExampleCo）
 | Demo 紀要 | note 已寫入 timeline |
 | 排程任務 | 「安排 demo」已標記完成 |
 | 跟進任務 | 7/6 跟進（已建立） |
+| 開案 | 交易已到 qualified：還沒開案的話，跑 /project-init 客戶案 <交易編號> |
 ```
+
+Add the 開案 row whenever, after step 5.3, the deal is at `qualified` or later: a client project opens at qualified (`SKB-045` D2), and this skill never opens it itself. Don't judge from the `專案資料夾：` line whether the project is open: `/sales-inbound` writes that line before any project exists. Running `/project-init` again is safe, since it stops when the folder already holds the project set.
 
 Call out anything you left for Peter's judgement (a stage you did NOT auto-advance, a recording link you didn't have, a task match you weren't sure about).
 

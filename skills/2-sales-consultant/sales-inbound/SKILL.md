@@ -300,7 +300,7 @@ The block is exactly one line, on its own, with the full-width colon:
 ```
 
 That line is the contract: `/consult-shadowing-scheduler`, `/gtm-uat-writer` and `/project-governance`
-find the client folder by matching it, and `/project-init` writes the same line when it opens a won deal.
+find the client folder by matching it, and `/project-init` writes the same line when it opens a qualified deal's project.
 Don't reword it or add text after the URL.
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never

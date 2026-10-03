@@ -121,7 +121,7 @@ Gmail 草稿則**看環境**：有可用的 Gmail MCP 就用，沒有就走 Play
   (`website@zynkr.ai` AI 顧問服務 inquiries and the `[2.1] Inbound Sales` label), de-dupes
   them into deals and drafts each first reply by this skill's steps 5–6. Use it for the
   inbox sweep, not a single pasted signal.
-- **project-init** — once a deal is won, opens the client project: numbered
+- **project-init** — once a deal is qualified, opens the client project: numbered
   Drive folder + kickoff set + the deal's folder line. It never creates a deal —
   the deal comes from here, from sales-inbound or from a demo.
 - **sales-outbound** (this one) — takes ONE person's **interest signal**

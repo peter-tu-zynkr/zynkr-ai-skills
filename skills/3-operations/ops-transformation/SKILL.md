@@ -194,7 +194,7 @@ Design work kept only in chat never reaches the BRD, the PRD or the client folde
 **Resolve** (once per run, before any interviewing):
 - **Deal** — from a `…/deals/{id}` URL, or by company name: `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`.
 - **Folder** — the deal's `notes` may carry a `專案資料夾：<url>` backlink; take the folder id from it. Otherwise list the projects parent (`mcp__google-workspace__list_drive_items`, folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by company name.
-- **No folder** → stop. The client has no project workspace yet: open it first with `/project-init` (client project), which opens it from the won CRM deal. Never create a folder here.
+- **No folder** → stop. The client has no project workspace yet: open it first with `/project-init` (client project), which opens it from the qualified CRM deal. Never create a folder here.
 
 **Fill the template** — `references/assessment-template.md` or `references/blueprint-template.md`. Fill every placeholder, keep the numbered section headings (`redesign`, `/consult-brd-writer` and `/ops-prd-writer` read them back), and delete every `<!-- … -->` comment, the contract at the top included.
 

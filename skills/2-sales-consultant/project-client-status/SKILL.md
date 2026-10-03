@@ -91,7 +91,7 @@ client** is an incident. Peter reviews, edits, and hits send himself.
 4. **Scheduled / unattended weekly runs stay with project-status-update.** This
    skill runs only when Peter invokes it on a named engagement.
 5. **Never create a folder.** No `[N]` folder ⇒ STOP and point at
-   /sales-inbound (inbound lead) or /project-init (won deal).
+   /sales-inbound (inbound lead) or /project-init (qualified deal).
 
 ---
 

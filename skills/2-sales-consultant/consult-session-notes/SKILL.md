@@ -13,7 +13,7 @@ description: >-
   "session summary for the client project" — fire eagerly whenever session material
   belongs to a CLIENT engagement. Distinct from project-note-specialist (the
   generic source skill — ONLY tidies text, files nothing, touches no CRM; for
-  non-engagement notes), project-init (opens the project folder at deal won;
+  non-engagement notes), project-init (opens the project folder at qualified;
   THIS skill updates an EXISTING engagement, never creates a folder or a
   deal), consult-transcriber (upstream — produces the transcript this skill
   structures), and consult-brd-writer (downstream — consumes the ledger).
@@ -60,7 +60,7 @@ its source — who said it, or which transcript section.
 
 - **project-note-specialist** — the generic source skill. ONLY tidies text into
   the four sections: files nothing, touches no CRM. For non-engagement notes.
-- **project-init** — opens a client's `[N]` project folder at deal won (Sales
+- **project-init** — opens a client's `[N]` project folder at qualified (Sales
   creates the deal). THIS skill updates an EXISTING engagement, never creates either.
 - **consult-transcriber** — upstream: produces the transcript this skill structures.
 - **consult-brd-writer** — downstream: consumes the 痛點 ledger (and the rest
@@ -75,7 +75,7 @@ its source — who said it, or which transcript section.
 ## Hard rules
 
 1. **Never create a folder or a deal.** No `[N]` folder → STOP and point at
-   /sales-inbound (inbound lead) or /project-init 客戶案 (won
+   /sales-inbound (inbound lead) or /project-init 客戶案 (qualified
    deal). One numbered workspace per engagement is the 2.x invariant.
 2. **Never invent a pain.** Ledger rows come only from pains actually voiced or
    observed in this session's material; a thin session yields a short ledger.

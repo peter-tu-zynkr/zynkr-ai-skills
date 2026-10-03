@@ -147,7 +147,7 @@ create it (the five fields above, one row per client).
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written
   by sales-inbound / project-init); extract the folder id, or
   list the parent folder and match `[N] Company（…）`. No `[N]` folder at all →
-  STOP and route to /sales-inbound (inbound lead) or /project-init (won deal); never
+  STOP and route to /sales-inbound (inbound lead) or /project-init (qualified deal); never
   create a competing folder.
 
 ### 2 · Introspect `crm_ai_usage`

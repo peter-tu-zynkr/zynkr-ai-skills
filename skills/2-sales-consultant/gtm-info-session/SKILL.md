@@ -75,7 +75,7 @@ Liao) · recap structure from `training-lecture-recap` (4.08).
 ## Hard rules
 
 1. **Never create the `[N]` folder.** No folder → STOP and route to
-   /sales-inbound (inbound lead) or /project-init 客戶案 (won deal).
+   /sales-inbound (inbound lead) or /project-init 客戶案 (qualified deal).
 2. **Client-facing email is ALWAYS a Gmail draft** —
    `mcp__google-workspace__draft_gmail_message` for invites, sponsor mails,
    D-1 confirmations, and the recap send. Never send.

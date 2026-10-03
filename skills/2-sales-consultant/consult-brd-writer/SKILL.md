@@ -12,7 +12,7 @@ description: >-
   hands over discovery notes or a transcript wanting a requirements document
   out of it — fire eagerly even if he never says the letters "BRD". Distinct
   from sales-discovery (CONDUCTS the interviews; this skill consumes their
-  output), from project-init (opens the project folder at deal won, writes no
+  output), from project-init (opens the project folder at qualified, writes no
   requirements doc), and from ops-prd-writer (writes the
   buildable PRD once the client has signed THIS skill's BRD).
 category: sales-consultant
@@ -57,7 +57,7 @@ first, the prose second.
 
 - **sales-discovery** — CONDUCTS the pain-point / vision interviews and produces
   the discovery summaries. This skill sits downstream and consumes them.
-- **project-init** — opens the client's project folder at deal won (or reuses the
+- **project-init** — opens the client's project folder at qualified (or reuses the
   inbound one), no requirements doc; it creates the workspace this skill writes INTO.
 - **ops-transformation** — its `assess` entry point files an `[Assessment]` during
   Consult: the numbered as-is process, the diagnosis and the knowledge and data
@@ -75,7 +75,7 @@ first, the prose second.
 ## Hard rules
 
 1. **Never create a competing folder.** If the client has no `[N]` folder yet, STOP
-   and route to /sales-inbound (inbound lead) or /project-init (won deal); see step 1.
+   and route to /sales-inbound (inbound lead) or /project-init (qualified deal); see step 1.
 2. **Never generate the full document before the step-3 gate is approved.**
 3. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the doc
    to the client, use `mcp__google-workspace__draft_gmail_message`. Never send.
@@ -109,7 +109,7 @@ Then resolve the CRM deal and the Drive folder:
   missing, list the parent (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by company name.
 - **No folder at all** → STOP. Tell Peter this client has no project workspace yet
-  and point at /sales-inbound (inbound lead) or /project-init 客戶案 (won
+  and point at /sales-inbound (inbound lead) or /project-init 客戶案 (qualified
   deal). Hard rule 1: never create a competing folder.
 
 Finally, list the folder
