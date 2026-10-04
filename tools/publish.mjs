@@ -15,7 +15,10 @@
  *      install_command are derived here and overwrite whatever the stage carried.
  *   e. A folder the shelf does not hold yet waits for --promote (AC-12), unless it is a skill the
  *      shelf already publishes under another folder: moved between categories, or renamed (its
- *      manifest says `renamed_from: <old name>` and keeps the old folder's sheetId).
+ *      manifest says `renamed_from: <old name>` and keeps the old folder's sheetId). A held skill is
+ *      named by its sheetId in every output (log, summary, commit message, dry-run), never by its
+ *      slug: it may be a client build marked public by mistake, and a client build's slug names the
+ *      client (workbench SKB-054). --promote takes sheetIds or slugs.
  *   f. A stage under half the shelf waits for --allow-shrink.
  *   g. The stage must be newer than the shelf's last `Workbench-Commit:` trailer (AC-10).
  *   h. prune: a scheduled run prunes, a dispatch reports unless told `true` (AC-11).
@@ -32,7 +35,8 @@
  *
  *   node tools/publish.mjs --stage <dir holding stage/> --shelf <this checkout>
  *        --event schedule|workflow_dispatch --run <run.json> [--prune report|true]
- *        [--promote a,b|all] [--allow-shrink] [--allow-rewind] [--seed-fail] [--dry-run]
+ *        [--promote <sheetIds or slugs, comma-separated>|all] [--allow-shrink] [--allow-rewind]
+ *        [--seed-fail] [--dry-run]
  *
  * Env: WORKBENCH_READ_TOKEN (the compare call), SKILLS_SYNC_HMAC_SECRET, SITE_SYNC_URL
  * (default https://zynkr.ai/api/skills/sync), GITHUB_STEP_SUMMARY (optional).
@@ -518,12 +522,12 @@ export function planPromotion(skills, shelf, promote = '') {
     if (from) {
       kept.push(s);
       renamed.push({ skill: s, from });
-    } else if (all || named.has(s.slug)) {
+    } else if (all || named.has(s.slug) || (s.sheetId && named.has(s.sheetId))) {
       kept.push(s);
       promoted.push(s);
     } else held.push(s);
   }
-  const unmatched = [...named].filter((n) => !skills.some((s) => s.slug === n)).length;
+  const unmatched = [...named].filter((n) => !skills.some((s) => s.slug === n || s.sheetId === n)).length;
   return { kept, held, promoted, renamed, unmatched };
 }
 
@@ -676,6 +680,15 @@ export function netOfRenames(plan, renamed = []) {
   return { added: plan.added.filter((s) => !to.has(s.dir)), removed: plan.removed.filter((d) => !from.has(d)) };
 }
 
+/** How held skills are named in public: by sheetId, never by slug (e). A held skill may be a client
+ *  build marked public by mistake, and its slug would name the client. One without a sheetId is
+ *  counted; promote it by slug from the workbench's own export log, which is private. */
+export function heldWords(held) {
+  const ids = held.map((s) => s.sheetId).filter(Boolean);
+  const unnumbered = held.length - ids.length;
+  return unnumbered ? [...ids, `${plural(unnumbered, 'skill')} with no sheetId`] : ids;
+}
+
 export function commitMessage({ manifest, kept, plan, held, renamed = [], rewoundFrom = null }) {
   const slugs = (entries) => entries.map((s) => s.slug).join(', ');
   const { added, removed } = netOfRenames(plan, renamed);
@@ -685,7 +698,7 @@ export function commitMessage({ manifest, kept, plan, held, renamed = [], rewoun
   if (plan.changed.length) lines.push(`Changed: ${slugs(plan.changed)}`);
   if (removed.length) lines.push(`Removed: ${removed.map((d) => path.posix.basename(d)).join(', ')}`);
   if (plan.loose) lines.push(`Removed ${plural(plan.loose, 'file')} outside every skill folder`);
-  if (held.length) lines.push(`Held until promoted: ${slugs(held)}`);
+  if (held.length) lines.push(`Held until promoted: ${heldWords(held).join(', ')}`);
   if (rewoundFrom) lines.push(`Rewound from ${rewoundFrom.slice(0, 7)}, dispatched with allow_rewind`);
   return [
     `export: ${plural(kept.length, 'skill')} from ${manifest.workbench_sha.slice(0, 7)}`,
@@ -852,8 +865,8 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   log(`order: ${ORDER_WORDS[order]}${last && order !== 'identical' ? ` (${last.slice(0, 7)})` : ''}`);
   if (promotion.promoted.length) log(`promoted: ${slugsOf(promotion.promoted).join(', ')}`);
   if (promotion.renamed.length) log(`kept under a new name (renamed_from, same sheetId): ${renamedWords(promotion.renamed).join(', ')}`);
-  if (promotion.held.length) log(`held until promoted: ${slugsOf(promotion.held).join(', ')}`);
-  if (promotion.unmatched) log(`note: promote names ${plural(promotion.unmatched, 'slug')} that the stage does not hold`);
+  if (promotion.held.length) log(`held until promoted: ${heldWords(promotion.held).join(', ')}`);
+  if (promotion.unmatched) log(`note: promote names ${plural(promotion.unmatched, 'sheetId or slug', 'sheetIds or slugs')} that the stage does not hold`);
 
   const summary = [
     '### Export to the shelf',
@@ -867,7 +880,7 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   }
   if (promotion.held.length) {
     summary.push(
-      `- **Held until promoted** (dispatch with \`promote\`): ${slugsOf(promotion.held).map((s) => `\`${s}\``).join(', ')}`,
+      `- **Held until promoted** (dispatch with \`promote\` and the sheetId): ${heldWords(promotion.held).map((s) => `\`${s}\``).join(', ')}`,
     );
   }
 
@@ -881,7 +894,7 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
       added: slugsOf(net.added),
       changed: slugsOf(plan.changed),
       removed: net.removed,
-      held: slugsOf(promotion.held),
+      held: heldWords(promotion.held),
       promoted: slugsOf(promotion.promoted),
       renamed: promotion.renamed.map((r) => ({ from: r.from, to: r.skill.dir })),
       body: JSON.parse(body),

@@ -7,6 +7,8 @@ import { SECRET, SITE, TOKEN, WB, buildStage, deps, git, head, makeShelf, networ
 import { Refusal, SHELF_URL } from './common.mjs';
 import {
   checkShrink,
+  commitMessage,
+  heldWords,
   main,
   parseFrontmatter,
   planPromotion,
@@ -360,7 +362,7 @@ describe('promotion (AC-12)', () => {
   test('a folder new to the shelf is held until promoted, with its sub-agents', async () => {
     const { shelf, remote } = makeShelf();
     placeOnShelf(shelf, buildStage([skill('alpha')]), ['alpha'], WB.a);
-    const stage = buildStage([skill('alpha'), skill('gamma', { agents: ['helper'] })], { sha: WB.b });
+    const stage = buildStage([skill('alpha'), skill('gamma', { sheetId: '1.07', agents: ['helper'] })], { sha: WB.b });
 
     const net = network();
     const d = deps(net);
@@ -369,11 +371,15 @@ describe('promotion (AC-12)', () => {
     assert.equal(held.commit, null, 'alpha is unchanged and gamma is held: nothing to commit');
     assert.equal(fs.existsSync(path.join(shelf, 'skills/1-brand-marketing/gamma')), false);
     assert.deepEqual(bodyOf(net).skills.map((r) => r.slug), ['alpha']);
-    assert.match(d.summary(), /Held until promoted.*`gamma`/);
-    assert.ok(d.out.includes('held until promoted: gamma'));
+    // A held skill is named by its sheetId: it may be a client build marked public by mistake, whose
+    // slug names the client (workbench SKB-054). Nothing public says "gamma" until it is promoted.
+    assert.match(d.summary(), /Held until promoted.*`1\.07`/);
+    assert.ok(d.out.includes('held until promoted: 1.07'));
+    assert.doesNotMatch(d.summary(), /gamma/);
+    assert.doesNotMatch(JSON.stringify(d.out), /gamma/);
 
     const net2 = network();
-    const promoted = await publish(opts(stage, shelf, { promote: 'other, gamma' }), deps(net2));
+    const promoted = await publish(opts(stage, shelf, { promote: 'other, 1.07' }), deps(net2));
     assert.deepEqual(promoted.promotion.held, []);
     assert.deepEqual(bodyOf(net2).skills.map((r) => r.slug), ['alpha', 'gamma', 'gamma-helper']);
     assert.match(git(remote, ['log', '-1', '--format=%B', 'main']), /^Added: gamma$/m);
@@ -395,6 +401,23 @@ describe('promotion (AC-12)', () => {
     assert.deepEqual(all.held, []);
     assert.deepEqual(all.promoted.map((s) => s.slug), ['fresh']);
     assert.equal(planPromotion(stageSkills, shelf, 'fresh,typo').unmatched, 1);
+    // promote also takes a sheetId: the outputs name a held skill by its id, never its slug.
+    const numbered = stageSkills.map((s) => (s.slug === 'fresh' ? { ...s, sheetId: '1.09' } : s));
+    assert.deepEqual(planPromotion(numbered, shelf, '1.09').promoted.map((s) => s.slug), ['fresh']);
+    assert.equal(planPromotion(numbered, shelf, '9.99').unmatched, 1);
+  });
+
+  test('held skills are named by sheetId in the commit message, never by slug', () => {
+    const held = [{ slug: 'acme-portal', sheetId: '3.40' }, { slug: 'acme-tools' }];
+    assert.deepEqual(heldWords(held), ['3.40', '1 skill with no sheetId']);
+    const msg = commitMessage({
+      manifest: { workbench_sha: 'a'.repeat(40) },
+      kept: [],
+      plan: { added: [], changed: [], removed: [], loose: 0 },
+      held,
+    });
+    assert.match(msg, /^Held until promoted: 3\.40, 1 skill with no sheetId$/m);
+    assert.doesNotMatch(msg, /acme/);
   });
 
   test('a new skill that only reuses a public folder name is held', () => {
