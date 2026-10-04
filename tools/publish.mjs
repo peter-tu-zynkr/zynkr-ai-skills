@@ -31,9 +31,9 @@
  * too; the next run posts again). This repo's logs are public, so until the marks are checked (c)
  * a refusal gives counts, never a path: a stage that went wrong may carry a team skill, and its
  * name must not reach this log. After (c) a refusal names a file the shelf already publishes by its
- * path, and one new to the shelf by its sheetId only: it comes before the hold (e), and a new file may
- * belong to a client build marked public by mistake (wordsFor). Rebuild the stage in the workbench to
- * see which files (`npx tsx scripts/export-shelf.ts --out <dir>`).
+ * path, and one new to the shelf by its sheetId or not at all (wordsFor; stageIndex counts them): it
+ * comes before the hold (e), and a new file may belong to a client build marked public by mistake.
+ * Rebuild the stage in the workbench to see which files (`npx tsx scripts/export-shelf.ts --out <dir>`).
  *
  *   node tools/publish.mjs --stage <dir holding stage/> --shelf <this checkout>
  *        --event schedule|workflow_dispatch --run <run.json> [--prune report|true]
