@@ -44,7 +44,9 @@
 
 ## 1 · Canonical PMO artefacts
 
-Verified 2026-09-02. These eight IDs are **committed literals** — they are the org's single
+Verified 2026-09-02; the Kickoff and Business Case headers and the TEMPLATE-INDEX were re-read
+on 2026-10-04.
+These eight IDs are **committed literals** — they are the org's single
 template set, they change approximately never, and a skill must be able to copy a template
 with no config file present. Use them verbatim; do not re-derive them from a Drive search.
 
@@ -52,10 +54,10 @@ with no config file present. Use them verbatim; do not re-derive them from a Dri
 |---|---|---|---|
 | **Playbook** | 專案管理 Playbook — the process spine: phases 啟動·規劃·執行·監控·結案, per-project file set, naming, roles, 五條鐵律 (§5) | Doc | `1ckEyMVhgH7ArRnke4SFjGpnT2pho1Drj7sransKpIh0` |
 | **管控表 v2 template** | `[專案管控表]` — the唯一 SOT for progress. tab 1 `專案管理總表` (14 cols A–N) + `Stakeholders & RACI` · `Risk Register` · `Budget` · `Prerequisite Checklist` · `Change & Decision Log` · `所有檔案` · `Comms Plan` | Sheet | `1Pc1YT4z6LdU9JjVSPT_ESN7DCa7aL8DhOD1IOpGiuvQ` |
-| **TEMPLATE-INDEX** | The index of the template set: 9 rows (7 files + 2 「(skill)」 rows) plus a 12-term glossary. Update it whenever a template changes | Doc | `1s--w8AqooItD985Rr3sijZBMYByvBWgxchAPiKLLAZc` |
-| **Business Case** | `[Business Case]` — header carries **專案類型 客戶案 / 課程案 / 內部案** (the field the adapter keys on); §1 問題與機會 → §6 建議與核准. Gate: 核准後才進入 Charter | Doc | `1jwiSK3nsHQV-HZkc6eDv3IktdfvVcmO1WxiLTUFwDI4` |
+| **TEMPLATE-INDEX** | `TEMPLATE-INDEX 模板登錄表` — the index of the template set: tab `模板登錄`, 9 rows (7 files + 2 「(skill)」 rows; its `最後更新` column dates each template's last change), plus tab `Glossary 詞彙表`, 12 terms. Update it whenever a template changes. It is a Sheet: the Docs API answers 404 for this id | Sheet | `1s--w8AqooItD985Rr3sijZBMYByvBWgxchAPiKLLAZc` |
+| **Business Case** | `[Business Case]` — header carries **專案類型 客戶案 / 課程案 / 內部案** (the field the adapter keys on) and, on the line under it, **核心目標**; §1 問題與機會 → §6 建議與核准. Gate: 核准後才進入 Charter | Doc | `1jwiSK3nsHQV-HZkc6eDv3IktdfvVcmO1WxiLTUFwDI4` |
 | **Charter Slides** | `[Charter]` — 2 slides: objective · milestones · roll-out · KPIs · RAPID · RACI; slide 2 scope in/out · budget · top-3 risks · sign-off. Gate: 核准後才進入 Planning | Slides | `1SWgWed9hIjLrux8mJnff95nFPMPGEO-HNi8yQ8LiBUs` |
-| **Kickoff** | `[Kickoff]` — 專案類型 · 客戶/對象 · 主要窗口（內部案免填）· PM · Sponsor · CRM Deal（客戶案）· Charter/管控表/BC URLs · the 4-section Weekly Project Update block · As-is 流程 | Doc | `1W1DAVTFmsuhuDPznN8EicoltxfdyqJ1jegBCIjuVrg0` |
+| **Kickoff** | `[Kickoff]` — 專案類型 · 核心目標 · 客戶/對象 · 主要窗口（內部案免填）· PM · Sponsor · 目標完成日 · CRM Deal（客戶案）· 專案資料夾 · Charter/管控表/BC URLs · the 4-section Weekly Project Update block · As-is 流程 | Doc | `1W1DAVTFmsuhuDPznN8EicoltxfdyqJ1jegBCIjuVrg0` |
 | **會議記錄** | `[會議記錄]` — 進度更新（狀態 On track／At risk／Delayed／Done, a **health** reading）· 提醒與阻礙 · 決議 · Action Items（`對應管控表任務 no.`）· 討論摘要 | Doc | `1NbaL92dg0NWty5Wba-tlIWGE7d0qm0R0aXtFgbkOeNs` |
 | **復盤** | `[復盤]` — §1 結案確認（通過／有條件通過／未交付, the **closure verdict** axis）· §2 成果 vs BC · §3 Lessons · §4 封存檢查表（7 boxes, 2 客戶案-only）· §5 PIR 30–90 天 | Doc | `1mHrs1M_hasg9mjIeuiJDWBsoXx_d0-GjLCPt9YvnveY` |
 
