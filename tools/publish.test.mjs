@@ -789,7 +789,7 @@ describe('failures after the checks', () => {
     const { shelf, remote } = makeShelf();
     const before = head(remote, 'main');
     const net = network();
-    await refused(publish(opts(stage, shelf), deps(net)), /git's index differs from the stage at 1 path \(skills\/1-brand-marketing\/alpha\/crlf\.txt\)/);
+    await refused(publish(opts(stage, shelf), deps(net)), /git's index differs from the stage at 1 path, 1 of them new to the shelf and unnamed here/);
     assert.equal(head(shelf), before, 'no commit');
     assert.equal(net.posts().length, 0);
   });
@@ -800,5 +800,20 @@ describe('failures after the checks', () => {
     const before = head(remote, 'main');
     await refused(publish(opts(stage, shelf), deps(network(), { SKILLS_SYNC_HMAC_SECRET: '' })), /SKILLS_SYNC_HMAC_SECRET is not set/);
     assert.equal(head(remote, 'main'), before);
+  });
+});
+
+// Review round 5 (workbench SKB-054): stageIndex's refusal listed paths, a new sub-agent's among them.
+describe('a refusal after the mirror', () => {
+  test('names only paths the shelf already published', async () => {
+    const { shelf } = makeShelf();
+    placeOnShelf(shelf, buildStage([skill('alpha', { sheetId: '1.01' })]), ['alpha'], WB.a);
+    const stage = buildStage([skill('alpha', { sheetId: '1.01', files: { '.gitattributes': '*.md text\n', 'agents/globex-portal.md': '---\r\nname: globex-portal\r\n---\r\nSteps.\r\n' } })], { sha: WB.b });
+    const d = deps(network(), { GITHUB_ACTIONS: 'true' });
+    const code = await main(['--stage', stage.root, '--shelf', shelf, '--event', 'schedule', '--run', stage.runFile], d);
+    const text = [...d.out, ...d.err, d.summary()].join('\n');
+    assert.notEqual(code, 0);
+    assert.match(text, /new to the shelf and unnamed here/);
+    assert.doesNotMatch(text, /globex/);
   });
 });

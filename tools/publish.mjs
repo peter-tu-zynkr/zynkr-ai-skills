@@ -686,9 +686,20 @@ export function stageIndex(shelfRoot, desired) {
     return !a || !b || a.mode !== b.mode || a.sha !== b.sha;
   });
   if (off.length) {
+    // Only a path the shelf already published is named: one new to it may belong to a client build
+    // marked public by mistake (wordsFor; workbench SKB-054, review round 5).
+    let published = new Set();
+    try {
+      published = new Set(git(shelfRoot, ['ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', 'skills']).split('\0').filter(Boolean));
+    } catch {
+      // a shelf with no commit yet published nothing
+    }
+    const named = off.filter((p) => published.has(p)).slice(0, 5);
+    const unnamed = off.filter((p) => !published.has(p)).length;
     refuse(
-      `after the mirror, git's index differs from the stage at ${plural(off.length, 'path')} ` +
-        `(${off.slice(0, 5).join(', ')}): a .gitattributes or line-ending rule in a skill folder?`,
+      `after the mirror, git's index differs from the stage at ${plural(off.length, 'path')}` +
+        `${named.length ? ` (${named.join(', ')})` : ''}${unnamed ? `, ${unnamed} of them new to the shelf and unnamed here` : ''}` +
+        ': a .gitattributes or line-ending rule in a skill folder?',
     );
   }
   return git(shelfRoot, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
