@@ -30,8 +30,10 @@
  * Any refusal exits 1 before anything is pushed or posted (a failed post after a push exits 1
  * too; the next run posts again). This repo's logs are public, so until the marks are checked (c)
  * a refusal gives counts, never a path: a stage that went wrong may carry a team skill, and its
- * name must not reach this log. Rebuild the stage in the workbench to see which files
- * (`npx tsx scripts/export-shelf.ts --out <dir>`).
+ * name must not reach this log. After (c) a refusal names a file the shelf already publishes by its
+ * path, and one new to the shelf by its sheetId only: it comes before the hold (e), and a new file may
+ * belong to a client build marked public by mistake (wordsFor). Rebuild the stage in the workbench to
+ * see which files (`npx tsx scripts/export-shelf.ts --out <dir>`).
  *
  *   node tools/publish.mjs --stage <dir holding stage/> --shelf <this checkout>
  *        --event schedule|workflow_dispatch --run <run.json> [--prune report|true]
@@ -322,7 +324,18 @@ export function readStage(stageRoot) {
 const says = (fm, key, value) => !fm.dupes.has(key) && fm.keys.get(key) === value;
 
 /** (c): returns Map(dir → { entry, fm }) once every owning manifest is marked public. */
-export function checkMarks(stageRoot, manifest) {
+/**
+ * How a refusal names a stage file: by its path when the shelf already publishes that file, else by its
+ * sheetId. A refusal comes before the hold (e), and a file new to the shelf may belong to a client build
+ * marked public by mistake, whose path and slug name the client (workbench SKB-054, review round 4).
+ * `shelfHas(path)` says whether the shelf holds a file; without it nothing is named by path.
+ */
+export function wordsFor(shelfHas, file, id) {
+  if (shelfHas(file)) return file;
+  return id ? `a file new to the shelf (sheetId ${id})` : 'a file new to the shelf, with no sheetId';
+}
+
+export function checkMarks(stageRoot, manifest, shelfHas = () => false) {
   const frontmatter = (p) => parseFrontmatter(fs.readFileSync(path.join(stageRoot, p), 'utf8'));
   const owners = new Map();
   let unmarked = 0;
@@ -351,18 +364,24 @@ export function checkMarks(stageRoot, manifest) {
     );
   }
 
-  // Every folder is public from here on, so a message may name it.
+  // Every folder is marked public from here on. A message names one the shelf already publishes by its
+  // path, and one new to the shelf by its sheetId only, never its path or name (wordsFor).
   const names = new Map();
   for (const { entry, fm } of owners.values()) {
+    const known = shelfHas(entry.manifest);
+    const words = wordsFor(shelfHas, entry.manifest, sheetIdOf(fm));
     const name = fm.keys.get('name');
     if (fm.dupes.has('name') || typeof name !== 'string' || !NAME_RE.test(name)) {
-      refuse(`${entry.manifest}: its name must match ${NAME_RE} (the CLI installs by name)`);
+      refuse(`${words}: its name must match ${NAME_RE} (the CLI installs by name)`);
     }
     if (name !== entry.name) {
-      refuse(`${entry.manifest}: manifest.json calls it "${entry.name}", its frontmatter "${name}"`);
+      refuse(known ? `${entry.manifest}: manifest.json calls it "${entry.name}", its frontmatter "${name}"` : `${words}: manifest.json and its frontmatter name it differently`);
     }
-    if (names.has(name)) refuse(`the name "${name}" is used by both ${names.get(name)} and ${entry.manifest}`);
-    names.set(name, entry.manifest);
+    if (names.has(name)) {
+      const other = names.get(name);
+      refuse(known && other.known ? `the name "${name}" is used by both ${other.words} and ${words}` : `one name is used by both ${other.words} and ${words}`);
+    }
+    names.set(name, { words, known });
   }
   return owners;
 }
@@ -370,7 +389,7 @@ export function checkMarks(stageRoot, manifest) {
 // ── d. payload ───────────────────────────────────────────────────────────────
 
 /** The public fields of one row, from the tree: never from what the stage carried. */
-export function deriveFields(rec, { entry, fm }) {
+export function deriveFields(rec, { entry, fm }, shelfHas = () => false) {
   const src = rec.source_path;
   const github_url =
     path.posix.basename(src) === 'CLAUDE.md'
@@ -381,7 +400,7 @@ export function deriveFields(rec, { entry, fm }) {
     if (fm.keys.has('install_command')) {
       const override = fm.keys.get('install_command');
       if (fm.dupes.has('install_command') || typeof override !== 'string' || !OVERRIDE_RE.test(override)) {
-        refuse(`${entry.manifest}: install_command must be an "npx skills add https://github.com/<owner>/<repo> --skill <name>" line`);
+        refuse(`${wordsFor(shelfHas, entry.manifest, sheetIdOf(fm))}: install_command must be an "npx skills add https://github.com/<owner>/<repo> --skill <name>" line`);
       }
       install_command = override;
     } else {
@@ -391,8 +410,9 @@ export function deriveFields(rec, { entry, fm }) {
   return { repo_url: SHELF_URL, github_url, install_command };
 }
 
-/** (d): [{ dir, row }] — each row with its owning folder and its derived fields. */
-export function derivePayload(payload, manifest, owners) {
+/** (d): [{ dir, row }] — each row with its owning folder and its derived fields. A refusal names a row
+ *  the shelf doesn't publish yet by its id, never its path or slug (wordsFor). */
+export function derivePayload(payload, manifest, owners, shelfHas = () => false) {
   if (!Array.isArray(payload)) refuse('payload.json is not an array');
   const files = new Set(manifest.files.map((f) => f.path));
   const dirs = [...owners.keys()];
@@ -403,16 +423,17 @@ export function derivePayload(payload, manifest, owners) {
     }
     const hits = dirs.filter((d) => within(rec.source_path, d));
     if (hits.length !== 1) refuse(`payload[${i}].source_path sits in ${hits.length} skill folders, not one`);
-    const where = rec.source_path;
+    const known = shelfHas(rec.source_path);
+    const where = wordsFor(shelfHas, rec.source_path, typeof rec.id === 'string' ? rec.id : null);
     if (rec.visibility !== 'public') refuse(`the payload row for ${where} is not marked visibility: public`);
     if (typeof rec.slug !== 'string' || rec.slug === '') refuse(`the payload row for ${where} has no slug`);
-    if (slugs.has(rec.slug)) refuse(`the payload slug "${rec.slug}" appears twice`);
+    if (slugs.has(rec.slug)) refuse(known ? `the payload slug "${rec.slug}" appears twice` : `the payload row for ${where} repeats another row's slug`);
     slugs.add(rec.slug);
     if (!KINDS.has(rec.kind)) refuse(`the payload row for ${where} has kind "${rec.kind}", not skill, orchestrator or subagent`);
-    return { dir: hits[0], row: { ...rec, ...deriveFields(rec, owners.get(hits[0])) } };
+    return { dir: hits[0], row: { ...rec, ...deriveFields(rec, owners.get(hits[0]), shelfHas) } };
   });
-  for (const { entry } of owners.values()) {
-    if (!rows.some((r) => r.row.source_path === entry.manifest)) refuse(`${entry.manifest} has no payload row`);
+  for (const { entry, fm } of owners.values()) {
+    if (!rows.some((r) => r.row.source_path === entry.manifest)) refuse(`${wordsFor(shelfHas, entry.manifest, sheetIdOf(fm))} has no payload row`);
   }
   return rows;
 }
@@ -823,8 +844,9 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   if (opts.seedFail) seedFail(stageRoot); // a
   const { manifest, payload } = readStage(stageRoot); // b
   checkRunSha(opts.run, manifest, opts.dryRun); // b
-  const owners = checkMarks(stageRoot, manifest); // c
-  const rows = derivePayload(payload, manifest, owners); // d
+  const shelfHas = (p) => isFile(path.join(opts.shelf, p));
+  const owners = checkMarks(stageRoot, manifest, shelfHas); // c
+  const rows = derivePayload(payload, manifest, owners, shelfHas); // d
   const shelf = shelfSkills(opts.shelf);
   const shelfDirs = shelf.map((h) => h.dir);
   const staged = manifest.skills.map((s) => {

@@ -188,10 +188,15 @@ describe('derived fields', () => {
   });
 
   test('an install_command override that is not an npx skills add line refuses', async () => {
-    const { shelf } = makeShelf();
     for (const line of ['curl -sL zynkr.ai/s/1.01.md -o x.md', 'npx skills add https://evil.test/a/b --skill x']) {
       const stage = buildStage([skill('alpha', { extra: `install_command: ${line}` })]);
-      await refused(publish(opts(stage, shelf, { dryRun: true }), deps(network())), /alpha\/SKILL\.md: install_command must be/);
+      // A folder the shelf already publishes is named by its path...
+      const { shelf: known } = makeShelf();
+      placeOnShelf(known, buildStage([skill('alpha')]), ['alpha'], WB.a);
+      await refused(publish(opts(stage, known, { dryRun: true }), deps(network())), /alpha\/SKILL\.md: install_command must be/);
+      // ...and one new to it by its sheetId only.
+      const { shelf: empty } = makeShelf();
+      await refused(publish(opts(stage, empty, { dryRun: true }), deps(network())), /a file new to the shelf \(sheetId id-alpha\): install_command must be/);
     }
   });
 
@@ -200,7 +205,27 @@ describe('derived fields', () => {
     const bad = buildStage([skill('alpha', { name: 'Alpha_Skill' })]);
     await refused(publish(opts(bad, shelf, { dryRun: true }), deps(network())), /name must match/);
     const twice = buildStage([skill('alpha', { name: 'same' }), skill('beta', { name: 'same' })]);
-    await refused(publish(opts(twice, shelf, { dryRun: true }), deps(network())), /"same" is used by both/);
+    await refused(publish(opts(twice, shelf, { dryRun: true }), deps(network())), /one name is used by both a file new to the shelf \(sheetId id-alpha\) and a file new to the shelf \(sheetId id-beta\)/);
+  });
+
+  // Review round 4 (workbench SKB-054): a refusal came before the hold and named the folder, so a client
+  // build marked public by mistake was named in this public log. A folder new to the shelf is named by
+  // its sheetId now, whatever the refusal.
+  test('a refusal never names a folder new to the shelf', async () => {
+    const cases = [
+      ['name written as a block', { name: '>-' }],
+      ['name on the next line', { name: '' }],
+      ['install_command with -y', { extra: `install_command: npx skills add ${SHELF_URL} --skill globex-portal -y` }],
+    ];
+    for (const [label, spec] of cases) {
+      const { shelf } = makeShelf();
+      const stage = buildStage([skill('globex-portal', { sheetId: '3.41', ...spec })]);
+      const d = deps(network());
+      const err = await publish(opts(stage, shelf, { dryRun: true }), d).then(() => null, (e) => e);
+      assert.ok(err instanceof Refusal, `${label}: refused`);
+      assert.match(err.message, /sheetId 3\.41/, label);
+      assert.doesNotMatch(`${err.message}\n${d.out.join('\n')}\n${d.err.join('\n')}\n${d.summary()}`, /globex/, label);
+    }
   });
 });
 
@@ -302,7 +327,11 @@ describe('the stage is checked before anything happens', () => {
     const unmarked = buildStage(trio());
     delete unmarked.payload[0].visibility;
     unmarked.save();
-    await refused(publish(opts(unmarked, shelf), deps(network())), /alpha\/SKILL\.md is not marked visibility: public/);
+    // alpha is new to this shelf, so the refusal names its row by id, never its path (wordsFor).
+    await refused(publish(opts(unmarked, shelf), deps(network())), /the payload row for a file new to the shelf \(sheetId 1\.1\) is not marked visibility: public/);
+    const { shelf: known } = makeShelf();
+    placeOnShelf(known, buildStage(trio()), trio().map((s) => s.slug), WB.a);
+    await refused(publish(opts(unmarked, known), deps(network())), /alpha\/SKILL\.md is not marked visibility: public/);
   });
 
   test("a stage whose workbench_sha is not its run's commit refuses before anything is pushed or posted", async () => {
