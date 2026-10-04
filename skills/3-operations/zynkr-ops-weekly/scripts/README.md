@@ -15,6 +15,7 @@ network call.
 | `recap.py` | The Monday recap (`SKB-044`): reads last week's blocks from the Ledger, runs zynkr-gm's `derive_state.py`, and renders the mail; the run writes only the TL;DR, and lines citing no item number are dropped. `--selftest`, `--mutate` |
 | `ledger.py` | The Weekly Ledger (`SKB-044`). Prints the exact MCP calls for each step of the Friday `snapshot` and checks every saved result before the next. Unlike the others it works from files in a run folder, not stdin. See `../references/ledger.md` |
 | `proposals.py` | The Friday close-out (`SKB-044` Phase 3): `propose` reads the tracker and the week's Ledger evidence, `check` refuses any change outside `../references/proposal-rules.md` and renders the 【待核准】 mail, `sent` guards the one send (`--send-failed` frees it after an error) and checks the mail in Sent is word for word the checked one; `apply-*` reads the owner's reply in that thread (`全部核准` · `核准 1 3` · `退回 2`; strict on purpose: an approving reply that asks or says more than thanks is unreadable), waits while a draft is open, asks once to restate a reply it cannot read (`apply-sent` remembers a request that went out), writes the decision to the `Proposals` block, reads that block and the thread again, confirms in the thread, and only then writes the `Updates` block that marks the week applied; shadow mode writes nothing to the tracker. Works from a run folder, like `ledger.py`, which it imports. `--selftest`, `--mutate` |
+| `tracker_guard.py` | The runner's PreToolUse hook (`SKB-044` AC-3.5), not run by the model: refuses any call aimed at the Main Tracker unless it only reads or the beat is `apply` writing values. Exit 2 refuses; an error inside it refuses every call but a read. Installed next to `run_ops_weekly.sh`. `--selftest` (18 cases, each run the way Claude Code runs the hook), `--mutate` |
 
 ## The usual pipeline (`rollup`)
 
@@ -74,7 +75,7 @@ exactly and saves the whole result to `save`.
 only when an `Updates` row with the same cycle, `#`, column and new value falls inside the window
 between the two snapshots; everything else is a manual edit. Monday's recap reads this. `ledger.py --selftest` runs the whole pipeline
 against fake MCP results; `ledger.py --mutate` checks that fourteen deliberate breakages each turn
-the selftest red (`proposals.py --mutate` sixty, `recap.py --mutate` twelve).
+the selftest red (`proposals.py --mutate` sixty, `recap.py --mutate` twelve, `tracker_guard.py --mutate` nine).
 
 ## Exit codes
 

@@ -83,10 +83,19 @@ server. `rollup` and `decisions`, which now also write their weekly block into t
 same list minus the tools each one needs (`rollup` keeps the Doc writes; `decisions` keeps Chat,
 Doc and mail). Hardening the remaining beats is `SKB-044` step 2.6.
 
+**The tracker guard (`SKB-044` AC-3.5, since 2026-10-04).** Every beat also runs with a PreToolUse
+hook, `scripts/tracker_guard.py`, passed through `--settings`, so the owner's own settings and hooks
+still apply. It refuses any tool call aimed at the Main Tracker, meaning the tracker id in a
+`spreadsheet_id`, `fileId` or other id field, or anywhere in a Bash command, unless the call only
+reads or the beat is `apply` calling `modify_sheet_values`. A link to the tracker inside a mail body,
+a Doc or a Ledger row is not a target, so it passes. A hook refusal holds in every permission mode,
+which the lists above cannot promise. An error inside the guard refuses every call but a read, and a
+missing guard stops the runner before the beat starts.
+
 ## Installing
 
 ```sh
-cp scripts/run_ops_weekly.sh ~/.claude/skills/zynkr-ops-weekly/
+cp scripts/run_ops_weekly.sh scripts/tracker_guard.py ~/.claude/skills/zynkr-ops-weekly/
 chmod +x ~/.claude/skills/zynkr-ops-weekly/run_ops_weekly.sh
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zynkr.ops-weekly.plist
 ```

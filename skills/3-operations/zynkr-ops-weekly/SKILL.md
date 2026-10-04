@@ -771,8 +771,9 @@ silent Monday and a half-failed Wednesday in W36 before this line existed.
 - **Fail loud on config.** Placeholder id → stop; a wrong id writes into someone else's file.
 - **Never write the Main Tracker.** No mode writes it in Phase 3a. `snapshot` and `propose` read it
   and write only the Ledger, through the calls the scripts print; `apply` in shadow mode records the
-  owner's decisions in the Ledger only. The live write (Phase 3b) waits for the hook that blocks
-  every other beat from the tracker, and for the owner's yes.
+  owner's decisions in the Ledger only. The live write is Phase 3b. Since 2026-10-04 a hook
+  (`scripts/tracker_guard.py`, see `references/scheduling.md`) refuses any tracker write from every
+  beat but `apply`.
 - **Nothing is proposed without evidence, and nothing is applied without a reply.** Every proposal
   passes `proposals.py check`; a row the owner's reply does not name stays 未回覆.
 - **The recap writes nothing and mails once.** It reads the Ledger, sends one mail to the

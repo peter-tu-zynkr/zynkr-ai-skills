@@ -191,6 +191,13 @@ esac
 
 MODEL="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('routine',{}).get('model') or 'sonnet')" "$CFG" 2>/dev/null || echo sonnet)"
 
+# Tracker guard (SKB-044 AC-3.5, the owner's yes on 2026-10-04): every beat runs with a PreToolUse
+# hook that refuses any call aimed at the Main Tracker unless it only reads, or the beat is apply
+# writing values. A hook refusal holds in every permission mode; the lists above only pre-approve
+# under `auto`. The settings file adds this one hook, and the owner's own settings still apply.
+GUARD="$(cd "$(dirname "$0")" && pwd)/tracker_guard.py"
+GUARD_SETTINGS="$STATE_DIR/tracker-guard.settings.json"
+
 if [ "$DRY" = 1 ]; then
   echo "WOULD RUN  mode=$MODE  week=$WEEK  model=$MODEL"
   echo "  why    : $WHY"
@@ -198,6 +205,7 @@ if [ "$DRY" = 1 ]; then
   echo "  tools  : $TOOLS"
   echo "  deny   : ${DENY:-(none)}"
   echo "  limit  : $([ "$LIMIT" -gt 0 ] && echo "${LIMIT}s" || echo none)"
+  echo "  guard  : $GUARD (only apply may write the Main Tracker)"
   echo "  state  : $STATE_DIR"
   exit 0
 fi
@@ -231,12 +239,20 @@ except subprocess.TimeoutExpired:
   fi
 }
 
+# A missing guard would make every hook call fail; stop here with a clear line instead.
+if [ ! -f "$GUARD" ]; then
+  log "FATAL mode=$MODE week=$WEEK tracker guard missing: $GUARD"
+  exit 2
+fi
+printf '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"python3 \\"%s\\"","timeout":30}]}]}}\n' "$GUARD" > "$GUARD_SETTINGS"
+export ZYNKR_OPS_WEEKLY_MODE="$MODE"
+
 log "START mode=$MODE week=$WEEK model=$MODEL ($WHY)"
 OUT="$(mktemp -t zynkr-ops-weekly.XXXXXX)"
 if [ -n "$DENY" ]; then
-  run_limited claude -p "$PROMPT" --model "$MODEL" --allowedTools "$TOOLS" --disallowedTools "$DENY" >"$OUT" 2>&1
+  run_limited claude -p "$PROMPT" --model "$MODEL" --settings "$GUARD_SETTINGS" --allowedTools "$TOOLS" --disallowedTools "$DENY" >"$OUT" 2>&1
 else
-  run_limited claude -p "$PROMPT" --model "$MODEL" --allowedTools "$TOOLS" >"$OUT" 2>&1
+  run_limited claude -p "$PROMPT" --model "$MODEL" --settings "$GUARD_SETTINGS" --allowedTools "$TOOLS" >"$OUT" 2>&1
 fi
 STATUS=$?
 [ "$LIMIT" -gt 0 ] && [ "$STATUS" -eq 124 ] && log "TIMEOUT mode=$MODE week=$WEEK after ${LIMIT}s"
