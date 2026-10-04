@@ -28,7 +28,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 ## 這個技能讀什麼（固定事實，不要再推導）
 
-- 知識來源：references/pm-knowledge-pack.md · v1 · sha256 b3d4e130fe64
+- 知識來源：references/pm-knowledge-pack.md · v2 · sha256 d29deeea178a
 - `references/pm-sources.md` §1 — 八個 PMO 正本 ID 與模板資料夾的正確名稱；§2 — `~/.config/zynkr/pm.json` adapter 契約；§2.1 — 逐鍵說明；§3 — 可直接複製的 `pm.json.example`
 - `references/pm-sheet-schema.json`（管控表分頁與標頭）· `references/pm-status-crosswalk.json`（五個軸），兩者都透過技能自帶的 `scripts/pm-schema.py` 讀，不用眼睛比對
 
@@ -162,7 +162,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 
 ## Step 6 — 管控表 tab 1 播下五列交付階段列，不編任務
 
-**先偵測版本，不要假設**（知識包 §3）：讀第 1 列標頭，`K1` 命中 `前置任務` ⇒ v2，讀寫 `A:N`；`K1` 命中 `Reference` ⇒ legacy v1，讀寫 `A:M`；兩者都不吻合 ⇒ 回報而不是猜。剛複製出來的正本應該是 v2，仍然要驗——寫死範圍正是現行 `project-status-update` 讀錯欄位的原因。
+**先偵測版本，不要假設**（知識包 §3）：讀 `專案管理總表!A1:N5`，標頭列是 A 欄為 `no.` 的那一列（正本在**第 3 列**；第 1 列的 D 欄是核心目標）。把那一列寫成 `{"tab": "專案管理總表", "headers": [...]}` 存成暫存檔，從技能資料夾跑 `scripts/pm-schema.py headers --file <暫存檔>`：結束碼 `0` ⇒ v2，讀寫 `A:N`；`2` ⇒ legacy v1，讀寫 `A:M`；其他 ⇒ 回報而不是猜。剛複製出來的正本應該是 v2，仍然要驗。五列階段列寫在標頭列下方。
 
 播下五列 `X.0` 階段列——Playbook §4 流程骨架裡的**五個交付階段**，它們就是這個專案的交付脊椎（delivery spine）：
 
@@ -189,8 +189,11 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 **回連要兩邊都有**，只有單向的連結在第三週就會斷：
 
 - 專案資料夾 URL、管控表 URL、Business Case URL、Charter URL ⇒ 寫進 Kickoff 表頭對應欄位。
-- 五份檔案的名稱與 URL ⇒ **這一版不寫 `所有檔案` 分頁**，改成印在對話裡讓使用者自己貼。原因很硬：`references/pm-sheet-schema.json` 對這個分頁誠實地記著 `"headers": null`（只知道 12 欄，2026-09-02 的實測沒抓到標頭字串），沒有標頭就沒有依據決定「一列一份」該落在哪幾欄；而 §4.3 剛把這張表的範例列清掉，也沒有現成的範例列可以照抄。**不要自己補那 12 個標頭**——猜出來的欄序寫進去，比留白難修得多（知識包 §9：讀不到就回報，不猜）。
-  交付清單裡照實報一句：`所有檔案 未寫入 — 該分頁標頭尚未擷取（TODO: references/pm-sheet-schema.json → tabs.所有檔案.headers 仍為 null）`。
+- 五份檔案 ⇒ 寫進管控表 `所有檔案` 分頁，一份一列，從第 2 列起（這個分頁的標頭在**第 1 列**；§4.3 已清掉範例列）。先讀第 1 列，存成 `{"tab": "所有檔案", "headers": [...]}` 交給 `scripts/pm-schema.py headers --file <暫存檔>`：結束碼 `0` 才寫，否則不寫並回報（知識包 §9：讀不到就回報，不猜）。每列只寫這些欄，值一律 `RAW`：
+  - `分類 Category`＝`專案文件` · `版本 Version`＝`v1` · `狀態 Status`＝`Active`
+  - `類型 Type`＝`Google Docs`／`Google Slides`／`Google Sheets` · `文件/資料夾名稱 Name`＝檔名 · `連結 Link`＝URL · `Drive File ID`＝檔案 id
+  - `用途/內容說明 Purpose`：Business Case＝`一頁投資論證，核准後才進入 Charter` · Charter＝`一頁章程，核准後才進入 Planning` · Kickoff＝`專案脈絡與每週更新` · 專案管控表＝`進度的唯一事實來源（tab 1）` · 復盤＝`結案四合一，結案時才動`
+  - `資料夾路徑` · `最後編輯者` · `最後修改日期` · `備註` 留白（日期不自行填）
 
 **`客戶案` 另外回連到交易，兩處都要寫：**
 
@@ -240,7 +243,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 | `[專案管控表] <專案名稱>` | Sheet | … | WBS 待 `/project-planning` |
 | `[復盤] <專案名稱>` | Doc | … | 結案時才動 |
 
-外加：專案資料夾 URL · 四個子資料夾 · 依案型被略過的 Kickoff 欄位 · Step 7 那句 `所有檔案 未寫入` 的說明 · 那段還沒貼進 `pm.json` 的片段（含 `spine` 與 `report_recipients`）。
+外加：專案資料夾 URL · 四個子資料夾 · 依案型被略過的 Kickoff 欄位 · `所有檔案` 寫入的五列（或沒寫的原因）· 那段還沒貼進 `pm.json` 的片段（含 `spine` 與 `report_recipients`）。
 
 **下一步只有一個：完成 `[Business Case]` §1–§6 並送核准**，因為「核准後才進入 Charter」（`pm-sources.md` §1 Business Case 那列）。鐵律 4 說得更硬：Gate 沒過不進下一階段。所以不要在報告裡同時列三件「接下來可以做的事」——現在能做的就這一件，其餘都在 Gate 後面。
 

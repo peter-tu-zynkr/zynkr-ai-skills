@@ -1,4 +1,4 @@
-<!-- pack_version: 1 · direction pending D4 -->
+<!-- pack_version: 2 · direction pending D4 -->
 # PM 共用知識包｜五個 PM 技能的唯一交集
 
 這份知識包收錄的，是 `project-planning`（3.07）· `project-note-specialist`（3.08）· `project-status-update`（3.09）· `project-init`（3.20）· `project-minutes-sync`（3.21）五個技能**共同**需要、而且不管哪個團隊、哪種案型都成立的 PM 規則——交集以外的一律不收。它**不是**這些位元組唯一的家（D4 仍停著：人類到底編輯 Google Doc 還是這份 repo seed，尚未裁決，本包一律寫 direction pending D4，絕不主張任一方是另一方的產物），也**不是**各團隊變體的收納櫃（凡隨團隊／LOB／案型而變的，依 D3 都是 adapter DATA，住在 `pm-sources.md` 與 `~/.config/zynkr/pm.json`）。
@@ -102,9 +102,9 @@ health 反映的是「日期 × lifecycle」的當下讀數，一旦允許手填
 
 **legacy v1**：同一份清單但**沒有** `前置任務 Depends on`，共 13 欄 A–M（`K`＝`Reference 連結` · `L`＝`Note` · `M`＝`DOD 完成定義／交付物`）。
 
-**版本偵測是強制的**：技能在對映欄位之前，必須先讀第 1 列標頭並判定版本——`K1` 命中 `前置任務` 即為 v2（讀 `A:N`），`K1` 命中 `Reference` 即為 v1（讀 `A:M`）。不得寫死範圍。`project-status-update` 目前寫死 `A1:M44`，在 v2 表上會把 `前置任務` 當成 `Reference` 讀——這就是本次要修掉的活 bug。標頭兩者都不吻合時，**回報**而不是猜。
+**版本偵測是強制的**：技能在對映欄位之前，必須先找到標頭列並判定版本。標頭列是 A 欄為 `no.` 的第一列——正本與每份複製出來的管控表都在**第 3 列**（第 1 列的 D 欄放核心目標）。那一列的 `K` 欄命中 `前置任務` 即為 v2（讀 `A:N`），命中 `Reference` 即為 v1（讀 `A:M`）；也可以把整列交給 `scripts/pm-schema.py headers` 判定。不得寫死範圍。標頭兩者都不吻合時，**回報**而不是猜。（早期的 `project-status-update` 寫死 `A1:M44`，在 v2 表上把 `前置任務` 讀成 `Reference`；它現在先找標頭列。）
 
-其餘分頁：`Stakeholders & RACI` · `Risk Register` · `Budget` · `Prerequisite Checklist` · `Change & Decision Log` · `所有檔案` · `Comms Plan`。
+其餘分頁：`Stakeholders & RACI` · `Risk Register` · `Budget` · `Prerequisite Checklist` · `Change & Decision Log` · `所有檔案` · `Comms Plan`。各分頁的標頭字串收在 `pm-sheet-schema.json`；`所有檔案` 的 12 個標頭在它自己的第 1 列（2026-10-04 自正本擷取）。
 
 ---
 
@@ -155,7 +155,7 @@ health 反映的是「日期 × lifecycle」的當下讀數，一旦允許手填
 
 | 用語 | 使用者 |
 |---|---|
-| `"No updates this week."` | `admin-meeting-note`（3.04）· `project-note-specialist`（3.08） |
+| `"No updates this week."` | `admin-meeting-note`（3.04，`admin-meeting-prep` 底下的 agent）· `project-note-specialist`（3.08） |
 | 「本次無相關內容」 | `consult-session-notes`（2.39） |
 
 前者是給**專案週期**看的（這一週沒有進展），後者是給**單場會議**看的（這場會議沒有談到）——語意不同，強行統一會讓其中一邊說謊。技能沿用自己那一邊的用語即可，不得跨用、也不得替對方改。
@@ -168,6 +168,7 @@ health 反映的是「日期 × lifecycle」的當下讀數，一旦允許手填
 - **「完成」的定義**：`[復盤]` Doc 完成 ＋ 封存歸位。兩者缺一，專案不得標記結束（鐵律 5）。
 - 復盤 §1 的結案判定走 **closure verdict** 軸：`passed` / `passed_with_conditions` / `not_delivered`——這是第五個軸，不得和 lifecycle 的 `done` 混用；`done` 說的是事情做完了，closure verdict 說的是做出來的東西算不算數。
 - 本專案若改動過模板，回寫 `[3.3]/[1]` Templates 正本並更新 TEMPLATE-INDEX。
+- **封存歸位的位置是 adapter DATA**：有封存資料夾的案型（`pm.json` → `filing_home.archive_folder_id`，例如 `客戶案`），結案後整個 `[N]` 資料夾移進去，`[N]` 編號仍算已用、不得重用。
 
 ---
 

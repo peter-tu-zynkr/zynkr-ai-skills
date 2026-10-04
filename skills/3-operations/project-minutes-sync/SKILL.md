@@ -53,7 +53,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 **這五份都是技能自帶的，路徑一律以技能資料夾為根。** 安裝指令 只裝這一個資料夾；repo 的 `docs/pm-shared/` 與根目錄 `scripts/` 在安裝後的環境裡並不存在，指過去只會拿到 `No such file`。`scripts/check-pm-refs.sh`（住在 repo，給維護者跑）保證這五份與 `docs/pm-shared/` 逐位元組相同。呼叫 CLI 時把 seed 明給——`--schema ./references/pm-sheet-schema.json` · `--crosswalk ./references/pm-status-crosswalk.json`——因為 CLI 的內建預設值指向 repo 版面。
 
-知識來源：references/pm-knowledge-pack.md · v1 · sha256 b3d4e130fe64
+知識來源：references/pm-knowledge-pack.md · v2 · sha256 d29deeea178a
 
 Google 帳號、時區、週起始日與門檻值全部從 `pm.json` 讀（`pm-sources.md` §2）。本檔沒有、也不得出現任何專案的 Sheet／Doc／資料夾 ID。
 

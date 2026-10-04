@@ -183,7 +183,7 @@ def cmd_headers(headers, tab_name, schema):
     declared = spec.get("headers")
 
     if declared is None:
-        # 所有檔案 declares a column_count only — its header strings were never captured, so
+        # A tab that declares a column_count only (its header strings not captured yet), so
         # nothing is invented here. Width is the only assertion available.
         want = spec.get("column_count")
         if want is None:

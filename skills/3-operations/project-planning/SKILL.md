@@ -22,7 +22,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project-planning
 ```
 
-知識來源：references/pm-knowledge-pack.md · v1 · sha256 b3d4e130fe64
+知識來源：references/pm-knowledge-pack.md · v2 · sha256 d29deeea178a
 
 Source: [Google Doc](https://docs.google.com/document/d/10u7TaTZW6BMoUyN-55ZymA-LkyZ_ca0tIzarPWOG4Zw/edit)
 
