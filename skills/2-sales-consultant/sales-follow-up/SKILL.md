@@ -209,14 +209,16 @@ Condensed house style (fallback only — the Doc is authoritative):
 ### 5 · Sync the existing deal (light update — Zynkr MCP)
 
 **Find the deal.** If Peter gave a deal URL, use that id. Otherwise
-`mcp__zynkr__list_deals(query="<name>")` and pick the match (confirm by
+`mcp__zynkr__list_deals(search="<deal name or 交易 number>")` and pick the match (confirm by
 contact/company). Read it with `mcp__zynkr__get_deal(id=…)` to see the current
 stage, notes, contact_id, company_id, owner_id.
 
 Then, in order:
 
 1. **Log the demo as a note** — `mcp__zynkr__create_note(deal_id=…, subject="[DEMO] …", body=…, confirm:true)`
-   (preview → `confirm:true`). Structure the body: 展示內容 · 痛點 · feedback · 方案 · 下一步.
+   (preview → `confirm:true`). **Skip this step** when this call is already on the deal as a
+   `[DISCOVERY]` meeting, which `/sales-discovery` logs and says so in the conversation. One call
+   gets one timeline entry. Structure the body: 展示內容 · 痛點 · feedback · 方案 · 下一步.
    Attach to **exactly one parent** (the deal) — the deal timeline already widens to
    its contact's activities, so also passing `contact_id` would render the same note
    twice. `body` is required; `subject` is the short title on the timeline.

@@ -63,7 +63,7 @@ It does three things, and **delegates everything else**:
 | `sales-outbound` | 2.09 | ONE lead signal → CRM lead + Gmail draft (+ three 台北時間 slots) | batches |
 | `sales-follow-up` | 2.10 | A completed demo transcript → threaded follow-up + deal sync | new leads |
 | `sales-research` | 2.11 | A company → background brief written back to the CRM | contacts |
-| `sales-proposal-writer` | 2.47 | A deal + the client's asks → a priced 交付文件 proposal, and its revision rounds | the covering email (→ `sales-follow-up`) |
+| `sales-proposal-writer` | 2.47 | A deal + the client's asks → a priced 交付文件 proposal, and its revision rounds | the covering email (→ whoever picks up the outbound with the client; no skill drafts it) |
 
 **Delegate, never inline.** If you find yourself writing CRM SQL, parsing a card, or
 drafting an email body in this skill, stop — that belongs to a child. This skill's own

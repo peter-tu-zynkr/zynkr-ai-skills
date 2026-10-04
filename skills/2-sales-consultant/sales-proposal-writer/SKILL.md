@@ -11,12 +11,14 @@ description: >-
   NT$10,000/hr with the hours shown; and writes an honest-boundaries section saying
   what we will not do and why. On later rounds it reads the review comments on the
   document, applies them, resolves them, verifies the published body by checksum,
-  and syncs the CRM note, the Gmail draft and the kickoff doc in the same pass.
+  and syncs the CRM note and the kickoff doc in the same pass, telling the outbound owner
+  what changed for any unsent covering email.
   Trigger on /sales-proposal-writer or when Peter says "寫提案", "幫我做提案",
   "報價給這個客戶", "把需求整理成提案", "提案 v2", "draft the proposal", "quote this
   client", "update the proposal", or hands over a client's requirement list and wants
   a priced document out of it. Distinct from sales-follow-up (writes the post-demo
-  EMAIL on an existing deal — this writes the PROPOSAL and hands the email to it),
+  EMAIL on an existing deal — this writes the PROPOSAL; its covering email is written by
+  whoever picks up the outbound with this client),
   consult-solution-planning (an INTERNAL solution plan, unpriced) and
   consult-brd-writer (a requirements document, unpriced).
 category: sales-consultant
@@ -28,7 +30,7 @@ author: Peter Tu
 sheetId: "2.47"
 input: "A CRM deal id or name, plus the client's own material — a requirement sheet, discovery/meeting notes, a transcript, or a prior proposal version to revise."
 process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into a recurring lane and a build lane → price each line at the NT$10,000/hr anchor → publish as 交付文件 → CRM note. Revisions: comment → apply → resolve → checksum → sync."
-output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note carrying the pricing rationale and the internal→external module mapping, and a handoff to sales-follow-up."
+output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note with the pricing rationale, and a handoff line for the outbound owner, who writes the covering email."
 synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "project-init"]
 house-style: bound
 type: agent
@@ -76,6 +78,10 @@ new one. The revision loop below is the half that earns its keep.
 Open the CRM deal and read its **timeline first** — notes, prior proposals, stage history. The
 context that decides the proposal's shape is usually already logged there, and starting from the
 client's latest message alone reproduces work and contradicts what we already told them.
+The discovery summaries sit there as a `[DISCOVERY]` meeting (`/sales-discovery`). No Zynkr MCP
+tool reads a deal's timeline back yet (`get_deal` returns its fields and `notes` only). So when the
+summaries are not already in this conversation, ask the user to paste them, together with any
+note the proposal depends on. Never guess at what was said.
 
 Record: who the contact is, what was already promised, which proposal versions exist and
 **whether the client already holds a link to one**.
@@ -143,8 +149,14 @@ costs: it is the part that makes the rest credible.
 ### 7 · Publish and log
 
 Publish as a 交付文件, then write **one CRM note** carrying the pricing rationale, the ranking
-criterion, any internal→external mapping, and the share URL. Hand the covering email to
-`sales-follow-up`.
+criterion, any internal→external mapping, and the share URL.
+
+**The covering email is not this skill's to write, and not `sales-follow-up`'s either.** That
+skill follows up a call from its transcript and has no proposal mode. Whoever picks up the outbound with this client writes the
+email, in their own thread with the client. Give them a handoff line instead: the share URL and
+password, which version is current, and the two or three points the email should land (the
+ranking criterion, the 第一順位 total, and what is deliberately left out). Never draft or send
+that email from here.
 
 If the client **already holds a link** to an earlier version, do not overwrite it — publish the
 new version separately and say which is current. Otherwise update in place so the URL they were
@@ -178,8 +190,10 @@ Proposals are not written once. When comments come back:
 6. **Publish, then verify the published body by checksum against the local file.** Same length is
    not the same content.
 7. **Resolve each comment** once its change is live.
-8. **Sync every downstream copy in the same pass** — the Gmail draft, the CRM note, the kickoff
-   doc. A stale total in an unsent draft is the failure mode this step exists to stop.
+8. **Sync every downstream copy in the same pass**: the CRM note and the kickoff doc. If an unsent
+   covering email already sits in Gmail, it belongs to whoever picks up the outbound. Tell them
+   which totals and lines changed, and do not rewrite their email. A stale total in an unsent
+   email is the failure mode this step exists to stop.
 
 Report the comment→change mapping back to Peter, and flag any judgement call — a wording change
 that shifts meaning, or a consistency edit applied beyond the anchored spot.
@@ -189,7 +203,8 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
 - A published 交付文件 with a share URL
 - A CRM note: ranking criterion · lane split · per-line pricing with hours · internal→external
   module mapping · anything deliberately unquoted and why
-- A handoff line for `sales-follow-up`
+- A handoff line for whoever picks up the outbound with this client: the share URL and
+  password, the current version, and the points the covering email should land
 - On revisions: the comment→change table, the checksum verification, and what was synced
 
 ## House style

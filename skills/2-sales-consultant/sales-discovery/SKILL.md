@@ -10,10 +10,12 @@ visibility: public
 author: Peter Tu
 input: "A consulting client (founder, department head, or senior manager) ready to discuss business challenges and company strategy"
 process: "Stage 1 pain-point discovery with 5D problem exploration, then Stage 2 vision/strategy/product/organization exploration; one question at a time"
-output: "Structured Needs Definition Summary and Strategic Discovery Summary, ready for downstream process mapping or pain-point validation"
+output: "Structured Needs Definition Summary and Strategic Discovery Summary, logged as a [DISCOVERY] meeting on the client's CRM deal, ready for the follow-up and the proposal"
 synergy:
   - "sales-research"
   - "project-init"
+  - "sales-follow-up"
+  - "sales-proposal-writer"
 type: agent
 skills: ["sales-discovery-pains", "sales-discovery-vision"]
 house-style: bound
@@ -26,7 +28,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-discovery
 ```
 
-Run a two-stage consulting intake before any solution conversation. Stage 1 surfaces the client's pain points and a 5D problem map. Stage 2 zooms out to company vision, product lines, organization, and decision conditions. Use this skill at the very start of a consulting engagement — it produces the discovery summaries that feed downstream operations / transformation work.
+Run a two-stage consulting intake before any solution conversation. Stage 1 surfaces the client's pain points and a 5D problem map. Stage 2 zooms out to company vision, product lines, organization, and decision conditions. Use this skill on the discovery call, before any proposal. It produces the discovery summaries and logs them on the client's CRM deal, where the follow-up, the proposal and, once the deal is won, the consulting work pick them up.
 
 ---
 
@@ -95,16 +97,46 @@ Store the agent's **Strategic Discovery Summary** as `STAGE2_SUMMARY`.
 
 ---
 
-## Step 4 — Hand-off
+## Step 4 — Save the summaries on the deal, then hand off
 
-Present both summaries and ask:
+Present both summaries. Then log them on the client's CRM deal, so that the person who follows up,
+writes the proposal or runs the consulting work finds them there and not only in this chat:
+
+1. **Find the deal.** Run `mcp__zynkr__list_deals(search="<deal name or 交易 number>")`. The search
+   matches the deal's name and number only, not the company field, but deal names usually start
+   with the company name. Confirm the match with the user by company and contact, and read it with `mcp__zynkr__get_deal(id=…)`. This skill
+   never creates a deal; Sales opens it (`/sales-inbound`, `/sales-outbound`). If there is no deal,
+   say so, print the summaries, and skip to the hand-off.
+2. **Log the call as a meeting.** Call `mcp__zynkr__log_meeting(deal_id=…, subject="[DISCOVERY] 痛點與願景摘要",
+   body=…, occurred_at=<when the call happened, ISO 8601>)`. The deal is the only parent. Preview it, show
+   the user the preview, and re-call with `confirm:true` only after they agree.
+   - Pass `occurred_at` whenever the call was not today.
+   - The body is `STAGE1_SUMMARY` under 「痛點（需求定義）」, then `STAGE2_SUMMARY` under 「願景（策略探索）」, in the
+     client's language and exactly as the user agreed them.
+   - If only one stage ran, log that one and say which.
+3. **Use a meeting entry and nothing else.** Never write the summaries into the deal's `notes` field. Other
+   skills parse its link lines (`專案資料夾：<url>`, `部署紀錄（<SPEC_ID>）：<url>`), and `update_deal`
+   replaces the whole field. Never use the description either, which is not shown on the deal. The call
+   happened, so log it as a meeting, not a note.
+4. **Say what was saved:** the subject, the date, and the deal it went on. No tool reads a deal's timeline
+   back yet (`get_deal` returns the fields only), so the next skill does not see this entry on its own.
+   Hand the summaries on in the same conversation, or tell the user they are on the deal's timeline.
+
+Then ask:
 
 ```
-Discovery complete. Next step options:
-1. Move to process mapping — hand off to `ops-transformation` orchestrator
-2. Validate specific pain points — re-enter Stage 1 with a different angle
-3. Schedule a human consulting follow-up — contact <your-company-contact-email>
+Discovery saved to the deal. Next step options:
+1. Follow up after the call — /sales-follow-up drafts the reply and brings the deal up to date
+2. Write the proposal — /sales-proposal-writer prices what the client asked for
+3. Validate specific pain points — re-enter Stage 1 with a different angle
+4. Schedule a human consulting follow-up — contact <your-company-contact-email>
 ```
+
+When handing to `/sales-follow-up`, tell it that this call is already logged on the deal as a
+`[DISCOVERY]` meeting, so it skips its own `[DEMO]` note and the call lands on the timeline once.
+
+Process mapping and redesign come after the deal is won. They belong to the consulting and
+operations-transformation teams, not to this hand-off.
 
 > **`<your-company-contact-email>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it. Read it before you launch `sales-discovery-pains` in Stage 1 — that agent's closing offer names the same address, so pass the value in with the launch.
 
