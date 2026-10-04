@@ -133,11 +133,15 @@ filled in (it becomes 已結案) or its folder leaves the parent.
 ## I4 — [N] numbering continuity
 
 **What it checks.** Folder numbers run 1…max with no gaps and no duplicates,
-and every folder in the parent starts with `[N]`. The rest of the name is free
-text — the owners write several shapes — so it is never judged here.
+and every folder in the parent starts with `[N]`. A closed project's folder
+moves to the archive and keeps its number, so the archive's numbers count as
+taken. The rest of the name is free text — the owners write several shapes —
+so it is never judged here.
 
-**How.** Read `^\[(\d+)\]` from every **folder** name in the parent listing.
-Files are not numbered: a file loose in the parent goes to 本次未檢查.
+**How.** Read `^\[(\d+)\]` from every **folder** name in the parent listing and
+in the archive listing (SKILL.md step 2). A number found in either is taken; the
+same number in both, or twice in either, is a duplicate. Files are not
+numbered: a file loose in the parent goes to 本次未檢查.
 
 **Violations.** A gap (`[6]` absent while `[7]` exists) · a duplicate number ·
 a folder with no `[N]` prefix.
@@ -145,7 +149,7 @@ a folder with no `[N]` prefix.
 **Fix lines.** (Drive renames keep the folder id, so a rename never breaks an
 existing backlink.)
 ```
-建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）或 /sales-inbound（新詢問）分配，缺號通常代表資料夾被移走
+建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）或 /sales-inbound（新詢問）分配，缺號通常代表資料夾被移走；結案的資料夾請移到「[Archive] [2.2] 結案專案」，編號仍算已用
 建議動作：在資料夾名稱前補上 [<下一個號碼>]（本技能不改名）
 ```
 

@@ -119,7 +119,9 @@ is §3.
     "客戶案": {
       "filing_home": {
         "folder_id": "<folder-id>",   // where a new project folder is created
-        "label": "[2.2]"              // the bracket label, for prose and for backlinks
+        "label": "[2.2]",             // the bracket label, for prose and for backlinks
+        "archive_folder_id": "<folder-id>"  // optional: where closed projects' folders move; their [N]
+                                      // stay taken, so project-init numbers past them
       },
       "creates_crm_deal": true,       // this type has a CRM deal: Sales creates it (sales-inbound,
                                       // sales-outbound) and project-init reads it at qualified
@@ -294,7 +296,7 @@ engagement type, so the per-type differences are visible side by side.
     "$note": "Keys are the literal 專案類型 values in the Business Case / Kickoff header, so a run reads the field and looks the key up directly. Adding a fourth type is a config change, not a code change.",
 
     "客戶案": {
-      "filing_home": { "folder_id": "<folder-id-client-projects>", "label": "[2.2]" },
+      "filing_home": { "folder_id": "<folder-id-client-projects>", "label": "[2.2]", "archive_folder_id": "<folder-id-closed-client-projects>" },
       "creates_crm_deal": true,
       "kickoff_fields_omitted": [],
       "closure_extra_steps": ["CRM deal 關閉", "客戶版連結權限"],

@@ -101,6 +101,7 @@ documents, never from its stage.
 
 - **Google account** for all Drive/Docs tools: `<your-google-workspace-account>`
 - **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, where the numbered `[N]` folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **Closed-projects archive** (`[Archive] [2.2] 結案專案`, beside the parent; a finished project's folder moves here and keeps its `[N]`): `1OP38Kx8oBxHuZjXL-LEsQETsNj0SSA7u`
 - **CRM deal URL** for report lines: `https://platform.zynkr.ai/deals/{deal_id}`
 - Every call this skill makes is a **read**, by design — it never writes.
 
@@ -168,7 +169,9 @@ List the parent: `mcp__google-workspace__list_drive_items(user_google_email=
 page_size=100)`. Keep the **folders**; a file loose in the parent goes to
 本次未檢查. Read each folder's number from its leading `[N]`; the rest of the
 name is free text (owners write `[N] 公司（專案）`, `[N] 專案`, and older shapes),
-so a name is never a reason to skip a folder.
+so a name is never a reason to skip a folder. List the closed-projects archive
+once too, names only: its `[N]` numbers count as taken for I4, and nothing in it
+is audited (a live deal whose line points there reads as moved out).
 
 Then list *each* folder to capture its contents with `modifiedTime`: the
 kickoff documents, the project set, and any `[Assessment]` / `[Notes]` /
@@ -239,7 +242,7 @@ answers it, and the exact 問題 → 建議動作 line format. In one breath:
 | I1 | deal ↔ folder: a deal at qualified or later carries the line; no dangling, orphan, forked or ambiguous link | every folder and deal | — |
 | I2 | the kickoff set is in the folder | qualified or later: `/project-init`'s set · `new` · `contacted`: any kickoff doc | — |
 | I3 | a fresh session record (`[Notes]`, a kickoff doc, `[1] 會議`) | `proposal` · `won` | 21d |
-| I4 | `[N]` numbering: no gaps, no duplicates, no folder without a number | every folder | — |
+| I4 | `[N]` numbering: no gaps, no duplicates, no folder without a number | every folder; archived numbers count as taken | — |
 | I5 | the deal shows CRM activity (else 停滯) | open | 14d |
 | I6 | document chain: each document has the ones it is built from | every audited engagement | — |
 
