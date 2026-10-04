@@ -28,7 +28,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 ## 這個技能讀什麼（固定事實，不要再推導）
 
-- 知識來源：references/pm-knowledge-pack.md · v2 · sha256 d29deeea178a
+- 知識來源：references/pm-knowledge-pack.md · v2 · sha256 c0e2a89e3057
 - `references/pm-sources.md` §1 — 八個 PMO 正本 ID 與模板資料夾的正確名稱；§2 — `~/.config/zynkr/pm.json` adapter 契約；§2.1 — 逐鍵說明；§3 — 可直接複製的 `pm.json.example`
 - `references/pm-sheet-schema.json`（管控表分頁與標頭）· `references/pm-status-crosswalk.json`（五個軸），兩者都透過技能自帶的 `scripts/pm-schema.py` 讀，不用眼睛比對
 
@@ -143,7 +143,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 
 **這是最常被跳過的一步，所以它自己一個編號。** 複製完成後、還沒有任何人開始用之前，立刻做兩件事：
 
-1. **改核心目標** — 管控表 tab 1 第 1 列的核心目標欄、Business Case 表頭、Kickoff 表頭、Charter 首頁，全部換成 Step 1 收到的那一行。
+1. **改核心目標** — 管控表 tab 1 的 `B1`（`A1` 是標籤「核心目標」）、Business Case 表頭、Kickoff 表頭、Charter 首頁，全部換成 Step 1 收到的那一行。
 2. **清空範例列** — 管控表每一個分頁的示範資料都要清掉：tab 1 的範例 `X.Y` 任務列、`Stakeholders & RACI` · `Risk Register` · `Budget` · `Prerequisite Checklist` · `Change & Decision Log` · `所有檔案` · `Comms Plan` 的範例列，以及 BC／Charter／Kickoff／復盤 裡的示範段落。
 
 沒清乾淨的下場很具體：範例任務會被 `/project-status-update` 當成真任務算進完成度分母，範例風險會被當成未關閉風險回報，第一份週報就開始說謊。
@@ -162,7 +162,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 
 ## Step 6 — 管控表 tab 1 播下五列交付階段列，不編任務
 
-**先偵測版本，不要假設**（知識包 §3）：讀 `專案管理總表!A1:N5`，標頭列是 A 欄為 `no.` 的那一列（正本在**第 3 列**；第 1 列的 D 欄是核心目標）。把那一列寫成 `{"tab": "專案管理總表", "headers": [...]}` 存成暫存檔，從技能資料夾跑 `scripts/pm-schema.py headers --file <暫存檔>`：結束碼 `0` ⇒ v2，讀寫 `A:N`；`2` ⇒ legacy v1，讀寫 `A:M`；其他 ⇒ 回報而不是猜。剛複製出來的正本應該是 v2，仍然要驗。五列階段列寫在標頭列下方。
+**先偵測版本，不要假設**（知識包 §3）：讀 `專案管理總表!A1:N5`，標頭列是 A 欄為 `no.` 的那一列（正本在**第 3 列**；第 1 列 `A1` 是標籤「核心目標」、`B1` 是目標）。把那一列寫成 `{"tab": "專案管理總表", "headers": [...]}` 存成暫存檔，從技能資料夾跑 `scripts/pm-schema.py headers --file <暫存檔>`：結束碼 `0` ⇒ v2，讀寫 `A:N`；`2` ⇒ legacy v1，讀寫 `A:M`；其他 ⇒ 回報而不是猜。剛複製出來的正本應該是 v2，仍然要驗。五列階段列寫在標頭列下方。
 
 播下五列 `X.0` 階段列——Playbook §4 流程骨架裡的**五個交付階段**，它們就是這個專案的交付脊椎（delivery spine）：
 

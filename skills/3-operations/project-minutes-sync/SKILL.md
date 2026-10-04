@@ -47,13 +47,13 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 - `./references/pm-knowledge-pack.md` — §2 五個軸與三條裁決 · §3 管控表 v2 的 14 欄與強制版本偵測 · §4 編號與日期 · §5 Gate 與 Drop 留痕 · §6 升級與同步的兩條強制規則 · §9 讀這份知識包的技能四條鐵律
 - `./references/pm-sources.md` — 8 份 PMO 模板 ID（§1）· `~/.config/zynkr/pm.json` adapter 契約與 Step 0 驗證順序（§2）· instance ID 只住 pm.json 這條規則（§2.3）
-- `./references/pm-sheet-schema.json` — 分頁 → 標頭字串；本技能會寫的兩張表在這裡：`Risk Register`（10 欄）· `Change & Decision Log`（9 欄）
+- `./references/pm-sheet-schema.json` — 分頁 → 標頭字串；本技能會寫的兩張表在這裡：`Risk Register`（11 欄，標頭在第 1 列）· `Change & Decision Log`（10 欄，標頭在第 2 列；第 1 列是說明文字）
 - `./references/pm-status-crosswalk.json` — 五個軸、各表面的值對照、`rejected_values`（`取消`／`暫停`）、`% = done / (total − dropped)`
 - `./scripts/pm-schema.py` — 標頭與值的驗證 CLI（python3 標準庫，`--help` 可看退場碼）
 
 **這五份都是技能自帶的，路徑一律以技能資料夾為根。** 安裝指令 只裝這一個資料夾；repo 的 `docs/pm-shared/` 與根目錄 `scripts/` 在安裝後的環境裡並不存在，指過去只會拿到 `No such file`。`scripts/check-pm-refs.sh`（住在 repo，給維護者跑）保證這五份與 `docs/pm-shared/` 逐位元組相同。呼叫 CLI 時把 seed 明給——`--schema ./references/pm-sheet-schema.json` · `--crosswalk ./references/pm-status-crosswalk.json`——因為 CLI 的內建預設值指向 repo 版面。
 
-知識來源：references/pm-knowledge-pack.md · v2 · sha256 d29deeea178a
+知識來源：references/pm-knowledge-pack.md · v2 · sha256 c0e2a89e3057
 
 Google 帳號、時區、週起始日與門檻值全部從 `pm.json` 讀（`pm-sources.md` §2）。本檔沒有、也不得出現任何專案的 Sheet／Doc／資料夾 ID。
 
@@ -145,7 +145,7 @@ Google 帳號、時區、週起始日與門檻值全部從 `pm.json` 讀（`pm-s
 ## Step 5 — 決議 → Change & Decision Log
 
 - **篩選**：只取 `影響` 不是 `無` 的列（影響範疇／時程／預算）。`影響` 欄空白代表還沒判定，列進「需人決定」——判定影響範疇是人的工作，不是這個技能的（知識包 §6）。
-- **一列一筆**，九欄依 `pm-sheet-schema.json` 的順序：`日期` · `類型 變更/決策` · `內容` · `原因` · `影響 範疇/時程/預算/無` · `提出人` · `核准人` · `狀態 提案/核准/駁回` · `關聯任務 no.`。
+- **一列一筆，依標頭字串對位寫入，不依欄位順序**：先讀表頭區塊，以第一個儲存格等於 `no.` 的那一列為標頭列（正本在第 2 列），把每個值寫到同名標頭那一欄。十欄（字串照 `pm-sheet-schema.json`）：`no.`（該表現有最大 `no.` ＋1，同批次內遞增）· `日期` · `類型（變更 Change/決策 Decision）`（寫 `變更 Change` 或 `決策 Decision`）· `內容` · `原因` · `影響（範疇/時程/預算/無）` · `提出人` · `核准人` · `狀態（提案/核准/駁回）` · `關聯任務 no.`。
 - **`狀態` 一律寫 `提案`**。這是 decision 軸，不是 lifecycle 軸——這欄永遠不會出現 `WIP` 或 `Done`。核准是人在 Gate 上做的動作，技能不代簽（鐵律 4）。
 - `核准人` 沒有就留空，不要填提出人充數。`關聯任務 no.` 只在會議記錄寫了、且該 no. 存在時才填。
 - **去重**：同一 `日期` ＋ 同一 `內容` 已經在表上就跳過，列進報告的 skipped-duplicate。同一場會被跑第二次不應該長出第二筆。
@@ -155,9 +155,9 @@ Google 帳號、時區、週起始日與門檻值全部從 `pm.json` 讀（`pm-s
 
 - **升級條件三個同時成立**：`類型` ＝ `Blocker` · 仍未解除 · 距首次出現已達門檻天數。門檻讀 `defaults.health_thresholds.blocker_stale_days`（預設 7），對應知識包 §6 的「一週內無法自行解除」與 §2.2 at_risk 用的是同一條線。
 - **「首次出現」怎麼算**：以這筆阻礙在會議記錄中最早出現的那場會議日期為準。只讀得到一場會議時，就用該場日期計算，並在報告寫明依據是哪一天——不要用「感覺拖很久了」升級。
-- 欄位：`風險描述`（用原文，不改寫）· `類別`（會議記錄寫了才填）· `Owner`（**必填**）· `狀態 Open/Monitoring/Closed` ＝ `Open`（**必填**）· `最後檢視日` ＝ 這場會議日期。
+- **依標頭字串對位寫入**，標頭列同樣是第一個儲存格等於 `no.` 的那一列（正本在第 1 列）。欄位：`no.`（該表現有最大 `no.` ＋1）· `風險描述`（用原文，不改寫）· `類別（時程/範疇/資源/技術/外部）`（會議記錄寫了才填）· `Owner`（**必填**）· `狀態 (Open/Monitoring/Closed)` ＝ `Open`（**必填**）· `最後檢視日` ＝ 這場會議日期。
 - **`機率 1-3` · `衝擊 1-3` · `分數` 一律留白給人**。分數是機率×衝擊，直接決定要不要升級；猜一個數字等於替人做了升級決策。
-- `緩解措施` · `應變計畫` 只在會議記錄原文寫了才填，沒有就留白。
+- `緩解措施（降機率）` · `應變計畫（若發生）` 只在會議記錄原文寫了才填，沒有就留白。
 - **Owner 缺就不寫**：把該筆列進「需人決定」。Owner 與狀態是這條規則的必填項，開一筆沒有 Owner 的風險等於沒開。
 - `Call-out` 類型不升級。未達門檻天數的 Blocker 也不升級，但要在報告列成「觀察中（第 N 天）」，下次會議它就到期了。
 

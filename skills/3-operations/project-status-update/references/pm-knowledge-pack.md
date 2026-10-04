@@ -102,9 +102,9 @@ health 反映的是「日期 × lifecycle」的當下讀數，一旦允許手填
 
 **legacy v1**：同一份清單但**沒有** `前置任務 Depends on`，共 13 欄 A–M（`K`＝`Reference 連結` · `L`＝`Note` · `M`＝`DOD 完成定義／交付物`）。
 
-**版本偵測是強制的**：技能在對映欄位之前，必須先找到標頭列並判定版本。標頭列是 A 欄為 `no.` 的第一列——正本與每份複製出來的管控表都在**第 3 列**（第 1 列的 D 欄放核心目標）。那一列的 `K` 欄命中 `前置任務` 即為 v2（讀 `A:N`），命中 `Reference` 即為 v1（讀 `A:M`）；也可以把整列交給 `scripts/pm-schema.py headers` 判定。不得寫死範圍。標頭兩者都不吻合時，**回報**而不是猜。（早期的 `project-status-update` 寫死 `A1:M44`，在 v2 表上把 `前置任務` 讀成 `Reference`；它現在先找標頭列。）
+**版本偵測是強制的**：技能在對映欄位之前，必須先找到標頭列並判定版本。標頭列是 A 欄為 `no.` 的第一列——正本與每份複製出來的管控表都在**第 3 列**（第 1 列放核心目標：A 欄是標籤「核心目標」，B 欄是目標本身；第 2 列是狀態字彙說明）。那一列的 `K` 欄命中 `前置任務` 即為 v2（讀 `A:N`），命中 `Reference` 即為 v1（讀 `A:M`）；也可以把整列交給 `scripts/pm-schema.py headers` 判定。不得寫死範圍。標頭兩者都不吻合時，**回報**而不是猜。（早期的 `project-status-update` 寫死 `A1:M44`，在 v2 表上把 `前置任務` 讀成 `Reference`；它現在先找標頭列。）
 
-其餘分頁：`Stakeholders & RACI` · `Risk Register` · `Budget` · `Prerequisite Checklist` · `Change & Decision Log` · `所有檔案` · `Comms Plan`。各分頁的標頭字串收在 `pm-sheet-schema.json`；`所有檔案` 的 12 個標頭在它自己的第 1 列（2026-10-04 自正本擷取）。
+其餘分頁：`Stakeholders & RACI` · `Risk Register` · `Budget` · `Prerequisite Checklist` · `Change & Decision Log` · `所有檔案` · `Comms Plan`。各分頁的標頭字串與標頭列（`header_row`：`專案管理總表` 第 3 列 · `Stakeholders & RACI` 與 `Change & Decision Log` 第 2 列 · 其餘第 1 列）收在 `pm-sheet-schema.json`，2026-10-04 依正本逐字重新擷取。寫入任何分頁都依標頭字串對位，不依欄位順序。
 
 ---
 

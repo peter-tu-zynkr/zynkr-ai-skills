@@ -18,7 +18,7 @@ house-style: bound
 
 # Weekly Project Status Update
 
-知識來源：references/pm-knowledge-pack.md · v2 · sha256 d29deeea178a
+知識來源：references/pm-knowledge-pack.md · v2 · sha256 c0e2a89e3057
 
 You run a project tracked in a Google Sheet. The `專案管理總表` tab is the live task list; the `專案狀態看板` tab is a hand-formatted executive dashboard. This skill closes the gap: it reads the raw tracker, does the reasoning a human would do (what's late, what's blocked, how far along), and produces the dashboard **as a weekly HTML email draft** — so you only have to skim and hit send.
 
@@ -100,7 +100,7 @@ If the user gives an explicit "as of" date, use that instead.
 
 There are two live shapes of `專案管理總表`: **v2** (14 columns A–N, with `前置任務 Depends on` at K) and **legacy v1** (13 columns A–M, no `前置任務`). Reading one as the other silently mis-maps every column from K rightwards — that is exactly the bug this step exists to prevent. **Detect first, map second. Never hardcode a range.** (pack §3)
 
-Read the top of the tab and find the header row — the first row whose column A is `no.` (typically row 3; row 1 carries the core goal in col D):
+Read the top of the tab and find the header row — the first row whose column A is `no.` (typically row 3; row 1 carries the core goal in col B, with the label 核心目標 in A1):
 
 ```
 read_sheet_values(<tracker_sheet_id>, "專案管理總表!A1:N5", <google_account>)
@@ -137,7 +137,7 @@ Row 44 is the historical extent, not a law: if the last row read is non-empty, e
 
 Read the source tab with the range Step 2 chose. Structure:
 
-- **Row 1**: core goal (col D). **Row 3**: header row.
+- **Row 1**: core goal in col B (A1 is the label 核心目標). **Row 3**: header row.
 - **Stage rows** (`X.0`, e.g. `1.0`, `2.0`): stage/milestone name in `里程碑 Stage`, the stage date-range in Start/End, the stage's Definition-of-Done in `DOD`.
 - **Task rows** (`X.Y`, e.g. `2.3`): task description, owner/facilitator, `Status`, Start/End, and a `Note` that often carries the real blocker context.
 
@@ -283,7 +283,7 @@ The earliest Stage Gate / `X.0` milestone that is not yet complete. `overdue` = 
 
 ### Overview
 
-`project_name`, `goal` (row 1 col D, condensed to one line), `owners` (derive from the `Owner`/`Facilitator` columns), `timeline` (earliest Start → latest End across stage rows).
+`project_name`, `goal` (row 1 col B, condensed to one line), `owners` (derive from the `Owner`/`Facilitator` columns), `timeline` (earliest Start → latest End across stage rows).
 
 ### Recent decisions
 

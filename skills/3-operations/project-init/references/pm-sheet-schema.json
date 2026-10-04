@@ -2,7 +2,7 @@
   "schema_version": 1,
   "sheet": "管控表 v2",
   "spreadsheet_id": "1Pc1YT4z6LdU9JjVSPT_ESN7DCa7aL8DhOD1IOpGiuvQ",
-  "verified": "2026-09-02",
+  "verified": "2026-10-04",
   "conventions": {
     "enum_column_key_matching": "prefix",
     "enum_column_key_matching_note": "管控表 v2 header cells embed the enum in the cell text (e.g. `狀態 Open/Monitoring/Closed`). An `enum_columns` key is the column-name prefix; match it against the start of the verbatim header string, not by equality.",
@@ -11,6 +11,7 @@
   },
   "tabs": {
     "專案管理總表": {
+      "header_row": 3,
       "version": "v2",
       "headers": [
         "no.",
@@ -56,29 +57,32 @@
       "note": "The only SOT for progress (五條鐵律 1). Gate rows overload two columns: Owner = 核准人, End = 核准日期. Priority has no enumerated set — only `High` observed."
     },
     "Stakeholders & RACI": {
+      "header_row": 2,
       "headers": [
-        "角色",
+        "角色 Role",
         "姓名",
         "組織/部門",
-        "Interest H/M/L",
-        "Influence H/M/L",
-        "溝通需求",
+        "Interest (H/M/L)",
+        "Influence (H/M/L)",
+        "溝通需求（要知道什麼、多常）",
         "備註"
       ],
       "enum_columns": {},
       "note": "A stakeholder register only — there is no per-deliverable RACI grid here, despite the tab name and Playbook §4."
     },
     "Risk Register": {
+      "header_row": 1,
       "headers": [
+        "no.",
         "風險描述",
-        "類別 時程/範疇/資源/技術/外部",
+        "類別（時程/範疇/資源/技術/外部）",
         "機率 1-3",
         "衝擊 1-3",
         "分數",
-        "緩解措施",
-        "應變計畫",
+        "緩解措施（降機率）",
+        "應變計畫（若發生）",
         "Owner",
-        "狀態 Open/Monitoring/Closed",
+        "狀態 (Open/Monitoring/Closed)",
         "最後檢視日"
       ],
       "enum_columns": {
@@ -87,42 +91,47 @@
       "note": "A 阻礙 that cannot be cleared within one week must open a row here with Owner and 狀態 filled (會議記錄 header rule)."
     },
     "Budget": {
+      "header_row": 1,
       "headers": [
-        "科目",
-        "類別 人力/外包/工具/行銷/其他",
-        "預算",
-        "實際",
-        "差異"
+        "科目 Item",
+        "類別（人力/外包/工具/行銷/其他）",
+        "預算 Planned",
+        "實際 Actual",
+        "差異 Variance",
+        "備註"
       ],
       "enum_columns": {},
       "note": "Seeded with a 應急準備金 row at 10–15%."
     },
     "Prerequisite Checklist": {
+      "header_row": 1,
       "headers": [
         "類別",
         "確認事項",
-        "負責部門 Engineering/Marketing/Product",
+        "負責部門 (Engineering/Marketing/Product)",
         "內部 Owner",
         "對口窗口",
-        "狀態 已確認/未確認/已知背景/N.A.",
-        "needed-by",
+        "狀態（已確認/未確認/已知背景/N.A.）",
+        "needed-by 日期",
         "卡哪個任務 no.",
         "客戶回答／決定",
-        "備註"
+        "備註（風險理由）"
       ],
       "enum_columns": {},
       "note": "Its 狀態 column (已確認/未確認/已知背景/N.A.) is a confirmation vocabulary, not one of the five axes — see `unmapped_enums`. The seeded rows are EDM/CSRC-specific, not generic prerequisites."
     },
     "Change & Decision Log": {
+      "header_row": 2,
       "headers": [
+        "no.",
         "日期",
-        "類型 變更/決策",
+        "類型（變更 Change/決策 Decision）",
         "內容",
         "原因",
-        "影響 範疇/時程/預算/無",
+        "影響（範疇/時程/預算/無）",
         "提出人",
         "核准人",
-        "狀態 提案/核准/駁回",
+        "狀態（提案/核准/駁回）",
         "關聯任務 no."
       ],
       "enum_columns": {
@@ -131,6 +140,7 @@
       "note": "A 決議 affecting 範疇／時程／預算 must land here; every Drop on tab 1 must leave a row here. 週報 RECENT DECISIONS reads from this tab."
     },
     "所有檔案": {
+      "header_row": 1,
       "headers": [
         "分類 Category",
         "資料夾路徑 Folder Path",
@@ -150,12 +160,13 @@
       "note": "12 columns. Headers captured 2026-10-04 from the template's row 1, which is this tab's header row (tab 1's is row 3). Its status vocabulary is Active / Reference / Archive / 待清理 — see `unmapped_enums`."
     },
     "Comms Plan": {
+      "header_row": 1,
       "headers": [
-        "對象",
+        "對象 Audience",
         "目的",
         "內容",
         "頻率",
-        "管道 Email/LINE/會議/HTML週報",
+        "管道（Email/LINE/會議/HTML週報）",
         "負責人",
         "格式／模板"
       ],
