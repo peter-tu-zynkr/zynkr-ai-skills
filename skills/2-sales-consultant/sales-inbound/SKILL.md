@@ -4,15 +4,15 @@ description: >-
   Turn this week's inbound sales mail into tracked work and first replies. It
   owns two inboxes: the website's "AI 顧問服務" consulting inquiries (the
   discovery-call emails from website@zynkr.ai) and the [2.1] Inbound Sales Gmail
-  label. For each real lead it creates a CRM deal in Supabase, a numbered Google
-  Drive project folder and a kickoff doc inside it, and drafts the first reply
-  as a Gmail draft (never sent). Use this skill whenever Peter runs
+  label. For each real lead it creates a CRM deal in Supabase and drafts the
+  first reply as a Gmail draft (never sent); the client folder and kickoff doc
+  come later, from /project-init at qualified. Use this skill whenever Peter runs
   /sales-inbound or says things like "process this week's consult inbounds",
   "處理本週顧問諮詢", "有沒有新的顧問諮詢", "check for new consulting leads",
   "turn the discovery-call inquiries into deals", "intake the consult requests",
   "回覆 inbound sales", "清 sales inbox", "處理詢價信", or otherwise asks to triage /
   log inbound AI-consulting requests or inbound sales mail — even if he doesn't
-  name the CRM, the Drive folder, or the exact phrase. It is also the skill a
+  name the CRM or the exact phrase. It is also the skill a
   scheduled weekly sales-inbound run should invoke. The Support label and the
   other website forms belong to /zynkr-support; one pasted signal belongs to
   /sales-outbound.
@@ -24,8 +24,8 @@ visibility: public
 author: Peter Tu
 sheetId: "2.04"
 input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 inquiries and the [2.1] Inbound Sales label; optionally a forwarded proposal or partnership email"
-process: "Sweep both inboxes → filter real leads → idempotently create a CRM deal + numbered Drive folder + kickoff doc → draft the first reply (never sent) → report; optional proposal mode opens a Notion ticket"
-output: "Per real lead: a CRM deal, a numbered Drive folder, a kickoff doc and a first-reply Gmail draft; proposals listed for Peter; (optional) a Notion ticket"
+process: "Sweep both inboxes → filter real leads → idempotently create a CRM deal → draft the first reply (never sent) → report; the client folder waits for /project-init at qualified; optional proposal mode opens a Notion ticket"
+output: "Per real lead: a CRM deal and a first-reply Gmail draft; proposals listed for Peter; (optional) a Notion ticket"
 synergy:
   - "sales-outbound"
   - "zynkr-support"
@@ -39,12 +39,16 @@ Peter gets inbound sales mail two ways: consulting inquiries through the Zynkr
 website's consult page, and mail that lands under the `[2.1] Inbound Sales` Gmail
 label. This skill clears both once a week: it reads the week's mail, and for every
 genuine lead it lays down what the sales motion needs — a **CRM deal** his team can
-track, a **Drive project folder** to hold the work, a **kickoff doc** so whoever
-picks it up starts with context, and a **first-reply draft** so the lead hears back.
+track and a **first-reply draft** so the lead hears back.
+
+The client folder and its kickoff doc are not this skill's. A lead is not a project
+yet: `/project-init` opens the numbered folder, the kickoff documents and the deal's
+`專案資料夾：` line once the deal reaches **qualified**, after the discovery call
+(Peter's rule of 2026-10-03; decision D2 took them out of this skill on 2026-10-05).
 
 It runs **fully autonomously**: parse → filter → create → draft → report. No mid-run
 confirmation. The whole point is that Peter runs it (or a cron does) and comes
-back to a finished pipeline. Because it writes real CRM records and Drive files,
+back to a finished pipeline. Because it writes real CRM records and Gmail drafts,
 the safety comes from being *idempotent* — it skips tests and skips any lead that
 already has a deal, so re-running the same week never creates duplicates. A reply
 is only ever a draft: Peter reads it and sends it himself.
@@ -103,7 +107,6 @@ the latest message they sent. Three kinds turn up there:
 ## Fixed facts (don't re-derive these)
 
 - **Google account** for all Gmail/Drive tools: `<your-google-workspace-account>`
-- **Drive parent folder** (where numbered project folders go): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
 - **CRM deal URL** for the report/doc: `https://platform.zynkr.ai/deals/{deal_id}`
 - Owner (`Peter Tu`) and pipeline (`銷售流程`) are looked up live inside the SQL — don't hardcode their ids.
 
@@ -164,20 +167,18 @@ Resolve the batch in two reads. First `mcp__zynkr__list_deals(limit=100)` once,
 and keep the `contact_id` of every row. Then, per lead,
 `mcp__zynkr__list_contacts(search="<email>")` — no match means a genuinely new
 lead; a match whose id appears in that contact_id set is **already handled** →
-skip it entirely (no deal, no folder, no doc). The rest are your work list.
+skip it entirely (no deal, no reply draft). The rest are your work list.
 
-Checking up front is the point: it stops you creating an orphan folder for a
+Checking up front is the point: it stops you creating a second deal for a
 lead that turns out to be a repeat.
 
 ⚠️ `list_deals` returns the newest 100 rows by activity and cannot filter by
 contact. If it comes back with exactly 100, the de-dup is no longer sound —
 stop and say so rather than risk double-booking a lead.
 
-### 4 · For each surviving lead, create the three artifacts
+### 4 · For each surviving lead, create the CRM deal
 
-Do these in order so each can reference the one before it.
-
-**a) The CRM deal.** Three calls in this order, so each hands its id to the next.
+Three calls in this order, so each hands its id to the next.
 Every write previews first — call it once without `confirm`, then again with
 `confirm=true` to apply.
 
@@ -224,88 +225,14 @@ For an Inbound Sales lead the source line is `來源：Inbound Sales 信件 · <
 `workshop` (an event or livestream they name), `referral` (a warm introduction),
 otherwise `other`. Never `outbound`: they wrote in.
 
-`create_deal` returns the new `deal_id` — carry it into (b) and (c). If step 3
-already flagged this lead as handled, you never reach here: skip its folder and
-doc too, and say so in the report.
+`create_deal` returns the new `deal_id`; the report links it. If step 3 already
+flagged this lead as handled, you never reach here, and the report says so.
 
-**b) The Drive project folder.** The folder name is **`[N] Company（Name）`** —
-e.g. `[1] 轉職計劃中（Jane）`. If `Company` is blank, use `[N] Name`.
-
-Compute `N` by listing the parent folder and scanning **folders** (not files) for
-a leading `[number]`:
-
-```
-mcp__google-workspace__list_drive_items(
-  user_google_email = "<your-google-workspace-account>",
-  folder_id = "1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t"
-)
-```
-
-`N` = (highest `[number]` found among folders) + 1, or `1` if none are numbered.
-When you create several folders in one run, keep incrementing locally so each
-lead gets a distinct number. List the parent **once** at the start of the run and
-track the counter yourself — don't re-list between leads.
-
-Create the folder:
-
-```
-mcp__google-workspace__create_drive_file(
-  user_google_email = "<your-google-workspace-account>",
-  file_name  = "[N] Company（Name）",
-  folder_id  = "1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t",
-  mime_type  = "application/vnd.google-apps.folder",
-  content    = " "
-)
-```
-
-Capture the new folder's id from the response. (The tool rejects a completely
-empty call, so pass a single-space `content` even for a folder — it's ignored.)
-
-**c) The kickoff doc.** Read `references/starting-doc-template.md` and fill its
-placeholders (`{{DEAL_NAME}}`, `{{TODAY}}`, `{{NAME}}`, `{{EMAIL}}`, `{{COMPANY}}`,
-`{{CONTEXT}}`, `{{DEAL_URL}}`). Create it as a real Google Doc, then move it into
-the project folder — this two-step path is reliable, whereas creating a Doc
-directly via `create_drive_file` with the document mime-type returns HTTP 400:
-
-```
-# 1. create the doc (lands in My Drive root)
-mcp__google-workspace__create_doc(
-  user_google_email = "<your-google-workspace-account>",
-  title   = "{{DEAL_NAME}} — 專案啟動",
-  content = "<filled-in template>"
-)
-# 2. move it into the project folder (capture the doc id from step 1)
-mcp__google-workspace__update_drive_file(
-  user_google_email = "<your-google-workspace-account>",
-  file_id    = "<doc id>",
-  add_parents = "<new folder id from step b>"
-)
-```
-
-Capture the doc's link for the report.
-
-**d) Link the folder back to the deal** so the team can jump from CRM to the
-workspace. Append the folder URL to the deal's notes:
-
-`mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
-
-1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
-2. build the new value: the existing notes, then a blank line, then the block below
-3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
-
-The block is exactly one line, on its own, with the full-width colon:
-
-```
-專案資料夾：https://drive.google.com/drive/folders/<new folder id from step b>
-```
-
-That line is the contract: `/consult-shadowing-scheduler`, `/gtm-uat-writer` and `/project-governance`
-find the client folder by matching it, and `/project-init` writes the same line when it opens a qualified deal's project.
-Don't reword it or add text after the URL.
-
-Call it once without `confirm` to preview, then again with `confirm=true`. Never
-send `notes` without the existing text in front of it — the field is overwritten,
-not appended, and skipping the read loses every earlier backlink.
+**No folder, no kickoff doc.** Don't create a Drive folder or a kickoff doc, and
+don't add a `專案資料夾：` line to the deal. `/project-init` does all three when the
+deal reaches qualified, after the discovery call, and the skills that need the
+folder (`/consult-shadowing-scheduler`, `/gtm-uat-writer`, `/project-governance`)
+read that line. A lead that never qualifies leaves no orphan folder behind.
 
 ### 5 · Draft the first reply (Gmail draft — never send)
 
@@ -337,17 +264,16 @@ inquiry, including the skipped ones so nothing is silently dropped:
 ```
 本週進件：官網 N 封 · Inbound Sales K 封，建立 M 筆
 
-| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 資料夾 | 回覆草稿 |
-|---|------|------|------|------|------|--------|----------|
-| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | [1] 轉職計劃中（Jane） | ✅ 已擬 |
-| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — |
-| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | — | ⏭️ 已回過 |
+| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 回覆草稿 |
+|---|------|------|------|------|------|----------|
+| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | ✅ 已擬 |
+| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — |
+| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | ⏭️ 已回過 |
 ```
 
 Then list the proposals found under the Inbound Sales label (sender · subject · one line),
 any `[[NEEDS PETER]]` drafts, and state the headline in prose (e.g. "Created 2 deals +
-2 folders + 2 docs + 2 reply drafts; skipped 1 test and 1 already-processed; 1 proposal
-waiting for you").
+2 reply drafts; skipped 1 test and 1 already-processed; 1 proposal waiting for you").
 
 ---
 
@@ -365,9 +291,9 @@ waiting for you").
   can be left with a company and contact but no deal. That is recoverable and
   visible; re-running finds them and continues. Report it rather than retrying
   blindly.
-- **Numbered folders are sequential, not timestamped.** Peter tracks consult
-  projects by a simple running count (`[1]`, `[2]`, …). Scanning existing folders
-  for the max keeps the sequence continuous even across weeks and reruns.
+- **The folder waits for qualified.** A lead is not a project yet. `/project-init`
+  opens the numbered folder once discovery qualifies the deal, so a lead that never
+  converts leaves no orphan folder, and one skill numbers every project (D2).
 - **One owner per inbox.** /zynkr-support used to draft KB answers on the same
   Inbound Sales threads this skill logged, so a lead could get two drafts. The sales
   inboxes are this skill's now, and the Support inbox is /zynkr-support's.
@@ -380,7 +306,7 @@ waiting for you").
 `stage=new` · `service_tier=advisory (顧問訂閱)` · `priority=medium` ·
 `lead_source=content` for a website inquiry (the enum has no "website" value; `content` is the closest; an Inbound Sales lead follows step 4)
 · `value=NULL` (unknown at intake) · `close_date=today+30`. They are passed
-explicitly on the `create_deal` call in step 4a — if Peter asks to change one,
+explicitly on the `create_deal` call in step 4 — if Peter asks to change one,
 change it there.
 
 ---
@@ -388,7 +314,7 @@ change it there.
 ## Optional mode — inbound sales / proposal lead intake (folded in from inbound-sales-project-init)
 
 The autonomous weekly flow above handles website **consult** inquiries
-(`Interest: AI 顧問服務`) → CRM deal + Drive folder + kickoff doc. For a one-off
+(`Interest: AI 顧問服務`) → CRM deal + first-reply draft. For a one-off
 **inbound sales / proposal lead** — a forwarded 講座提案 / 合作邀請 / introduction
 email — run this interactive branch instead, which additionally captures
 attachments and opens a Notion ticket in the Consultant service DB:
