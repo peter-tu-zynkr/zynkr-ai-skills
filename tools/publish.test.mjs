@@ -7,6 +7,8 @@ import { SECRET, SITE, TOKEN, WB, buildStage, deps, git, head, makeShelf, networ
 import { Refusal, SHELF_URL } from './common.mjs';
 import {
   checkShrink,
+  commitMessage,
+  heldWords,
   main,
   parseFrontmatter,
   planPromotion,
@@ -186,10 +188,15 @@ describe('derived fields', () => {
   });
 
   test('an install_command override that is not an npx skills add line refuses', async () => {
-    const { shelf } = makeShelf();
     for (const line of ['curl -sL zynkr.ai/s/1.01.md -o x.md', 'npx skills add https://evil.test/a/b --skill x']) {
       const stage = buildStage([skill('alpha', { extra: `install_command: ${line}` })]);
-      await refused(publish(opts(stage, shelf, { dryRun: true }), deps(network())), /alpha\/SKILL\.md: install_command must be/);
+      // A folder the shelf already publishes is named by its path...
+      const { shelf: known } = makeShelf();
+      placeOnShelf(known, buildStage([skill('alpha')]), ['alpha'], WB.a);
+      await refused(publish(opts(stage, known, { dryRun: true }), deps(network())), /alpha\/SKILL\.md: install_command must be/);
+      // ...and one new to it by its sheetId only.
+      const { shelf: empty } = makeShelf();
+      await refused(publish(opts(stage, empty, { dryRun: true }), deps(network())), /a file new to the shelf \(sheetId id-alpha\): install_command must be/);
     }
   });
 
@@ -198,7 +205,27 @@ describe('derived fields', () => {
     const bad = buildStage([skill('alpha', { name: 'Alpha_Skill' })]);
     await refused(publish(opts(bad, shelf, { dryRun: true }), deps(network())), /name must match/);
     const twice = buildStage([skill('alpha', { name: 'same' }), skill('beta', { name: 'same' })]);
-    await refused(publish(opts(twice, shelf, { dryRun: true }), deps(network())), /"same" is used by both/);
+    await refused(publish(opts(twice, shelf, { dryRun: true }), deps(network())), /one name is used by both a file new to the shelf \(sheetId id-alpha\) and a file new to the shelf \(sheetId id-beta\)/);
+  });
+
+  // Review round 4 (workbench SKB-054): a refusal came before the hold and named the folder, so a client
+  // build marked public by mistake was named in this public log. A folder new to the shelf is named by
+  // its sheetId now, whatever the refusal.
+  test('a refusal never names a folder new to the shelf', async () => {
+    const cases = [
+      ['name written as a block', { name: '>-' }],
+      ['name on the next line', { name: '' }],
+      ['install_command with -y', { extra: `install_command: npx skills add ${SHELF_URL} --skill globex-portal -y` }],
+    ];
+    for (const [label, spec] of cases) {
+      const { shelf } = makeShelf();
+      const stage = buildStage([skill('globex-portal', { sheetId: '3.41', ...spec })]);
+      const d = deps(network());
+      const err = await publish(opts(stage, shelf, { dryRun: true }), d).then(() => null, (e) => e);
+      assert.ok(err instanceof Refusal, `${label}: refused`);
+      assert.match(err.message, /sheetId 3\.41/, label);
+      assert.doesNotMatch(`${err.message}\n${d.out.join('\n')}\n${d.err.join('\n')}\n${d.summary()}`, /globex/, label);
+    }
   });
 });
 
@@ -300,7 +327,11 @@ describe('the stage is checked before anything happens', () => {
     const unmarked = buildStage(trio());
     delete unmarked.payload[0].visibility;
     unmarked.save();
-    await refused(publish(opts(unmarked, shelf), deps(network())), /alpha\/SKILL\.md is not marked visibility: public/);
+    // alpha is new to this shelf, so the refusal names its row by id, never its path (wordsFor).
+    await refused(publish(opts(unmarked, shelf), deps(network())), /the payload row for a file new to the shelf \(sheetId 1\.1\) is not marked visibility: public/);
+    const { shelf: known } = makeShelf();
+    placeOnShelf(known, buildStage(trio()), trio().map((s) => s.slug), WB.a);
+    await refused(publish(opts(unmarked, known), deps(network())), /alpha\/SKILL\.md is not marked visibility: public/);
   });
 
   test("a stage whose workbench_sha is not its run's commit refuses before anything is pushed or posted", async () => {
@@ -360,7 +391,7 @@ describe('promotion (AC-12)', () => {
   test('a folder new to the shelf is held until promoted, with its sub-agents', async () => {
     const { shelf, remote } = makeShelf();
     placeOnShelf(shelf, buildStage([skill('alpha')]), ['alpha'], WB.a);
-    const stage = buildStage([skill('alpha'), skill('gamma', { agents: ['helper'] })], { sha: WB.b });
+    const stage = buildStage([skill('alpha'), skill('gamma', { sheetId: '1.07', agents: ['helper'] })], { sha: WB.b });
 
     const net = network();
     const d = deps(net);
@@ -369,11 +400,15 @@ describe('promotion (AC-12)', () => {
     assert.equal(held.commit, null, 'alpha is unchanged and gamma is held: nothing to commit');
     assert.equal(fs.existsSync(path.join(shelf, 'skills/1-brand-marketing/gamma')), false);
     assert.deepEqual(bodyOf(net).skills.map((r) => r.slug), ['alpha']);
-    assert.match(d.summary(), /Held until promoted.*`gamma`/);
-    assert.ok(d.out.includes('held until promoted: gamma'));
+    // A held skill is named by its sheetId: it may be a client build marked public by mistake, whose
+    // slug names the client (workbench SKB-054). Nothing public says "gamma" until it is promoted.
+    assert.match(d.summary(), /Held until promoted.*`1\.07`/);
+    assert.ok(d.out.includes('held until promoted: 1.07'));
+    assert.doesNotMatch(d.summary(), /gamma/);
+    assert.doesNotMatch(JSON.stringify(d.out), /gamma/);
 
     const net2 = network();
-    const promoted = await publish(opts(stage, shelf, { promote: 'other, gamma' }), deps(net2));
+    const promoted = await publish(opts(stage, shelf, { promote: 'other, 1.07' }), deps(net2));
     assert.deepEqual(promoted.promotion.held, []);
     assert.deepEqual(bodyOf(net2).skills.map((r) => r.slug), ['alpha', 'gamma', 'gamma-helper']);
     assert.match(git(remote, ['log', '-1', '--format=%B', 'main']), /^Added: gamma$/m);
@@ -395,6 +430,23 @@ describe('promotion (AC-12)', () => {
     assert.deepEqual(all.held, []);
     assert.deepEqual(all.promoted.map((s) => s.slug), ['fresh']);
     assert.equal(planPromotion(stageSkills, shelf, 'fresh,typo').unmatched, 1);
+    // promote also takes a sheetId: the outputs name a held skill by its id, never its slug.
+    const numbered = stageSkills.map((s) => (s.slug === 'fresh' ? { ...s, sheetId: '1.09' } : s));
+    assert.deepEqual(planPromotion(numbered, shelf, '1.09').promoted.map((s) => s.slug), ['fresh']);
+    assert.equal(planPromotion(numbered, shelf, '9.99').unmatched, 1);
+  });
+
+  test('held skills are named by sheetId in the commit message, never by slug', () => {
+    const held = [{ slug: 'acme-portal', sheetId: '3.40' }, { slug: 'acme-tools' }];
+    assert.deepEqual(heldWords(held), ['3.40', '1 skill with no sheetId']);
+    const msg = commitMessage({
+      manifest: { workbench_sha: 'a'.repeat(40) },
+      kept: [],
+      plan: { added: [], changed: [], removed: [], loose: 0 },
+      held,
+    });
+    assert.match(msg, /^Held until promoted: 3\.40, 1 skill with no sheetId$/m);
+    assert.doesNotMatch(msg, /acme/);
   });
 
   test('a new skill that only reuses a public folder name is held', () => {
@@ -737,7 +789,7 @@ describe('failures after the checks', () => {
     const { shelf, remote } = makeShelf();
     const before = head(remote, 'main');
     const net = network();
-    await refused(publish(opts(stage, shelf), deps(net)), /git's index differs from the stage at 1 path \(skills\/1-brand-marketing\/alpha\/crlf\.txt\)/);
+    await refused(publish(opts(stage, shelf), deps(net)), /git's index differs from the stage at 1 path, 1 of them new to the shelf and unnamed here/);
     assert.equal(head(shelf), before, 'no commit');
     assert.equal(net.posts().length, 0);
   });
@@ -748,5 +800,20 @@ describe('failures after the checks', () => {
     const before = head(remote, 'main');
     await refused(publish(opts(stage, shelf), deps(network(), { SKILLS_SYNC_HMAC_SECRET: '' })), /SKILLS_SYNC_HMAC_SECRET is not set/);
     assert.equal(head(remote, 'main'), before);
+  });
+});
+
+// Review round 5 (workbench SKB-054): stageIndex's refusal listed paths, a new sub-agent's among them.
+describe('a refusal after the mirror', () => {
+  test('names only paths the shelf already published', async () => {
+    const { shelf } = makeShelf();
+    placeOnShelf(shelf, buildStage([skill('alpha', { sheetId: '1.01' })]), ['alpha'], WB.a);
+    const stage = buildStage([skill('alpha', { sheetId: '1.01', files: { '.gitattributes': '*.md text\n', 'agents/globex-portal.md': '---\r\nname: globex-portal\r\n---\r\nSteps.\r\n' } })], { sha: WB.b });
+    const d = deps(network(), { GITHUB_ACTIONS: 'true' });
+    const code = await main(['--stage', stage.root, '--shelf', shelf, '--event', 'schedule', '--run', stage.runFile], d);
+    const text = [...d.out, ...d.err, d.summary()].join('\n');
+    assert.notEqual(code, 0);
+    assert.match(text, /new to the shelf and unnamed here/);
+    assert.doesNotMatch(text, /globex/);
   });
 });

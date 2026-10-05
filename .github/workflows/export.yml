@@ -33,7 +33,7 @@ on:
           - 'true'
         default: report
       promote:
-        description: 'Publish skills new to the shelf: slugs separated by commas, or all'
+        description: 'Publish skills new to the shelf: sheetIds (e.g. 3.24) or slugs, separated by commas, or all. The run summary lists held skills by sheetId.'
         type: string
         default: ''
       allow_shrink:

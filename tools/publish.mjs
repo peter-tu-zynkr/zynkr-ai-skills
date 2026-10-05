@@ -15,7 +15,10 @@
  *      install_command are derived here and overwrite whatever the stage carried.
  *   e. A folder the shelf does not hold yet waits for --promote (AC-12), unless it is a skill the
  *      shelf already publishes under another folder: moved between categories, or renamed (its
- *      manifest says `renamed_from: <old name>` and keeps the old folder's sheetId).
+ *      manifest says `renamed_from: <old name>` and keeps the old folder's sheetId). A held skill is
+ *      named by its sheetId in every output (log, summary, commit message, dry-run), never by its
+ *      slug: it may be a client build marked public by mistake, and a client build's slug names the
+ *      client (workbench SKB-054). --promote takes sheetIds or slugs.
  *   f. A stage under half the shelf waits for --allow-shrink.
  *   g. The stage must be newer than the shelf's last `Workbench-Commit:` trailer (AC-10).
  *   h. prune: a scheduled run prunes, a dispatch reports unless told `true` (AC-11).
@@ -27,12 +30,15 @@
  * Any refusal exits 1 before anything is pushed or posted (a failed post after a push exits 1
  * too; the next run posts again). This repo's logs are public, so until the marks are checked (c)
  * a refusal gives counts, never a path: a stage that went wrong may carry a team skill, and its
- * name must not reach this log. Rebuild the stage in the workbench to see which files
- * (`npx tsx scripts/export-shelf.ts --out <dir>`).
+ * name must not reach this log. After (c) a refusal names a file the shelf already publishes by its
+ * path, and one new to the shelf by its sheetId or not at all (wordsFor; stageIndex counts them): it
+ * comes before the hold (e), and a new file may belong to a client build marked public by mistake.
+ * Rebuild the stage in the workbench to see which files (`npx tsx scripts/export-shelf.ts --out <dir>`).
  *
  *   node tools/publish.mjs --stage <dir holding stage/> --shelf <this checkout>
  *        --event schedule|workflow_dispatch --run <run.json> [--prune report|true]
- *        [--promote a,b|all] [--allow-shrink] [--allow-rewind] [--seed-fail] [--dry-run]
+ *        [--promote <sheetIds or slugs, comma-separated>|all] [--allow-shrink] [--allow-rewind]
+ *        [--seed-fail] [--dry-run]
  *
  * Env: WORKBENCH_READ_TOKEN (the compare call), SKILLS_SYNC_HMAC_SECRET, SITE_SYNC_URL
  * (default https://zynkr.ai/api/skills/sync), GITHUB_STEP_SUMMARY (optional).
@@ -318,7 +324,18 @@ export function readStage(stageRoot) {
 const says = (fm, key, value) => !fm.dupes.has(key) && fm.keys.get(key) === value;
 
 /** (c): returns Map(dir → { entry, fm }) once every owning manifest is marked public. */
-export function checkMarks(stageRoot, manifest) {
+/**
+ * How a refusal names a stage file: by its path when the shelf already publishes that file, else by its
+ * sheetId. A refusal comes before the hold (e), and a file new to the shelf may belong to a client build
+ * marked public by mistake, whose path and slug name the client (workbench SKB-054, review round 4).
+ * `shelfHas(path)` says whether the shelf holds a file; without it nothing is named by path.
+ */
+export function wordsFor(shelfHas, file, id) {
+  if (shelfHas(file)) return file;
+  return id ? `a file new to the shelf (sheetId ${id})` : 'a file new to the shelf, with no sheetId';
+}
+
+export function checkMarks(stageRoot, manifest, shelfHas = () => false) {
   const frontmatter = (p) => parseFrontmatter(fs.readFileSync(path.join(stageRoot, p), 'utf8'));
   const owners = new Map();
   let unmarked = 0;
@@ -347,18 +364,24 @@ export function checkMarks(stageRoot, manifest) {
     );
   }
 
-  // Every folder is public from here on, so a message may name it.
+  // Every folder is marked public from here on. A message names one the shelf already publishes by its
+  // path, and one new to the shelf by its sheetId only, never its path or name (wordsFor).
   const names = new Map();
   for (const { entry, fm } of owners.values()) {
+    const known = shelfHas(entry.manifest);
+    const words = wordsFor(shelfHas, entry.manifest, sheetIdOf(fm));
     const name = fm.keys.get('name');
     if (fm.dupes.has('name') || typeof name !== 'string' || !NAME_RE.test(name)) {
-      refuse(`${entry.manifest}: its name must match ${NAME_RE} (the CLI installs by name)`);
+      refuse(`${words}: its name must match ${NAME_RE} (the CLI installs by name)`);
     }
     if (name !== entry.name) {
-      refuse(`${entry.manifest}: manifest.json calls it "${entry.name}", its frontmatter "${name}"`);
+      refuse(known ? `${entry.manifest}: manifest.json calls it "${entry.name}", its frontmatter "${name}"` : `${words}: manifest.json and its frontmatter name it differently`);
     }
-    if (names.has(name)) refuse(`the name "${name}" is used by both ${names.get(name)} and ${entry.manifest}`);
-    names.set(name, entry.manifest);
+    if (names.has(name)) {
+      const other = names.get(name);
+      refuse(known && other.known ? `the name "${name}" is used by both ${other.words} and ${words}` : `one name is used by both ${other.words} and ${words}`);
+    }
+    names.set(name, { words, known });
   }
   return owners;
 }
@@ -366,7 +389,7 @@ export function checkMarks(stageRoot, manifest) {
 // ── d. payload ───────────────────────────────────────────────────────────────
 
 /** The public fields of one row, from the tree: never from what the stage carried. */
-export function deriveFields(rec, { entry, fm }) {
+export function deriveFields(rec, { entry, fm }, shelfHas = () => false) {
   const src = rec.source_path;
   const github_url =
     path.posix.basename(src) === 'CLAUDE.md'
@@ -377,7 +400,7 @@ export function deriveFields(rec, { entry, fm }) {
     if (fm.keys.has('install_command')) {
       const override = fm.keys.get('install_command');
       if (fm.dupes.has('install_command') || typeof override !== 'string' || !OVERRIDE_RE.test(override)) {
-        refuse(`${entry.manifest}: install_command must be an "npx skills add https://github.com/<owner>/<repo> --skill <name>" line`);
+        refuse(`${wordsFor(shelfHas, entry.manifest, sheetIdOf(fm))}: install_command must be an "npx skills add https://github.com/<owner>/<repo> --skill <name>" line`);
       }
       install_command = override;
     } else {
@@ -387,8 +410,9 @@ export function deriveFields(rec, { entry, fm }) {
   return { repo_url: SHELF_URL, github_url, install_command };
 }
 
-/** (d): [{ dir, row }] — each row with its owning folder and its derived fields. */
-export function derivePayload(payload, manifest, owners) {
+/** (d): [{ dir, row }] — each row with its owning folder and its derived fields. A refusal names a row
+ *  the shelf doesn't publish yet by its id, never its path or slug (wordsFor). */
+export function derivePayload(payload, manifest, owners, shelfHas = () => false) {
   if (!Array.isArray(payload)) refuse('payload.json is not an array');
   const files = new Set(manifest.files.map((f) => f.path));
   const dirs = [...owners.keys()];
@@ -399,16 +423,17 @@ export function derivePayload(payload, manifest, owners) {
     }
     const hits = dirs.filter((d) => within(rec.source_path, d));
     if (hits.length !== 1) refuse(`payload[${i}].source_path sits in ${hits.length} skill folders, not one`);
-    const where = rec.source_path;
+    const known = shelfHas(rec.source_path);
+    const where = wordsFor(shelfHas, rec.source_path, typeof rec.id === 'string' ? rec.id : null);
     if (rec.visibility !== 'public') refuse(`the payload row for ${where} is not marked visibility: public`);
     if (typeof rec.slug !== 'string' || rec.slug === '') refuse(`the payload row for ${where} has no slug`);
-    if (slugs.has(rec.slug)) refuse(`the payload slug "${rec.slug}" appears twice`);
+    if (slugs.has(rec.slug)) refuse(known ? `the payload slug "${rec.slug}" appears twice` : `the payload row for ${where} repeats another row's slug`);
     slugs.add(rec.slug);
     if (!KINDS.has(rec.kind)) refuse(`the payload row for ${where} has kind "${rec.kind}", not skill, orchestrator or subagent`);
-    return { dir: hits[0], row: { ...rec, ...deriveFields(rec, owners.get(hits[0])) } };
+    return { dir: hits[0], row: { ...rec, ...deriveFields(rec, owners.get(hits[0]), shelfHas) } };
   });
-  for (const { entry } of owners.values()) {
-    if (!rows.some((r) => r.row.source_path === entry.manifest)) refuse(`${entry.manifest} has no payload row`);
+  for (const { entry, fm } of owners.values()) {
+    if (!rows.some((r) => r.row.source_path === entry.manifest)) refuse(`${wordsFor(shelfHas, entry.manifest, sheetIdOf(fm))} has no payload row`);
   }
   return rows;
 }
@@ -518,12 +543,12 @@ export function planPromotion(skills, shelf, promote = '') {
     if (from) {
       kept.push(s);
       renamed.push({ skill: s, from });
-    } else if (all || named.has(s.slug)) {
+    } else if (all || named.has(s.slug) || (s.sheetId && named.has(s.sheetId))) {
       kept.push(s);
       promoted.push(s);
     } else held.push(s);
   }
-  const unmatched = [...named].filter((n) => !skills.some((s) => s.slug === n)).length;
+  const unmatched = [...named].filter((n) => !skills.some((s) => s.slug === n || s.sheetId === n)).length;
   return { kept, held, promoted, renamed, unmatched };
 }
 
@@ -661,9 +686,20 @@ export function stageIndex(shelfRoot, desired) {
     return !a || !b || a.mode !== b.mode || a.sha !== b.sha;
   });
   if (off.length) {
+    // Only a path the shelf already published is named: one new to it may belong to a client build
+    // marked public by mistake (wordsFor; workbench SKB-054, review round 5).
+    let published = new Set();
+    try {
+      published = new Set(git(shelfRoot, ['ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', 'skills']).split('\0').filter(Boolean));
+    } catch {
+      // a shelf with no commit yet published nothing
+    }
+    const named = off.filter((p) => published.has(p)).slice(0, 5);
+    const unnamed = off.filter((p) => !published.has(p)).length;
     refuse(
-      `after the mirror, git's index differs from the stage at ${plural(off.length, 'path')} ` +
-        `(${off.slice(0, 5).join(', ')}): a .gitattributes or line-ending rule in a skill folder?`,
+      `after the mirror, git's index differs from the stage at ${plural(off.length, 'path')}` +
+        `${named.length ? ` (${named.join(', ')})` : ''}${unnamed ? `, ${unnamed} of them new to the shelf and unnamed here` : ''}` +
+        ': a .gitattributes or line-ending rule in a skill folder?',
     );
   }
   return git(shelfRoot, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
@@ -676,6 +712,15 @@ export function netOfRenames(plan, renamed = []) {
   return { added: plan.added.filter((s) => !to.has(s.dir)), removed: plan.removed.filter((d) => !from.has(d)) };
 }
 
+/** How held skills are named in public: by sheetId, never by slug (e). A held skill may be a client
+ *  build marked public by mistake, and its slug would name the client. One without a sheetId is
+ *  counted; promote it by slug from the workbench's own export log, which is private. */
+export function heldWords(held) {
+  const ids = held.map((s) => s.sheetId).filter(Boolean);
+  const unnumbered = held.length - ids.length;
+  return unnumbered ? [...ids, `${plural(unnumbered, 'skill')} with no sheetId`] : ids;
+}
+
 export function commitMessage({ manifest, kept, plan, held, renamed = [], rewoundFrom = null }) {
   const slugs = (entries) => entries.map((s) => s.slug).join(', ');
   const { added, removed } = netOfRenames(plan, renamed);
@@ -685,7 +730,7 @@ export function commitMessage({ manifest, kept, plan, held, renamed = [], rewoun
   if (plan.changed.length) lines.push(`Changed: ${slugs(plan.changed)}`);
   if (removed.length) lines.push(`Removed: ${removed.map((d) => path.posix.basename(d)).join(', ')}`);
   if (plan.loose) lines.push(`Removed ${plural(plan.loose, 'file')} outside every skill folder`);
-  if (held.length) lines.push(`Held until promoted: ${slugs(held)}`);
+  if (held.length) lines.push(`Held until promoted: ${heldWords(held).join(', ')}`);
   if (rewoundFrom) lines.push(`Rewound from ${rewoundFrom.slice(0, 7)}, dispatched with allow_rewind`);
   return [
     `export: ${plural(kept.length, 'skill')} from ${manifest.workbench_sha.slice(0, 7)}`,
@@ -810,8 +855,9 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   if (opts.seedFail) seedFail(stageRoot); // a
   const { manifest, payload } = readStage(stageRoot); // b
   checkRunSha(opts.run, manifest, opts.dryRun); // b
-  const owners = checkMarks(stageRoot, manifest); // c
-  const rows = derivePayload(payload, manifest, owners); // d
+  const shelfHas = (p) => isFile(path.join(opts.shelf, p));
+  const owners = checkMarks(stageRoot, manifest, shelfHas); // c
+  const rows = derivePayload(payload, manifest, owners, shelfHas); // d
   const shelf = shelfSkills(opts.shelf);
   const shelfDirs = shelf.map((h) => h.dir);
   const staged = manifest.skills.map((s) => {
@@ -852,8 +898,8 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   log(`order: ${ORDER_WORDS[order]}${last && order !== 'identical' ? ` (${last.slice(0, 7)})` : ''}`);
   if (promotion.promoted.length) log(`promoted: ${slugsOf(promotion.promoted).join(', ')}`);
   if (promotion.renamed.length) log(`kept under a new name (renamed_from, same sheetId): ${renamedWords(promotion.renamed).join(', ')}`);
-  if (promotion.held.length) log(`held until promoted: ${slugsOf(promotion.held).join(', ')}`);
-  if (promotion.unmatched) log(`note: promote names ${plural(promotion.unmatched, 'slug')} that the stage does not hold`);
+  if (promotion.held.length) log(`held until promoted: ${heldWords(promotion.held).join(', ')}`);
+  if (promotion.unmatched) log(`note: promote names ${plural(promotion.unmatched, 'sheetId or slug', 'sheetIds or slugs')} that the stage does not hold`);
 
   const summary = [
     '### Export to the shelf',
@@ -867,7 +913,7 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   }
   if (promotion.held.length) {
     summary.push(
-      `- **Held until promoted** (dispatch with \`promote\`): ${slugsOf(promotion.held).map((s) => `\`${s}\``).join(', ')}`,
+      `- **Held until promoted** (dispatch with \`promote\` and the sheetId): ${heldWords(promotion.held).map((s) => `\`${s}\``).join(', ')}`,
     );
   }
 
@@ -881,7 +927,7 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
       added: slugsOf(net.added),
       changed: slugsOf(plan.changed),
       removed: net.removed,
-      held: slugsOf(promotion.held),
+      held: heldWords(promotion.held),
       promoted: slugsOf(promotion.promoted),
       renamed: promotion.renamed.map((r) => ({ from: r.from, to: r.skill.dir })),
       body: JSON.parse(body),
