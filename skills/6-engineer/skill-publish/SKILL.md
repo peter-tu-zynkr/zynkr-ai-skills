@@ -82,7 +82,10 @@ Skip the dedup/classify chain entirely — the issue already carries those decis
 **A client build** (the matched issue is labelled `client-build`, titled `[Client Build] …`, or carries
 `**Intake**: client-prd` in its body — any one) lands only in the private workbench. Before the
 dispatch, `gh api repos/peter-tu-zynkr/zynkr-skill-builder --jq .private` must answer `true`; anything else → stop
-and say it is held. The dispatch's payload would otherwise print the skill into a public workflow log.
+and say it is held. The dispatch's payload would otherwise print the skill into a public workflow log. The workflow
+then reads the issue itself and lands a client build only if its SKILL.md keeps `visibility: client`, declares
+`client: <the client's name>`, and that name is on the leak list (`scripts/check-leaks.ts`). Check all three before
+dispatching; `npx tsx scripts/check-leaks.ts --entry "<name>"` prints the rows a new client needs.
 
 **Mode B — Fresh intake (fallback):** No prior pipeline item exists. Run the full classify + dedup + propose chain (Steps 2b–4b below) before landing the artifact.
 
@@ -173,9 +176,10 @@ Pick **one** of the three payload shapes — `skill_md_url`, `skill_md_b64`, or 
 - Skill is a single SKILL.md, only local → `skill_md_b64`.
 - Skill has additional files (`references/`, `scripts/`, `assets/`) — **the common case for Peter-authored skills** → `bundle_b64`.
 
-**A client build adds `-F "client_payload[visibility]=client"` to whichever shape it sends.** `publish-skill.yml`
-then skips the whole job while the repo is public, so the payload never reaches a run log even if the hold above
-was missed.
+**The `visibility` line is for a client build only:** send `client` there, and drop the line for anything else.
+`publish-skill.yml` then skips the whole job while the repo is public, so the payload never reaches a run log even
+if the hold above was missed. Whether to apply the client checks doesn't hang on this line: the workflow reads the
+source issue's markers too.
 
 **Shape 1 — `skill_md_url`** (single file, remote):
 
@@ -187,6 +191,7 @@ gh api repos/peter-tu-zynkr/zynkr-skill-builder/dispatches \
   -F "client_payload[issue_repo]=peter-tu-zynkr/zynkr-skill-idea" \
   -F "client_payload[slug]=<slug>" \
   -F "client_payload[category]=<category-number-or-slug>" \
+  -F "client_payload[visibility]=<client — only for a client build>" \
   -F "client_payload[skill_md_url]=<raw or blob URL to the SKILL.md>"
 ```
 
@@ -200,6 +205,7 @@ gh api repos/peter-tu-zynkr/zynkr-skill-builder/dispatches \
   -F "client_payload[issue_repo]=peter-tu-zynkr/zynkr-skill-idea" \
   -F "client_payload[slug]=<slug>" \
   -F "client_payload[category]=<category-number-or-slug>" \
+  -F "client_payload[visibility]=<client — only for a client build>" \
   -F "client_payload[skill_md_b64]=$(base64 -w0 < /path/to/SKILL.md)"
 ```
 
@@ -218,6 +224,7 @@ gh api repos/peter-tu-zynkr/zynkr-skill-builder/dispatches \
   -F "client_payload[issue_repo]=peter-tu-zynkr/zynkr-skill-idea" \
   -F "client_payload[slug]=$SLUG" \
   -F "client_payload[category]=<category-number-or-slug>" \
+  -F "client_payload[visibility]=<client — only for a client build>" \
   -F "client_payload[bundle_b64]=$BUNDLE_B64"
 ```
 
@@ -226,10 +233,13 @@ The workflow extracts the bundle to `skills/<N-cat>/<slug>/` — all files insid
 **Size limit.** GitHub caps `client_payload` at ~64 KB serialized. Gzipped markdown is usually 25-35% of raw, so most multi-file skills fit comfortably (ops-workflow-design with 7 files = ~40 KB b64). If your bundle is too large, use the **pre-push fallback**:
 
 1. Create branch `skill/<slug>` from `main` locally.
-2. Add the whole folder, commit, push to that branch.
-3. Open the PR manually with `gh pr create --base main --head skill/<slug> --title "publish(<slug>): from <repo>#<num>" --body ...`.
-4. Comment on the source issue with the PR URL.
-5. Skip the dispatch entirely — you've already done what it would have.
+2. Land the folder with the workflow's own script, so a client build gets the same checks (SKB-054). From
+   `scripts/`: `ISSUE_NUMBER=<num> SLUG=$SLUG CATEGORY=<category-number-or-slug> BUNDLE_B64=$BUNDLE_B64 npx tsx publish-skill.ts`.
+   It refuses (exit 6) a client build that lost its mark, names no client, or names one not on the leak list.
+3. Commit the folder and push to that branch.
+4. Open the PR manually with `gh pr create --base main --head skill/<slug> --title "publish(<slug>): from <repo>#<num>" --body ...`.
+5. Comment on the source issue with the PR URL.
+6. Skip the dispatch entirely — you've already done what it would have.
 
 This fallback should be rare; most skills fit in `bundle_b64`.
 

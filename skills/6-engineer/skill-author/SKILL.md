@@ -62,7 +62,17 @@ If nothing resolves, ask once: **"Point me at the stub — a path, slug, or `ski
 > `**Intake**: client-prd` in its body — any one) is written only in the private workbench. Before
 > touching it, `gh api repos/peter-tu-zynkr/zynkr-skill-builder --jq .private` must answer `true`; anything else →
 > stop, because every file here would be public. Its spec is the client's PRD (the issue links it; read it with
-> `get_doc_as_markdown`): every `AC-n` is behaviour the skill must have.
+> `get_doc_as_markdown`): every `AC-n` is behaviour the skill must have. Keep the `visibility: client` line the
+> scaffold wrote, exactly as a plain line, and never change it: QA and the shelf export refuse any manifest or
+> sub-agent outside the build that carries the path, name or sheetId one of its own ever had, or a `client:`
+> key. Only the owner may clear a name or sheetId another row really shares (`scripts/client-identity-cleared.json`;
+> QA shows it on the PR); never add a clearance yourself. Add `client: <the client's name>` beside
+> it, one client only, written exactly as listed: the leak check lets the folder name that client and no other.
+> That name must be on the leak list before publish will land the build: if it isn't,
+> `npx tsx scripts/check-leaks.ts --entry "<name>"` prints the rows to paste into `BANNED` in
+> `scripts/check-leaks.ts` (hashes only; drop a row for a common word, add one for a short name people write).
+> The slug's first word must be a listed spelling too, in lower case, so the leak check refuses the slug in any
+> public file: `--entry "<word>" --party "client name <letter>"` prints that row for a listed client.
 
 ## Step 2 — Read the contract before writing anything
 

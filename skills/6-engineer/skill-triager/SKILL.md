@@ -147,10 +147,13 @@ The issue is ready to go into the build pipeline.
      -F "client_payload[category]=<category-number-or-slug>" \
      -F "client_payload[spec_url]=<URL of skills/approved/<slug>.md, if one exists>" \
      -F "client_payload[mode]=<rescaffold|lift-and-shift>" \
+     -F "client_payload[visibility]=<client — only for a client build>" \
      -F "client_payload[upstream_url]=<github URL — only if mode=lift-and-shift>" \
      -F "client_payload[upstream_author]=<optional override — only if mode=lift-and-shift>"
    ```
-   `mode`, `upstream_url`, `upstream_author` are optional — omit them entirely for the default rescaffold path.
+   `mode`, `visibility`, `upstream_url`, `upstream_author` are optional — omit them entirely for the default rescaffold
+   path. The scaffold reads the issue's client markers itself; `visibility=client` only lets the workflow skip the
+   whole job while the repo is public.
 6. **Verify dispatch landed:**
    ```bash
    gh run list --repo peter-tu-zynkr/zynkr-skill-builder \
@@ -210,7 +213,7 @@ The artifact is **already built and committed** (typical for `/skill-publish` in
    curl -sL https://www.zynkr.ai/api/skills \
      | python3 -c "import sys,json; print(any(s.get('slug')=='<slug>' or s.get('name')=='<slug>' for s in json.load(sys.stdin)))"
    ```
-   If `False`: the shelf has not published it yet. `export-stage.yml` stages the public skills after each push, and the shelf (`peter-tu-zynkr/zynkr-ai-skills`) picks the stage up on its next run. A skill **new** to the shelf is held there until the owner dispatches the shelf's workflow with `promote` naming it (`gh workflow run export.yml -R peter-tu-zynkr/zynkr-ai-skills -f promote=<slug>`) — the run summary lists what it held. Re-check before flipping status.
+   If `False`: the shelf has not published it yet. `export-stage.yml` stages the public skills after each push, and the shelf (`peter-tu-zynkr/zynkr-ai-skills`) picks the stage up on its next run. A skill **new** to the shelf is held there until the owner dispatches the shelf's workflow with `promote` naming its sheetId (`gh workflow run export.yml -R peter-tu-zynkr/zynkr-ai-skills -f promote=<sheetId>`; a slug works too). The run summary lists held skills by sheetId, never by slug (a new folder may be a client build marked public by mistake). A new sub-agent inside a skill the shelf already publishes isn't held; it goes out on the next run. Re-check before flipping status.
 5. **Document it in the Sheet and the Drive mirror** — the two surfaces CI never touches. The pipeline stops at git (and, for a public skill, the shelf → Supabase → marketplace); the portfolio index and the Drive library are written by hand or not at all. Both are **team** surfaces: document team skills here exactly as public ones. Read `./references/index-and-mirror.md` for the committed folder IDs, the column contract and the staging rules. The shape of the work:
    - **Drive — always:** create `1 Skills/<category folder>/<slug>/` and upload the merged `SKILL.md` as `text/markdown`.
    - **Drive — only when the skill ships knowledge:** if
