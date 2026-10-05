@@ -1,12 +1,12 @@
 {
   "skill_name": "sales-inbound",
-  "notes": "Side-effecting skill: writes real CRM deals + Drive folders/docs. Baseline (no-skill) runs are intentionally omitted because they would create duplicate/garbage production records. Tested via a real live run + an idempotency re-run. Live window is widened to ~30d in the prompt because the 7d window is currently empty.",
+  "notes": "Side-effecting skill: writes real CRM deals and Gmail reply drafts (drafts only, never sent). Since D2 (2026-10-05) it opens no Drive folder or kickoff doc: /project-init does that at qualified. Baseline (no-skill) runs are intentionally omitted because they would create duplicate/garbage production records. Tested via a real live run + an idempotency re-run. Live window is widened to ~30d in the prompt because the 7d window is currently empty.",
   "evals": [
     {
       "id": 0,
       "name": "live-month-intake",
-      "prompt": "Can you process the AI 顧問服務 consult inbounds from the past month? Log anything new into the CRM and set up the project folders.",
-      "expected_output": "Finds the discovery-call inquiries from website@zynkr.ai in the last ~30 days. Creates a CRM deal named 'Jane（轉職計劃中）AI 顧問' (stage=new, owner=Peter, pipeline=銷售流程, service_tier=advisory), a Drive folder '[1] 轉職計劃中（Jane）' under parent 1hkXPX7O…, and a kickoff Google Doc inside it pre-filled with Jane's name/email/company/context. Skips the 'GA4 Test' row as a test. Ends with a summary table listing both (Jane=created, GA4 Test=skipped).",
+      "prompt": "Can you process the AI 顧問服務 consult inbounds from the past month? Log anything new into the CRM and draft the first replies.",
+      "expected_output": "Finds the discovery-call inquiries from website@zynkr.ai in the last ~30 days. Creates a CRM deal named 'Jane（轉職計劃中）AI 顧問' (stage=new, owner=Peter, pipeline=銷售流程, service_tier=advisory) and one first-reply Gmail draft to Jane's address, never sent. Creates no Drive folder, no kickoff doc and no 專案資料夾 line: /project-init opens those at qualified. Skips the 'GA4 Test' row as a test. Ends with a summary table listing both (Jane=created, GA4 Test=skipped).",
       "files": [],
       "assertions": [
         "Found the consult inbounds via Gmail and identified both inquiries (Jane + GA4 Test)",
@@ -14,25 +14,26 @@
         "Deal fields correct: stage=new, owner=Peter Tu, pipeline=銷售流程, service_tier=advisory, priority=medium, lead_source=content, close_date=today+30",
         "Find-or-created the contact and company and linked them to the deal",
         "Logged exactly one 'created' activity for the deal",
-        "Created Drive folder '[1] 轉職計劃中（Jane）' under the consult parent folder",
-        "Created an editable Google Doc kickoff inside the folder, pre-filled with Jane's details",
-        "Appended the project folder URL back to the deal notes",
-        "Skipped the GA4 Test row as a test (no deal created for it)",
-        "Reported a clear summary table listing both leads and their outcomes"
+        "Created one first-reply Gmail draft for Jane as a new email to the address on her Email: line (not a reply in the website@zynkr.ai thread), and sent nothing",
+        "Created no Drive folder and no kickoff doc",
+        "The deal notes carry the source line and the brief context, and no 專案資料夾： line",
+        "Skipped the GA4 Test row as a test (no deal and no draft for it)",
+        "Reported the summary table (交易 and 回覆草稿 columns, no folder column) listing both leads and their outcomes"
       ]
     },
     {
       "id": 1,
       "name": "idempotency-rerun",
-      "prompt": "處理一下本月的顧問諮詢，有新的就建立 deal 跟資料夾。",
-      "expected_output": "Run immediately after eval 0. Jane now has a deal, so she is de-duped (skipped). GA4 Test is skipped as a test row. No new deal, folder, or doc is created. Report says no new leads this period and lists why each was skipped. Critically: does NOT create a duplicate Jane deal or an orphan numbered folder.",
+      "prompt": "處理一下本月的顧問諮詢，有新的就建立 deal 跟回信草稿。",
+      "expected_output": "Run immediately after eval 0. Jane now has a deal, so she is de-duped (skipped): no second deal and no second reply draft. GA4 Test is skipped as a test row. Nothing new is created, and no folder or doc either. Report says no new leads this period and lists why each was skipped. Critically: does NOT create a duplicate Jane deal or a second draft.",
       "files": [],
       "assertions": [
         "Found the 2 inquiries again on re-run",
         "Skipped Jane because a deal already exists for her email (dedup by email)",
         "Skipped GA4 Test as a test row",
         "Created 0 new deals — no duplicate Jane deal (DB count stays 1)",
-        "Created 0 new folders/docs — no orphan numbered folder",
+        "Created 0 new reply drafts — Jane's draft from eval 0 is not duplicated",
+        "Created no Drive folder or doc",
         "Reported that nothing new was created, with per-lead skip reasons"
       ]
     }
