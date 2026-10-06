@@ -43,10 +43,11 @@ A admin-meeting-prep assistant that runs automatically twice a day: at 9 AM it t
 
 Read all calendar events within the next 7 days.
 
-Use `mcp__google_workspace__get_events`:
-- `user_google_email`: the user's email
-- `time_min`: today 00:00
-- `time_max`: today + 7 days 23:59
+Use `mcp__claude_ai_Google_Calendar__list_events` (the Google Workspace connector's
+calendar tools work only where its Calendar API is enabled, which it isn't on the owner's Google Cloud project):
+- `startTime`: today 00:00
+- `endTime`: today + 7 days 23:59
+- `timeZone`: `Asia/Taipei`
 
 Filter criteria:
 - Keep only events that have other attendees (not personal block time)
@@ -90,9 +91,10 @@ Use `mcp__google_workspace__google_chat_send_self_message` (requires Peter to wi
 
 ### Step B1 — Get the Next Day's Meetings
 
-Use `mcp__google_workspace__get_events`:
-- `time_min`: tomorrow 00:00
-- `time_max`: tomorrow 23:59
+Use `mcp__claude_ai_Google_Calendar__list_events`:
+- `startTime`: tomorrow 00:00
+- `endTime`: tomorrow 23:59
+- `timeZone`: `Asia/Taipei`
 
 Apply the same filtering as Mode A to obtain `TOMORROW_MEETINGS[]`.
 
@@ -160,7 +162,7 @@ Send one independent message per meeting.
 
 ## Limitations
 
-- **Google Chat MCP not yet wired up**: currently the google_workspace MCP supports Gmail / Drive / Calendar; Google Chat requires Peter to separately integrate the Chat API on his end
+- **Google Chat MCP not yet wired up**: currently the google-workspace MCP covers Gmail / Drive and calendar reads go through the claude.ai Google Calendar connector; Google Chat requires Peter to separately integrate the Chat API on his end
 - Does not support LINE / Slack or other chat tools
 - If an attendee has no Gmail exchange history, the background field shows "無歷史記錄"
 - Scheduled triggering requires implementation via a cron job or the Claude Code schedule skill

@@ -84,7 +84,7 @@ engagement, which phase, which folder, and the CRM breadcrumb.
    parent paths (a standalone install has no siblings), never re-implement
    their steps here. If a base skill is missing, STOP (step 2) — don't improvise.
 2. **Never create the `[N]` folder.** No folder → STOP and route to
-   /sales-inbound (inbound lead) or /project-init (qualified deal). The ONE folder this skill
+   /project-init (it opens the folder once the deal is qualified). The ONE folder this skill
    may create is a genuinely-absent `Shadowing — YYYY-MM-DD` subfolder (step 1).
 3. **Override the optimizer's delivery.** training-srt-optimizer's own final
    step uploads to the TRAINING business's Drive folder — that upload is
@@ -102,11 +102,11 @@ engagement, which phase, which folder, and the CRM breadcrumb.
 **Deal** — from a `…/deals/{id}` URL or a company name. Preferred:
 `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`. 
 **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written by
-sales-inbound / project-init); extract the `[N]` folder id. If
+/project-init); extract the `[N]` folder id. If
 the line is missing, list the parent (`mcp__google-workspace__list_drive_items`,
 folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by
-name. **No folder at all → STOP** and point at /sales-inbound (inbound lead)
-or /project-init 客戶案 (qualified deal) — hard rule 2.
+name. **No folder at all → STOP** and point at /project-init 客戶案 (it opens
+one once the deal is qualified) — hard rule 2.
 
 **Phase** — discovery call (訪談) or shadowing? Infer from what Peter said and
 the recording's filename/date; ask one question if genuinely ambiguous.
@@ -229,14 +229,12 @@ first, append, write back — never overwrite):
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
-2. build the new value: the existing notes, then a blank line, then the block below
+2. build the new value: the existing notes, then a blank line, then the block above
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,
 not appended, and skipping the read loses every earlier backlink.
-
-Escape single quotes by doubling them (`O'Brien` → `O''Brien`).
 
 ### 7 · Report + handoff
 

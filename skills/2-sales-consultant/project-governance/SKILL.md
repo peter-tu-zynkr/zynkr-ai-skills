@@ -16,9 +16,8 @@ description: >-
   sweep". Distinct from admin-governance (local _INDEX.md ↔ Drive KNOWLEDGE
   governance — a different universe), from project-client-status (ONE
   engagement, client-facing, writes a Gmail draft; this is ALL engagements,
-  internal, writes nothing), and from project-init / sales-inbound (they OWN
-  the fixes this report proposes — folders, numbering, backlinks, the project
-  set).
+  internal, writes nothing), and from project-init (it OWNS the fixes this
+  report proposes — folders, numbering, backlinks, the project set).
 category: sales-consultant
 project: project-governance
 platform: claude
@@ -58,10 +57,12 @@ sweep that only reports can run every Monday without fear.
 
 ## The project's life, as this sweep reads it
 
-- **Before the sale**, `/sales-inbound` opens a folder for an inbound lead and
-  links it from the deal; `/sales-outbound` creates the deal and no folder. Not
-  every lead gets a folder, and not every folder is a build project — talks,
-  partnerships and coaching land in the same parent.
+- **Before the sale**, no client folder opens: `/sales-inbound` and
+  `/sales-outbound` create the deal only. Until 2026-10-05 `/sales-inbound` also
+  opened a folder for each inbound lead and linked it from the deal, so older
+  leads may have one. Not every folder is a build project — talks, partnerships
+  and coaching land in the same parent, including the folders `/sales-inbound`'s
+  optional proposal mode still files for them.
 - **At qualified** (`SKB-045`: the deal is labelled `qualified` after the
   discovery call), `/project-init 客戶案` reuses the deal's folder or
   numbers a new `[N]`, lays the project set (`[Kickoff] <專案名稱>`,
@@ -91,11 +92,10 @@ documents, never from its stage.
   `[N]` project folders.
 - **project-client-status** — ONE engagement, client-facing, produces a Gmail
   draft. This skill is ALL engagements, internal-only, and writes nothing.
-- **project-init / sales-inbound** — they OWN the fixes this report proposes:
-  `/project-init` opens every client project once its deal is qualified (folder, `[N]`
-  numbering, the project set, the deal backlink); `/sales-inbound` opens
-  folders for new inbound leads. This skill points at them; it never does
-  their job.
+- **project-init** — it OWNS the fixes this report proposes: `/project-init`
+  opens every client project once its deal is qualified (folder, `[N]`
+  numbering, the project set, the deal backlink). This skill points at it; it
+  never does its job.
 
 ## Fixed facts (don't re-derive these)
 
@@ -129,8 +129,7 @@ documents, never from its stage.
 ## What this skill explicitly does not do
 
 - Does **not** fix anything. /project-init opens client projects once the deal is qualified
-  (folder, numbering, project set, backlink); /sales-inbound opens folders for
-  new inbound leads; /consult-session-notes files `[Notes]`;
+  (folder, numbering, project set, backlink); /consult-session-notes files `[Notes]`;
   /consult-brd-writer (`[BRD]`), /ops-transformation (`[Assessment]`,
   `[Blueprint]`), /ops-prd-writer (`[PRD]`) and /gtm-uat-writer (`[UAT]`) own
   the document chain.
@@ -240,7 +239,7 @@ answers it, and the exact 問題 → 建議動作 line format. In one breath:
 | ID | Invariant | Applies to | Window |
 |----|-----------|------------|--------|
 | I1 | deal ↔ folder: a deal at qualified or later carries the line; no dangling, orphan, forked or ambiguous link | every folder and deal | — |
-| I2 | the kickoff set is in the folder | qualified or later: `/project-init`'s set · `new` · `contacted`: any kickoff doc | — |
+| I2 | the kickoff set is in the folder | qualified or later: `/project-init`'s set | — |
 | I3 | a fresh session record (`[Notes]`, a kickoff doc, `[1] 會議`) | `proposal` · `won` | 21d |
 | I4 | `[N]` numbering: no gaps, no duplicates, no folder without a number | every folder; archived numbers count as taken | — |
 | I5 | the deal shows CRM activity (else 停滯) | open | 14d |

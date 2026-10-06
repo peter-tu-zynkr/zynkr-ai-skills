@@ -49,9 +49,9 @@ Before Stage 1's first question, compute the pack's sha and compare it with the 
 shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check-pm-refs.sh --print-sha
 ```
 
-If it does not equal the declared `sha256`, **stop**. Report:「知識包不一致：SKILL.md 宣告 `<declared>`，實際 `<actual>` — 請執行 `scripts/check-pm-refs.sh --sync` 後重跑」. There is deliberately no「先跑再說」fallback: a charter facilitated under superseded conventions is handed downstream to `/project-init` and `/project-status-update`, where the wrong vocabulary becomes rows in a live tracker.
+If it does not equal the declared `sha256`, **stop**. Report:「知識包不一致：SKILL.md 宣告 `<declared>`，實際 `<actual>` — 請執行 `scripts/check-pm-refs.sh --sync` 後重跑」. There is deliberately no「先跑再說」fallback: a charter facilitated under superseded conventions is copied by the PM into the `[Charter]` and 管控表 that `/project-init` laid, and read by `/project-status-update`, where the wrong vocabulary becomes rows in a live tracker.
 
-Nothing else loads here. This skill reads no Sheet, writes no Sheet and sends no mail, so it needs no adapter config — `~/.config/zynkr/pm.json` first matters at `/project-init` (3.20), when the charter becomes files.
+Nothing else loads here. This skill reads no Sheet, writes no Sheet and sends no mail, so it needs no adapter config. `/project-init` (3.20), which reads `~/.config/zynkr/pm.json`, lays the `[Charter]` and the 管控表 this conversation fills; the PM copies the result in.
 
 ## Assistant Flow
 

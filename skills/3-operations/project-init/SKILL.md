@@ -7,7 +7,7 @@ status: WIP
 visibility: public
 author: Peter Tu
 sheetId: "3.20"
-description: "Stands up a new project from the PMO template set — resolves the filing home from the engagement type, copies the five templates into a new project folder, creates the four sub-folders, clears the example rows (鐵律 2), fills the Kickoff header, seeds 管控表 tab 1 with the five delivery-stage rows, writes the backlinks both ways and prints the pm.json entry to paste (spine + report recipients included). Trigger on /project-init or when the user says 「開新專案」「建立專案資料夾」「幫我開一個案子」「set up a new project」「複製專案模板」「開案」「新專案要什麼檔案」, or hands over a project name plus a 專案類型 (客戶案／課程案／內部案) and wants the PMO file set laid down. For a 客戶案 it opens the engagement once the deal is qualified (after the discovery call): from the CRM deal it numbers (or reuses) the client's `[N] Company（Project）` folder, lays the set inside and notes the links on the deal — it never creates a deal; Sales does. Distinct from project-planning (which fills the WBS this skill deliberately leaves empty)."
+description: "Stands up a new project from the PMO template set — resolves the filing home from the engagement type, copies the five templates into a new project folder, creates the four sub-folders, clears the example rows (鐵律 2), fills the Kickoff header, seeds 管控表 tab 1 with the five delivery-stage rows, writes the backlinks both ways and prints the pm.json entry to paste (spine + report recipients included). Trigger on /project-init or when the user says 「開新專案」「建立專案資料夾」「幫我開一個案子」「set up a new project」「複製專案模板」「開案」「新專案要什麼檔案」, or hands over a project name plus a 專案類型 (客戶案／課程案／內部案) and wants the PMO file set laid down. For a 客戶案 it opens the engagement once the deal is qualified (after the discovery call): from the CRM deal it numbers (or reuses) the client's `[N] Company（Project）` folder, lays the set inside and notes the links on the deal — it never creates a deal; Sales does. Distinct from project-planning (which works out the charter and the timeline; the PM later fills the WBS rows this skill deliberately leaves empty)."
 input: "專案名稱 · 專案類型 (客戶案／課程案／內部案) · Sponsor · PM · 目標完成日 · 一行核心目標 · for a 客戶案 the CRM deal (qualified or later); plus ~/.config/zynkr/pm.json for the filing home"
 process: "Verify the pack sha → collect inputs (客戶案: the qualified deal) → resolve filing_home, number or reuse the [N] folder → pre-flight → copy 5 templates + 4 sub-folders → set 核心目標, CLEAR example rows → seed five X.0 rows → backlink → print pm.json"
 output: "A project folder holding [Business Case] · [Charter] · [Kickoff] · [專案管控表] · [復盤] plus sub-folders [1]–[4], tab 1 seeded with five stage rows and no tasks, and a pm.json snippet"
@@ -45,7 +45,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 | `[專案管控表] <專案名稱>` | Sheet | `1Pc1YT4z6LdU9JjVSPT_ESN7DCa7aL8DhOD1IOpGiuvQ` |
 | `[復盤] <專案名稱>` | Doc | `1mHrs1M_hasg9mjIeuiJDWBsoXx_d0-GjLCPt9YvnveY` |
 
-`[會議記錄]` 是**每場會議一份**，不在開案時複製——那是 `/project-minutes-sync` 的事。TEMPLATE-INDEX 只有在模板本身被改動時才需要更新，開案不動它。
+`[會議記錄]` 是**每場會議一份**，不在開案時複製：開會的人從 `[3.3]` 的會議記錄模板複製一份。`/project-minutes-sync` 不建它：它讀這份 Doc，經同意才勾「已同步」欄。TEMPLATE-INDEX 只有在模板本身被改動時才需要更新，開案不動它。
 
 **資料夾名稱一律以 `[3.3]` 為準**：Drive 上的真正名稱是 `[3.3] 專案管理 PMO｜Playbook & Templates`，模板只從 `[3.3]/[1] Templates 模板庫` 複製。
 
@@ -112,7 +112,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 1. **找到交易。** 交易網址 `…/deals/<id>` ⇒ `mcp__zynkr__get_deal(id)`。交易編號或公司名 ⇒ `mcp__zynkr__list_deals(search="<編號或公司名>")`，留下編號或公司相符的列，再 `get_deal`。找到不只一筆就列出來問，不要自己挑；一筆都沒有就停，並說「交易要先由 Sales 建立」。CRM 連不上就停並照實回報，不要退回去用公司名猜資料夾。
 2. **確認交易階段。** `qualified`、`proposal`、`won` ⇒ 開案。`new` 或 `contacted` ⇒ 停，回報「客戶案在交易標為 qualified（探索會議後）時開案；這筆交易目前在 `<stage>`」；只有 Peter 明說要提前開，才照做，並在交付清單第一行標明「交易尚未 qualified」。`lost` ⇒ 停，不開案。
 3. **先找既有的資料夾，再考慮編號。** 舊流程在 inbound 時就替每個詢問開了 `[N]` 資料夾，所以很多交易早已有資料夾：
-   - 交易的 `notes` 欄裡有 Drive 資料夾連結（`/sales-inbound` 寫的回連）⇒ 確認它在歸檔家 `[2.2]` 底下，就用它。它在封存資料夾（`filing_home.archive_folder_id`）裡 ⇒ 這是結案過的專案：停，請 Peter 先把資料夾移回歸檔家再開。
+   - 交易的 `notes` 欄裡有 Drive 資料夾連結（2026-10-05 前 `/sales-inbound` 寫的舊回連）⇒ 確認它在歸檔家 `[2.2]` 底下，就用它。它在封存資料夾（`filing_home.archive_folder_id`）裡 ⇒ 這是結案過的專案：停，請 Peter 先把資料夾移回歸檔家再開。
    - 沒有連結 ⇒ 列出歸檔家**一次**，找名稱含交易公司名的 `[N]` 資料夾。恰好一個 ⇒ 用它並說出來；不只一個 ⇒ 列出來問。
    - 都沒有 ⇒ 編號：`N` ＝ 歸檔家與封存資料夾（`filing_home.archive_folder_id`，有設定才列）裡資料夾開頭 `[數字]` 的最大值 ＋ 1（沒有任何編號就從 1 開始；結案移去封存的資料夾編號仍算已用，絕不重用），建立 `[N] <公司名>（<專案名稱>）`；公司名空白就用 `[N] <專案名稱>`。編號只看**資料夾**，不看檔案。
 4. **沿用的資料夾就是本次的專案資料夾**，Step 4 的五份模板與四個子資料夾直接建在裡面，不再多包一層。資料夾裡已經有 inbound 時期的啟動文件（`— 專案啟動` 或 `[Kickoff] … — 專案脈絡與會議紀錄`）⇒ PMO 的 `[Kickoff]` 照樣複製，把舊文件的連結寫進新 Kickoff，舊文件不刪不改。
@@ -197,7 +197,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 
 **`客戶案` 另外回連到交易，兩處都要寫：**
 
-1. **交易的 `notes` 欄加一行 `專案資料夾：https://drive.google.com/drive/folders/<資料夾 id>`。** 這是其他技能找客戶資料夾的唯一管道：`/consult-shadowing-scheduler`、`/gtm-uat-writer`、`/consult-brd-writer`、`/consult-session-notes`、`/consult-solution-planning`、`/consult-flow-design` 都只讀這一行，`/project-governance` 的 I1 也查它，而 CRM 沒有讀回備註的工具。寫法照 `/sales-inbound` 的回連：
+1. **交易的 `notes` 欄加一行 `專案資料夾：https://drive.google.com/drive/folders/<資料夾 id>`。** 這是其他技能找客戶資料夾的唯一管道：`/consult-shadowing-scheduler`、`/gtm-uat-writer`、`/consult-brd-writer`、`/consult-session-notes`、`/consult-solution-planning`、`/consult-flow-design` 都只讀這一行，`/project-governance` 的 I1 也查它，而 CRM 沒有讀回備註的工具。寫法：
    1. `mcp__zynkr__get_deal(id)` 讀出目前的 `notes`。
    2. 已經有指向**同一個**資料夾的 `專案資料夾：` 行 ⇒ 不動。已經有一行指向**別的**資料夾 ⇒ 停下來把兩個連結都列出來問，不要再加第二行。
    3. 新值＝原本的 `notes` 原封不動，接一個空行，再接上面那一行。**`update_deal` 會整欄覆蓋**，所以一定要先讀、再接、再寫，絕不只送新的那一行。
@@ -229,7 +229,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 - **`spine`** — Step 6 播下去的那五個 `里程碑 Stage`，順序即交付順序，逐字照抄。`/project-status-update` 讀它來算完成度；沒有這個鍵時它會退回這五個預設值並印一行警告，而不是沿用別的專案的階段名。`跨階段 Cross-Cutting` 不在裡面。
 - **`report_recipients`** — 這個專案的週報要寄給誰。**本技能一個 email 都不填**：上面印的是佔位字串，由使用者換成真的收件人。收件人是 adapter data，不是技能常數——寫死在技能裡，等於把某一個專案的名單套到所有專案上。缺這個鍵時 `/project-status-update` 應該 fail loud，而不是寄給預設名單。
 
-`<project-slug>` 用 kebab-case，取定之後就是之後所有 PM 技能呼叫這個專案的名字，不要再改。`minutes_doc_id` 先留 `null`，等 `/project-minutes-sync` 建出第一份 `[會議記錄]` 再補（`pm-sources.md` §2.1）。提醒使用者：貼完之前，`/project-status-update` 對這個專案只會 fail loud，那是預期行為，不是壞掉。
+`<project-slug>` 用 kebab-case，取定之後就是之後所有 PM 技能呼叫這個專案的名字，不要再改。`minutes_doc_id` 先留 `null`：`[會議記錄]` 每場會議一份，每次把那場的 Doc 連結直接交給 `/project-minutes-sync`。只有專案用同一份持續更新的會議記錄時，才把它填進 `minutes_doc_id`（`pm-sources.md` §2.1）。提醒使用者：貼完之前，`/project-status-update` 對這個專案只會 fail loud，那是預期行為，不是壞掉。
 
 ## Step 8 — 交出清單與唯一的下一步
 
@@ -265,7 +265,7 @@ Charter 首頁只放：專案名稱 · 核心目標 · Sponsor／PM · 目標完
 
 | 接手的技能 | 什麼時候 |
 |---|---|
-| `/project-planning` | Charter 核准後，把五列階段列展開成 WBS |
-| `/project-minutes-sync` | 第一場會議之後，建 `[會議記錄]` 並把 Action Items 對回管控表 `no.` |
+| `/project-planning` | Charter 核准前：在對話裡陪 PM 談出里程碑、RACI、時程與風險，PM 把結果填進 `[Charter]`；Charter 核准後，PM 再把時程展開成管控表的 WBS 列 |
+| `/project-minutes-sync` | 每場會議之後（`[會議記錄]` 由開會的人從模板建立），把 Action Items、決議與阻礙同步回管控表 |
 | `/project-status-update` | `pm.json` 片段貼好之後的第一個週報週期 |
 | `/sales-inbound` · `/sales-outbound` | `客戶案` 的 CRM 交易由他們建立（在本技能之前）；交易標為 `qualified` 之後才輪到本技能開案 |

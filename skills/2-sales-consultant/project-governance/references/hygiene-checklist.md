@@ -79,11 +79,13 @@ that is gone.
 
 **What it checks.** The folder of a deal at **qualified or later** holds the set
 `/project-init` lays: `[Kickoff] <專案名稱>` and `[專案管控表] …` (with
-`[Charter]`, `[Business Case]` and `[復盤]`). A **`new` or `contacted`** deal's
-folder holds an inbound kickoff doc: a title ending in `專案啟動`, `啟動文件` or
-`專案脈絡與會議紀錄`, whatever separator comes before it (` — `, `｜`, ` · `).
-`/sales-inbound` writes `<交易名稱> — 專案啟動`; the older ones read
-`[Kickoff] … — 專案脈絡與會議紀錄` or `[Kickoff] …｜專案脈絡與會議紀錄`.
+`[Charter]`, `[Business Case]` and `[復盤]`).
+
+**An inbound kickoff doc** is not part of that set. Its title ends in `專案啟動`,
+`啟動文件` or `專案脈絡與會議紀錄`, whatever separator comes before it (` — `, `｜`,
+` · `). `/sales-inbound` wrote `<交易名稱> — 專案啟動` into a `new` or `contacted`
+deal's folder until 2026-10-05 (since then it opens no client folder); the older
+ones read `[Kickoff] … — 專案脈絡與會議紀錄` or `[Kickoff] …｜專案脈絡與會議紀錄`.
 
 **How.** The step-2 per-folder listing; title-based only — contents are never
 read. The project's `[Kickoff]` is `[Kickoff] <專案名稱>`, with no such ending;
@@ -97,15 +99,16 @@ it, so such a folder holding only that is *Not opened*. Left in an opened projec
   line, I1 reports it). Projects that got past qualified before `/project-init`
   opened them land here once.
 - *Half a set*: the folder holds one of the two but not the other.
-- *Early, no kickoff*: a `new` or `contacted` deal's folder with downstream documents
-  (`[BRD]`, `[Notes]`, …) but no kickoff doc, or an entirely empty folder.
 
 **Fix lines.**
 ```
 建議動作：跑 /project-init 客戶案 <交易編號>：沿用 [<n>]、補齊專案文件
 建議動作：跑 /project-init 客戶案 <交易編號>：它沿用 [<n>]，看到已有一部分專案文件會停下來問，選「只補缺的」（已存在的文件一字不動）
-建議動作：照 /sales-inbound 的「<交易名稱> — 專案啟動」格式手動補一份（/sales-inbound 只處理 7 天內的新詢問，不會回頭補）
 ```
+
+A `new` or `contacted` deal's folder without a kickoff doc is not a finding: no
+skill can act on it before the deal qualifies (hard rule 3), and then
+`/project-init` reuses the folder and lays the set.
 
 ## I3 — Session-record recency (default window: 21 days)
 
@@ -149,7 +152,7 @@ a folder with no `[N]` prefix.
 **Fix lines.** (Drive renames keep the folder id, so a rename never breaks an
 existing backlink.)
 ```
-建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）或 /sales-inbound（新詢問）分配，缺號通常代表資料夾被移走；結案的資料夾請移到「[Archive] [2.2] 結案專案」，編號仍算已用
+建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）分配（2026-10-05 前 /sales-inbound 也為新詢問配號），缺號通常代表資料夾被移走；結案的資料夾請移到「[Archive] [2.2] 結案專案」，編號仍算已用
 建議動作：在資料夾名稱前補上 [<下一個號碼>]（本技能不改名）
 ```
 

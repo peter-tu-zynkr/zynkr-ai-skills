@@ -91,7 +91,7 @@ client** is an incident. Peter reviews, edits, and hits send himself.
 4. **Scheduled / unattended weekly runs stay with project-status-update.** This
    skill runs only when Peter invokes it on a named engagement.
 5. **Never create a folder.** No `[N]` folder ⇒ STOP and point at
-   /sales-inbound (inbound lead) or /project-init (qualified deal).
+   /project-init (it opens the folder once the deal is qualified).
 
 ---
 
@@ -248,13 +248,19 @@ duplicates. Hard rule 1: this step never sends.
 
 ### 9 · Deal note + report to Peter
 
-Append to the deal's notes — `mcp__zynkr__update_deal` preferred; SQL fallback:
+Append to the deal's notes with `mcp__zynkr__update_deal`:
 
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+The block:
+
+```
+週報已擬稿：{{YYYY-Www}}（<health>）— Gmail 草稿待寄
+```
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,

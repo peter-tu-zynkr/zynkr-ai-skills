@@ -68,14 +68,18 @@ Liao) · recap structure from `training-lecture-recap` (4.08).
 
 ## Fixed facts (don't re-derive these)
 
-- **Google account** for all Gmail/Drive/Docs/Calendar tools: `<your-google-workspace-account>`
+- **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
+- **Calendar** — the claude.ai Google Calendar connector
+  (`mcp__claude_ai_Google_Calendar__*`) on calendar `<your-google-workspace-account>`;
+  the Google Workspace connector's calendar tools (`query_freebusy`, `manage_event`,
+`get_events`) work only where its Calendar API is enabled, which it isn't on the owner's Google Cloud project.
 - **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything in it
 - **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
 
 ## Hard rules
 
 1. **Never create the `[N]` folder.** No folder → STOP and route to
-   /sales-inbound (inbound lead) or /project-init 客戶案 (qualified deal).
+   /project-init 客戶案 (it opens the folder once the deal is qualified).
 2. **Client-facing email is ALWAYS a Gmail draft** —
    `mcp__google-workspace__draft_gmail_message` for invites, sponsor mails,
    D-1 confirmations, and the recap send. Never send.
@@ -94,7 +98,7 @@ Liao) · recap structure from `training-lecture-recap` (4.08).
 **Deal** — from a `…/deals/{id}` URL or a company name. Preferred:
 `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`. 
 **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written by
-sales-inbound / project-init); extract the `[N]` folder id. If
+/project-init); extract the `[N]` folder id. If
 the line is missing, list the parent (`mcp__google-workspace__list_drive_items`,
 folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by
 name. **No folder at all → STOP** (hard rule 1).
@@ -136,9 +140,11 @@ Work the due stage's table from the checklist. Stage-specific mechanics:
 
 - **D-14** — invite as a Gmail DRAFT (default: one draft to the sponsor for
   internal forwarding). Calendar event via
-  `mcp__google-workspace__manage_event` — **ask first when external attendees
+  `mcp__claude_ai_Google_Calendar__create_event` on calendar
+  `<your-google-workspace-account>`, with `timeZone = "Asia/Taipei"` (it overrides
+  the times' offsets, and Peter's calendar runs on Europe/Amsterdam) — **ask first when external attendees
   are involved** (the event invite reaches client mailboxes the moment it's
-  created); Meet link included for 線上.
+  created); `addGoogleMeetUrl = true` for 線上.
 - **D-7** — materials pack: demo 流程 (walked on the client's own data),
   常見問題, 上手三步; sponsor 對稿 mail as a DRAFT.
 - **D-1** — 設備測試 per the checklist; the confirmation DRAFT **must** carry
@@ -201,14 +207,12 @@ first, append, write back — never overwrite):
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
-2. build the new value: the existing notes, then a blank line, then the block below
+2. build the new value: the existing notes, then a blank line, then the block above
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,
 not appended, and skipping the read loses every earlier backlink.
-
-Escape single quotes by doubling them (`O'Brien` → `O''Brien`).
 
 ### 8 · Report + checklist state
 

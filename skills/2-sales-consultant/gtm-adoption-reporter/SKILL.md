@@ -145,9 +145,9 @@ create it (the five fields above, one row per client).
   `workspace_id` via the platform's workspace-membership tables (introspect for
   names — read-only). No workspace resolves → coverage-caveat case; continue.
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written
-  by sales-inbound / project-init); extract the folder id, or
+  by /project-init); extract the folder id, or
   list the parent folder and match `[N] Company（…）`. No `[N]` folder at all →
-  STOP and route to /sales-inbound (inbound lead) or /project-init (qualified deal); never
+  STOP and route to /project-init (it opens the folder once the deal is qualified); never
   create a competing folder.
 
 ### 2 · Introspect `crm_ai_usage`
@@ -334,8 +334,8 @@ A compact artifact table, then the headline in prose:
   feature HOW OFTEN, never what they asked or whether the answer helped.
 - `request_count` measures invocations, not business value; pair the numbers
   with a qualitative client check-in before renewal conversations.
-- Requires an existing deal + `[N]` folder (bootstrapping is sales-inbound /
-  project-init's job). One client per run — a portfolio sweep is
+- Requires an existing deal + `[N]` folder (bootstrapping is /project-init's
+  job). One client per run — a portfolio sweep is
   one run per client — and one build per run when a deal carries several.
 
 ## House style

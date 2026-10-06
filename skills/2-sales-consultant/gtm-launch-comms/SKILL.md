@@ -75,7 +75,7 @@ nothing public itself (that's zynkr-content-writer / social-publish-article).
 ## Hard rules
 
 1. **Never create a competing folder.** No `[N]` folder ⇒ STOP and route to
-   /sales-inbound (inbound lead) or /project-init (qualified deal); see step 1.
+   /project-init (it opens the folder once the deal is qualified); see step 1.
 2. **Nothing is shared before the step-4 gate.** These words go out under the
    sponsor's name — Peter aligns with the sponsor before anything moves.
 3. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send
@@ -98,8 +98,8 @@ nothing public itself (that's zynkr-content-writer / social-publish-article).
   the folder id. If missing, list the parent
   (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
-- **No folder at all** → STOP (hard rule 1) and point at /sales-inbound or
-  /project-init 客戶案 (qualified deal).
+- **No folder at all** → STOP (hard rule 1) and point at /project-init 客戶案
+  (it opens one once the deal is qualified).
 
 **Deployment record first.** When the build has a `[Deployment]` record from
 /skill-deploy (the deal's `notes` carry a `部署紀錄（<SPEC_ID>）：<url>` line, or
@@ -164,14 +164,22 @@ mcp__google-workspace__update_drive_file(
 )
 ```
 
-Then append both URLs to the deal notes — prefer `mcp__zynkr__update_deal`
-(read current notes, append, write back); SQL fallback:
+Then append both URLs to the deal notes with `mcp__zynkr__update_deal`
+(read current notes, append, write back):
 
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+The block:
+
+```
+上線溝通文件：
+[Comms] 上線公告 <doc url>
+[Comms] 說明會邀請 <doc url>
+```
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,

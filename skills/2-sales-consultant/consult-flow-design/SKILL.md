@@ -80,7 +80,7 @@ documents, the two-chart pairing discipline, the naming, and the CRM record.
    through an invocation of /ops-workflow-design. If it's not installed,
    hard-STOP (step 2). Do not re-derive its convention here.
 3. **Never create a project folder.** No `[N]` folder ⇒ STOP and route to
-   /sales-inbound (inbound lead) or /project-init (qualified deal).
+   /project-init (it opens the folder once the deal is qualified).
 4. **Never draw before the step-3 narrative confirm.** Charts are expensive
    to redo (the Lucid create tool cannot restructure lanes in place).
 5. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the
@@ -99,8 +99,8 @@ documents, the two-chart pairing discipline, the naming, and the CRM record.
   the folder id. If missing, list the parent
   (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
-- **No folder at all** → STOP. Point at /sales-inbound (inbound lead) or
-  /project-init 客戶案 (qualified deal). Hard rule 3.
+- **No folder at all** → STOP. Point at /project-init 客戶案 (it opens one
+  once the deal is qualified). Hard rule 3.
 - **Sources** — `mcp__google-workspace__list_docs_in_folder` on the `[N]`
   folder; read whatever exists of `[Notes]` session notes, 痛點 ledger,
   `[Plan]`, `[BRD]` via `mcp__google-workspace__get_doc_content`. If the
@@ -162,14 +162,22 @@ only relays the base skill's verdict.
 
 ### 6 · Record the chart links on the deal
 
-Append both URLs to the deal notes — `mcp__zynkr__update_deal` preferred
-(read current notes first, append, write back); SQL fallback:
+Append both URLs to the deal notes with `mcp__zynkr__update_deal`
+(read current notes first, append, write back):
 
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+The block:
+
+```
+流程圖：
+as-is：<lucid url>
+to-be：<lucid url>
+```
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,

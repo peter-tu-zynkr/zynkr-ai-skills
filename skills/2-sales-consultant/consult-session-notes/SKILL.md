@@ -75,8 +75,8 @@ its source — who said it, or which transcript section.
 ## Hard rules
 
 1. **Never create a folder or a deal.** No `[N]` folder → STOP and point at
-   /sales-inbound (inbound lead) or /project-init 客戶案 (qualified
-   deal). One numbered workspace per engagement is the 2.x invariant.
+   /project-init 客戶案 (it opens one once the deal is qualified). One
+   numbered workspace per engagement is the 2.x invariant.
 2. **Never invent a pain.** Ledger rows come only from pains actually voiced or
    observed in this session's material; a thin session yields a short ledger.
 3. **Empty summary sections say 「本次無相關內容」** — the per-session adaptation
@@ -117,7 +117,7 @@ Then resolve the engagement (the standard 2.x pattern):
 - **Deal** — from a `…/deals/{id}` URL, or by company name. Prefer
   `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written
-  by sales-inbound / project-init); extract the folder id. If
+  by /project-init); extract the folder id. If
   missing, list the parent (`mcp__google-workspace__list_drive_items`,
   folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）`.
 - **No folder at all** → STOP (hard rule 1).
@@ -185,13 +185,20 @@ itself. Never create the subfolder.
 
 ### 5 · CRM note on the deal
 
-Append to the deal's notes — `mcp__zynkr__update_deal` preferred; SQL fallback:
+Append to the deal's notes with `mcp__zynkr__update_deal`:
 
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+The block:
+
+```
+會議紀錄：[Notes] {{COMPANY}} — {{SESSION_TYPE}} {{YYYY-MM-DD}}
+<doc url>
+```
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,

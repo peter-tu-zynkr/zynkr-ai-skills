@@ -225,11 +225,15 @@ to hardcode. Then append to the deal's notes:
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
 
+The block:
+
+```
+Bug #<n>：<issue url>（<severity>，追蹤任務已建立）
+```
+
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,
 not appended, and skipping the read loses every earlier backlink.
-
-Escape single quotes by doubling them (`O'Brien` → `O''Brien`).
 
 ### 8 · Acknowledgment — a threaded Gmail DRAFT, never sent
 

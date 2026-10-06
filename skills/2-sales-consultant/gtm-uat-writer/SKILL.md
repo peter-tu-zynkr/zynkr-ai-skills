@@ -89,7 +89,7 @@ If Peter gave a Doc URL, read it directly with
 Read the PRD as Markdown, never with `get_doc_content`: plain text drops the `**AC-n**`
 and `*Verify:*` markers the four shapes below are matched on.
 Otherwise resolve the client workspace first: find the deal
-(`mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`, or SQL by company name),
+(`mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`),
 extract the `專案資料夾：<url>` backlink from its notes, then scan that folder
 for spec docs. No backlink → list the projects parent once
 (`mcp__google-workspace__list_drive_items(user_google_email="<your-google-workspace-account>", folder_id="1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t")`)
@@ -213,13 +213,20 @@ you, so there is no owner id to resolve and none to hardcode. Preview first by
 calling without `confirm`.
 
 **Backlink** — append the Doc URL to the deal's notes (the same pattern
-sales-inbound / consult-brd-writer use):
+consult-brd-writer uses):
 
 `mcp__zynkr__update_deal` REPLACES `notes` wholesale, so append in three steps:
 
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+The block:
+
+```
+驗收文件：[UAT] {{COMPANY}} — 驗收測試指南
+<doc url>
+```
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,
@@ -288,7 +295,7 @@ A compact artifact table, then the headline in prose:
 ## Limitations
 
 - Consumes a PRD; it will not write one (ops-prd-writer), conduct discovery,
-  or bootstrap a missing `[N]` workspace (sales-inbound / project-init).
+  or bootstrap a missing `[N]` workspace (/project-init).
 - Scenario quality is bounded by the PRD's Verify lines — vague Verify upstream
   yields a judgment-call translation here, flagged at the gate rather than hidden.
 - One PRD per run: a guide covers exactly one spec ID. Two specs = two runs and

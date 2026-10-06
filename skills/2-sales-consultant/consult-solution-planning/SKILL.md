@@ -78,7 +78,7 @@ recognize or a score he'd contest poisons everything downstream of it.
 ## Hard rules
 
 1. **Never create a competing folder.** No `[N]` folder for this client ⇒ STOP
-   and route to /sales-inbound (inbound lead) or /project-init (qualified deal); see step 1.
+   and route to /project-init (it opens the folder once the deal is qualified); see step 1.
 2. **One section at a time.** Never generate the whole plan in one shot — each
    of steps 2–6 ends with Peter confirming before the next begins.
 3. **Score with the rubric, only the rubric.** Every pain gets the 1–5 scale
@@ -104,12 +104,12 @@ Then resolve the engagement:
 - **Deal** — from a `…/deals/{id}` URL, or by company name. Prefer
   `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`
 - **Folder** — the deal's `notes` carry a `專案資料夾：<url>` backlink (written
-  by sales-inbound / project-init); extract the folder id. If
+  by /project-init); extract the folder id. If
   missing, list the parent (`mcp__google-workspace__list_drive_items`, folder_id
   `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by name.
 - **No folder at all** → STOP. This client has no project workspace yet — point
-  at /sales-inbound (inbound lead) or /project-init 客戶案 (qualified
-  deal). Hard rule 1: never create a competing folder.
+  at /project-init 客戶案 (it opens one once the deal is qualified).
+  Hard rule 1: never create a competing folder.
 
 ### 2 · Persona — confirm
 
@@ -179,6 +179,13 @@ Then append the Doc to the deal's notes (same pattern as consult-brd-writer):
 1. `mcp__zynkr__get_deal(id="<deal_id>")` — read the current `notes`
 2. build the new value: the existing notes, then a blank line, then the block below
 3. `mcp__zynkr__update_deal(id="<deal_id>", notes="<combined>", confirm=true)`
+
+The block:
+
+```
+方案規劃：[Plan] {{COMPANY}} — {{PROJECT}}
+<doc url>
+```
 
 Call it once without `confirm` to preview, then again with `confirm=true`. Never
 send `notes` without the existing text in front of it — the field is overwritten,
@@ -255,7 +262,7 @@ repo because the adaptation, not the framework, is what installs here.
 ## Limitations
 
 - Consumes discovery material; it interviews no one and will not bootstrap a
-  missing workspace (that's sales-inbound / project-init).
+  missing workspace (that's /project-init).
 - Plan quality tracks ledger quality — thin discovery yields a thin plan with
   many `（假設）` rows; the skill flags this rather than papering over it.
 - Scores are structured hypotheses, not measurements — validation happens via
