@@ -2,8 +2,8 @@
 
 Used by `consult-shadowing-scheduler` step 5c. Fill every `{{PLACEHOLDER}}`, then
 create a Gmail **draft** with `mcp__google-workspace__draft_gmail_message`.
-This mail is **never auto-sent** — Peter reviews it in his drafts folder and
-sends it himself.
+This mail is **never auto-sent** — the user (whoever runs the skill) reviews it
+in their drafts folder and sends it.
 
 ## Placeholders
 

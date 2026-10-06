@@ -2,21 +2,19 @@
 name: consult-shadowing-scheduler
 sheetId: "2.13"
 description: >-
-  Close the shadowing-scheduling admin loop for a consulting deal in one pass: read
-  the CRM deal, resolve the client's existing [N] Drive project folder from the deal
-  notes, check Peter's calendar free/busy, propose 3–5 candidate slots, and on Peter's
-  confirm lay down the whole kit — a calendar hold, a "Shadowing — YYYY-MM-DD"
-  subfolder inside the project folder, a client logistics Gmail DRAFT (never sent),
-  a CRM follow-up task, and a deal-notes backlink. Trigger EAGERLY on
-  /consult-shadowing-scheduler or whenever Peter says "排 shadowing 時間", "約跟拍",
-  "安排現場觀察", "幫我跟 <client> 約 shadowing", "schedule the shadowing", "book the
-  shadowing session", "find time to shadow the client", or otherwise wants an on-site
-  observation session scheduled for a consulting engagement — even if he only names
-  the company. Distinct from project-init (it CREATES the project folder, at
-  qualified) and the Sales skills that create the deal: this skill REUSES those
-  artifacts and never creates a new top-level folder or a new deal. Distinct from
-  consult-brd-writer (which consumes the shadowing transcript AFTER the session
-  happens — this skill only gets the session onto the calendar and preps the client).
+  Book a consulting deal's shadowing session in one pass: read the CRM deal, find
+  the client's [N] Drive project folder from the deal notes, read the user's own
+  calendar for free time, propose 3–5 candidate slots, and on the user's confirm lay
+  down the whole kit — a calendar hold, a "Shadowing — YYYY-MM-DD" subfolder inside
+  the project folder, a client logistics Gmail DRAFT (never sent), a CRM follow-up
+  task, and a deal-notes backlink. Trigger EAGERLY on /consult-shadowing-scheduler
+  or whenever the user says "排 shadowing 時間", "約跟拍", "安排現場觀察", "幫我跟
+  <client> 約 shadowing", "schedule the shadowing", "book the shadowing session",
+  "find time to shadow the client", or otherwise wants an on-site observation
+  session scheduled for a consulting engagement — even if they only name the
+  company. It reuses the folder project-init opened (at qualified) and the deal
+  Sales created; it never creates either. consult-brd-writer takes the transcript
+  after the session; this skill only books the session and preps the client.
 category: sales-consultant
 project: consult-shadowing-scheduler
 platform: claude
@@ -24,7 +22,7 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "A CRM deal (URL or company name), optionally a preferred date window and session duration"
-process: "get_deal → resolve the client's [N] Drive folder from deal notes (else one name match) → read Peter's calendar → slot-confirm gate → create the calendar hold + shadowing subfolder + logistics Gmail draft + CRM task → backlink + report"
+process: "get_deal → resolve the client's [N] Drive folder from deal notes (else one name match) → read the user's own calendar → slot-confirm gate → create the calendar hold + shadowing subfolder + logistics Gmail draft + CRM task → backlink + report"
 output: "A confirmed calendar hold, a shadowing subfolder in the client's project folder, a client-ready logistics mail draft (never auto-sent), and a CRM task — all linked on the deal"
 synergy:
   - "sales-inbound"
@@ -41,15 +39,18 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill consult
 ```
 
 After a consulting deal is qualified, the next step is a **shadowing session**
-— Peter sits with the client's team and watches the real workflow run. Booking
-it is pure admin friction. This skill collapses it into one pass: read the
-deal, find the client's existing `[N]` project folder, propose free slots from
-Peter's real calendar, then — on his pick — create the calendar hold, the
-dated subfolder, the client logistics mail **as a Gmail draft (hard rule:
-never sent)**, and the CRM task, backlinking everything onto the deal.
+— the consultant sits with the client's team and watches the real workflow
+run. Booking it is pure admin friction. This skill collapses it into one pass:
+read the deal, find the client's existing `[N]` project folder, propose free
+slots from the user's own calendar, then — on their pick — create the calendar
+hold, the dated subfolder, the client logistics mail **as a Gmail draft (hard
+rule: never sent)**, and the CRM task, backlinking everything onto the deal.
+**The user** is whoever runs the skill and will do the shadowing: the slots
+come from their calendar, and the hold, the draft and the task are theirs. To
+book a colleague's session, the colleague runs it.
 
-It is deliberately **gated, not autonomous**: nothing is created until Peter
-confirms a slot — a wrong-day hold, or an invite accidentally mailed to the
+It is deliberately **gated, not autonomous**: nothing is created until the
+user confirms a slot — a wrong-day hold, or an invite accidentally mailed to the
 client, is worse than one follow-up question. Re-runs update, never duplicate.
 
 ## How this differs from its neighbours
@@ -70,11 +71,11 @@ client, is worse than one follow-up question. Re-runs update, never duplicate.
 `get_events`) work only where its Calendar API is enabled, which it isn't on the owner's Google Cloud project.
 - **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything directly in it
 - **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
-- Ownership needs no lookup and no hardcoded id: every `mcp__zynkr__*` write is made as you, on your own workspace, and defaults the owner accordingly.
+- Ownership needs no lookup and no hardcoded id: every `mcp__zynkr__*` write is made as the user, on their own workspace, and defaults the owner to them.
 
-## Scheduling defaults (Peter overrides any of these by just saying so)
+## Scheduling defaults (the user overrides any of these by saying so)
 
-**Timezone** `Asia/Taipei` · **working hours** 09:30–17:30 · **slot-search window** next 10 business days · **session duration** 2 hours.
+**The client's day** 09:30–17:30 `Asia/Taipei` · **the user's day** the same, unless they work from another time zone (step 3) · **slot-search window** next 10 business days · **session duration** 2 hours.
 
 ---
 
@@ -82,11 +83,11 @@ client, is worse than one follow-up question. Re-runs update, never duplicate.
 
 ### 1 · Resolve the deal
 
-Peter hands over a deal URL or a company name.
+The user hands over a deal URL or a company name.
 
 - Deal URL → `mcp__zynkr__get_deal(id="<deal uuid>")`
 - Company name → `mcp__zynkr__list_deals(search="<company>")`, then `get_deal`
-  on the match. More than one match → confirm with Peter before acting.
+  on the match. More than one match → confirm with the user before acting.
 
 `get_deal` returns `notes`, `contact_id` and `company_id`. The contact name and
 email come from `mcp__zynkr__get_contact(id=…)`, the company name from
@@ -103,9 +104,9 @@ folder id — that `[N]` folder anchors everything this skill creates.
 and look for a `[N] <Company>（…）` folder whose company part matches the deal's
 company name, ignoring case, spaces and punctuation.
 
-- **Exactly one match** → use it, and tell Peter the deal is missing its backlink
+- **Exactly one match** → use it, and tell the user the deal is missing its backlink
   (`/project-init` writes it: `專案資料夾：<folder url>` on its own line).
-- **None, or more than one** → **STOP.** Tell Peter the deal has no project folder
+- **None, or more than one** → **STOP.** Tell the user the deal has no project folder
   yet and point at `/project-init` (it opens one once the deal is qualified). Never
   invent a folder here.
 
@@ -114,9 +115,38 @@ company name, ignoring case, spaces and punctuation.
 Settle: date window · duration · on-site (現場) vs remote (遠端) — the last
 one drives the mail's `{{MODE}}`/`{{LOCATION_OR_LINK}}`. Ask only for what's
 missing; apply the defaults for the rest and **say which defaults applied**
-(e.g. "用預設：台北時區、09:30–17:30、未來 10 個工作天、2 小時").
+(e.g. "用預設：客戶與你都是台北時間 09:30–17:30（你不在台灣請告訴我）、未來 10 個工作天、2 小時").
 
-### 3 · Free/busy → 3–5 candidate slots
+### 3 · The user's free time → 3–5 candidate slots
+
+Slots come from the user's own availability: any free stretch of their working
+time in the window can be offered. Unlike `/sales-outbound`, which offers only
+events titled `Available`, this skill needs no such blocks.
+
+**Business days** are Monday to Friday minus Taiwan's public holidays, which a
+calendar shows only if it subscribes to them. Read them from Google's public
+holiday calendar; no subscription is needed:
+
+```
+mcp__claude_ai_Google_Calendar__list_events(
+  calendarId = "zh-tw.taiwan#holiday@group.v.calendar.google.com",
+  startTime = "<window start>", timeZone = "Asia/Taipei",
+  endTime = "<window end>"  # the default window: start + 4 weeks, which holds 10 business days even over Lunar New Year
+)
+```
+
+A weekday is a day off when any of its events has a description starting with
+`國定假日` (補假 days included). An observance (`假日節慶`), such as 重陽節, never
+makes a day off on its own. For the default window, count 10 business days
+after skipping. At the gate, name the days skipped and every weekday
+observance kept:
+
+「略過國定假日：10/9 國慶日補假 · 未略過的節慶：9/28 教師節，若放假請告訴我」
+
+Google's list can lag, and a day off it calls an observance shows up only in
+the second list.
+
+Then read the user's own calendar:
 
 ```
 mcp__claude_ai_Google_Calendar__list_events(
@@ -127,16 +157,27 @@ mcp__claude_ai_Google_Calendar__list_events(
 ```
 
 Every event is busy except one marked free (`transparency: transparent` or
-`availability: AVAILABILITY_FREE`), one Peter declined, and one titled `Available`:
-Peter marks the time he offers with those (`Not available` stays busy). Compare
-instants, not clock times: an event's own time zone may be Europe/Amsterdam, and
-its `dateTime` carries the offset. Pass the response's `nextPageToken` back as
-`pageToken` until the window is covered.
+`availability: AVAILABILITY_FREE`), one the user declined, and one titled
+`Available`: some people mark the time they offer that way (`Not available`
+stays busy). Compare instants, not clock times: an event's own time zone may be
+Europe/Amsterdam, and its `dateTime` carries the offset. Pass the response's
+`nextPageToken` back as `pageToken` until the window is covered.
 
-Derive **3–5 candidate slots** that fit ALL of: inside working hours on
-business days · full duration, zero overlap with busy blocks · **no same-day
-adjacency to long meetings** (a day carrying a ≥2h meeting gets no slot butted
-against it — shadowing is draining) · spread across days, not stacked on one.
+**The user's own day.** If any event the user organized (`organizer.self`)
+carries another `start.timeZone`, they may work from there. Unless they have
+already said, ask before offering anything: which hours they work in that
+zone, and which days in the window they'll be in Taiwan. On a day in Taiwan
+their day is the client's day, and a 現場 session can only go on such a day.
+Otherwise a 遠端 slot has to fit both days: someone working 08:00–17:00 in
+Amsterdam meets the client's Taipei day from 14:00 Taipei time (15:00 once
+Europe leaves summer time). If the two days overlap by less than the session,
+say so and ask for a shorter session or a day in Taiwan.
+
+Derive **3–5 candidate slots** that fit ALL of: inside the client's working
+hours and the user's own, on business days · full duration, zero overlap with
+busy blocks · **no same-day adjacency to long meetings** (a day carrying a ≥2h
+meeting gets no slot butted against it — shadowing is draining) · spread across
+days, not stacked on one.
 
 ### 4 · GATE — confirm the slot (nothing is created before this)
 
@@ -155,10 +196,14 @@ Present the candidates as a table and stop:
 （加入 = Google 會「立刻」寄邀請信給對方）— 預設：否
 ```
 
-Peter picks a number **or supplies his own slot** (his wins, even outside the
-defaults). The **same gate** settles the attendee question: an external
-attendee is emailed the moment the event is created, so the default is **NO**
-— the client hears about the time via the reviewed draft. Explicit yes opts in.
+When the user works from another time zone, add a column with each slot in
+their own time, as `/sales-outbound` does.
+
+The user picks a number **or gives a slot of their own** (theirs wins, even
+outside the defaults). The **same gate** settles the attendee question: an
+external attendee is emailed the moment the event is created, so the default is
+**NO** — the client hears about the time via the reviewed draft. Explicit yes
+opts in.
 
 ### 5 · Create the kit (in this order)
 
@@ -209,7 +254,7 @@ mcp__google-workspace__draft_gmail_message(
 ```
 
 **Hard rule: this mail is a DRAFT, never a send.** Never call any send tool on
-it — Peter reviews and sends it himself.
+it — the user reviews and sends it.
 
 **d) CRM task + notes backlink** —
 
@@ -218,12 +263,12 @@ not, so a re-run would book the session twice. Call
 `mcp__zynkr__list_tasks(filter="all", limit=200)` first and look for a task on
 this deal whose subject is already `跟拍 shadowing @ <YYYY-MM-DD>`. Found →
 skip, and say so. (That listing is capped at 200; if it returns exactly 200,
-you cannot rule out a duplicate — ask Peter rather than guessing.)
+you cannot rule out a duplicate — ask the user rather than guessing.)
 
 Otherwise `mcp__zynkr__create_task(deal_id="<deal_id>",
 subject="跟拍 shadowing @ <YYYY-MM-DD>", body="行事曆：<event url>
 Shadowing 資料夾：<subfolder url>", due_at="<session date>T09:00:00+08",
-confirm=true)`. It is created as you and assigned to you — no ids to look up.
+confirm=true)`. It is created as the user and assigned to them — no ids to look up.
 
 Then append the links to the deal notes. `update_deal` REPLACES `notes`:
 `mcp__zynkr__get_deal(id="<deal_id>")` first, append
@@ -253,10 +298,11 @@ Shadowing 已排定：範例科技 — 2026-08-12（週三）10:00–12:00
 | 時段 | 2026-08-12 10:00–12:00（Asia/Taipei · 2h）|
 | 行事曆 | <event link>（未邀請客戶）|
 | Shadowing 資料夾 | <subfolder url>（在 [N] 專案資料夾內）|
-| 客戶信 | Gmail 草稿（待 Peter 審閱寄出）|
+| 客戶信 | Gmail 草稿（待你審閱寄出）|
 | CRM 任務 | 跟拍 shadowing @ 2026-08-12（due 當天）|
 ```
 
+If the user works from another time zone, give the 時段 row in their time too.
 Name what still needs a human: sending the draft, and — if the client wasn't
 invited at the gate — telling them the confirmed time.
 
@@ -271,7 +317,7 @@ event, search the day (`mcp__claude_ai_Google_Calendar__list_events` with
 `fullText = "[Shadowing] {{COMPANY}}"`) and change it with
 `mcp__claude_ai_Google_Calendar__update_event` (with 5a's `timeZone`) if the time moved, rather
 than creating a second hold. A changed slot supersedes the draft — create the
-new one, tell Peter to delete the old, append a correction line to deal notes.
+new one, tell the user to delete the old, append a correction line to deal notes.
 
 ## Why it's built this way
 
@@ -279,13 +325,13 @@ new one, tell Peter to delete the old, append a correction line to deal notes.
   (a mis-set attendee emails the client instantly). One gate settles both
   slot and attendee; before it, the skill only reads.
 - **Draft-only client mail** — the mail carries commitments (date, recording
-  consent); Peter's voice check before send is non-negotiable.
+  consent); the user's voice check before send is non-negotiable.
 - **Reuses the `[N]` folder** — numbering belongs to project-init; a second
   authority would fork the sequence.
 - **The dated subfolder is the pipeline seam** — consult-brd-writer reads the
   transcript from exactly `[N]/Shadowing — YYYY-MM-DD`.
 - **Adjacency rule over raw free/busy** — a technically-free slot after a 3h
-  meeting is a bad shadowing slot; the judgment is encoded, not left to Peter.
+  meeting is a bad shadowing slot; the judgment is encoded, not left to the user.
 
 ## Reference files
 
@@ -297,12 +343,13 @@ new one, tell Peter to delete the old, append a correction line to deal notes.
 - Requires a deal whose `[N]` folder can be found, either through the 專案資料夾
   line in its notes or through a single `[N] <Company>（…）` folder matching its
   company. Otherwise it stops (by design) rather than create folders or deals itself.
-- Slots come from **Peter's calendar only**; client availability is confirmed
-  via the mail draft, not negotiated live.
+- Slots come from **the user's own calendar** and Taiwan's public holidays;
+  client availability is confirmed via the mail draft, not negotiated live.
+  Holidays where the user lives count only if their calendar shows them.
 - Session output belongs downstream: /consult-transcriber files the transcript,
   /consult-session-notes the notes, /consult-brd-writer the BRD.
-- The client is never emailed by this skill: the invite only if Peter opts in
-  at the gate, the logistics mail only when he sends the draft.
+- The client is never emailed by this skill: the invite only if the user opts
+  in at the gate, the logistics mail only when they send the draft.
 
 ## House style
 
