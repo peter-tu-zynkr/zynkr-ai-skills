@@ -5,7 +5,10 @@
 > `zynkr-gm/scripts/derive_state.py` directly when zynkr-gm is installed. zynkr-gm **owns** these
 > rules; that skill only consumes them. **If you change a threshold or a state name here, re-copy
 > this file there in the same commit** — otherwise the founder brief and the team weekly silently
-> disagree about which items are OVERDUE or STALLED. Verify the rule bodies still match — each
+> disagree about which items are OVERDUE or STALLED. A third consumer holds no copy:
+> zynkr-ops-weekly's `scripts/recap.py` runs the installed `derive_state.py` on Ledger snapshot rows,
+> so a change to that script's input keys or output fields breaks the Monday team recap — run
+> `recap.py --selftest` after any such change. Verify the rule bodies still match — each
 > file carries its own banner, so strip banner (`>`) and blank lines from both and diff. Use
 > `grep`, not `sed`: BSD/macOS sed rejects `/^$/{1d}` and both sides then compare empty-to-empty,
 > which reports a false pass.
@@ -35,7 +38,7 @@ The Main Tracker 「H2 專案項目」 uses five statuses — **未開始 / 進�
 
 ## Inputs
 
-- `today` (config `timezone`), tracker rows (`#`, `項目`, `Priority`, `負責人`, `開始`, `結束`, `狀態`, `備註`), previous tracker snapshot(s) with dates (optional), newest **two** [3.1] weekly blocks, activity signals from function SOTs (CRM deals/tasks for 2.x/4.01; ops heal 修復清單 for 3.x; course tracker for 4.05/4.07; CMS `articles` for 1.03), plan-doc Refresh blocks (labels + expected date ranges).
+- `today` (config `timezone`), tracker rows (`#`, `項目`, `Priority`, `負責人`, `開始`, `結束`, `狀態`, `備註`), previous tracker snapshot(s) with dates — since 2026-10-02 the Weekly Ledger's `Snapshot` tab, one copy per Friday (SKB-044; read with zynkr-gm's `scripts/ledger_read.py`), newest **two** [3.1] weekly blocks, activity signals from function SOTs (CRM deals/tasks for 2.x/4.01; ops heal 修復清單 for 3.x; course tracker for 4.05/4.07; CMS `articles` for 1.03), plan-doc Refresh blocks (labels + expected date ranges).
 - Date parsing: ISO `YYYY-MM-DD` → date. Literal `YYYY-MM-DD`, empty, or unparseable → **undated**. `MM-DD` / `M/D` → current year, `date_inferred=true` (say so in evidence). Never guess a year silently.
 - Rows with a TERMINAL 狀態 (放棄 · 完成) are excluded from all states and from the per-owner rollup (surface only in the tracker delta when newly set, plus the `done` / `dropped` id lists). Rows with 狀態 = 暫停 keep their owner but take no schedule flag. Unknown 狀態 value → `UNKNOWN_STATUS`, surface it, do not map it.
 
@@ -50,8 +53,8 @@ The Main Tracker 「H2 專案項目」 uses five statuses — **未開始 / 進�
 | `ENDS_SOON` | 狀態 is LIVE (進行中 · 未開始) AND `結束` ∈ [today, today+14d] | P0/P1 → deadline strip of the brief; P2 → status table only | `結束` date, days left, owner |
 | `OVERDUE` | (狀態 = 進行中 AND `結束` < today) OR (狀態 = 未開始 AND `開始` < today) | all priorities; P0/P1 → status table + owner rollup; P2 → status table only | which date, days late (e.g. 1.03 SEO: 開始 07-01, still 未開始) |
 | `UNDATED` | Priority ∈ {P0, P1} AND 狀態 is LIVE AND (`開始` or `結束` undated) | P0/P1 only (P2/P3 undated is normal — status table only, no ask) | which cell(s); age = days since first observed undated |
-| `STALLED` | **Needs ≥2 snapshots ≥14 days apart — not available in first runs** (emit `STALLED: n/a`). Row 狀態 = 進行中, Priority ∈ {P0, P1}, AND all of: (a) no change in 狀態/開始/結束/負責人/備註 vs a snapshot ≥14 days old; (b) no mention in the newest two [3.1] blocks — match tracker `#` (e.g. `4.01`) or ≥2 keyword tokens of `項目`, searching the owner's function section first; (c) no activity in the row's mapped SOT within 14 days (CRM deal/task touched, heal-list row changed, course-tracker row changed, article published). Rows with **no** mapped SOT satisfy (c) by silence but the flag is downgraded to `STALLED?` (low confidence). | P0/P1 only | last tracker change date, last [3.1] mention (block date), last SOT activity |
-| `PROPOSE_DONE` | 狀態 = 進行中 AND (備註 or newest [3.1] block says shipped / 上線 / 完成 / 已交付 / done, or the mapped SOT is terminal — course tracker 完成, heal-list 已完成, deal won) | all | the quote + source + date; brief says "propose 完成 — owner to set" |
+| `STALLED` | **Needs a Ledger snapshot ≥14 days old** — the first is W40 (2026-10-02), usable from 2026-10-16; until then, or when it cannot be read, emit `STALLED: n/a` and say why. Row 狀態 = 進行中, Priority ∈ {P0, P1}, AND all of: (a) no change in 狀態/開始/結束/負責人/備註 vs a snapshot ≥14 days old; (b) no mention in the newest two [3.1] blocks — match tracker `#` (e.g. `4.01`) or ≥2 keyword tokens of `項目`, searching the owner's function section first; (c) no activity in the row's mapped SOT within 14 days (CRM deal/task touched, heal-list row changed, course-tracker row changed, article published). Rows with **no** mapped SOT satisfy (c) by silence but the flag is downgraded to `STALLED?` (low confidence). | P0/P1 only | last tracker change date, last [3.1] mention (block date), last SOT activity |
+| `PROPOSE_DONE` | 狀態 = 進行中 AND (備註 or newest [3.1] block says shipped / 上線 / 完成 / 已交付 / done, or the mapped SOT is terminal — course tracker 完成, heal-list 已完成, deal won) | all | the quote + source + date; brief routes it to the Friday approval cycle (already in last Friday's `Proposals` → its 決定 / 結果; not yet → "goes to Friday's propose"). While `apply` runs in shadow (`結果` = would-apply) the owner still sets 完成 by hand |
 | `DONE` | 狀態 = 完成 (terminal). Drops out of owner load and every deadline/date flag; appears in `summary.done` | all | the 完成 value + the row's `結束` (a future `結束` on a 完成 row is normal — it was the plan, not a deadline) |
 | `PAUSED` | 狀態 = 暫停. No schedule flags, but **always cross-check the newest [3.1] block**: a row marked 暫停 that is visibly running is an SOR divergence and belongs in the brief | all | the 暫停 value + any weekly-log evidence of activity |
 | `UNKNOWN_STATUS` | 狀態 outside {未開始, 進行中, 放棄, 完成, 暫停} | all | the raw value; never mapped to a known state |
@@ -76,6 +79,6 @@ Age of `UNDATED` with no earlier snapshot: seed `first_seen_undated` from the da
 
 - Tracker vocab is 未開始 / 進行中 / 放棄 / 完成 / 暫停 — the skill never *writes* any of them; 延遲 does not exist and appears only in the brief as the derived `OVERDUE`. When the skill believes a row is finished it emits `PROPOSE_DONE` and the owner sets 完成.
 - When a new status value shows up in the sheet, it arrives as `UNKNOWN_STATUS` — that is the signal to update this file, `derive_state.py` (`KNOWN_STATUSES`), `source-map.md`, `routine-prompt.tmpl` and the private config's `status_vocab` **together**, then re-render the routine prompt. Vocab drift in one place silently re-opens completed work in the brief.
-- The skill **never edits the tracker** (status, dates, owners, 備註). All changes are asks to owners; owners push.
+- The skill **never edits the tracker** (status, dates, owners, 備註). All changes are asks to owners; owners push. Since SKB-044 a change the skill believes is due is placed in zynkr-ops-weekly's Friday approval cycle; until that cycle's `apply` writes the tracker (Phase 3b), the owner still types the approved value.
 - Every flag prints its evidence and source date. A flag without evidence is dropped.
 - Unknown ≠ silence: missing instrumentation is stated ("no signal source"), never read as inactivity.

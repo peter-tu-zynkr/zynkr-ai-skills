@@ -115,7 +115,11 @@ of how accurate the other eight blocks are.
 
 Sources, in this order: open decisions past or within 7 days of their decide-by (or with no
 decide-by at all and blocking a P0); P0s owned by the GM with 結束 ≤14 days; P0s UNDATED for
->2 weeks (any owner — the GM's job is to make the absence visible).
+>2 weeks (any owner — the GM's job is to make the absence visible). Two more come from the
+weekly project cycle's Ledger: a `待決` row from last Thursday's meeting that blocks a P0, and a
+Friday approval the GM never confirmed when a proposal in it touches a P0. For the approval, the
+card's close-it action is "reply to the 【待核准】 thread", linked. Approvals are the GM's alone,
+so an unanswered one is never somebody else's ask.
 
 ### The decision card
 
@@ -199,11 +203,23 @@ items appear only if OVERDUE. Cells ≤12 words — this block is a scan surface
 Where the tracker and another source disagree, say which one wins under the precedence rules and
 put the reconciliation in Next. A divergence is a fact about the machine, not an opinion.
 
+The team already gets last week's change list item by item in the Monday recap (the
+`【週報】WB m/d` mail from zynkr-ops-weekly; a subject with `沒有產出` is its no-snapshot notice, not a
+change list). Block 03 stays coarse: when the recap has arrived,
+link it once above the tables instead of restating its lines.
+
+A `PROPOSE_DONE` row's Next says where the change stands in the Friday approval cycle, read from
+the Ledger's `Proposals` tab: `in Friday's 【待核准】 mail — <決定> (<結果>)`, or, when it was never
+proposed, `goes to Friday's propose`. `would-apply` means shadow mode, so the owner still sets the
+value by hand. Once `apply` writes the tracker (SKB-044 Phase 3b), the brief stops asking anyone
+to type what that cycle carries.
+
 ## 04 · Per-owner summary
 
 One line per owner (named as the tracker names them): P0 held · P1 held · UNDATED · OVERDUE ·
-ENDS_SOON · what the brief needs from them · when they last appeared in the weekly log. End with
-`GM holds <k>/<n> P0s (<pct>%)`.
+ENDS_SOON · what the brief needs from them · when they were last heard from — the newest
+`#週報` post in the Ledger's `Reports` tab, else the newest weekly-log mention — plus their `卡關`
+line if they wrote one. End with `GM holds <k>/<n> P0s (<pct>%)`.
 
 ## 05 · KPI off-target + missing numbers
 
@@ -219,9 +235,11 @@ Cloud runs: CRM/accounting-backed metrics are marked `(not readable on a schedul
 ## 06 · Decisions register
 
 Table: id · Item · Label (`已定案` / `還在摸索` / unlabelled) · Decider · decide-by (or "no
-deadline") · Status · Source (linked). Sources: the ops heal sheet's decisions tab; open
-decisions named in the strategy docs' authoritative sections; DIRECTION_UNLABELLED P0s. Overdue
-or undated rows are carried every week until closed.
+deadline") · Status · Source (linked). Sources: the ops heal sheet's decisions tab; last
+Thursday's meeting as the Ledger's `Decisions` tab records it (`待決` rows — a decision missing its
+owner or date — first, then `決議`); open decisions named in the strategy docs' authoritative
+sections; DIRECTION_UNLABELLED P0s; and the Friday approval when the Ledger shows it unconfirmed
+(`Weeks` O = ok, Q empty). Overdue or undated rows are carried every week until closed.
 
 The three promoted into block 01 appear here too, marked `→ see 01`, so the register stays whole.
 
@@ -233,6 +251,11 @@ The three promoted into block 01 appear here too, marked `→ see 01`, so the re
 
 - Routines: newest weekly livestream note date (flag if >8 days); this brief's own idempotency
   result.
+- The weekly project cycle, from last week's `Weeks` row in the Ledger: one line naming each beat
+  that recorded (`snapshot` · `rollup` · `decisions` · `propose` · `apply`) and each that did not.
+  An empty cell means the beat never recorded the week, which is not the same as "nothing to
+  record" (`ok` over an empty block).
+- STALLED: computed, or why not (no Ledger snapshot 14+ days old yet; snapshot not readable).
 - SOR docs changed in the last 7 days (name · modified date · which authoritative section).
 - Sources this run could not read, and why (not available on a scheduled run / read failed /
   not found).

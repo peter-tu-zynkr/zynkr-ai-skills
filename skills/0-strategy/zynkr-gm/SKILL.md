@@ -16,7 +16,9 @@ description: >-
   H2 專案", or any ask for a company-level (not one project's) week/month focus, progress
   roll-up, or KPI variance. BOUNDARY — do NOT hijack: /project-status-update (one project's
   weekly status email from its own tracker), /project-client-status and /project-governance
-  (consulting portfolio), /admin-governance (file-level Drive↔local index drift),
+  (consulting portfolio), /zynkr-ops-weekly (the team's weekly loop, its Monday recap and the
+  Friday tracker approvals — this skill only reads its Weekly Ledger), /sales-manager (deal-level
+  pipeline review), /admin-governance (file-level Drive↔local index drift),
   /admin-meeting-prep (per-meeting packets), /skill-finder (which skill for a task),
   /planning-tracker-sync (the TEAM weekly tracker block, nudges and snapshots — it consumes this
   skill's derived-state rules, but the founder brief stays here), the rest of the planning suite
@@ -33,7 +35,7 @@ author: Peter Tu
 input: "Optional sub-command (week | progress [LOB] | send) and an optional 'as of' date; identifiers come from the private config (~/.config/zynkr/gm.json) or the rendered routine prompt."
 process: "Anchor on today → load private config → idempotency check → read the SOR chain in precedence order (script-first) → derive per-item state + per-owner rollup → compose the fixed-shape brief, every number cited → draft or send → report."
 output: "Weekly GM brief in English as an HTML email: runway · ≤3 decision cards, each with options and a link to the closing cell · two clocks · P0/P1 by LOB · owners · KPI · decisions"
-synergy: [admin-governance, project-status-update, project-governance, skill-finder, curate-livestream-transcripts, admin-meeting-prep, planning-tracker-sync, planning-evidence-pack]
+synergy: [admin-governance, project-status-update, project-governance, skill-finder, curate-livestream-transcripts, admin-meeting-prep, planning-tracker-sync, planning-evidence-pack, zynkr-ops-weekly, weekly-insights, sales-manager]
 house-style: bound
 
 ---
@@ -71,6 +73,7 @@ it — do not guess IDs and do not proceed with placeholders.
 | `recipients[]` | who receives the brief (default: the GM only) |
 | `sources.main_tracker` | H2 project tracker sheet + tab — **the status source of record** |
 | `sources.ops_weekly` | the ops lead's weekly log doc (newest week on top) — read-only |
+| `sources.ledger` | the Weekly Ledger: zynkr-ops-weekly's machine-owned record of each week (tracker snapshots, posts, decisions, approvals) — read-only |
 | `sources.okr_kpi_tracker` | OKR & KPI tracker (tabs `okrs`, `kpi_dashboard`) — the metrics SOR |
 | `sources.ops_heal_tracker` | ops gap-heal action sheet (tabs `fixes`, `decisions`) |
 | `sources.course_tracker` | flagship course project tracker (milestone dates only) |
@@ -163,13 +166,63 @@ dump dir. Status vocabulary is 未開始 · 進行中 · 放棄 · 完成 · 暫
 完成 and 放棄 are **terminal** — exclude them from open-work counts and from owner load; 暫停 keeps
 its owner but carries no schedule. 延遲 still does not exist and stays **derived** (Step 4).
 
+### 3.1b What the week recorded — the Weekly Ledger (every run)
+
+Since 2026-10-02 the team's weekly project cycle (zynkr-ops-weekly, SKB-044) keeps a machine-owned
+Sheet, `sources.ledger`. On Fridays it copies the whole tracker into `Snapshot`. Tuesday's rollup
+records each `#週報` post in `Reports` and Thursday's meeting records its decisions in `Decisions`.
+Friday's `propose` mails the GM the suggested tracker changes, a list kept in `Proposals`, and
+`apply` records the GM's answers (and, once live, the changes it wrote in `Updates`). Each beat
+stamps its cell pair in the week's `Weeks` row. The brief reads **last week**, the ISO week before
+the brief's week, and never writes a cell.
+
+The layout is fixed rows per week, so every range is computed by `scripts/ledger_read.py`. Do
+not search for a week's rows, and do not compute the ranges by hand:
+
+1. `ledger_read.py plan --epoch <sources.ledger.epoch_week> --today <date>` → one `Weeks` range.
+   Read it with `read_sheet_values` and save the result verbatim.
+2. `ledger_read.py weeks --epoch … --today … --ledger <id> <saved file>` → last week's beat health
+   (`snapshot` · `rollup` · `decisions` · `propose` · `apply`: `ok`, or `never recorded`), the
+   approval state (`confirmed` · `unconfirmed` · `no proposals recorded`), and every range to
+   read next, each ≤50 rows. It refuses a read of another file or range, a truncated read, and a
+   `Weeks` row that holds a different week. `unconfirmed` is an ask only when the week's
+   `Proposals` block holds at least one row (an empty week stamps it too).
+3. `ledger_read.py rows --week W --items N …` on the `prev` snapshot pages → `prev_rows.json` for
+   Step 4 (`--prev`). The same on the `stall` pages when `stalled_available` is true.
+4. `ledger_read.py block --kind decisions|proposals|reports|updates --epoch … …` on each block → that week's
+   rows plus counts (`open` 待決 decisions, `by_decision` for proposals, `blocked` reporters).
+
+Where it lands: beat health → block 08; `Decisions` → block 06, with a `待決` row that blocks a P0
+also a block-01 candidate; `Proposals` → block 03's Next for `PROPOSE_DONE` rows; an
+`unconfirmed` approval touching a P0 → a block-01 card closed by replying to the 【待核准】 thread;
+`Reports` → block 04's "last heard from" and `卡關` lines.
+
+The Ledger is **evidence and history, never status**: the brief still reads the tracker live
+(§3.1), and a snapshot is only what CHANGED and STALLED compare against.
+
+The cloud routine has no copy of the script. It reads the Ledger with `get_file_metadata`
+(`MAX_ALLOWED`): unquoted CSV, so it reads only each row's fields before the first free-text
+column, and one response capped near 80k characters (see `source-map.md` → *How to read a
+Sheet in the cloud*). The `Weeks` tab comes first and is always readable; `Snapshot` keeps its
+oldest weeks first and will outgrow the cap within about six weeks of 2026-10-02, after which the
+cloud brief reports CHANGED and STALLED as not measured and only a local run has them.
+
+**The team recap and the approval mail.** zynkr-ops-weekly also mails the team a Monday recap,
+subject `【週報】WB m/d 那週 — …` (a subject containing `沒有產出` is instead the owner-only notice
+that Friday's snapshot never ran — report it in block 08, never link it as a change list), built
+from the same Ledger: last week's changes, the items that
+need attention, decisions and blockers. It often lands after the brief starts, so check Sent for it
+by subject only. When it is there, block 03 links it once instead of restating its lines. When it
+is not, say nothing: its absence is not a failure. The Friday approval mail
+`【待核准】WB m/d 那週 · N 件（<ISO week>）` is likewise found by subject, and only to link it.
+
 ### 3.2 What actually happened — the ops weekly log (every run)
 
 `mcp__google-workspace__get_doc_as_markdown` on `sources.ops_weekly.id` with
 `include_comments=false`. The result is large and lands in a file → run
 `python3 scripts/extract_newest_block.py <file> --blocks 2 --json`. Block 1 = the newest
 week; block 2 is only for stall detection. The block has a fixed skeleton (Team update ·
-Demand Marketing · AI consulting & Sales · Operation · Knowledge product · AI assistant dev ·
+Demand Marketing · Sales · Operation · Knowledge product · AI enablement ·
 Tech/People/Finance, each with `Metrics` bullets, mostly bare `#` placeholders). Pull: event
 list with registration counts, course milestone checklist, anything under `#Team update`.
 **Never write to this doc.**
@@ -243,12 +296,22 @@ and `references/` are enough. Any change here goes into block 08 as "SOR doc cha
 
 ## Step 4 — Derive state, then roll up
 
-Run `python3 scripts/derive_state.py rows.json --today <YYYY-MM-DD> [--prev prev_rows.json]
---json`. It emits per-item states (ENDS_SOON · OVERDUE · UNDATED · CHANGED · PROPOSE_DONE)
-and a per-owner rollup. Apply `references/derived-state-rules.md` for the judgement calls the
-script cannot make: DIRECTION_UNLABELLED (a P0 whose direction lacks 已定案/還在摸索),
-STALLED (needs two snapshots — mark "not available yet" until P1), and priority weighting
-(P0 UNDATED for >2 weeks → escalate into block 01; P2 issues → status table only).
+Run `python3 scripts/derive_state.py rows.json --today <YYYY-MM-DD> --prev prev_rows.json
+--json`, where `prev_rows.json` is the Ledger snapshot from §3.1b: the week before last, so
+CHANGED covers last week and the weekend, or last week when that is the only one. It emits per-item
+states (ENDS_SOON · OVERDUE · UNDATED · CHANGED · PROPOSE_DONE) and a per-owner rollup. Without a
+readable snapshot, run it without `--prev` and say in block 08 that CHANGED was not measured.
+Apply `references/derived-state-rules.md` for the judgement calls the script cannot make:
+DIRECTION_UNLABELLED (a P0 whose direction lacks 已定案/還在摸索), STALLED (against the `stall`
+snapshot, one at least 14 days old: the first is W40's, usable from 2026-10-16; before that, say
+why it is not available), and priority weighting (P0 UNDATED for >2 weeks → escalate into block
+01; P2 issues → status table only). A `PROPOSE_DONE` row is placed in the Friday cycle: already
+proposed, or going to Friday's propose (§3.1b, `lob-skills-seed.md` → *The tracker is getting one
+writer*). While that cycle runs in shadow the owner still sets the value by hand; say so.
+
+`derive_state.py` has two outside consumers: planning-tracker-sync and zynkr-ops-weekly's Monday
+recap (`recap.py`). Keep its input keys and output fields stable, and run `recap.py --selftest`
+after changing it.
 
 ## Step 5 — Compose the brief
 
@@ -258,24 +321,30 @@ Follow `references/brief-template.md` **exactly**, in order:
   books as-of. RED if < `runway_floor_months` or as-of older than `books_stale_days`, or if
   un-metered.
 - **01 ≤3 decisions only the GM can close** — from open decisions past/near their decide-by,
-  P0s owned by the GM with 結束 ≤14d, and P0 UNDATED >2 weeks. Three at most. Each one is a
+  P0s owned by the GM with 結束 ≤14d, P0 UNDATED >2 weeks, a Ledger `待決` that blocks a P0, and an
+  unconfirmed Friday approval that touches a P0 (§3.1b). Three at most. Each one is a
   **decision card** in the exact shape the template gives: one question ending in `?` · real
   options A/B (or the exact value and cell to fill) · the consequence of not deciding · the
   single action that closes it, hyperlinked to the cell · where it came from. This block is
   the test of whether the brief changes the week — see the template's D1–D5 before writing it.
 - **02 Two clocks** — cash clock + calendar clock (Q3/H2 end + P0/P1 ending ≤30d).
 - **03 P0/P1 status by LOB** — state · evidence (tracker Δ / weekly-log mention / sheet
-  activity) · next. Coarse on purpose.
+  activity) · next. Coarse on purpose: the Monday team recap already lists the changes, so link it
+  when it has arrived. A `PROPOSE_DONE` row's Next is its place in the Friday cycle.
 - **04 Per-owner rollup** — for each owner: their P0s · missing dates · asks · last heard
-  from (newest weekly-log mention; for the GM, also the weekly-insights mail's owner line — §3.4b).
+  from (newest `#週報` post in the Ledger's `Reports`, else the newest weekly-log mention; for the GM,
+  also the weekly-insights mail's owner line — §3.4b) · their `卡關` line, if any.
   Include a GM-load line (share of P0s held by the GM).
 - **05 KPI off-target + asks** — only rows with both a target and an Actual can be
   off-target; rows without an Actual are listed as asks to their owner (batch, don't nag).
-- **06 Decisions register** — open 決策 rows + strategy-doc open decisions + inferred ones,
+- **06 Decisions register** — open 決策 rows + last Thursday's Ledger `Decisions` (待決 first) +
+  strategy-doc open decisions + inferred ones,
   each with label (已定案/還在摸索/未標), owner, decide-by (or "無期限"), status.
 - **07 Deliberately not this week** — named skips.
-- **08 Machine health** — routines that did/didn't fire, SOR docs that changed, sources the
-  run could not read, and the weekly-insights mail: its `laptop:` lines, or that it did not arrive.
+- **08 Machine health** — routines that did/didn't fire (including each beat of last week's
+  project cycle, from the Ledger's `Weeks` row), SOR docs that changed, sources the run could not
+  read, whether STALLED was computed, and the weekly-insights mail: its `laptop:` lines, or that
+  it did not arrive.
 
 Rules while composing (the template states these in full as C1–C5 and D1–D5 — read them, they
 are the difference between a brief that gets acted on and one that gets skimmed):
@@ -330,9 +399,11 @@ The cloud routine is this skill rendered into one self-contained prompt:
 claude.ai routine with that prompt (`routine.*` in config: cron, environment, Drive + Gmail
 connectors, model). Differences from a local run, by design:
 
-- Reads go through the **Google-Drive connector** (`read_file_content` returns Sheets as
-  markdown tables and Docs as text; large docs may be truncated — the ops weekly log's newest
-  week is at the top, so that is safe). The finance ledger IS readable here, so runway is computed
+- Reads go through the **Google-Drive connector**. Docs: `read_file_content` (large docs may be
+  truncated — the ops weekly log's newest week is at the top, so that is safe). **Sheets:
+  `get_file_metadata` with `snippetVerbosity: MAX_ALLOWED`**, never `read_file_content`, which
+  samples about 22 rows of a wide tab and silently drops the rest (the Main Tracker ends at 2.08
+  that way). See `source-map.md` → *How to read a Sheet in the cloud*. The finance ledger IS readable here, so runway is computed
   on scheduled runs too. No CRM, no calendar → those lines are marked unavailable, never guessed.
 - Delivery is **send** via the Gmail connector (`send_message`); if refused → `create_draft`
   and the run report says so. Idempotent per ISO week via the sent-mail check.
@@ -347,9 +418,14 @@ connectors, model). Differences from a local run, by design:
 
 - Never edit the H2 tracker's status, dates or owners — owners push schedules.
 - Never write to the onboarding master doc or any shared fact; propose to the GM instead.
-- Never write into another owner's doc (the ops weekly log is read-only for this skill).
-- In the mailbox, read only the weekly-insights mail's GM block (§3.4b) and the sent-mail
-  subjects needed for idempotency; nothing else.
+- Never write into another owner's doc (the ops weekly log is read-only for this skill), and
+  never write the Weekly Ledger — it is machine-owned by zynkr-ops-weekly.
+- Route a tracker change the brief believes is due to the Friday approval cycle. While `apply`
+  runs in shadow (until its Phase 3b) the owner still types the approved value; once it writes,
+  never ask anyone to type what the cycle carries.
+- In the mailbox, read only the weekly-insights mail's GM block (§3.4b) and sent-mail subjects:
+  for idempotency, and to link the team recap and the 【待核准】 approval thread (§3.1b). Never
+  open those two mails' bodies.
 - Every number cites source + as-of; HUMAN metrics are asked, not invented.
 - Precedence is enforced, not debated: strategy alignment section > body; Refresh block >
   plan body; tracker > OKR sheet > plan docs. Deprecated paths in the knowledge directory
@@ -371,13 +447,18 @@ connectors, model). Differences from a local run, by design:
 - `references/routine-prompt.tmpl` · `references/config.example.json` ·
   `references/config.README.md`
 - `scripts/extract_newest_block.py` · `scripts/derive_state.py` · `scripts/tracker_diff.py`
-  · `scripts/kpi_locate.py` · `scripts/render_routine_prompt.py` (all stdlib; `--selftest`)
+  · `scripts/kpi_locate.py` · `scripts/ledger_read.py` · `scripts/render_routine_prompt.py`
+  (all stdlib; `--selftest`)
 
 ## Limitations (v1 = P0)
 
-- **Read-only.** No KPI cell writes, no state tabs yet → STALLED cannot be computed (needs
-  two snapshots) and "changed since last week" relies on `--prev` if you saved last week's
-  rows. P1 adds the tabs and `kpi` writes; P2 adds `month` (+ Q3/H2 checkpoint scoring); P3
+- **Read-only.** No KPI cell writes. Week-over-week memory is borrowed from zynkr-ops-weekly's
+  Ledger rather than kept here: CHANGED compares with its Friday snapshots, and STALLED needs one at
+  least 14 days old (from 2026-10-16). In the cloud the Ledger arrives as one capped, unquoted
+  snippet: once `Snapshot` outgrows it (about six weeks of history, mid-November 2026) the cloud
+  brief loses CHANGED, STALLED and the tabs after `Snapshot` (`Reports`, `Decisions`, `Proposals`)
+  and says so; the local run keeps the full read. The lasting fix belongs in zynkr-ops-weekly (a
+  small current-week tab, or Snapshot newest-first) or in moving this routine to the laptop. P1 adds `kpi` writes; P2 adds `month` (+ Q3/H2 checkpoint scoring); P3
   adds `learn` (knowledge-directory curation, propose → `--apply` interactive only).
 - The tracker's status vocabulary has no 延遲; overdue and undated are inferred from
   dates that are often placeholders — the brief makes that visible rather than hiding it.
