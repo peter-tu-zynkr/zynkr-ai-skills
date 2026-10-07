@@ -12,9 +12,17 @@
   pattern error — this is the first thing to check when a sweep returns nothing.
 - `doc.archive_tab_id` must be a **tab in the same Doc**, not another file. `carryover.py` reads
   every tab as one stream to compute `↻N週`; moving history to a separate document resets every
-  streak to zero and silently blinds the Wednesday agenda. Verified 2026-09-15 by simulating
+  streak to zero and silently blinds the Thursday agenda. Verified 2026-09-15 by simulating
   3 live + 31 archived sections: 46 sections compared, **0 streaks changed**. Unset → `tidy`
   fails loud rather than deleting blocks it cannot archive.
+- `sources.weekly_insights` (SKB-070) is optional. With it, Thursday's `agenda` waits until
+  `wait_until` for the owner's weekly-insights recap of the same ISO week and reads the
+  work-only `meeting.json` the runner copies out of `dir`. Every beat's guard then refuses any
+  other read in that folder, so keep `dir` pointing at the weekly-insights `out_dir` and nowhere
+  broader. Without it the agenda runs as before, on the posts and the tracker alone.
+- `routine.notice_from` (SKB-070) switches on the missed-beat mail to the owner from that ISO
+  week. Set it to the week you install: an earlier week holds beats that predate their own code
+  (the Weekly Ledger beats did not exist before 2026-W40) and each would be reported as missed.
 - `chat_ids` is the only hardcoded map, by necessity: Chat exposes **no email field at all**, the
   Doc exposes email with no user id, and the People API resolves the id but returns no name or
   email for domain profiles. Everything else — which department belongs to whom, who receives the

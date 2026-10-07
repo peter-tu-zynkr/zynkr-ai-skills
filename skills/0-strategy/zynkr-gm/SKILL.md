@@ -262,10 +262,13 @@ header text (`Tracker #`, `Q3 target`, `Q4 target`, `Actual`, and — if present
 
 ### 3.4b The GM's own week — the weekly-insights mail (every run)
 
-The GM's laptop runs `/weekly-insights run` every Sunday evening and mails the GM a recap of
+The GM's laptop runs `/weekly-insights run` once a week when the week closes (Wednesday 20:00,
+the evening before the team meeting) and mails the GM a recap of
 their own Claude Code week, subject `[Weekly Insights] <week> — …`, where `<week>` is the ISO week
 before the current one (a brief run on any day of W41 — the Monday routine, a Tuesday re-run, a
-hand run — reads the W40 mail). Find it in sent mail (then the inbox) from the last 9 days,
+hand run — reads the W40 mail). Find it in sent mail (then the inbox) from the last 14 days (a
+Wednesday mail is 11 days old by the Sunday of the next week), with `subject:"Weekly Insights"` in
+the query so a busy week of sent mail cannot push it off the first page of results,
 matching subjects yourself; open it as plain text (`get_thread` with `messageFormat: PLAIN_TEXT` —
 the default also returns the ~15k-token HTML part) and read **only** its block between
 `=== FOR THE GM BRIEF · <week> ===` and `=== END ===`: owner line · shipped, with evidence ·

@@ -24,11 +24,17 @@
 #   stamped done. Both were recorded as successes. The beat therefore has to say, in a line this
 #   script can parse, what it actually delivered; see SKILL.md Step 5.
 #
+# WHY A BEAT THAT DID NOT RUN SENDS A MAIL (SKB-070)
+#   A beat that gave up, or whose window closed before it ran, used to leave only a GIVEUP line in
+#   the log, so nobody knew. When nothing else is due, the selector (scripts/beats.py) now names a
+#   week's missed beats and this script runs `notice`: one mail to the owner listing them.
+#
 # Usage: run_ops_weekly.sh [--dry-run] [--mode=recap|nudge|rollup|chase|agenda|decisions|tidy|propose|snapshot|apply|status]
 #
-# Rehearsal overrides: ZYNKR_OPS_WEEKLY_CONFIG, ZYNKR_OPS_WEEKLY_STATE, ZYNKR_OPS_WEEKLY_LOG, and
-# ZYNKR_OPS_WEEKLY_NOW (an ISO time the beat selector uses instead of the clock). Never force a
-# beat against the real state folder before that week's unforced run: an ok receipt stamps the week.
+# Rehearsal overrides: ZYNKR_OPS_WEEKLY_CONFIG, ZYNKR_OPS_WEEKLY_STATE, ZYNKR_OPS_WEEKLY_LOG,
+# ZYNKR_OPS_WEEKLY_NOW (an ISO time with its offset, e.g. 2026-10-15T09:05:00+08:00, that the beat
+# selector uses instead of the clock) and ZYNKR_OPS_WEEKLY_REHEARSAL=1 (a notice says 【演練】). Never
+# force a beat against the real state folder before that week's unforced run: an ok receipt stamps the week.
 set -uo pipefail
 export PATH="/Users/petertu/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export HOME="/Users/petertu"
@@ -53,79 +59,60 @@ log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >> "$LOG"; }
 [ -f "$CFG" ] || { log "FATAL config missing: $CFG"; exit 1; }
 
 # ── Which beat, if any, is due right now in Taipei? ──────────────────────────
-SEL="$(python3 - "$FORCE" "$STATE_DIR" "${ZYNKR_OPS_WEEKLY_NOW:-}" <<'PY'
-import sys, os, datetime, zoneinfo
-force, state, fixed = sys.argv[1], sys.argv[2], sys.argv[3]
-tz = zoneinfo.ZoneInfo("Asia/Taipei")
-now = datetime.datetime.fromisoformat(fixed).astimezone(tz) if fixed else datetime.datetime.now(tz)
-y, w, dow = now.isocalendar()
-week = f"{y}-W{w:02d}"
-done    = lambda m: os.path.exists(os.path.join(state, f"{week}.{m}.done"))
-gaveup  = lambda m: os.path.exists(os.path.join(state, f"{week}.{m}.gaveup"))
-# Settled = succeeded OR exhausted its retries, so a broken beat stops being selected.
-# The prerequisite check below accepts ONLY a real .done: `chase` must never run off
-# the back of a `rollup` that gave up, or it will name people whose posts were never
-# parsed at all.
-settled = lambda m: done(m) or gaveup(m)
-# `apply` waits for the owner to answer the approval mail. A waiting receipt stamps nothing, so
-# without this the beat would start Claude every 30 minutes all weekend; it looks again 2 hours after
-# the stamp was last written (its mtime). The mail promises that a reply before Sunday 22:00 counts,
-# so from Sunday 21:00 every tick looks: the last looks are 22:05 and 22:35, before 23:00.
-def waiting(m):
-    p = os.path.join(state, f"{week}.{m}.waiting")
-    if not os.path.exists(p) or (dow == 7 and now.strftime("%H:%M") >= "21:00"):
-        return False
-    return now.timestamp() - os.path.getmtime(p) < 7200
-if force:
-    print(f"{force}|{week}|forced (--mode)"); raise SystemExit
-hm = now.strftime("%H:%M")
-# mode, ISO weekday, window open, window close, prerequisite beat
-# `recap` (SKB-044) comes first: one beat runs per tick and nudge has hung for hours, so the
-# Monday mail must not queue behind it. It reads only the Ledger and is limited to 30 minutes.
-BEATS = [("recap",     1, "09:00", "20:00", None),
-         ("nudge",     1, "09:00", "20:00", None),
-         ("rollup",    2, "09:00", "20:00", None),
-         ("chase",     2, "09:30", "20:00", "rollup"),
-         ("agenda",    3, "17:00", "23:00", None),
-         ("decisions", 4, "22:00", "23:59", None),
-         # `tidy` is Friday because that is the first morning AFTER the Thursday 23:00 scaffold.
-         # The scaffold copies the week section forward verbatim, stacked auto blocks and all,
-         # so Friday is the moment the duplicates exist and nobody has read them yet. Trimming
-         # on Tuesday instead would leave the section fat across the whole weekend and the
-         # Monday nudge. It needs no prerequisite: it reads the Doc, not the space.
-         ("tidy",      5, "09:00", "20:00", None),
-         # `snapshot` (SKB-044) copies the Main Tracker into the Weekly Ledger once per ISO week.
-         # Saturday and Sunday catch up a closed lid on Friday evening. Sunday stops at 23:00 so
-         # no run is still going when the ISO week (and with it the rows the Ledger uses) changes
-         # at Monday 00:00 Taipei. NO APOSTROPHES in this heredoc: bash 3.2 then fails to parse.
-         # `propose` (SKB-044 Phase 3) mails the owner the suggested tracker changes for the week. It
-         # comes after tidy, reads the Ledger and the tracker, and writes only the Ledger.
-         ("propose",   5, "10:00", "17:30", None),
-         ("snapshot",  5, "18:00", "23:59", None),
-         ("snapshot",  6, "00:00", "23:59", None),
-         ("snapshot",  7, "00:00", "23:00", None),
-         # `apply` records the owner reply to that mail. Listed after snapshot so the week is captured
-         # first. No prerequisite: it reads the Ledger for this week (Weeks column O) itself, so a
-         # propose that recorded and mailed but then gave up still has its answer read. In shadow
-         # mode it writes nothing to the tracker.
-         ("apply",     5, "18:00", "23:59", None),
-         ("apply",     6, "00:00", "23:59", None),
-         ("apply",     7, "00:00", "23:00", None)]
-for mode, d, s, e, req in BEATS:
-    if dow != d or not (s <= hm <= e) or settled(mode) or waiting(mode):
-        continue
-    if req and not done(req):
-        print(f"|{week}|{mode} held: {req} has not run this week"); raise SystemExit
-    print(f"{mode}|{week}|{now:%a %H:%M} Taipei, window {s}-{e}"); raise SystemExit
-print(f"|{week}|nothing due at {now:%a %H:%M} Taipei")
-PY
-)"
+# beats.py holds the beat table and answers with one line, `mode|week|why` (SKB-070; until then it was
+# a heredoc here). It sits next to this script, like the tracker guard, because launchd runs the
+# flattened copy in ~/.claude/skills/zynkr-ops-weekly/. A selector that cannot answer must never look
+# like "nothing due", so any exit code but 0, or a line of any other shape, stops the tick loudly.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SELECTOR="$HERE/beats.py"
+fatal() { if [ "$DRY" = 1 ]; then echo "FATAL $*"; else log "FATAL $*"; fi; exit 2; }
+[ -f "$SELECTOR" ] || fatal "beat selector missing: $SELECTOR"
+[ "$FORCE" = notice ] && fatal "notice is chosen by the selector, never forced"
+SEL_ARGS=(select --state "$STATE_DIR" --config "$CFG")
+[ -n "$FORCE" ] && SEL_ARGS+=(--mode "$FORCE")
+[ -n "${ZYNKR_OPS_WEEKLY_NOW:-}" ] && SEL_ARGS+=(--now "$ZYNKR_OPS_WEEKLY_NOW")
+if [ "$DRY" = 1 ]; then
+  SEL="$(python3 "$SELECTOR" "${SEL_ARGS[@]}")"; RC=$?
+else
+  SEL="$(python3 "$SELECTOR" "${SEL_ARGS[@]}" 2>>"$LOG")"; RC=$?
+fi
+if [ $RC -ne 0 ] || ! printf '%s\n' "$SEL" | grep -Eq '^[a-z]*[|][0-9]{4}-W[0-9]{2}[|]'; then
+  fatal "beat selector failed (exit $RC): $SEL"
+fi
 MODE="${SEL%%|*}"; REST="${SEL#*|}"; WEEK="${REST%%|*}"; WHY="${REST#*|}"
 
 if [ -z "$MODE" ]; then
   [ "$DRY" = 1 ] && echo "no beat due — $WHY"
   exit 0
 fi
+
+# ── The owner's weekly insights (SKB-070) ─────────────────────────────────────
+# agenda reads ONE file from the owner's private weekly-insights folder: meeting.json, which holds only
+# the work streams the owner listed. The runner copies it next to the stamps and names the copy in the
+# prompt. Every beat runs with ZYNKR_OPS_WEEKLY_PRIVATE_DIR set, and the guard refuses any tool call
+# that reaches into the folder itself, whatever the permission mode.
+# The answer decides whether the folder is guarded. A setting that cannot be read (a typo in the config,
+# a relative folder) must neither open the folder nor stop the loop: the beat still runs, the usual
+# folder is guarded, the agenda gets nothing from it, and the log says why.
+TAB="$(printf '\t')"
+if [ "$DRY" = 1 ]; then
+  INS="$(python3 "$SELECTOR" insights --config "$CFG" --week "$WEEK")"; RC=$?
+else
+  INS="$(python3 "$SELECTOR" insights --config "$CFG" --week "$WEEK" 2>>"$LOG")"; RC=$?
+fi
+case "$INS" in
+  off"$TAB"|ready"$TAB"/*|missing"$TAB"/*) [ $RC -eq 0 ] || INS="" ;;
+  *) INS="" ;;
+esac
+if [ -z "$INS" ]; then
+  INS="missing$TAB$HOME/.claude/weekly-insights"
+  if [ "$DRY" = 1 ]; then
+    echo "WARN the weekly-insights setting could not be read (exit $RC); guarding $HOME/.claude/weekly-insights"
+  else
+    log "WARN  mode=$MODE week=$WEEK the weekly-insights setting could not be read (exit $RC); guarding $HOME/.claude/weekly-insights, and the agenda runs without the owner's week"
+  fi
+fi
+INSIGHTS_STATUS="${INS%%"$TAB"*}"; PRIVATE_DIR="${INS#*"$TAB"}"; INSIGHTS_COPY=""
 
 # ── Least privilege: each beat gets only the tools it actually needs ─────────
 READ_CORE="Read,Grep,Glob,mcp__google-workspace__list_spaces,mcp__google-workspace__get_messages,mcp__google-workspace__search_messages,mcp__google-workspace__get_doc_as_markdown,mcp__google-workspace__inspect_doc_structure,mcp__google-workspace__read_sheet_values,mcp__google-workspace__get_spreadsheet_info"
@@ -166,7 +153,14 @@ case "$MODE" in
   nudge)       TOOLS="$READ_CORE,$CHAT_WRITE"; LIMIT=1200 ;;
   chase)       TOOLS="$READ_CORE,$CHAT_WRITE"; LIMIT=900 ;;
   rollup)      TOOLS="$READ_CORE,$DOC_WRITE,$LEDGER_WRITE"; DENY="$ROLLUP_DENY" ;;
-  agenda)      TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE"; LIMIT=2400 ;;
+  # Thursday morning (SKB-070). It is told the week and where the owner's week is: a copy of
+  # meeting.json, or `missing` when the recap did not arrive by 13:00; nothing when it is not set up.
+  agenda)      TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE"; LIMIT=2400
+               PROMPT="/zynkr-ops-weekly agenda week=$WEEK"
+               case "$INSIGHTS_STATUS" in
+                 ready)   INSIGHTS_COPY="$STATE_DIR/$WEEK.meeting.json"; PROMPT="$PROMPT insights=$INSIGHTS_COPY" ;;
+                 missing) PROMPT="$PROMPT insights=missing" ;;
+               esac ;;
   decisions)   TOOLS="$READ_CORE,$CHAT_WRITE,$DOC_WRITE,$MAIL,$LEDGER_WRITE"; DENY="$DECISIONS_DENY"; LIMIT=1200 ;;   # the only beat that may mail
   # Doc only: it never posts and never mails. The Drive export is the one read that renders the
   # Done/Drop status chips its step 7 needs (SKB-039).
@@ -185,6 +179,15 @@ case "$MODE" in
   apply)       TOOLS="$P3_TOOLS"; DENY="$P3_DENY"; LIMIT=1200
                PROMPT="/zynkr-ops-weekly apply week=$WEEK"
                [ -n "${ZYNKR_OPS_WEEKLY_CONFIG:-}" ] && PROMPT="$PROMPT config=$CFG" ;;
+  # `notice` (SKB-070) mails the owner once about beats of a week that did not run. The selector names
+  # them as beat:code; the run may read the skill and send that one mail, nothing else.
+  notice)      TOOLS="Read,mcp__google-workspace__send_gmail_message,mcp__google-workspace__search_gmail_messages,mcp__google-workspace__get_gmail_message_content"
+               DENY="Edit,Write,Bash,NotebookEdit,Agent,$CHAT_WRITE,$DOC_WRITE,mcp__google-workspace__modify_sheet_values,$DENY_OTHERS"; LIMIT=600
+               # The label is worked out here: the run has no Bash, and a date done in its head can slip.
+               WB_LABEL="$(python3 "$SELECTOR" label --week "$WEEK" 2>/dev/null)" || WB_LABEL=""
+               PROMPT="/zynkr-ops-weekly notice week=$WEEK beats=$WHY${WB_LABEL:+ label=\"$WB_LABEL\"}"
+               [ "${ZYNKR_OPS_WEEKLY_REHEARSAL:-}" = 1 ] && PROMPT="$PROMPT rehearsal=1"
+               [ -n "${ZYNKR_OPS_WEEKLY_CONFIG:-}" ] && PROMPT="$PROMPT config=$CFG" ;;
   status)      TOOLS="$READ_CORE" ;;
   *) log "FATAL unknown mode: $MODE"; exit 2 ;;
 esac
@@ -195,7 +198,7 @@ MODEL="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('rou
 # hook that refuses any call aimed at the Main Tracker unless it only reads, or the beat is apply
 # writing values. A hook refusal holds in every permission mode; the lists above only pre-approve
 # under `auto`. The settings file adds this one hook, and the owner's own settings still apply.
-GUARD="$(cd "$(dirname "$0")" && pwd)/tracker_guard.py"
+GUARD="$HERE/tracker_guard.py"
 GUARD_SETTINGS="$STATE_DIR/tracker-guard.settings.json"
 
 if [ "$DRY" = 1 ]; then
@@ -205,9 +208,16 @@ if [ "$DRY" = 1 ]; then
   echo "  tools  : $TOOLS"
   echo "  deny   : ${DENY:-(none)}"
   echo "  limit  : $([ "$LIMIT" -gt 0 ] && echo "${LIMIT}s" || echo none)"
-  echo "  guard  : $GUARD (only apply may write the Main Tracker)"
+  echo "  guard  : $GUARD (only apply may write the Main Tracker${PRIVATE_DIR:+; nobody reads $PRIVATE_DIR})"
+  [ "$MODE" = agenda ] && echo "  insights: $INSIGHTS_STATUS"
   echo "  state  : $STATE_DIR"
   exit 0
+fi
+
+# The copy is made only now, so a dry run changes nothing. A copy that fails runs the agenda without it.
+if [ -n "$INSIGHTS_COPY" ] && ! cp "$PRIVATE_DIR/$WEEK/meeting.json" "$INSIGHTS_COPY" 2>>"$LOG"; then
+  log "WARN  mode=$MODE week=$WEEK could not copy the weekly insights; the agenda runs without them"
+  PROMPT="${PROMPT% insights=*} insights=missing"
 fi
 
 # Run a command, ending it and everything it started once LIMIT seconds pass (0 = no limit).
@@ -246,6 +256,7 @@ if [ ! -f "$GUARD" ]; then
 fi
 printf '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"python3 \\"%s\\"","timeout":30}]}]}}\n' "$GUARD" > "$GUARD_SETTINGS"
 export ZYNKR_OPS_WEEKLY_MODE="$MODE"
+export ZYNKR_OPS_WEEKLY_PRIVATE_DIR="$PRIVATE_DIR"
 
 log "START mode=$MODE week=$WEEK model=$MODEL ($WHY)"
 OUT="$(mktemp -t zynkr-ops-weekly.XXXXXX)"
@@ -265,6 +276,34 @@ cat "$OUT" >> "$LOG"
 # enough to report, which is exactly the case the old exit-code check waved through.
 RECEIPT="$(grep -a -o 'ZYNKR-OPS-WEEKLY-RESULT:.*' "$OUT" | tail -1)"
 rm -f "$OUT"
+
+# A notice stamps each beat it reported `.noticed`, never `.done`: the beats stay undone, and the selector
+# stops reporting them. A failed notice is tried again two hours later; after six tries the beats are
+# stamped anyway and the log says nobody was told, so a broken mailbox cannot start Claude forever.
+if [ "$MODE" = notice ]; then
+  ITEMS="$(printf '%s' "$WHY" | tr ',' ' ')"
+  case "$RECEIPT" in
+    *"mode=notice week=$WEEK status=ok"*) NOTICE_OK=1 ;;
+    *) NOTICE_OK=0 ;;
+  esac
+  if [ "$NOTICE_OK" = 1 ] && [ $STATUS -eq 0 ]; then
+    for item in $ITEMS; do echo "${item#*:} $(date '+%Y-%m-%dT%H:%M:%S%z')" > "$STATE_DIR/$WEEK.${item%%:*}.noticed"; done
+    rm -f "$STATE_DIR/$WEEK.notice.attempts"
+    log "NOTICE week=$WEEK beats=$WHY  $RECEIPT"
+    exit 0
+  fi
+  NATT="$STATE_DIR/$WEEK.notice.attempts"
+  N=$(( $(cat "$NATT" 2>/dev/null || echo 0) + 1 ))
+  echo "$N" > "$NATT"
+  if [ "$N" -ge 6 ]; then
+    for item in $ITEMS; do echo "notice failed after $N attempts" > "$STATE_DIR/$WEEK.${item%%:*}.noticed"; done
+    rm -f "$NATT"   # a later notice in the same week starts its own six tries
+    log "GIVEUP mode=notice week=$WEEK beats=$WHY attempts=$N — ${RECEIPT:-no receipt (claude exit=$STATUS)} (nobody was told: read this log)"
+  else
+    log "FAIL  mode=notice week=$WEEK beats=$WHY attempt=$N/6 — ${RECEIPT:-no receipt (claude exit=$STATUS)} (tried again in 2 hours)"
+  fi
+  exit 1
+fi
 
 case "$RECEIPT" in
   *status=ok*) VERDICT="ok" ;;

@@ -8,8 +8,9 @@ description: >-
   template plus last week's decisions), `rollup` (Tue 09:00 — read the week's `#週報` posts,
   route each one to its department heading using the owner person-chips already in the Doc, and
   write a clearly-marked auto-summary block), `chase` (Tue 09:30 — @ the owners who did not
-  post), `agenda` (Wed 17:00 — re-sweep for late arrivals, then produce carry-over, overdue,
-  KPI-off-target and the ≤3 decisions the Thursday meeting must actually make), and `decisions`
+  post), `agenda` (Thu 09:00 — re-sweep for late arrivals, set the owner's week against the
+  tracker, then produce carry-over, overdue, KPI-off-target and the ≤3 decisions the meeting
+  must actually make), and `decisions`
   (Thu 22:00 — post the resolutions back to the space, record them in the Weekly Ledger, send the
   recap mail and assert it actually went out), and `tidy` (Fri 09:00 — keep the newest
   auto block under each department, archive the stacked older copies to the 封存 tab, and carry
@@ -37,7 +38,7 @@ visibility: public
 author: Peter Tu
 input: "A mode (one beat from The cadence table, or status) and an optional 'as of' date; all identifiers come from the private config at ~/.config/zynkr/ops-weekly.json."
 process: "Anchor on today → resolve the target Thursday (Monday's posts belong to the NEXT Thursday) → load config → check idempotency → read routing from the Doc's owner chips → sweep Chat by createTime → parse the four lines → write a marked block → assert delivery."
-output: "Per mode: a Chat post, a marked 〔自動彙整〕 block per department in this week's Doc section, the Wednesday agenda, a recap email, a Friday tracker snapshot, and a Friday approval mail."
+output: "Per mode: a Chat post, a marked 〔自動彙整〕 block per department in this week's Doc section, the Thursday agenda, a recap email, a Friday tracker snapshot, and a Friday approval mail."
 synergy: [zynkr-gm, project-status-update, planning-tracker-sync, ops-flow-optimization, admin-governance]
 executed_by: internal-user
 house-style: bound
@@ -77,7 +78,8 @@ rewrites prose in a doc people are actively editing is a bot nobody trusts by we
 | Mon (all day) | — | team | People post `#週報` in the space |
 | **Tue 09:00** | `rollup` | skill | Read the window, route by owner chip, write the marked block, backfill metrics |
 | **Tue 09:30** | `chase` | skill | Owners in the Doc − people who posted → @ the difference |
-| Wed 17:00 | `agenda` | skill | Re-sweep for late arrivals, then carry-over · overdue · KPI · ≤3 decisions |
+| Wed 20:00 | — | `weekly-insights` | The owner's own week closes and leaves `meeting.json` for the agenda (SKB-070) |
+| **Thu 09:00** | `agenda` | skill | Waits (to 13:00) for that recap, re-sweeps for late arrivals, sets the owner's week against the tracker, then carry-over · overdue · KPI · ≤3 decisions |
 | **Thu 21:00** | — | team | The weekly meeting. Discuss exceptions and decisions only; edit the Doc live |
 | **Thu 22:00** | `decisions` | skill | Resolutions → space (3 lines) + Weekly Ledger + recap mail + **assert the send**; no decisions → one line, no mail |
 | Thu 23:00 | `scaffoldNextWeek` | **Apps Script** | Duplicate the newest week section, re-stamp next Thursday. Runs **after** `decisions` — see Step 4.1 |
@@ -86,6 +88,10 @@ rewrites prose in a doc people are actively editing is a bot nobody trusts by we
 | Fri → Sun 22:00 | — | owner | Reply to that mail: 「全部核准」 · 「核准 1 3」 · 「退回 2」. `apply` confirms in the thread what it recorded |
 | Fri 18:00 (to Sun 23:00) | `snapshot` | skill | Copy every Main Tracker item into the Weekly Ledger, once per ISO week. Monday's recap compares two of these to say what changed |
 | Fri 18:00 (to Sun 23:00) | `apply` | skill | Read the owner's reply and record each decision. Shadow mode: nothing is written to the tracker yet |
+
+When no beat is due, the runner mails the owner about any beat of the week that gave up or whose
+window closed before it ran (`notice`, 4.12, SKB-070). Before then such a beat left only a line in
+the log.
 
 `chase` must run **after** `rollup` — it cannot know who is missing until the roll-up has
 resolved who posted. Both beats sit on Tuesday morning so that the Doc's Thursday section is
@@ -124,7 +130,7 @@ This repository is public. The method is here; the **identifiers are not**. At r
 | `space.id` | the Chat space, in `spaces/<id>` form — **the `spaces/` prefix is required** |
 | `space.name` | human label, for report lines only |
 | `doc.id` · `doc.tab_id` · `doc.tab_name` | the weekly operations Doc and the tab that holds the week sections |
-| `doc.archive_tab_id` · `doc.archive_tab_name` | the **sibling tab** `tidy` moves old auto blocks into. It must be a tab in the *same* Doc: `carryover.py` reads all tabs as one stream to compute `↻N週`, so a separate file resets every streak and blinds the Wednesday agenda |
+| `doc.archive_tab_id` · `doc.archive_tab_name` | the **sibling tab** `tidy` moves old auto blocks into. It must be a tab in the *same* Doc: `carryover.py` reads all tabs as one stream to compute `↻N週`, so a separate file resets every streak and blinds the Thursday agenda |
 | `chat_ids` | **the only hardcoded map** — 6 rows of Chat `users/<id>` → email. See below |
 | `reporters` | the emails expected to post each week (6 people; excludes non-reporting members) |
 | `sources.main_tracker` · `sources.okr_kpi_tracker` | sheets read to backfill metrics and overdue items. `main_tracker.tab` is the tab `snapshot` copies; `main_tracker.cycle` (`2026H2`) keeps one half-year's item numbers apart from the next |
@@ -132,7 +138,9 @@ This repository is public. The method is here; the **identifiers are not**. At r
 | `routine.apply_mode` | what `apply` does with an approved change: `shadow` (record it, write nothing to the tracker) unless it says exactly `live`. `live` is refused until Phase 3b ships |
 | `routine.recap_audience` | who gets the Monday recap: `owner` (the account alone) while it is new, `team` (every reporter) once the owner has seen it work. Missing means `owner`. `routine.recap_team_from` (`YYYY-MM-DD`) sets the switch ahead: `team` starts with that Monday's recap |
 | `sources.state_rules.path` | optional; where zynkr-gm's `derive_state.py` lives. Default `~/.claude/skills/zynkr-gm/scripts/derive_state.py` |
-| `routine.*` | how the eight beats are scheduled — mechanism, model, timezone, per-beat windows. See `references/scheduling.md` |
+| `sources.weekly_insights.dir` · `.wait_until` | optional (SKB-070): the owner's weekly-insights folder, and until when Thursday's `agenda` waits for that week's recap (default `13:00`). The runner copies only `<dir>/<ISO week>/meeting.json` for the agenda, and every beat's guard refuses any other read in that folder. Missing = the agenda runs without the owner's week |
+| `routine.notice_from` | optional (SKB-070): the first ISO week (`2026-W42`) whose missed beats are mailed to the owner (`notice`, 4.12). Set it to the week you install, never earlier: older weeks hold beats that predate their own code. Missing, or not a week = no notices |
+| `routine.*` | how the beats are scheduled — mechanism, model, timezone, per-beat windows. See `references/scheduling.md` |
 
 If a required value is missing or still a placeholder, **fail loud** (`config: doc.id unset`).
 Never guess an id, and never fall back to a hardcoded department map.
@@ -166,7 +174,8 @@ stop resolving.
 | `references/proposal-rules.md` | `propose` — what may be suggested, on what evidence, and what `check` refuses |
 
 `propose` reads `references/proposal-rules.md`, `ledger.md`, `wording.md` and the approval section of
-`message-templates.md`; `apply` reads `ledger.md`. Neither touches the Doc or Chat.
+`message-templates.md`; `apply` reads `ledger.md`. Neither touches the Doc or Chat. `notice` reads
+only the `notice` section of `message-templates.md` and `wording.md`.
 `snapshot` reads only `references/ledger.md`: it touches no Doc, no Chat and no prose, so the
 "Always" rows above do not apply to it. `recap` reads `references/ledger.md`, `wording.md` and the
 recap section of `message-templates.md`, and nothing about the Doc or Chat.
@@ -184,7 +193,8 @@ Resolve today in `Asia/Taipei`. Compute:
   `week=` field. Never shown to the team. `references/wording.md` explains why both exist.
 - **The window** — Monday 00:00 of the current ISO week → now.
 - **The target Thursday** — the Doc names its sections by **Thursday** date (`Aug 27`,
-  `Aug 20`, …), but the team reports on **Monday**.
+  `Aug 20`, …), but the team reports on **Monday**. On a Thursday the target Thursday is
+  **today**: `agenda` (morning) and `decisions` (night) both work in today's section.
 
 `snapshot`, `propose` and `apply` need only the ISO week key. The runner passes it as `week=`; they have no target
 Thursday and no window, so the off-by-one below does not apply to it.
@@ -201,8 +211,14 @@ Load the private config; fail loud on placeholders. Then check whether this mode
 for this ISO week:
 
 - Chat-delivering modes (`nudge`, `chase`, `agenda`, `decisions`) — list the space's messages
-  for today and look for this skill's own marker line (each template ends with a
-  `— zynkr-ops-weekly · <week>` footer). Found → stop and report "already ran".
+  for today and look for **this mode's own post**: a message that ends with this skill's footer
+  (`— zynkr-ops-weekly · <week>`) **and opens with this mode's first line**, frozen in
+  `references/wording.md`: `nudge` 「這週的週報開始收囉」 · `chase` 「還缺這幾位的週報」 · `agenda`
+  「週四的議程整理好了」 · `decisions` 「今天談定的事」 or 「今天的會沒有談定的決議」. Found → stop and
+  report "already ran". The footer alone is not enough: since SKB-070 `agenda` (morning) and
+  `decisions` (night) both post on Thursday, and a ⚠ failure notice carries the footer too, so a
+  footer-only match makes `decisions` skip itself every Thursday and a retry skip itself after
+  its own failure notice.
 - `rollup` — look for a `〔自動彙整 <week>` stamp inside the target Thursday section. Found →
   do not write a second block; re-run in *append-new-only* mode (Step 4.4).
 - `propose` — the Ledger's `Weeks` O cell plus the recorded approval thread. `proposals.py pages`
@@ -318,28 +334,62 @@ here, because rebuilding it loses the owner person chips, which no API can recre
 `missing = reporters − posters`. Empty → post nothing and report full coverage; a chase message
 that chases nobody teaches people to ignore chase messages.
 
-Otherwise post one short message naming the missing people and the Wed 12:00 cut-off. Name them
+Otherwise post one short message naming the missing people and the Thursday 09:00 cut-off (the
+agenda's re-sweep is the last look). Name them
 in plain text — `send_message` posts text, and reliable programmatic @-mentions need the
 annotation payload the MCP tool does not currently expose.
 
 > If `chase` names the same person two weeks running, the problem is the format or the routing,
 > not the person. Say that in the report.
 
-### 4.4 `agenda` (Wed 17:00)
+### 4.4 `agenda` (Thu 09:00)
+
+It runs on the meeting day itself (SKB-070; until 2026-10-14 it ran Wednesday evening), after the
+owner's own week has closed at Wednesday 20:00. The runner passes `week=<ISO week>` and, when the
+owner's weekly insights are configured, `insights=<path>` (its copy of that week's `meeting.json`)
+or `insights=missing` (the recap had not arrived by 13:00). It waits for the recap without starting
+a run, so a morning agenda usually has it; when it does not, the agenda goes ahead without it.
 
 1. **Re-sweep the window first** (Mon 00:00 → now) to pick up anything that arrived after the
    chase. Append only records not already stamped in the Doc — match on reporter + ISO week so
    a re-run cannot duplicate.
-2. Assemble, in this order, and cap it: **carry-over `↻N週`** · **overdue** (from the tracker)
-   · **KPI off-target** · **≤3 decisions**. The decisions come from the reporters' `卡關:` line —
-   that is the only field in the format that forces a decision, which is why it cannot be
-   dropped.
-3. Write the agenda at the **top of the target Thursday section**, in its own marked block.
-4. Post a short pointer to the space with the Doc link — the agenda itself lives in the Doc.
+2. **Read the owner's week**: only the file `insights=` names, and nothing else in the owner's
+   weekly-insights folder. The guard refuses it; never look for another way in. The file lists,
+   for the workstreams the owner shares, what shipped, what is moving and what waits on the
+   owner, in English. `insights=missing` or an unreadable file → one `·` line,
+   「這週沒有收到 <owner> 的工作紀錄，下面只看週報和 Tracker」, and carry on. No `insights=` at all →
+   the feature is off; write nothing about it.
+3. **Set it against the Main Tracker** (the rows already read for overdue). Two gaps, both from a
+   positive match only. A match is the same spec id, or a name no colleague could take for
+   anything else; when unsure, it is not a match, and nothing is written.
+   - **做完了，Tracker 還沒改**: a `shipped` item that matches a row whose 狀態 is not 完成. It is a
+     quick confirm, not a decision: once the meeting confirms it, `decisions` records it and
+     Friday's `propose` suggests the change. At most five.
+   - **做了，找不到對應的 Tracker 項目**: a `shipped` item at spec level (it carries a spec id) that
+     matches no row, asked as a question: should it be on the tracker? At most three.
 
-If there are more than three candidate decisions, choose the three with the largest blast
-radius and list the rest under a "not this week" line. An agenda that lists everything makes no
-decisions.
+   Each line cites the tracker `#` (or 沒有對應項目) and one ref from the file, in zh-TW as a
+   colleague would say it: translate the English, keep product names and spec ids. A row the
+   owner's week does not mention is **not** a gap. The file covers only the owner's work in
+   Claude Code, so silence there proves nothing about the row.
+4. **Decisions, from evidence (≤3).** Candidates: the reporters' `卡關:` lines; the owner's
+   `waiting` items that only the owner can unblock; and, from what the agenda already lists, an
+   item at `↻3週` or more or overdue on the tracker, turned into one choice: keep it (by when),
+   hand it over (to whom) or drop it. Pick the three with the largest blast radius, phrase each
+   as that choice, and list the rest on a 「這週先不談」 line. An agenda that lists everything makes
+   no decisions.
+5. Write the agenda at the **top of the target Thursday section**, in its own marked block, in
+   this order: carry-over `↻N週` · overdue · KPI off-target · 「Tracker 跟實際進度對不上的」 (step
+   3) · the decisions. Every line in the block is a `·` line under the stamp, never a Doc bullet:
+   `carryover.py` counts bullets, and a gap written as a bullet would start counting as an item
+   carried from week to week.
+6. Post a short pointer to the space with the Doc link — the agenda itself lives in the Doc.
+
+**What may reach the team.** Six people read the Doc, and the whole space reads the pointer. From
+the owner's week, only the gap lines and decisions built from the file go in, each about one
+tracker row or one shipped item. Never a session id, a workstream that is not in the file, hours,
+or anything the file does not say. Receipt: add `insights=ok|missing|off;tracker-behind=<n>;no-row=<n>`
+to `delivered=`.
 
 ### 4.5 `decisions` (Thu 22:00)
 
@@ -692,6 +742,34 @@ that is unreadable, asks a question, or approves anything while saying more than
 nothing and gets one restate request. Never write the Main Tracker in shadow mode, and never send
 anything except the `send` call `apply-decide` printed.
 
+### 4.12 `notice` (when a beat did not run, SKB-070)
+
+No clock starts this mode; the runner does. When no beat is due, `scripts/beats.py` looks at this
+ISO week and the last for beats that gave up, or whose window closed before they ran, that nobody
+has been told about. The prompt carries `week=<ISO week> beats=<beat>:<code>,… label="WB m/d"` and,
+in a rehearsal, `rehearsal=1`. Use `label` as given: the runner works it out from the week, so never
+compute the date yourself. Codes:
+- `gaveup`: three tries failed.
+- `failed-<n>`: it failed `n` times, then its window closed.
+- `never-ran`: the laptop was off or asleep through the window.
+
+It touches no Doc, no Chat and no sheet: skip Steps 2 and 3.
+
+1. Load the config (Step 1) for `google_account`. Nobody else is ever mailed.
+2. Compose the mail from `references/message-templates.md` → `notice`. The subject is exact:
+   `【排程沒跑完】<label> 那週：<names>`, with 【演練】 in front when `rehearsal=1`, and every beat named
+   in Chinese from the template's table.
+3. **Never send twice.** `search_gmail_messages` with `in:sent newer_than:3d`, then read the subjects
+   that come back yourself; Gmail's `subject:` search misses 【】 and CJK text, as in 4.9. One equals
+   the subject exactly → send nothing; receipt `status=ok delivered=already-sent`. Otherwise
+   `send_gmail_message` to `google_account`, then list `in:sent newer_than:1d` the same way: the
+   subject is there → `status=ok delivered=notice-sent`; not there → `status=failed`.
+4. End with the receipt line (Step 5), naming the week the prompt gave. The runner stamps each beat
+   `.noticed` only on `ok`; a failed notice is tried again two hours later, six times at most.
+
+What the mail must not do: guess at a cause beyond its code, promise a re-run, or go to anyone but
+the owner. The detail is in `~/Library/Logs/zynkr-ops-weekly.log`; say so.
+
 ## Step 5 — Report, and receipt the run
 
 Every run ends with a compact report: mode, ISO week, target Thursday, records parsed, who is
@@ -717,6 +795,8 @@ short of that is `partial` (some landed) or `failed` (none did), with the reason
 ```
 ZYNKR-OPS-WEEKLY-RESULT: mode=rollup week=2026-W36 status=ok delivered=6-blocks-verified
 ZYNKR-OPS-WEEKLY-RESULT: mode=agenda week=2026-W36 status=partial delivered=doc-written;chat-404-app-not-configured
+ZYNKR-OPS-WEEKLY-RESULT: mode=agenda week=2026-W42 status=ok delivered=doc-block-verified;chat-verified;insights=ok;tracker-behind=2;no-row=1
+ZYNKR-OPS-WEEKLY-RESULT: mode=notice week=2026-W42 status=ok delivered=notice-sent;decisions:gaveup
 ZYNKR-OPS-WEEKLY-RESULT: mode=nudge week=2026-W36 status=failed delivered=none;mcp-timeout
 ZYNKR-OPS-WEEKLY-RESULT: mode=tidy week=2026-W41 status=ok delivered=9-archived;8-kept;38-carried;3-closed
 ZYNKR-OPS-WEEKLY-RESULT: mode=tidy week=2026-W38 status=failed delivered=none;scaffold-did-not-fire
@@ -741,7 +821,7 @@ ZYNKR-OPS-WEEKLY-RESULT: mode=apply week=2026-W42 status=ok delivered=shadow;4-a
 ZYNKR-OPS-WEEKLY-RESULT: mode=apply week=2026-W42 status=partial delivered=shadow;4-approved;1-rejected;0-pending;confirm-send-failed
 ```
 
-For `snapshot`, `recap`, `propose` and `apply` the runner also checks that the receipt names the week it passed, so a backfill of
+For `snapshot`, `recap`, `propose`, `apply` and `notice` the runner also checks that the receipt names the week it passed, so a backfill of
 another week can never mark this one done.
 
 This line is not decoration and it is not for humans. `run_ops_weekly.sh` parses it and stamps
@@ -764,6 +844,10 @@ silent Monday and a half-failed Wednesday in W36 before this line existed.
   Docs REST API — only copied. Rebuilding loses the routing table. Copy, or do nothing.
 - **Never write to a past section.** If the target Thursday is behind today, stop and report.
 - **Never invent a metric.** Cite the cell, or leave the slot empty.
+- **The owner's week stays the owner's.** `agenda` reads only the copy of `meeting.json` the runner
+  names (`insights=`), and the team sees only the gap lines and decisions built from it (4.4). The
+  guard refuses a call that names the owner's weekly-insights folder, searches from or above it, or
+  globs into it; never look for another way in, and never search from `~` or `~/.claude`.
 - **Never treat mail as an input** — with one designed exception: `apply` reads the owner's reply
   to this week's 【待核准】 mail, in the recorded thread, through `proposals.py`, and answers only in
   that thread (one restate request, one confirmation). Everything else reads state from the Doc,

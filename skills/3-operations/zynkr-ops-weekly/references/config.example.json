@@ -40,7 +40,8 @@
     "main_tracker": { "id": "<sheet-id>", "type": "sheet", "tab": "<tab>", "cycle": "<e.g. 2026H2>", "$note": "overdue items + status; snapshot copies this tab. cycle keeps one half-year's item numbers apart from the next tracker's." },
     "ledger": { "id": "<sheet-id>", "folder_id": "<folder-id>", "epoch_week": "<ISO week of the first snapshot, e.g. 2026-W40>", "$note": "The machine-owned Weekly Ledger (SKB-044, references/ledger.md). NEVER change epoch_week after the first snapshot: every week's rows are computed from it." },
     "okr_kpi_tracker": { "id": "<sheet-id>", "type": "sheet", "tabs": { "kpi_dashboard": "<tab>" }, "$note": "metric backfill + off-target" },
-    "decisions_register": { "id": "<sheet-id>", "type": "sheet", "tab": "<tab>" }
+    "decisions_register": { "id": "<sheet-id>", "type": "sheet", "tab": "<tab>" },
+    "weekly_insights": { "dir": "~/.claude/weekly-insights", "wait_until": "13:00", "$note": "Optional (SKB-070). The owner's weekly-insights folder: Thursday's agenda waits until wait_until for <dir>/<ISO week>/delivered.json, then the runner copies ONLY meeting.json for it. Every beat's guard refuses any other read in this folder." }
   },
 
   "cadence": {
@@ -48,7 +49,7 @@
     "meeting_day": "THU",
     "meeting_time": "21:00",
     "rollup_cutoff": "TUE 09:00",
-    "chase_cutoff": "WED 12:00",
+    "chase_cutoff": "THU 09:00",
     "carryover_agenda_threshold": 3
   },
 
@@ -58,7 +59,7 @@
       "nudge":     { "id": "<trigger-id>", "cron": "0 9 * * 1" },
       "rollup":    { "id": "<trigger-id>", "cron": "0 9 * * 2" },
       "chase":     { "id": "<trigger-id>", "cron": "30 9 * * 2" },
-      "agenda":    { "id": "<trigger-id>", "cron": "0 17 * * 3" },
+      "agenda":    { "id": "<trigger-id>", "cron": "0 9 * * 4" },
       "decisions": { "id": "<trigger-id>", "cron": "0 22 * * 4" },
       "tidy": { "id": "<trigger-id>", "cron": "0 9 * * 5" },
       "snapshot": { "id": "<trigger-id>", "cron": "0 18 * * 5", "window": "Fri 18:00 - Sun 23:00" },
@@ -71,7 +72,9 @@
     "recap_team_from": "",
     "$recap_team_from": "Optional YYYY-MM-DD: with recap_audience team, the team starts with that Monday's recap; earlier ones still go to the owner alone. Empty = team at once.",
     "apply_mode": "shadow",
-    "$apply_mode": "shadow = apply records the owner's decisions in the Ledger and writes nothing to the Main Tracker (default, and what any other value means); live = writes approved changes (Phase 3b — refused until it ships)."
+    "$apply_mode": "shadow = apply records the owner's decisions in the Ledger and writes nothing to the Main Tracker (default, and what any other value means); live = writes approved changes (Phase 3b — refused until it ships).",
+    "notice_from": "<ISO week you install, e.g. 2026-W42>",
+    "$notice_from": "Optional (SKB-070): from this ISO week on, beats that gave up or never ran are mailed to the owner (notice). Never earlier than the install week; after a mid-week install, the next week. Missing or not a week = no notices."
   },
 
   "limits": {

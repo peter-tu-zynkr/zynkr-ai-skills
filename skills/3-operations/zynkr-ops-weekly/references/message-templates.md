@@ -11,6 +11,12 @@ for, so it is not decoration and its exact shape is frozen:
 — zynkr-ops-weekly · WB 8/24
 ```
 
+Each mode's **first line** is frozen too: Step 1 knows a mode already posted today only by the
+footer **and** that first line together (`nudge` 這週的週報開始收囉 · `chase` 還缺這幾位的週報 ·
+`agenda` 週四的議程整理好了 · `decisions` 今天談定的事 / 今天的會沒有談定的決議). Since SKB-070 two
+modes post on a Thursday, so the footer alone no longer tells them apart. The rest of each line may
+change; that opening may not (`wording.md` → frozen strings).
+
 Keep posts short. Chat scrolls; anything past a screen is not read. The Doc is where length is
 allowed to live.
 
@@ -55,12 +61,12 @@ no reason.
 Only when someone is actually missing. Naming nobody teaches people to skip the message.
 
 ```
-還缺這幾位的週報，週三中午 12:00 前補都算數
+還缺這幾位的週報，週四早上 9 點前補都算數
 
 · <Name A>
 · <Name B>
 
-議程週三下午就會整理好，沒補到的就不會出現在上面
+議程週四早上就會整理好，沒補到的就不會出現在上面
 
 — zynkr-ops-weekly · WB 8/24
 ```
@@ -70,7 +76,7 @@ mentions need an annotation payload the tool does not expose.
 
 ---
 
-## `agenda` — Wed 17:00 (pointer only)
+## `agenda` — Thu 09:00 (pointer only)
 
 The agenda itself lives in the Doc. This post is a pointer.
 
@@ -88,11 +94,17 @@ The agenda itself lives in the Doc. This post is a pointer.
 — zynkr-ops-weekly · WB 8/24
 ```
 
-If there are no decisions to make, say so plainly and say why — an agenda that pretends to have
-three decisions when the reports carried none is worse than an honest empty line:
+Each decision is phrased as the choice it asks for — 「#2.04 停了 6 週：繼續做（做到哪天）、交給誰，還是先放掉？」
+— not as a status line. Since SKB-070 the candidates come from the evidence too (4.4), not only from
+the `卡關` line.
+
+If there are still no decisions to make, say so plainly and say why — an agenda that pretends to
+have three decisions is worse than an honest empty line. This line takes the place of the 三件事
+block only: the post still opens with 「週四的議程整理好了 → <link>」 and ends with the footer, which
+is how Step 1 knows the agenda already posted.
 
 ```
-這次沒有要決定的事：大家都用舊格式回報，沒有「卡關」那行，議程就長不出決策
+這次沒有要決定的事：沒有人寫卡關，Tracker 上也沒有停住或逾期、需要拍板的項目
 ```
 
 ---
@@ -229,6 +241,11 @@ the people reading:
 | `chase` | 補件提醒 |
 | `agenda` | 週四議程 |
 | `decisions` | 會後回貼 |
+| `recap` | 週一回顧信 |
+| `tidy` | 週五整理 |
+| `propose` | 待核准信 |
+| `snapshot` | 週五快照 |
+| `apply` | 套用核准 |
 
 ```
 ⚠ 這週的<說法>沒跑完：<一句話講原因>
@@ -244,3 +261,47 @@ Concrete cases that must produce one:
 |---|---|
 | Recap mail not found in `in:sent` after sending | 信沒寄出去，決議目前只在大廳和 Doc 裡 |
 | Target Thursday section missing at rollup | 下週的區塊沒開，Apps Script 的排程可能沒裝或沒跑到 |
+
+These notices go to the space and can only be sent by a beat that is running. A beat that never
+started, hung, or gave up says nothing here; the runner's `notice` mail below covers it.
+
+---
+
+## `notice` — mail to the owner only (SKB-070)
+
+Sent by the `notice` mode when a beat of the week gave up, or its window closed before it ran. It
+goes to `google_account` and nobody else: the team learns nothing it can act on from "the robot
+broke", and the owner can.
+
+Subject, exact (the run compares it with the subjects in `in:sent` before sending, so it must not
+change between tries): `【排程沒跑完】WB 10/12 那週：週四議程、會後回貼`. Use the `label` the prompt
+gives, list the beats in the order given, joined by 、, named from the 說法 table above. With
+`rehearsal=1`, put `【演練】` in front. The prefix is deliberately not 【營運週報】: `decisions` looks for
+its own recap by subject, and must never mistake this mail for it.
+
+Body, plain text, one block per beat:
+
+```
+WB 10/12 那週有排程沒跑完：
+
+· 週四議程（agenda）— 試了三次都沒成功，這週不會再試
+  影響：週四的會沒有自動整理好的議程，要從 Doc 和大廳直接看
+  要做的事：想補就在 Claude Code 跑 /zynkr-ops-weekly agenda；不補也沒關係，下週會照常
+
+細節在 ~/Library/Logs/zynkr-ops-weekly.log
+
+〔zynkr-ops-weekly〕 notice 2026-W42
+```
+
+What each code means, in words the owner reads at a glance:
+
+| code | 說法 |
+|---|---|
+| `gaveup` | 試了三次都沒成功，這週不會再試 |
+| `failed-<n>` | 失敗 <n> 次之後，時段就過了 |
+| `never-ran` | 整個時段都沒跑到（筆電沒開、在睡，或前一步太晚才完成） |
+
+One line of impact per beat, from what that beat would have delivered: a missing `decisions` means
+no recap mail and no Ledger record of the meeting; a missing `snapshot` means Monday's recap has
+nothing to compare; a missing `propose` or `apply` means no tracker changes this week. Never guess a
+cause beyond the code.

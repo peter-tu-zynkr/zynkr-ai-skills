@@ -1,4 +1,4 @@
-# Scheduling the seven beats
+# Scheduling the beats
 
 The skill half runs on **launchd**, on Peter's Mac. The Apps Script `scaffold` half is separate
 and documented in `scaffold.md`.
@@ -22,7 +22,7 @@ does not work here, for three independent reasons — any one of them is fatal:
 `zynkr-gm` is not a counter-example: it only ever *reads* Drive and *sends* Gmail, both of which
 have connectors.
 
-## Why a heartbeat instead of seven timed jobs
+## Why a heartbeat instead of one timed job per beat
 
 The beats are anchored to **Asia/Taipei** — the company's clock. The Mac is not: it is
 currently Europe/Amsterdam, six hours behind. `StartCalendarInterval` has **no timezone field**;
@@ -34,6 +34,12 @@ So launchd supplies only a heartbeat — `:05` and `:35` every hour — and
 `scripts/run_ops_weekly.sh` decides in Taipei time whether a beat is due. Fly home and nothing
 needs re-timing. With no beat due the script exits in milliseconds without starting Claude.
 
+The decision itself lives in `scripts/beats.py` (SKB-070): the beat table, the windows, the
+prerequisites, the waits and the missed-beat notices. The runner calls `beats.py select` and reads one
+line back, `mode|week|why`; an empty mode means nothing runs this tick. Any other exit code, or a
+line of another shape, is logged as FATAL: a broken selector must never look like a quiet tick.
+`beats.py --selftest` checks every rule, and `--mutate` proves each rule is tested.
+
 ## The beat windows
 
 | Beat | Day (Taipei) | Fires | Window closes | Notes |
@@ -42,7 +48,7 @@ needs re-timing. With no beat due the script exits in milliseconds without start
 | `nudge` | Mon | 09:05 | 20:00 | Also asserts last Thursday's scaffold landed |
 | `rollup` | Tue | 09:05 | 20:00 | |
 | `chase` | Tue | 09:35 | 20:00 | Never selected until `rollup` is stamped |
-| `agenda` | Wed | 17:05 | 23:00 | |
+| `agenda` | Thu | 09:05 | 20:00 | The meeting day itself (SKB-070; until 2026-10-14, Wed 17:05–23:00). While `sources.weekly_insights` is set, it waits until `wait_until` (13:00) for the owner's weekly-insights recap of the same ISO week (`<dir>/<week>/delivered.json`); a wait starts no run, and at 13:00 it goes ahead without it |
 | `decisions` | Thu | 22:05 | 23:59 | After the 21:00 meeting, before the 23:00 scaffold |
 | `tidy` | Fri | 09:05 | 20:00 | The first morning after the Thursday scaffold |
 | `propose` | Fri | 10:05 | 17:30 | After `tidy`, which comes first in the list. 30-minute limit |
@@ -69,11 +75,32 @@ the longest normal run. `decisions` gets 20 minutes so three attempts still fit 
 23:59. `rollup` gets none until its Doc reads stop pulling all 331k characters (`SKB-044` 2.6):
 its successful runs have taken hours.
 
+## Missed beats mail the owner (`notice`, SKB-070)
+
+Until SKB-070 a beat that gave up wrote `GIVEUP` to the log and nothing else, and a beat whose window
+closed while the laptop slept wrote nothing at all. Now, on any tick with no beat due, `beats.py`
+looks at this ISO week and the last for beats with no `.done` and no `.noticed`:
+
+- **gave up** (`.gaveup`): reported at once, even while its window is still open, because it is final;
+- **failed and its window closed** (`.attempts`, after the last window of that beat: Sunday 23:00 for
+  `snapshot` and `apply`): `failed-<n>`;
+- **never ran** (no stamp at all, after its last window): `never-ran`.
+
+It skips a beat whose prerequisite has no `.done`, so one cause makes one line (`rollup` reports, the
+held `chase` does not). It skips `apply` with a `.waiting` stamp and no `.gaveup`, because an owner
+who has not replied is not a failure. It skips weeks before `routine.notice_from`. All of a week's
+beats go into one `notice` run, so a week with the lid closed makes one mail, not ten. A notice that
+reaches `ok` stamps each beat `.noticed`; one that fails is tried again two hours later
+(`<week>.notice.attempts`), and after six tries the beats are stamped anyway and the log says nobody
+was told. Notices never wait in front of a due beat: they run only on a tick with nothing else to do.
+
 ## Least privilege
 
-Each beat is invoked with only the tools it needs. `decisions` is the **only** beat given
-`send_gmail_message`; `rollup` cannot post to the space; `status` is read-only. An unattended
-agent that can post to a team space should not also be able to mail the team.
+Each beat is invoked with only the tools it needs. `decisions` is the only beat that mails the
+team; `recap` mails its configured audience, and `propose`, `apply` and `notice` mail the owner
+alone. `rollup` cannot post to the space; `notice` can read and send that one mail and nothing
+else; `status` is read-only. An unattended agent that can post to a team space should not also be
+able to mail the team.
 
 **An allowlist pre-approves; it does not forbid.** With Claude Code's permission mode set to
 `auto`, `--allowedTools` only saves the run from asking. Any other tool can still be used if the
@@ -92,17 +119,39 @@ a Doc or a Ledger row is not a target, so it passes. A hook refusal holds in eve
 which the lists above cannot promise. An error inside the guard refuses every call but a read, and a
 missing guard stops the runner before the beat starts.
 
+**The owner's private folder (SKB-070).** When `sources.weekly_insights.dir` is set, the runner
+exports it as `ZYNKR_OPS_WEEKLY_PRIVATE_DIR` to every beat. The same guard then refuses, reads
+included, a call whose path fields, Glob pattern or Bash command:
+- names the folder in any spelling (full path, `~/…`, `$HOME/…`);
+- uses an ancestor up to the home folder (`~/.claude`, `~`) as a search root or `cd` target, or with
+  a wildcard just below it (`~/.claude/weekly-insight?`); or
+- searches (Grep, Glob) from the folder, from inside it or from above it, including a pathless
+  search from a working folder above it.
+
+What a Write or a Doc merely says is not checked, so a tracker row that mentions the folder still
+saves. `agenda` reads only the copy of `meeting.json` the runner puts in the state folder. A deny
+list could not do this: `agenda` runs its scripts through Bash. A guard catches honest mistakes, not
+a command built to hide the path; the agenda's instruction to read only the copy is the rule. If the
+setting cannot be read (a typo in the config, a relative folder), the beat still runs: the runner
+guards `~/.claude/weekly-insights`, the agenda gets `insights=missing`, and the log says why. A
+typo can neither open the folder nor stop the loop.
+
 ## Installing
 
 ```sh
-cp scripts/run_ops_weekly.sh scripts/tracker_guard.py ~/.claude/skills/zynkr-ops-weekly/
+cp scripts/run_ops_weekly.sh scripts/tracker_guard.py scripts/beats.py ~/.claude/skills/zynkr-ops-weekly/
 chmod +x ~/.claude/skills/zynkr-ops-weekly/run_ops_weekly.sh
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zynkr.ops-weekly.plist
 ```
 
+The runner looks for `beats.py` and `tracker_guard.py` next to itself, and stops with FATAL when
+either is missing. The installed skill folder also keeps copies under `scripts/` and `references/`:
+update those in the same pass, or the skill's instructions and the runner disagree.
+
 Verify without side effects — `run_ops_weekly.sh --dry-run` prints the beat that is due now (or
 nothing), and `--dry-run --mode=<beat>` prints the exact tool allowlist that beat would get, its
-deny list, time limit and prompt.
+deny list, time limit and prompt. `ZYNKR_OPS_WEEKLY_NOW=2026-10-15T09:05:00+08:00` pretends it is
+that moment; the offset is required.
 
 **Never force a beat (`--mode=<beat>`) before that week's unforced run.** A forced run that
 receipts `ok` stamps the week, so the scheduled run never fires and the wiring is never proven.
@@ -124,3 +173,7 @@ and sealing it would leave the week with no snapshot at all.
 
 `decisions` carries its own guard for this case (it refuses to recap a week with no `〔自動彙整〕`
 stamp), but the seal is what keeps `agenda` from posting an agenda built from nothing.
+
+After a mid-week install, set `routine.notice_from` to the **next** ISO week. The seal covers only
+the Chat beats, so the week's other closed windows (`recap`, say) would otherwise be mailed to the
+owner as never run.

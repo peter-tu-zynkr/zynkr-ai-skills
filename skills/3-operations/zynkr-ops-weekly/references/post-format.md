@@ -19,10 +19,13 @@ and a piece of the automation has nothing to work with.
 | `上週:` | The Doc's 進度 column; `Done` removes the item from next week's skeleton, `WIP` increments `↻N週` | No carry-over tracking; items rot silently, which is diagnosis 01 |
 | `本週:` | The Doc's 本週待辦 column | Thursday has no forward-looking half |
 | `數字:` | The Doc's Metrics slots | The slot stays empty unless a configured tracker can backfill it |
-| `卡關:` | Wednesday's **≤3 decisions** | The meeting has no decision candidates and reverts to reading progress aloud |
+| `卡關:` | Thursday morning's **≤3 decisions** | The meeting has fewer decision candidates and leans on evidence alone |
 
-`卡關:` is the load-bearing line. It is the only field that forces a decision, and the whole
-point of the Thursday meeting is to make decisions rather than narrate status.
+`卡關:` is the load-bearing line. It is the only field in which a person asks for a decision, and
+the whole point of the Thursday meeting is to make decisions rather than narrate status. Since
+SKB-070 the agenda also turns evidence into decisions (an item stalled for weeks, an overdue row,
+the owner's waiting items), so an empty `卡關:` no longer empties the agenda; it still hides the
+blockers only the reporter knows about.
 
 ## Parse rules (`scripts/parse_reports.py`)
 

@@ -84,7 +84,8 @@ cannot be checked — not that it is on target.
 | Don't | Do |
 |---|---|
 | KPI off-target — 無法比對 | KPI 這欄還沒有人填數字，所以沒辦法看有沒有達標 |
-| 決議候選 — 本週 0 項 | 這次沒有要決定的事：大家都用舊格式回報，沒有「卡關」那行 |
+| 決議候選 — 本週 0 項 | 這次沒有要決定的事：沒有人寫卡關，Tracker 上也沒有停住或逾期、需要拍板的項目 |
+| Tracker 狀態不一致：#1.03 | #1.03 看起來做完了（SKB-070 已上線），Tracker 還寫進行中：要改成完成嗎？ |
 
 ## Frozen strings — never reword
 
@@ -93,6 +94,23 @@ loop write duplicates:
 
 - `〔自動彙整 <week> · <stamp>〕` — `rollup` searches the section for `〔自動彙整 <week>`
 - `— zynkr-ops-weekly · <week>` — the Chat footer every delivering beat looks for
+
+Since SKB-070 the footer alone is not enough: `agenda` and `decisions` both post on a Thursday, so
+Step 1 matches the footer **together with** each mode's opening words. These are frozen too; the rest
+of each line may change:
+
+| mode | the post opens with |
+|---|---|
+| `nudge` | 這週的週報開始收囉 |
+| `chase` | 還缺這幾位的週報 |
+| `agenda` | 週四的議程整理好了 |
+| `decisions` | 今天談定的事 · or, with nothing decided, 今天的會沒有談定的決議 |
+
+A ⚠ failure notice opens with ⚠ and so never counts as a mode's post. That is the point: a retry
+after its own failure notice must still run.
+
+The `notice` mail's subject prefix `【排程沒跑完】` is frozen for the same reason: the run finds an
+earlier send by its exact subject, and `decisions` must never mistake it for its 【營運週報】 recap.
 
 `↻N週` is also fixed: `norm_key()` in `render_block.py` strips it with the regex
 `↻\s*\d+\s*週`, so appending words to it silently breaks carry-over matching.
