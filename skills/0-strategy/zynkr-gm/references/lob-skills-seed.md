@@ -16,6 +16,10 @@ This file holds only what the KB **cannot** tell you, and which therefore has to
 4. **Tracker numbering quirks** — none since the 2026-08-21 renumber: tracker `#` now matches the LOB number (Tech = `6.x`, People = `7.x`).
    5.0 Product and 8.0 Finance have no tracker rows.
 
+Since SKB-068 each KB entry also names its **Skill Map home** (`Skill Map: <page> · <team>`, e.g.
+`Engagement · Sales`), and `## The Skill Map — six pages` lists every team with its count — so "which
+team runs this skill" and "what does the Sales team have" are KB lookups too, not this file's job.
+
 So: the KB answers *what exists*, this file answers *what to reach for and in what order*, and
 skill-finder (5.01) answers *which skill for an arbitrary task*. When the two disagree about
 whether a skill exists, **the KB wins and this file is stale** — say so in the brief rather than

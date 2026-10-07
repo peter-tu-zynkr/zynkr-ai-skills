@@ -11,9 +11,23 @@ Default output: the newest N blocks verbatim (nothing stripped).
 --json: [{date_iso, heading, line_start, line_end, body, sections:[{heading, level, text, owners}]}]
 "Metrics" pseudo-heading lines (a line that is just `Metrics` / `Metrics:`) become level-5 sections.
 
+--heading TEXT (SKB-068): any other big doc, one section at a time. Emits the section under the first
+heading whose text contains TEXT (case-insensitive; markdown escapes such as `0\\.`, bold markers, links
+and HTML entities ignored), up to the next heading of the same or a higher level. This is how the skills
+Knowledge Map is read one category at a time (`--heading "0. Strategy"`, `--heading "The Skill Map"`),
+and the VMS / plan docs one dated block at a time (`--heading "H2 2026 alignment"`, `--heading "2026-08-06 Refresh"`,
+`--heading "2026-07-28 Refresh"`). Name the dated heading: a bare "Refresh" also matches the Integrated Refresh doc's
+own title, and a level-1 title's section is the whole doc.
+Exit 1, listing the doc's top headings, when nothing matches. With --json: {heading, level, line_start,
+line_end, body}.
+
+The input is the markdown, or the file a harness saves an oversize tool result to: that is JSON
+({"result": "…"}), and is unwrapped first — read raw, it is one line with no heading in it.
+
 Python 3 stdlib only.
 """
 import argparse
+import html
 import json
 import re
 import sys
@@ -55,6 +69,67 @@ def clean_heading(text):
 
 def owners_in(text):
     return [m.group(1).strip() for m in MAILTO_LINK.finditer(text)]
+
+
+HEADING_LINE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
+
+
+def heading_key(text):
+    """A heading's text as a reader means it: `## 0\\. Strategy &amp; Leadership` → '0. strategy & leadership'."""
+    text = html.unescape(clean_heading(text))
+    text = re.sub(r"\\(.)", r"\1", text)          # Docs' markdown export escapes `0.` as `0\.`
+    return re.sub(r"\s+", " ", text.replace("__", "")).strip().casefold()
+
+
+def doc_lines(text):
+    """Lines as grep and sed count them. Not splitlines(): a Doc's in-paragraph breaks export as \\x0b, which
+    splitlines() also splits on, so its line numbers drift from the file's (397 of them in the skills KB)."""
+    return [ln.rstrip("\r") for ln in text.split("\n")]
+
+
+def extract_heading(text, needle):
+    """The section under the first heading whose text contains `needle`, up to the next heading of the
+    same or a higher level. None when no heading matches."""
+    lines = doc_lines(text)
+    want = heading_key(needle)
+    for i, line in enumerate(lines):
+        m = HEADING_LINE.match(line)
+        if not (m and want in heading_key(m.group(2))):
+            continue
+        level, end = len(m.group(1)), len(lines)
+        for j in range(i + 1, len(lines)):
+            n = HEADING_LINE.match(lines[j])
+            if n and len(n.group(1)) <= level:
+                end = j
+                break
+        return {"heading": line, "level": level, "line_start": i + 1, "line_end": end,
+                "body": "\n".join(lines[i + 1:end]).strip("\n")}
+    return None
+
+
+def top_headings(text, max_level=2):
+    return [line for line in doc_lines(text)
+            if (m := HEADING_LINE.match(line)) and len(m.group(1)) <= max_level]
+
+
+def unwrap(text):
+    """The doc's markdown. A harness that saves an oversize tool result to a file wraps it as JSON —
+    {"result": "..."} or [{"type": "text", "text": "..."}] — so the whole doc sits on one line and no
+    heading is found. Unwrap that; anything else (a doc may itself start with `[`) is used as is."""
+    s = text.lstrip()
+    if not s.startswith(("{", "[")):
+        return text
+    try:
+        obj = json.loads(s)
+    except ValueError:
+        return text
+    if isinstance(obj, dict) and isinstance(obj.get("result"), str):
+        return obj["result"]
+    if isinstance(obj, list):
+        parts = [x["text"] for x in obj if isinstance(x, dict) and isinstance(x.get("text"), str)]
+        if parts:
+            return "\n".join(parts)
+    return text
 
 
 def split_blocks(lines):
@@ -228,8 +303,69 @@ def selftest():
     assert parse_date_heading("## Sept 5, 2026") == "2026-09-05"
     assert parse_date_heading("## **Claude Code 課程**") is None
     assert parse_date_heading("### Aug 13, 2026") is None
+    # --heading: the skills Knowledge Map, one category at a time, in the shapes the Docs export writes
+    kb = KB_SAMPLE
+    s0 = extract_heading(kb, "0. Strategy")
+    assert s0 and s0["level"] == 2 and "zynkr-gm (0.02)" in s0["body"], s0
+    assert "Brand" not in s0["body"] and "content-idea" not in s0["body"], s0["body"]
+    assert "### planning-prework-pack (0.03)" in s0["body"], "a ### skill heading stays inside its category"
+    s1 = extract_heading(kb, "1. brand & marketing")
+    assert s1 and "zynkr-content-writer" in s1["body"] and "Appendix" not in s1["body"], s1
+    sm = extract_heading(kb, "The Skill Map")
+    assert sm and "Engagement — 41" in sm["body"] and "zynkr-gm" not in sm["body"], sm
+    assert extract_heading(kb, "At a glance")["body"].startswith("| Skills covered"), "first section"
+    one = extract_heading(kb, "zynkr-gm (0.02)")
+    assert one and one["level"] == 3 and "planning-prework-pack" not in one["body"], one
+    assert extract_heading(kb, "9. Legal") is None
+    assert extract_heading("## **H2 2026 alignment** (2026-08-06)\nnew\n## Body\nold", "H2 2026 alignment")["body"] == "new"
+    assert top_headings(kb)[:2] == ["# Zynkr Skills — Knowledge Map", "## At a glance"], top_headings(kb)
+    # a dump the harness saved as JSON is unwrapped; a doc that merely starts with `[` is left alone
+    assert unwrap(json.dumps({"result": kb})) == kb
+    assert unwrap(json.dumps([{"type": "text", "text": SAMPLE}])) == SAMPLE
+    linked = "[⤴ back](https://example.com)\n\n" + kb
+    assert unwrap(linked) == linked
+    assert extract(unwrap(json.dumps({"result": SAMPLE})), n=1)[0][0]["date_iso"] == "2026-08-13"
+    # line numbers are the file's: a Doc's in-paragraph break (\x0b) does not start a new line
+    vt = "## A\none\x0btwo\x0bthree\n## B\nb"
+    sb = extract_heading(vt, "B")
+    assert (sb["line_start"], sb["line_end"]) == (3, 4), sb
+    assert vt.split("\n")[sb["line_start"] - 1] == "## B"
     print("extract_newest_block selftest OK")
     return 0
+
+
+KB_SAMPLE = """# Zynkr Skills — Knowledge Map
+
+## At a glance
+
+| Skills covered | 138 index rows: 105 skills and 33 sub-agents |
+
+## The Skill Map — six pages
+
+- Index — all 138
+- Engagement — 41: Sales 12 · Consult 6
+
+## 0\\. Strategy &amp; Leadership 策略與領導
+
+### [zynkr-gm (0.02)](https://example.com/zynkr-gm)
+
+Reads the company source-of-record chain.
+Skill Map: Company teams · Leadership
+
+### planning-prework-pack (0.03)
+
+- ⟳ planning-sources.md
+
+## 1\\. Brand & Marketing 品牌與行銷
+
+### zynkr-content-writer (1.01)
+
+Sub-agents (7): content-idea (1.02)
+
+## Appendix A — sources that need attention
+
+None.
+"""
 
 
 def main(argv=None):
@@ -237,6 +373,8 @@ def main(argv=None):
     ap.add_argument("path", nargs="?", help="markdown dump of the weekly ops log (newest week on top)")
     ap.add_argument("--blocks", type=int, default=1, help="how many newest blocks to emit (default 1)")
     ap.add_argument("--json", action="store_true", help="emit JSON instead of verbatim markdown")
+    ap.add_argument("--heading", metavar="TEXT",
+                    help="emit the section under the first heading containing TEXT (any big doc), not weekly blocks")
     ap.add_argument("--selftest", action="store_true", help="run embedded sample and exit 0/1")
     args = ap.parse_args(argv)
     if args.selftest:
@@ -248,7 +386,24 @@ def main(argv=None):
     if not args.path:
         ap.error("path is required (or use --selftest)")
     with open(args.path, encoding="utf-8") as fh:
-        text = fh.read()
+        text = unwrap(fh.read())
+    if args.heading:
+        sec = extract_heading(text, args.heading)
+        if not sec:
+            print(f"no heading contains {args.heading!r}; the doc's top headings are:", file=sys.stderr)
+            for h in top_headings(text):
+                print(f"  {h}", file=sys.stderr)
+            return 1
+        if args.json:
+            json.dump(sec, sys.stdout, ensure_ascii=False, indent=2)
+            print()
+        else:
+            print(sec["heading"])
+            print()
+            print(sec["body"])
+        print(f"[extract_newest_block] section {sec['heading']!r}: lines {sec['line_start']}–{sec['line_end']}",
+              file=sys.stderr)
+        return 0
     blocks, total = extract(text, n=args.blocks)
     if not blocks:
         print("no `## <Mon DD, YYYY>` date heading found", file=sys.stderr)

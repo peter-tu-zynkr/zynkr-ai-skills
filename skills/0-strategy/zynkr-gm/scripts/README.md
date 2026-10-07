@@ -2,7 +2,7 @@
 
 | Script | One-line usage |
 |---|---|
-| `extract_newest_block.py` | `python3 scripts/extract_newest_block.py <weekly-log.md> [--blocks N] [--json]` — newest N `## <Mon DD, YYYY>` blocks of the 營運每週彙報 dump (verbatim, or JSON with per-section text) |
+| `extract_newest_block.py` | `python3 scripts/extract_newest_block.py <weekly-log.md> [--blocks N] [--json]` — newest N `## <Mon DD, YYYY>` blocks of the 營運每週彙報 dump (verbatim, or JSON with per-section text). `--heading TEXT` instead emits one section of any big doc (the skills Knowledge Map's `"0. Strategy"` or `"The Skill Map"`, a plan doc's `"2026-08-06 Refresh"` — name the dated heading, a bare `"Refresh"` matches a doc title) up to the next heading of its level; it also reads the harness's JSON-saved dump |
 | `derive_state.py` | `python3 scripts/derive_state.py rows.json --today YYYY-MM-DD [--prev prev_rows.json] [--json]` — ENDS_SOON / OVERDUE / UNDATED / CHANGED / PROPOSE_DONE per tracker row + summary + per-owner rollup |
 | `tracker_diff.py` | `python3 scripts/tracker_diff.py before.json after.json [--json]` — added / removed / changed (狀態·開始·結束·負責人·Priority) between two 「H2 專案項目」 snapshots |
 | `kpi_locate.py` | `python3 scripts/kpi_locate.py values.json --tracker 1.03` or `--metric-substring Runway` — row + A1 cells (Actual / As of / Source) on the KPI Dashboard tab, columns resolved by header text |

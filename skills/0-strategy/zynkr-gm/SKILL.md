@@ -81,6 +81,7 @@ it — do not guess IDs and do not proceed with placeholders.
 | `sources.vms_v2` · `sources.integrated_refresh` | strategy docs — read the authoritative TOP section only |
 | `sources.plan_docs.<lob>` · `sources.eae_readme` | per-function H2 plan docs — Refresh block only, on change |
 | `sources.knowledge_directory` · `sources.org_taxonomy` | governance docs (SOR precedence table, DRIs) |
+| `sources.skills_knowledge_map` | **the skills KB** (generated Doc): every skill on main, the files each reads, and its Skill Map page and team — one `## <N>. <Category>` section per read, or `## The Skill Map` for the team view; check freshness first (`references/source-map.md`) |
 | `sources.livestream_notes_folder` | health-check only: date of the newest weekly note |
 | `constraints.*` | runway floor (months), books-stale days, burn cap, **burn window**, Q3/H2 end dates |
 | `routine.*` | trigger id, cron, connectors, model, subject prefix — for `render_routine_prompt.py` |
