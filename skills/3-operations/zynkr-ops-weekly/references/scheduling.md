@@ -128,8 +128,11 @@ included, a call whose path fields, Glob pattern or Bash command:
 - searches (Grep, Glob) from the folder, from inside it or from above it, including a pathless
   search from a working folder above it.
 
-What a Write or a Doc merely says is not checked, so a tracker row that mentions the folder still
-saves. `agenda` reads only the copy of `meeting.json` the runner puts in the state folder. A deny
+Each path is read the way the shell and the disk read it, not as raw text: the command split into
+words as a shell splits it (quotes and escapes undone, `--flag=value` split), `~`, `$HOME` and
+`file://` unwrapped, a relative word joined to the working folder, `.`, `..` and `//` folded, and case
+ignored, as on a macOS disk. What a Write or a Doc merely says is not checked, so a tracker row that
+mentions the folder still saves. `agenda` reads only the copy of `meeting.json` the runner puts in the state folder. A deny
 list could not do this: `agenda` runs its scripts through Bash. A guard catches honest mistakes, not
 a command built to hide the path; the agenda's instruction to read only the copy is the rule. If the
 setting cannot be read (a typo in the config, a relative folder), the beat still runs: the runner

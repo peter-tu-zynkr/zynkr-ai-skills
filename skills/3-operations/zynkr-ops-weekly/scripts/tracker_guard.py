@@ -29,6 +29,7 @@ private_reason() for what a guard can and cannot promise.
 import json
 import os
 import re
+import shlex
 import sys
 
 READ_PREFIXES = ("get_", "read_", "list_", "search_", "check_", "query_", "fetch_",
@@ -76,109 +77,135 @@ def targets(node, tid):
 def private_dir():
     """The owner's private weekly-insights folder (SKB-070), absolute, or '' when not set."""
     folder = os.environ.get("ZYNKR_OPS_WEEKLY_PRIVATE_DIR", "").strip()
-    return os.path.normpath(os.path.expanduser(folder)) if folder else ""
+    return os.path.normpath(os.path.expandvars(os.path.expanduser(folder))) if folder else ""
 
 
-def spellings(path, home):
-    """The ways a tool input may write a path that sits under the home folder."""
-    out = [path]
-    if path == home or path.startswith(home + os.sep):
-        rest = path[len(home):]
-        out += ["~" + rest, "$HOME" + rest, "${HOME}" + rest]
-    return out
-
-
-START = r"(?:^|(?<=[\s\"'=:(<>]))"     # a path starts the input, or follows a space, quote, = : ( < >
-ENDS = r"(?=$|[\s\"';&|)<>])"           # ... and ends right there
-GLOB_BELOW = r"/[^\s/\"']*[*?\[]"       # ... or the next part of it is a wildcard
 # Fields that name a file or a place, at any depth: file_path, path, fileUrl (a Drive upload takes a
 # file:// URL), attachments, folder… A Doc's text, a mail body or a Write's content is never one.
 PATHISH = re.compile(r"(?:path|file|url|uri|dir|folder|attach)", re.I)
+WILDCARD = "*?[{"
 
 
-def pathish_values(node, under=False):
+def pathish_values(node, under_path=False):
     """Every string that sits in a path-like field of a tool input, at any depth."""
     out = []
     if isinstance(node, dict):
         for key, value in node.items():
-            out += pathish_values(value, under or (isinstance(key, str) and bool(PATHISH.search(key))))
+            out += pathish_values(value, under_path or (isinstance(key, str) and bool(PATHISH.search(key))))
     elif isinstance(node, list):
         for value in node:
-            out += pathish_values(value, under)
-    elif isinstance(node, str) and under:
+            out += pathish_values(value, under_path)
+    elif isinstance(node, str) and under_path:
         out.append(node)
     return out
 
 
-def resolved(text):
-    """A path as the file system will see it: file:// and ~ and $HOME unwrapped, .. folded."""
-    text = re.sub(r"^file://", "", text.strip())
-    if text.startswith(("/", "~", "$")):
-        return os.path.normpath(os.path.expandvars(os.path.expanduser(text)))
-    return text
+def shell_words(command):
+    """The words a shell would see in a command: quotes and escapes undone, ; & | < > ( ) split off,
+    and the value of a --flag=value as a word of its own. An unbalanced quote falls back to spaces."""
+    try:
+        lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        words = list(lex)
+    except ValueError:
+        words = command.split()
+    return words + [w.split("=", 1)[1] for w in words if "=" in w]
 
 
-def glob_root(pattern):
-    """The folder an absolute Glob pattern searches: its parts up to the first wildcard."""
-    p = resolved(pattern) if isinstance(pattern, str) else ""
-    if not p.startswith("/"):
+def as_path(word, cwd):
+    """A word as the file system would take it: file://, ~ and $HOME unwrapped, a relative word joined
+    to the working folder, . and .. and doubled slashes folded, lower-cased because a macOS disk ignores
+    case. '' when there is no telling where a relative word points."""
+    w = re.sub(r"^file://", "", word.strip())
+    if not w:
         return ""
+    w = os.path.expandvars(os.path.expanduser(w))
+    if not w.startswith("/"):
+        if not cwd:
+            return ""
+        w = os.path.join(cwd, w)
+    return os.path.normpath(re.sub(r"^/+", "/", w)).lower()
+
+
+def fixed_part(path):
+    """A path up to its first wildcard part: the folder a wildcard starts matching from."""
     fixed = []
-    for part in p.split("/"):
-        if any(c in part for c in "*?[{"):
+    for part in path.split("/"):
+        if any(c in part for c in WILDCARD):
             break
         fixed.append(part)
     return "/".join(fixed) or "/"
 
 
+def under(path, folder):
+    return path == folder or path.startswith(folder.rstrip("/") + "/")
+
+
+def reaches(path, folder, home):
+    """True when a resolved path opens the folder: the folder or anything in it, an ancestor of it
+    inside the home folder (~ or ~/.claude: a search root or a cd target), or a wildcard that starts
+    matching inside the folder or at such an ancestor. Ancestors above home (/, /Users) are left to
+    the Grep and Glob rule: as Bash words they are mostly not paths at all, but code (`{`, `*`) that
+    lands on / once joined to the launchd working folder."""
+    if not path:
+        return False
+    if any(c in path for c in WILDCARD):
+        start = fixed_part(path)
+        return under(start, folder) or (under(folder, start) and under(start, home))
+    if under(path, folder):
+        return True
+    return under(folder, path) and under(path, home)
+
+
 def private_reason(event):
     """None to allow, or the reason for refusing a call that reaches into the private folder.
 
-    Only where a call says what it opens counts: the path fields of any tool (an MCP upload or
-    attachment names its file there too), a Glob pattern and a Bash command. What a Write or a Doc
-    says is never a read, so a tracker row that mentions the folder still passes. Three ways in are
-    refused:
-    1. the folder itself, or anything below it, in any spelling;
-    2. an ancestor up to the home folder (~/.claude, ~) used as a whole path, which is a search
-       root or a cd target, or with a wildcard just below it (`~/.claude/weekly-insight?`);
-    3. a Grep or Glob whose search root, its path or else the working folder, is the folder,
-       inside it, or above it: a search from / or from ~ walks into it.
-    A guard cannot read intent: a command that hides the path from it still gets through. It
-    catches the honest mistakes; the agenda's instruction to read only the copy is the rule.
+    Only where a call says what it opens counts: the path fields of any tool (an MCP upload or an
+    attachment names its file there too), a Glob pattern, and the words of a Bash command. What a
+    Write or a Doc says is never a read, so a tracker row that mentions the folder still saves.
+
+    Every candidate is read the way the shell and the disk will read it, not as raw text: the
+    command is split into words as a shell splits them (quotes and escapes undone, --flag=value
+    split), ~, $HOME and file:// unwrapped, a relative word joined to the working folder, . .. and //
+    folded, and case ignored, as it is on a macOS disk. A candidate is refused when it is the folder
+    or inside it, an ancestor of it up to the home folder (~/.claude or ~, a search root or a cd
+    target), or a wildcard that starts matching at or above it. A Grep is also refused when it
+    searches from the folder or from anywhere above it, / included, which a pathless Grep from the
+    launchd working folder does.
+
+    A guard cannot read intent: a path built at run time (a variable, a command substitution, a
+    symlink made earlier) still gets through. It catches the ways a beat might reach the folder by
+    mistake; the agenda's instruction to read only the copy is the rule.
     """
-    folder = private_dir()
-    tool = event.get("tool_name") or ""
+    folder = private_dir().lower()
     if not folder:
         return None
-    home = os.path.normpath(os.path.expanduser("~"))
+    home = os.path.normpath(os.path.expanduser("~")).lower()
+    tool = event.get("tool_name") or ""
     args = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
-    paths = pathish_values(args)
-    said = paths + [resolved(p) for p in paths]
-    if tool == "Bash":
-        said.append(args.get("command"))
-    if tool == "Glob":
-        said += [args.get("pattern"), resolved(args.get("pattern") or "")]
-    blob = "\n".join(s for s in said if isinstance(s, str))
-    refuse = ("zynkr-ops-weekly guard: %s is the owner's private weekly-insights folder, and this call "
-              "reaches into it. Read only the copy the prompt names (insights=...); search from a "
-              "folder that does not contain it. Do not retry another way." % folder)
-    for s in spellings(folder, home):
-        if re.search(START + re.escape(s) + r"(?:" + ENDS + "|/)", blob):
-            return refuse
-    above = os.path.dirname(folder)
-    while above and (above == home or above.startswith(home + os.sep)):
-        for s in spellings(above, home):
-            if re.search(START + re.escape(s) + r"(?:" + ENDS + "|/" + ENDS + "|" + GLOB_BELOW + ")", blob):
-                return refuse
-        if above == home:
-            break
-        above = os.path.dirname(above)
-    if tool in ("Grep", "Glob"):
-        root = args.get("path") or (tool == "Glob" and glob_root(args.get("pattern"))) or event.get("cwd") or ""
-        root = resolved(root) if isinstance(root, str) and root else ""
-        if root and (root == folder or root.startswith(folder + os.sep)
-                     or folder.startswith(root.rstrip(os.sep) + os.sep)):
-            return refuse
+    cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else ""
+    words = pathish_values(args)
+    if tool == "Bash" and isinstance(args.get("command"), str):
+        words += shell_words(args["command"])
+    glob_at = ""
+    if tool == "Glob" and isinstance(args.get("pattern"), str):
+        pattern = args["pattern"]
+        base = args.get("path") if isinstance(args.get("path"), str) and args.get("path") else cwd
+        glob_at = pattern if pattern.startswith(("/", "~", "$")) or not base else os.path.join(base, pattern)
+        words.append(glob_at)
+    hit = any(reaches(as_path(w, cwd), folder, home) for w in words if isinstance(w, str))
+    if not hit and tool in ("Grep", "Glob"):
+        # Grep and Glob walk a whole tree: refused from the folder, inside it, or anywhere above it, /
+        # included, which is where a pathless search from the launchd working folder starts.
+        if tool == "Grep":
+            root = as_path(args.get("path") or cwd or "", cwd)
+        else:
+            root = fixed_part(as_path(glob_at, cwd)) if glob_at else ""
+        hit = bool(root) and (under(root, folder) or under(folder, root))
+    if hit:
+        return ("zynkr-ops-weekly guard: %s is the owner's private weekly-insights folder, and this call "
+                "reaches into it. Read only the copy the prompt names (insights=...); search from a "
+                "folder that does not contain it. Do not retry another way." % private_dir())
     return None
 
 
@@ -304,7 +331,25 @@ PRIVATE_CASES = [
     ("Bash reading the config under $HOME", "agenda", "Bash",
      {"command": 'cat "${ZYNKR_OPS_WEEKLY_CONFIG:-$HOME/.config/zynkr/ops-weekly.json}"'}, 0),
     ("a saved row that names the folder is no read", "snapshot", "Write",
-     {"file_path": "/tmp/run/rows.json", "content": "3.22 weekly-insights keeps its week in ~/.claude/weekly-insights"}, 0),
+     {"file_path": "/tmp/run/rows.json", "content": "~/.claude/weekly-insights/2026-W42/report.md"}, 0),
+    # the shell and the disk read a path differently from raw text: quotes, escapes, case, //, --flag=
+    ("a quoted name", "agenda", "Bash", {"command": "cat ~/.claude/'weekly-insights'/2026-W42/report.md"}, 2),
+    ("an escaped name", "agenda", "Bash", {"command": "cat ~/.claude/weekly\\-insights/2026-W42/report.md"}, 2),
+    ("the name in another case", "agenda", "Read", {"file_path": HOME + "/.claude/Weekly-Insights/2026-W42/report.md"}, 2),
+    ("doubled and dotted slashes", "agenda", "Bash",
+     {"command": "cat //home/selftest/.claude/./weekly-insights//2026-W42/report.md"}, 2),
+    ("a --flag=path", "agenda", "Bash",
+     {"command": "python3 x.py --input=~/.claude/weekly-insights/2026-W42/digest.md"}, 2),
+    ("a relative path from ~/.claude", "agenda", "Bash", {"command": "cat weekly-insights/2026-W42/report.md"}, 2,
+     HOME + "/.claude"),
+    ("ls / reads nothing of the folder", "agenda", "Bash", {"command": "ls /"}, 0),
+    ("a Glob from / by its path", "agenda", "Glob", {"pattern": "**/*.md", "path": "/"}, 2),
+    ("a pathless relative Glob from /", "agenda", "Glob", {"pattern": "**/report.md"}, 2, "/"),
+    ("code with braces and stars from /", "decisions", "Bash",
+     {"command": "python3 -c \"import json; d={'a': [1, 2]}; print(d['a'][0] * 2)\""}, 0, "/"),
+    ("the config read from /", "rollup", "Bash",
+     {"command": 'cat "${ZYNKR_OPS_WEEKLY_CONFIG:-$HOME/.config/zynkr/ops-weekly.json}"; ls ~/.claude/skills/zynkr-ops-weekly'},
+     0, "/"),
     ("a Doc that mentions the folder is no read", "agenda", GW + "batch_update_doc",
      {"document_id": "1DOC", "operations": [{"text": PRIVATE}]}, 0),
     ("a Drive upload by file:// URL", "agenda", GW + "create_drive_file",
@@ -399,29 +444,45 @@ MUTATIONS = [
         ("        print(reason, file=sys.stderr)\n        return 2", "        print(reason, file=sys.stderr)\n        return 0")]),
     ("private folder not checked", [
         ("    if not folder:\n        return None\n    home", "    return None\n    home")]),
-    ("only the full path is spelled", [
-        ('        out += ["~" + rest, "$HOME" + rest, "${HOME}" + rest]', "        pass")]),
+    ("case matters", [
+        ('    return os.path.normpath(re.sub(r"^/+", "/", w)).lower()', '    return os.path.normpath(re.sub(r"^/+", "/", w))')]),
+    (".. not folded", [
+        ('    return os.path.normpath(re.sub(r"^/+", "/", w)).lower()', '    return re.sub(r"^/+", "/", w).lower()')]),
+    ("doubled slashes kept", [
+        ('os.path.normpath(re.sub(r"^/+", "/", w))', "os.path.normpath(w)")]),
+    ("quotes not undone", [
+        ("        words = list(lex)", "        words = command.split()")]),
+    ("--flag=path not split", [
+        ('    return words + [w.split("=", 1)[1] for w in words if "=" in w]', "    return words")]),
+    ("relative words dropped", [
+        ("        w = os.path.join(cwd, w)", '        return ""')]),
+    ("wildcards ignored", [
+        ("    if any(c in path for c in WILDCARD):\n        start = fixed_part(path)",
+         "    if False:\n        start = fixed_part(path)")]),
     ("ancestors not checked", [
-        ("    while above and (above == home or above.startswith(home + os.sep)):", "    while False:")]),
-    ("a wildcard below an ancestor allowed", [
-        (' + "|" + GLOB_BELOW + ")"', ' + ")"')]),
-    ("search roots not checked", [
-        ('    if tool in ("Grep", "Glob"):', "    if False:")]),
-    ("a pathless search ignores cwd", [
-        (' or event.get("cwd") or ""', ' or ""')]),
+        ("    return under(folder, path) and under(path, home)", "    return False")]),
+    ("ancestors outside home refused", [
+        ("    return under(folder, path) and under(path, home)", "    return under(folder, path)")]),
+    ("Grep and Glob roots not checked", [
+        ('    if not hit and tool in ("Grep", "Glob"):', "    if False:")]),
+    ("wildcard ancestors above home refused", [
+        ("        return under(start, folder) or (under(folder, start) and under(start, home))",
+         "        return under(start, folder) or under(folder, start)")]),
+    ("a Glob root ignores its pattern", [
+        ("            root = fixed_part(as_path(glob_at, cwd)) if glob_at else \"\"", '            root = ""')]),
+    ("a pathless Grep ignores cwd", [
+        ('root = as_path(args.get("path") or cwd or "", cwd)', 'root = as_path(args.get("path") or "", cwd)')]),
+    ("a relative Glob ignores its path", [
+        ('pattern if pattern.startswith(("/", "~", "$")) or not base else os.path.join(base, pattern)', "pattern")]),
     ("private: payload fields checked too", [
-        ('    blob = "\\n".join(s for s in said if isinstance(s, str))', "    blob = json.dumps(args, ensure_ascii=False)")]),
+        ("    words = pathish_values(args)\n", "    words = pathish_values(args, True)\n")]),
     ("file:// URLs not unwrapped", [
-        ('    text = re.sub(r"^file://", "", text.strip())', "    text = text.strip()")]),
+        ('    w = re.sub(r"^file://", "", word.strip())', "    w = word.strip()")]),
     ("lists under a path field skipped", [
         ("    elif isinstance(node, list):", "    elif False:")]),
-    (".. not folded", [
-        ("        return os.path.normpath(os.path.expandvars(os.path.expanduser(text)))",
-         "        return os.path.expandvars(os.path.expanduser(text))")]),
-    ("an absolute Glob searches from cwd", [
-        ('(tool == "Glob" and glob_root(args.get("pattern")))', "False")]),
     ("MCP calls not checked", [
-        ("    if not folder:\n        return None\n    home", '    if not folder or tool.startswith("mcp__"):\n        return None\n    home')]),
+        ("    if not folder:\n        return None\n    home",
+         '    if not folder or (event.get("tool_name") or "").startswith("mcp__"):\n        return None\n    home')]),
     ("a private refusal exits 0", [
         ("        print(preason, file=sys.stderr)\n        return 2", "        print(preason, file=sys.stderr)\n        return 0")]),
     ("private check after the config", [
