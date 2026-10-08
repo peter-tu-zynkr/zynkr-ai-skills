@@ -244,6 +244,17 @@ def private_reason(event):
         glob_at = pattern if pattern.startswith(("/", "~", "$")) or not base else os.path.join(base, pattern)
         words.append(glob_at)
     hit = any(reaches(as_path(w, cwd), folder, home) for w in words if isinstance(w, str))
+    if not hit and tool == "Bash" and isinstance(args.get("command"), str):
+        # Follow cd inside the command: `cd ~/.claude/skills && cd ../weekly-insights` moves the folder
+        # the next relative word is read from. A bare cd goes home.
+        here, said = cwd, shell_words(args["command"])
+        for i, w in enumerate(said):
+            if reaches(as_path(w, here), folder, home):
+                hit = True
+                break
+            if w in ("cd", "pushd"):
+                nxt = said[i + 1] if i + 1 < len(said) else ""
+                here = home if not nxt or nxt in (";", "&&", "||", "|", "&") else (as_path(nxt, here) or here)
     if not hit:
         texts = pathish_values(args) + [args.get("command") if tool == "Bash" else None,
                                         args.get("pattern") if tool == "Glob" else None]
@@ -413,6 +424,12 @@ PRIVATE_CASES = [
     ("a quote mid-name, ancestor", "agenda", "Bash", {"command": "grep -r Atlas ~/.cl'aude'"}, 2),
     ("code that names the folder in another case", "agenda", "Bash",
      {"command": "python3 -c \"print(open('/HOME/SELFTEST/.claude/Weekly-Insights/x').read())\""}, 2),
+    ("a cd chain that walks back in", "agenda", "Bash",
+     {"command": "cd ~/.claude/skills && cd ../weekly-insights && cat 2026-W42/report.md"}, 2, "/"),
+    ("a bare cd, then a relative path", "agenda", "Bash",
+     {"command": "cd && cat .claude/weekly-insights/2026-W42/report.md"}, 2, "/"),
+    ("a cd into the skill, then its files", "agenda", "Bash",
+     {"command": "cd ~/.claude/skills/zynkr-ops-weekly/references; cat post-format.md routing.md"}, 0, "/"),
     ("bash $'…' quoting", "agenda", "Bash",
      {"command": "cat ~/.claude/$'\\x77eekly-insights'/2026-W42/report.md"}, 2),
     ("~+ from ~/.claude", "agenda", "Bash", {"command": "cat ~+/weekly-insights/2026-W42/report.md"}, 2, HOME + "/.claude"),
@@ -565,6 +582,12 @@ MUTATIONS = [
         ('        w = re.sub(r"^~\\+(?=/|$)", lambda m: cwd, w)', "        pass")]),
     ("$PWD not expanded", [
         ('        w = re.sub(r"\\$\\{PWD\\}|\\$PWD\\b", lambda m: cwd, w)', "        pass")]),
+    ("cd not followed", [
+        ('                here = home if not nxt or nxt in (";", "&&", "||", "|", "&") else (as_path(nxt, here) or here)',
+         "                pass")]),
+    ("a bare cd stays put", [
+        ('here = home if not nxt or nxt in (";", "&&", "||", "|", "&") else (as_path(nxt, here) or here)',
+         'here = here if not nxt or nxt in (";", "&&", "||", "|", "&") else (as_path(nxt, here) or here)')]),
     ("raw text not searched", [
         ("    if not hit:\n        texts = pathish_values(args)", "    if False:\n        texts = pathish_values(args)")]),
     ("raw text: ancestors not searched", [
