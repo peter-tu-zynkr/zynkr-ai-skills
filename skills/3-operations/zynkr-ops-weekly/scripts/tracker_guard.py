@@ -100,9 +100,23 @@ def pathish_values(node, under_path=False):
     return out
 
 
+ANSI_C = re.compile(r"\$'((?:[^'\\]|\\.)*)'")
+
+
+def _ansi_c(match):
+    """bash's $'…' quoting, decoded the way bash decodes it (\\x77 is w), then quoted plainly."""
+    try:
+        text = match.group(1).encode("latin-1", "backslashreplace").decode("unicode_escape")
+    except Exception:  # noqa: BLE001 - an undecodable escape stays as written
+        text = match.group(1)
+    return shlex.quote(text)
+
+
 def shell_words(command):
-    """The words a shell would see in a command: quotes and escapes undone, ; & | < > ( ) split off,
-    and the value of a --flag=value as a word of its own. An unbalanced quote falls back to spaces."""
+    """The words a shell would see in a command: $'…' decoded, quotes and escapes undone, ; & | < > ( )
+    split off, and the value of a --flag=value as a word of its own. An unbalanced quote falls back
+    to spaces."""
+    command = ANSI_C.sub(_ansi_c, command).replace('$"', '"')
     try:
         lex = shlex.shlex(command, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
@@ -119,6 +133,9 @@ def as_path(word, cwd):
     w = re.sub(r"^file://", "", word.strip())
     if not w:
         return ""
+    if cwd:                                   # ~+ and $PWD are the working folder, not the hook's own
+        w = re.sub(r"^~\+(?=/|$)", lambda m: cwd, w)
+        w = re.sub(r"\$\{PWD\}|\$PWD\b", lambda m: cwd, w)
     w = os.path.expandvars(os.path.expanduser(w))
     if not w.startswith("/"):
         if not cwd:
@@ -139,6 +156,39 @@ def fixed_part(path):
 
 def under(path, folder):
     return path == folder or path.startswith(folder.rstrip("/") + "/")
+
+
+# The raw-text view: a path can also sit inside a quoted string of code (python3 -c "open('…')"), where
+# the shell sees one word that does not look like a path at all. So the text is searched too, case
+# ignored, for the folder in each spelling, and for an ancestor inside home that ends right there or
+# has a wildcard just below it.
+START = r"(?:^|(?<=[\s\"'=:(<>,\[]))"   # a path starts the text, or follows a space, quote, = : ( < > , [
+ENDS = r"(?=$|[\s\"';&|)<>,\]])"         # ... and ends right there
+GLOB_BELOW = r"/[^\s/\"']*[*?\[]"        # ... or the next part of it is a wildcard
+
+
+def spellings(path, home):
+    """The ways a text may write a path that sits under the home folder."""
+    out = [path]
+    if path == home or path.startswith(home + "/"):
+        rest = path[len(home):]
+        out += ["~" + rest, "$HOME" + rest, "${HOME}" + rest]
+    return out
+
+
+def raw_hit(text, folder, home):
+    for s in spellings(folder, home):
+        if re.search(START + re.escape(s) + r"(?:" + ENDS + "|/)", text, re.I):
+            return True
+    above = os.path.dirname(folder)
+    while above and under(above, home):
+        for s in spellings(above, home):
+            if re.search(START + re.escape(s) + r"(?:" + ENDS + "|/" + ENDS + "|" + GLOB_BELOW + ")", text, re.I):
+                return True
+        if above == home:
+            break
+        above = os.path.dirname(above)
+    return False
 
 
 def reaches(path, folder, home):
@@ -194,6 +244,11 @@ def private_reason(event):
         glob_at = pattern if pattern.startswith(("/", "~", "$")) or not base else os.path.join(base, pattern)
         words.append(glob_at)
     hit = any(reaches(as_path(w, cwd), folder, home) for w in words if isinstance(w, str))
+    if not hit:
+        texts = pathish_values(args) + [args.get("command") if tool == "Bash" else None,
+                                        args.get("pattern") if tool == "Glob" else None]
+        hit = raw_hit("\n".join(t for t in texts if isinstance(t, str)), private_dir(),
+                      os.path.normpath(os.path.expanduser("~")))
     if not hit and tool in ("Grep", "Glob"):
         # Grep and Glob walk a whole tree: refused from the folder, inside it, or anywhere above it, /
         # included, which is where a pathless search from the launchd working folder starts.
@@ -344,6 +399,30 @@ PRIVATE_CASES = [
      HOME + "/.claude"),
     ("ls / reads nothing of the folder", "agenda", "Bash", {"command": "ls /"}, 0),
     ("a Glob from / by its path", "agenda", "Glob", {"pattern": "**/*.md", "path": "/"}, 2),
+    # cases only one view can catch: quotes break the raw text but not the shell's words, and a path
+    # inside a string of code is no word of its own but is plain in the raw text
+    ("quoted, in another case", "agenda", "Bash", {"command": "cat ~/.claude/'Weekly-Insights'/2026-W42/report.md"}, 2),
+    ("a quoted --flag=path", "agenda", "Bash",
+     {"command": "python3 x.py --input=~/.claude/'weekly-insights'/2026-W42/digest.md"}, 2),
+    ("a quoted wildcard", "agenda", "Bash", {"command": "cat ~/.claude/'weekly-insight'?/2026-W42/report.md"}, 2),
+    ("a quoted ancestor", "agenda", "Bash", {"command": "grep -r Atlas ~/'.claude'"}, 2),
+    ("a quote mid-name, another case", "agenda", "Bash", {"command": "cat ~/.cl'aude'/Weekly-Insights/2026-W42/report.md"}, 2),
+    ("a quote mid-name, --flag=path", "agenda", "Bash",
+     {"command": "python3 x.py --input=~/.cl'aude'/weekly-insights/2026-W42/digest.md"}, 2),
+    ("a quote mid-name, wildcard", "agenda", "Bash", {"command": "cat ~/.cl'aude'/weekly-insight?/2026-W42/report.md"}, 2),
+    ("a quote mid-name, ancestor", "agenda", "Bash", {"command": "grep -r Atlas ~/.cl'aude'"}, 2),
+    ("code that names the folder in another case", "agenda", "Bash",
+     {"command": "python3 -c \"print(open('/HOME/SELFTEST/.claude/Weekly-Insights/x').read())\""}, 2),
+    ("bash $'…' quoting", "agenda", "Bash",
+     {"command": "cat ~/.claude/$'\\x77eekly-insights'/2026-W42/report.md"}, 2),
+    ("~+ from ~/.claude", "agenda", "Bash", {"command": "cat ~+/weekly-insights/2026-W42/report.md"}, 2, HOME + "/.claude"),
+    ("$PWD from ~/.claude", "agenda", "Bash", {"command": "cat $PWD/weekly-insights/2026-W42/report.md"}, 2, HOME + "/.claude"),
+    ("a path inside quoted code", "agenda", "Bash",
+     {"command": "python3 -c \"print(open('" + PRIVATE + "/2026-W42/report.md').read())\""}, 2),
+    ("an ancestor inside quoted code", "agenda", "Bash",
+     {"command": "python3 -c \"import os; print(os.listdir(os.path.expanduser('~/.claude')))\""}, 2),
+    ("code that opens its own tool results", "agenda", "Bash",
+     {"command": "python3 -c \"import json; t=json.load(open('" + HOME + "/.claude/projects/-/abc/tool-results/x.txt'))\""}, 0, "/"),
     ("a pathless relative Glob from /", "agenda", "Glob", {"pattern": "**/report.md"}, 2, "/"),
     ("code with braces and stars from /", "decisions", "Bash",
      {"command": "python3 -c \"import json; d={'a': [1, 2]}; print(d['a'][0] * 2)\""}, 0, "/"),
@@ -480,6 +559,20 @@ MUTATIONS = [
         ('    w = re.sub(r"^file://", "", word.strip())', "    w = word.strip()")]),
     ("lists under a path field skipped", [
         ("    elif isinstance(node, list):", "    elif False:")]),
+    ("$'…' not decoded", [
+        ("    command = ANSI_C.sub(_ansi_c, command).replace('$\"', '\"')", "    pass")]),
+    ("~+ not expanded", [
+        ('        w = re.sub(r"^~\\+(?=/|$)", lambda m: cwd, w)', "        pass")]),
+    ("$PWD not expanded", [
+        ('        w = re.sub(r"\\$\\{PWD\\}|\\$PWD\\b", lambda m: cwd, w)', "        pass")]),
+    ("raw text not searched", [
+        ("    if not hit:\n        texts = pathish_values(args)", "    if False:\n        texts = pathish_values(args)")]),
+    ("raw text: ancestors not searched", [
+        ("    above = os.path.dirname(folder)\n    while above and under(above, home):",
+         "    above = os.path.dirname(folder)\n    while False:")]),
+    ("raw text: case matters", [
+        ('        if re.search(START + re.escape(s) + r"(?:" + ENDS + "|/)", text, re.I):',
+         '        if re.search(START + re.escape(s) + r"(?:" + ENDS + "|/)", text):')]),
     ("MCP calls not checked", [
         ("    if not folder:\n        return None\n    home",
          '    if not folder or (event.get("tool_name") or "").startswith("mcp__"):\n        return None\n    home')]),
