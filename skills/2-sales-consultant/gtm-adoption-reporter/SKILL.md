@@ -116,7 +116,8 @@ this repo (workspace ids, user emails and go-live dates are client
 PII/commercials — never commit the file to this or any repo). Read it every run. Expected per
 client: `company` (as named on the CRM deal) · `workspace_id` (platform.zynkr.ai
 workspace uuid) · `user_emails` · `features` (as in `crm_ai_usage.feature`) ·
-`go_live` (YYYY-MM-DD).
+`go_live` (YYYY-MM-DD). The shape, with blanks only, is in
+`./references/adoption-config.example.md`.
 
 Degradation ladder (never a hard stop): **row missing for this client** → fall
 back to the deal's CRM contact emails as the user set, resolve the workspace
@@ -307,6 +308,15 @@ A compact artifact table, then the headline in prose:
   honest report after it; the coverage section makes the gap a deliverable.
 - **Config out-of-repo.** Workspace ids, client emails and go-live dates never
   sit in a public repo — same pattern as guest-lecturer-program's config.
+- **The SQL it keeps, by name.** Three reads stay in SQL because no zynkr MCP
+  tool serves them: `crm_ai_usage` itself (step 3), and a
+  client's users and workspace memberships (steps 1 and 3d) —
+  `list_workspace_members` sees only the caller's own workspace.
+  `get_quota_status` is no substitute: it returns only `exempt`, `month_tokens`
+  and `minute_requests`, for the token's own workspace and the current month.
+  Step 1's deal lookup goes through the zynkr MCP first, with SQL as the
+  fallback; its contact-email read is still SQL, though `get_contact` on the
+  deal's `contact_id` could serve it.
 - **Introspect-first.** The platform ships weekly; the reference SQL is a
   starting point, not a contract.
 - **Table-first, no charts.** Docs render tables losslessly; charts go stale
@@ -325,6 +335,8 @@ A compact artifact table, then the headline in prose:
 - `./references/adoption-report-template.md` — the zh-TW report skeleton (fill
   all placeholders, delete its comment blocks); its 資料覆蓋範圍 comment lists
   the canonical caveat cases. Keep that section even when coverage is perfect.
+- `./references/adoption-config.example.md` — the shape of the local
+  `adoption-config.md`, blanks only (Configuration above).
 
 ## Limitations
 

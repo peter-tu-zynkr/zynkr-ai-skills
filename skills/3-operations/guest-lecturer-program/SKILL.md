@@ -28,7 +28,7 @@ A stage-based playbook for running Zynkr's external guest-lecturer collaboration
 
 ## Configuration
 
-All commercial terms live in a **local** `program-config.md` maintained outside this repo (they are business-confidential and vary by negotiation). Read it at the start of every run. Expected fields:
+All commercial terms live in a **local** `program-config.md` maintained outside this repo (they are business-confidential and vary by negotiation). Read it at the start of every run. Expected fields (an example with blanks only: `./references/program-config.example.md`):
 
 - `revenue_split`: per-plan split ratios by registration source
 - `hourly_revenue_floor`: minimum gross ticket revenue per course-hour used to compute the go/no-go attendance threshold

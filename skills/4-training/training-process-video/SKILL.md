@@ -47,7 +47,7 @@ Wait for the user to type a number.
 
 After selection:
 - Store the absolute path to the selected stream directory as `STREAM_DIR` (e.g., `<your-training-design-root>/4.4 claude-code-for-operation`)
-- Read `[STREAM_DIR]/stream-config.md` to load all stream configuration
+- Read `[STREAM_DIR]/stream-config.md` to load all stream configuration (its shape, with blanks only: `./references/stream-config.example.md`)
 - From the config, extract and store:
   - `course_outline`: filename of the course outline file (e.g., `4.4.1 course.md`)
   - `chapter_prefix`: prefix used for chapter files (e.g., `claude-code-ops`)

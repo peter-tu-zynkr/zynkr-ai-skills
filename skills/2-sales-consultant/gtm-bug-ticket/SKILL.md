@@ -103,7 +103,8 @@ never the record's link or anyone's email.
 
 Repo routing lives in a **local** `bug-routing-config.md` maintained outside
 this repo (client repo mappings are business-confidential; ask Peter where his
-copy lives on first run). Read it at the start of every run. Expected shape:
+copy lives on first run). Read it at the start of every run. Expected shape (an
+example with blanks only: `./references/bug-routing-config.example.md`):
 
 - **Client map** — `company → github repo`, one row per client. Client
   assistants may live in per-client repos, so a client row always outranks a
@@ -303,6 +304,8 @@ Bug 單已建立：[宏宇精密] 報價單送出後畫面凍結
   Environment / Repro / Expected vs Actual / Severity / Client impact / Links)
   with the PII rule restated at the top; fill it, delete its comment blocks,
   and present it at the gate.
+- `./references/bug-routing-config.example.md` — the shape of the local
+  `bug-routing-config.md`, blanks only (Configuration above).
 
 ## Limitations
 
