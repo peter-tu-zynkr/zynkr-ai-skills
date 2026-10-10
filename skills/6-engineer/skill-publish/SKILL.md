@@ -260,6 +260,8 @@ Surface the run URL and (once the workflow finishes) the PR URL to the user.
 
 After the PR merges, `ingest-skills.yml` adds the skill to the workbench's full index within a minute or two. It reaches the marketplace only if its manifest says `visibility: public` (no key means team): `export-stage.yml` stages it, and the public shelf holds a newly public skill until the owner promotes it there.
 
+The same push rings Atlas: the merge lands there as a draft of every skill folder it changed, on Atlas's review page. Someone who wrote, opened and merged none of it approves it — a merge of yours goes to another approver — and an owner, admin or reviewer then publishes it as the current version. Teammates get a team skill with `/skill-sync` only after that; until then they keep the version before. If that run's `ring-atlas` job is red, Atlas did not get the merge: re-run the job.
+
 ---
 
 ## Step 6 — Sync READMEs (after PR merges)
@@ -318,7 +320,7 @@ Report it as one line — `Knowledge: 5 files (2 Knowledge/<slug> required)` or
 
 When you're done with `/skill-publish`, tell the user:
 
-> "Published via dispatch. PR opened (URL: <pr_url>). After the PR merges, run `/skill-triager` and pick **Option D — `confirm-ship`** on this issue to close the loop. The triager will run its read-only verifications (`gh api contents` and the full `skills-index.json`, plus `/api/skills` for a public skill), then document the skill in the Skills Index Sheet and the Drive `[6.2]` mirror (a knowledge folder only if it ships files besides its SKILL.md), before flipping `Pipeline Status=shipped` and offering to install it into your local `~/.claude/skills/` via `npx skills add … --skill <slug>` — publishing to the marketplace alone does **not** make the skill invocable in your own Claude Code session."
+> "Published via dispatch. PR opened (URL: <pr_url>). After the PR merges, run `/skill-triager` and pick **Option D — `confirm-ship`** on this issue to close the loop. The triager will run its read-only verifications (`gh api contents` and the full `skills-index.json`, plus `/api/skills` for a public skill), then document the skill in the Skills Index Sheet and the Drive `[6.2]` mirror (a knowledge folder only if it ships files besides its SKILL.md), before flipping `Pipeline Status=shipped`. Publishing alone does **not** make the skill invocable in your own Claude Code session: a public skill installs from the shelf with `npx skills add … --skill <slug>`, and a team skill with `/skill-sync <slug>` once Atlas has approved and published the merge."
 
 For a **client build**, say instead that the triager ships it like a team skill and skips the
 install offer, because the client gets its own copy. Once it is deployed, `/skill-deploy` records where it runs.

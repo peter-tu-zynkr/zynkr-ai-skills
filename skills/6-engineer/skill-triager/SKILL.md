@@ -255,7 +255,7 @@ The artifact is **already built and committed** (typical for `/skill-publish` in
    ```bash
    npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill <slug>
    ```
-   That is the public shelf. For a **team** skill swap in the workbench URL, `https://github.com/peter-tu-zynkr/zynkr-skill-builder` — that install works only for workbench collaborators.
+   That is the public shelf. Offer nothing to run for a **team** skill: the CLI would install the workbench's main, which nobody has approved yet. Its merge waits in Atlas until someone who took no part in it approves it and it is published; then `/skill-sync <slug>` installs it, for workbench collaborators. Say that instead.
    On the user's OK, run it and confirm `~/.claude/skills/<slug>/SKILL.md` exists. Skip the offer for non-Claude skills (platform `gpt` / `gemini`) or if the user declines — the ship itself already succeeded regardless.
 
 **A client build** (any of the three markers in Step 1) ships like a team skill: no zynkr.ai check in step 4, the team wording in
@@ -302,7 +302,7 @@ When the session ends, summarise:
 - [ ] Issue label swapped to `shipped` (the label is the status of record)
 - [ ] Public skills: marketplace URL posted on the issue if it wasn't already
 - [ ] Issue closed with verification comment
-- [ ] Local install offered (`npx skills add … --skill <slug>`) — run on user OK, or skipped for non-Claude skills / on decline
+- [ ] Local install offered for a public skill (`npx skills add … --skill <slug>`) — run on user OK, or skipped for non-Claude skills / on decline; for a team skill, told to wait for Atlas and use `/skill-sync <slug>`
 
 ---
 
