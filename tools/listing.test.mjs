@@ -222,14 +222,35 @@ describe('frozen text (D-142)', () => {
 describe("first_seen, carried from zynkr.ai's own row", () => {
   const answer = (body, status = 200) => async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
 
-  test('carried by slug; a row the site does not hold gets the run\'s date', async () => {
-    const firstSeen = await readSiteFirstSeen({ url: 'https://site.test/api/skills/details', fetchImpl: answer({ '1.41': { slug: 'glimmer-notes', first_seen: '2026-08-17' }, '1.42': { slug: 'other', first_seen: null } }) });
-    const rows = finishRows([{ slug: 'glimmer-notes' }, { slug: 'other' }, { slug: 'brand-new' }], { firstSeen, today: '2026-10-15' });
-    assert.deepEqual(rows.map((r) => r.first_seen), ['2026-08-17', null, '2026-10-15']);
+  test('carried by the listing\'s id, so a rename keeps its date; a row the site does not hold gets the run\'s', async () => {
+    const firstSeen = await readSiteFirstSeen({
+      url: 'https://site.test/api/skills/details',
+      fetchImpl: answer({
+        '1.41': { id: '1.41', slug: 'glimmer-notes', first_seen: '2026-08-17' },
+        '1.42': { id: '1.42', slug: 'other', first_seen: null },
+        // A legacy row with no text id matches nothing and is passed over.
+        legacy: { id: null, slug: 'legacy-row', first_seen: '2025-01-01' },
+      }),
+    });
+    const rows = finishRows(
+      [
+        { id: '1.41', slug: 'glimmer-notes-renamed' },
+        { id: '1.42', slug: 'other' },
+        { id: '1.43', slug: 'glimmer-notes' },
+      ],
+      { firstSeen, today: '2026-10-15' },
+    );
+    assert.deepEqual(rows.map((r) => r.first_seen), ['2026-08-17', null, '2026-10-15'], 'by id, never by slug');
   });
 
   test('an answer it cannot read is refused rather than guessed', async () => {
-    for (const [body, status] of [['<html>', 200], [[], 200], [{ a: { slug: 'Bad Slug', first_seen: null } }, 200], [{ a: { slug: 'x', first_seen: 'yesterday' } }, 200], [{}, 502]]) {
+    for (const [body, status] of [
+      ['<html>', 200],
+      [[], 200],
+      [{ a: 'not a row' }, 200],
+      [{ a: { id: '1.01', first_seen: 'yesterday' } }, 200],
+      [{}, 502],
+    ]) {
       await assert.rejects(readSiteFirstSeen({ url: 'https://site.test/x', fetchImpl: answer(body, status) }), ListingError);
     }
     await assert.rejects(readSiteFirstSeen({ url: 'https://site.test/x', fetchImpl: async () => { throw new TypeError('fetch failed'); } }), ListingError);

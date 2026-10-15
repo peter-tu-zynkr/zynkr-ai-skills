@@ -116,6 +116,8 @@ const SEED_UNREACHABLE = 'https://atlas.invalid/api/shelf';
 const SEEDS = new Set(['unreachable', 'wrong_audience']);
 /** A committer's clock may run a little ahead of GitHub's; a stage's claimed commit time may not run further. */
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
+/** More skill folders than any stage holds (94 on 2026-10-15): a stage past this is refused unread. */
+export const MAX_STAGE_FOLDERS = 5000;
 const USAGE =
   'usage: publish.mjs --stage <dir holding stage/> --shelf <checkout> --event schedule|workflow_dispatch ' +
   '--run <run.json> [--prune report|true] [--promote a,b|all] [--allow-shrink] [--allow-rewind] [--seed-fail] ' +
@@ -134,7 +136,29 @@ const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v)
 const lstat = (p) => fs.lstatSync(p, { throwIfNoEntry: false });
 const isDir = (p) => lstat(p)?.isDirectory() === true;
 const isFile = (p) => lstat(p)?.isFile() === true;
-const within = (file, dir) => file.startsWith(`${dir}/`);
+
+/**
+ * The folder in `dirs` (a Set of folders that never nest) that holds `p`: the one proper prefix of it
+ * that ends at a "/", or null. Linear in the path's depth, so a lookup per file never costs a scan of
+ * every folder.
+ */
+function folderOf(p, dirs) {
+  for (let i = p.indexOf('/'); i !== -1; i = p.indexOf('/', i + 1)) {
+    const prefix = p.slice(0, i);
+    if (dirs.has(prefix)) return prefix;
+  }
+  return null;
+}
+
+/** Map(folder → its files [{ path relative to the folder, mode, sha }]) for folders that never nest. */
+function groupByFolder(files, dirs) {
+  const out = new Map([...dirs].map((d) => [d, []]));
+  for (const f of files) {
+    const d = folderOf(f.path, dirs);
+    if (d) out.get(d).push({ path: f.path.slice(d.length + 1), mode: f.mode, sha: f.sha });
+  }
+  return out;
+}
 
 /** A relative path under skills/ with no empty, `.` or `..` segment. */
 const isSkillsPath = (p) =>
@@ -205,6 +229,9 @@ function checkManifestShape(manifest) {
   if (!Array.isArray(manifest.files) || !Array.isArray(manifest.skills)) {
     refuse('manifest.json lacks its files or skills list');
   }
+  if (manifest.skills.length > MAX_STAGE_FOLDERS) {
+    refuse(`manifest.json lists ${manifest.skills.length} skill folders, more than the ${MAX_STAGE_FOLDERS} a stage may hold`);
+  }
 
   const paths = new Set();
   manifest.files.forEach((f, i) => {
@@ -233,10 +260,13 @@ function checkManifestShape(manifest) {
       );
     }
   });
-  const dirs = manifest.skills.map((s) => s.dir);
-  if (dirs.some((d, i) => dirs.some((e, j) => i !== j && (d === e || within(d, e))))) {
-    refuse('manifest.skills repeats a folder or nests one inside another');
+  // A repeated folder, or one inside another: a Set and each folder's own prefixes, never every pair.
+  const dirs = new Set();
+  for (const s of manifest.skills) {
+    if (dirs.has(s.dir)) refuse('manifest.skills repeats a folder or nests one inside another');
+    dirs.add(s.dir);
   }
+  for (const d of dirs) if (folderOf(d, dirs)) refuse('manifest.skills repeats a folder or nests one inside another');
   const slugs = new Set(manifest.skills.map((s) => s.slug));
   if (slugs.size !== manifest.skills.length) refuse('manifest.skills repeats a slug');
 }
@@ -271,8 +301,8 @@ function checkTree(stageRoot, manifest) {
   count(badSha, 'file whose bytes differ from its listed sha', 'files whose bytes differ from their listed sha');
   count(badMode, 'file whose executable bit differs from its listed mode', 'files whose executable bit differs from their listed mode');
 
-  const dirs = manifest.skills.map((s) => s.dir);
-  const loose = [...listed.keys()].filter((p) => !dirs.some((d) => within(p, d))).length;
+  const dirs = new Set(manifest.skills.map((s) => s.dir));
+  const loose = [...listed.keys()].filter((p) => !folderOf(p, dirs)).length;
   count(loose, 'listed file outside every skill folder', 'listed files outside every skill folder');
 
   if (problems.length) {
@@ -417,13 +447,15 @@ export function deriveFields(rec, { entry, fm }, shelfHas = () => false) {
 export function derivePayload(payload, manifest, owners, shelfHas = () => false) {
   if (!Array.isArray(payload)) refuse('payload.json is not an array');
   const files = new Set(manifest.files.map((f) => f.path));
-  const dirs = [...owners.keys()];
+  const dirs = new Set(owners.keys());
   const slugs = new Set();
   const rows = payload.map((rec, i) => {
     if (!isObject(rec) || typeof rec.source_path !== 'string' || !files.has(rec.source_path)) {
       refuse(`payload[${i}].source_path is not a file in the stage`);
     }
-    const hits = dirs.filter((d) => within(rec.source_path, d));
+    // The stage's folders never nest (checkManifestShape), so a file sits in one folder or none.
+    const owner = folderOf(rec.source_path, dirs);
+    const hits = owner ? [owner] : [];
     if (hits.length !== 1) refuse(`payload[${i}].source_path sits in ${hits.length} skill folders, not one`);
     const known = shelfHas(rec.source_path);
     const where = wordsFor(shelfHas, rec.source_path, typeof rec.id === 'string' ? rec.id : null);
@@ -555,10 +587,8 @@ export function pruneValue(event, prune) {
 
 /** What the mirror will do: the wanted files, and which folders it adds, changes and removes. */
 export function planMirror(shelfRoot, manifest, kept, shelfDirs) {
-  const keptDirs = kept.map((s) => s.dir);
-  const desired = new Map(
-    manifest.files.filter((f) => keptDirs.some((d) => within(f.path, d))).map((f) => [f.path, f]),
-  );
+  const keptDirs = new Set(kept.map((s) => s.dir));
+  const desired = new Map(manifest.files.filter((f) => folderOf(f.path, keptDirs)).map((f) => [f.path, f]));
   const tree = walk(path.join(shelfRoot, 'skills'), shelfRoot);
   const current = new Map(tree.other.map((p) => [p, null]));
   for (const p of tree.files) {
@@ -571,13 +601,18 @@ export function planMirror(shelfRoot, manifest, kept, shelfDirs) {
     return !want || !have || want.sha !== have.sha || want.mode !== have.mode;
   };
   const onShelf = new Set(shelfDirs);
-  const everyPath = [...new Set([...desired.keys(), ...current.keys()])];
+  // The kept folders that hold a path that differs, found per path (folders never nest), not per pair.
+  const differing = new Set();
+  for (const p of new Set([...desired.keys(), ...current.keys()])) {
+    const d = differs(p) ? folderOf(p, keptDirs) : null;
+    if (d) differing.add(d);
+  }
   return {
     desired,
     added: kept.filter((s) => !onShelf.has(s.dir)),
-    changed: kept.filter((s) => onShelf.has(s.dir) && everyPath.some((p) => within(p, s.dir) && differs(p))),
-    removed: shelfDirs.filter((d) => !keptDirs.includes(d)),
-    loose: [...current.keys()].filter((p) => !desired.has(p) && !shelfDirs.some((d) => within(p, d))).length,
+    changed: kept.filter((s) => onShelf.has(s.dir) && differing.has(s.dir)),
+    removed: shelfDirs.filter((d) => !keptDirs.has(d)),
+    loose: [...current.keys()].filter((p) => !desired.has(p) && !folderOf(p, onShelf)).length,
   };
 }
 
@@ -805,13 +840,9 @@ export function loadFrozen(shelfRoot) {
   }
 }
 
-/** One folder's files: [{ path (relative to the folder), mode, sha }] and its git tree id. */
-const folderEntries = (dir, files) =>
-  files.filter((f) => within(f.path, dir)).map((f) => ({ path: f.path.slice(dir.length + 1), mode: f.mode, sha: f.sha }));
-
 /**
- * The shelf as it is before the run: its folders (shelfSkills) with their files, tree ids and a view
- * for the listing build, plus every file it holds.
+ * The shelf as it is before the run: its folders (shelfSkills, which never nest) with their files,
+ * tree ids and a view for the listing build; every file it holds; and how many sit in no folder.
  */
 export function readShelfState(shelfRoot) {
   const tree = walk(path.join(shelfRoot, 'skills'), shelfRoot);
@@ -819,8 +850,11 @@ export function readShelfState(shelfRoot) {
     const abs = path.join(shelfRoot, p);
     return { path: p, sha: blobSha(fs.readFileSync(abs)), mode: modeOf(fs.lstatSync(abs)) };
   });
-  const folders = shelfSkills(shelfRoot).map((h) => {
-    const entries = folderEntries(h.dir, files);
+  const found = shelfSkills(shelfRoot);
+  const dirs = new Set(found.map((h) => h.dir));
+  const byFolder = groupByFolder(files, dirs);
+  const folders = found.map((h) => {
+    const entries = byFolder.get(h.dir);
     return {
       ...h,
       files: entries,
@@ -828,12 +862,11 @@ export function readShelfState(shelfRoot) {
       view: folderView(h.dir, entries.map((e) => e.path), (rel) => fs.readFileSync(path.join(shelfRoot, h.dir, rel), 'utf8')),
     };
   });
-  return { folders, files };
+  return { folders, files, loose: files.filter((f) => !folderOf(f.path, dirs)).length };
 }
 
 /** A staged folder for the rule: its files, its recomputed tree, its manifest's own line, a view. */
-function stageFolder(stageRoot, manifest, entry) {
-  const entries = folderEntries(entry.dir, manifest.files);
+function stageFolder(stageRoot, entry, entries) {
   const fm = parseFrontmatter(fs.readFileSync(path.join(stageRoot, entry.manifest), 'utf8'));
   return {
     dir: entry.dir,
@@ -848,8 +881,10 @@ function stageFolder(stageRoot, manifest, entry) {
 
 /**
  * The stage, read for the rule. { usable: true, manifest, payload, order, last, folders, stageRoot }
- * or { usable: false, why: 'none' | 'refused' | 'stale', words }. A refused stage is set aside, never
- * a reason to stop: the removals Atlas asks for still go (rule 5).
+ * or { usable: false, why: 'none' | 'refused' | 'stale', words }. Whatever goes wrong while it is read
+ * — a refusal, an unreadable file, anything — sets the stage aside and never stops the run: the
+ * removals Atlas asks for still go (rule 5). An unexpected error is described by its kind and code
+ * only, never its message, which could name a staged path new to the shelf.
  */
 export async function loadStageForAtlas(opts, { env, fetchImpl }) {
   const stageRoot = path.join(opts.stage, 'stage');
@@ -864,11 +899,12 @@ export async function loadStageForAtlas(opts, { env, fetchImpl }) {
     if (order === 'behind') {
       return { usable: false, why: 'stale', words: `the stage (${manifest.workbench_sha.slice(0, 7)}) is older than the last export (${last.slice(0, 7)})`, manifest, last };
     }
-    const folders = manifest.skills.map((entry) => stageFolder(stageRoot, manifest, entry));
+    const byFolder = groupByFolder(manifest.files, new Set(manifest.skills.map((s) => s.dir)));
+    const folders = manifest.skills.map((entry) => stageFolder(stageRoot, entry, byFolder.get(entry.dir)));
     return { usable: true, manifest, payload, order, last, folders, stageRoot };
   } catch (err) {
     if (err instanceof Refusal) return { usable: false, why: 'refused', words: err.message };
-    throw err;
+    return { usable: false, why: 'refused', words: `the stage could not be read (${unexpectedWords(err)})` };
   }
 }
 
@@ -905,13 +941,12 @@ function planLines(plan, words, prefix) {
   return lines;
 }
 
-/** Build a folder's rows, or null (its ListingError phrase in `why`). */
+/** Build a folder's rows, or null: `why` is the ListingError's phrase, or a fixed one for anything else. */
 function rowsOf(view, opts) {
   try {
     return { built: deriveFolder(view, opts), why: null };
   } catch (err) {
-    if (err instanceof ListingError) return { built: null, why: err.message };
-    throw err;
+    return { built: null, why: err instanceof ListingError ? err.message : 'an unexpected failure' };
   }
 }
 
@@ -1098,10 +1133,11 @@ export async function rehearse(opts, { fetchImpl = globalThis.fetch, env = proce
   try {
     const today = isoDay(now());
     const frozen = loadFrozen(opts.shelf);
+    // Atlas first, as enforce asks it: whatever the stage turns out to be, its answer is in hand.
+    const atlas = await askAtlasFor(opts, { env, fetchImpl });
     const shelf = readShelfState(opts.shelf);
     const stage = await loadStageForAtlas(opts, { env, fetchImpl });
     lines.push(stageLine(stage));
-    const atlas = await askAtlasFor(opts, { env, fetchImpl });
     lines.push(atlasLine(atlas));
     if (atlas.claims) {
       lines.push(`atlas: this job's token, as the door reads it: ${Object.entries(atlas.claims).map(([k, v]) => `${k}=${v}`).join(' · ')}`);
@@ -1173,8 +1209,12 @@ export async function rehearse(opts, { fetchImpl = globalThis.fetch, env = proce
   }
 }
 
-/** Under enforce, the commit message: what was published and removed by slug, what waits by sheetId. */
-export function enforceCommitMessage({ plan, words, stage, heldBack, loose, count, rewoundFrom }) {
+/**
+ * Under enforce, the commit message: what was published and removed by slug, what waits by sheetId.
+ * `applied` is the stage this run took from, or null — none fetched, refused, older than the shelf,
+ * or set aside by the shrink guard — and only a stage taken from is recorded in the trailer.
+ */
+export function enforceCommitMessage({ plan, words, applied, heldBack, loose, count, rewoundFrom }) {
   const lines = [];
   const claimants = new Set(plan.remove.filter((r) => r.claimant).map((r) => r.claimant.dir));
   const added = slugWords(plan.publish.filter((p) => !p.onShelf && !claimants.has(p.dir)).map((p) => p.built.rows[0]?.slug));
@@ -1187,14 +1227,14 @@ export function enforceCommitMessage({ plan, words, stage, heldBack, loose, coun
   if (heldBack.length) lines.push(`Kept as the shelf has it: ${idWords(heldBack).join(', ')}`);
   if (words.waiting.length) lines.push(`Waiting for Atlas: ${words.waiting.join(', ')}`);
   if (rewoundFrom) lines.push(`Rewound from ${rewoundFrom.slice(0, 7)}, dispatched with allow_rewind`);
-  const subject = stage.usable
-    ? `export: ${plural(count, 'skill')} from ${stage.manifest.workbench_sha.slice(0, 7)}`
+  const subject = applied
+    ? `export: ${plural(count, 'skill')} from ${applied.manifest.workbench_sha.slice(0, 7)}`
     : `export: ${plural(count, 'skill')}, only the removals Atlas asked for`;
   return [
     subject,
     '',
     ...(lines.length ? [...lines, ''] : []),
-    ...(stage.usable ? [`Workbench-Commit: ${stage.manifest.workbench_sha}`, ''] : []),
+    ...(applied ? [`Workbench-Commit: ${applied.manifest.workbench_sha}`, ''] : []),
   ].join('\n');
 }
 
@@ -1216,10 +1256,14 @@ async function enforceRun(opts, deps, mode) {
   if (opts.seedFail && isDir(stageRoot)) seedFail(stageRoot); // a: the stage is then refused (rule 5)
   const today = isoDay(now());
   const frozen = loadFrozen(opts.shelf);
+  // Atlas is asked first, so its answer is in hand whatever the stage turns out to be; the stage read
+  // never throws (loadStageForAtlas sets anything it cannot read aside, rule 5).
+  const atlas = await askAtlasFor(opts, { env, fetchImpl });
   const shelf = readShelfState(opts.shelf);
   const stage = await loadStageForAtlas(opts, { env, fetchImpl });
-  const atlas = await askAtlasFor(opts, { env, fetchImpl });
   const plan = planEnforce({ stage, shelf: shelf.folders, atlas, allowShrink: opts.allowShrink, frozen, today });
+  // The stage this run takes from: not one the shrink guard set aside.
+  const applied = stage.usable && !plan.stageRefused ? stage : null;
   const words = planWords(plan);
   const lines = [stageLine(stage), atlasLine(atlas), ...planLines(plan, words, 'rule: ')];
   for (const line of lines) log(line);
@@ -1238,23 +1282,22 @@ async function enforceRun(opts, deps, mode) {
 
   // i: the shelf after the run — published folders from the stage, kept ones as the shelf has them.
   const shelfFiles = new Map(shelf.folders.map((h) => [h.dir, h.files]));
-  const stageFiles = stage.usable ? new Map(stage.folders.map((s) => [s.dir, s.files])) : new Map();
+  const stageFiles = applied ? new Map(applied.folders.map((s) => [s.dir, s.files])) : new Map();
   const desired = new Map();
   for (const [dir, f] of plan.final) {
     const files = f.from === 'stage' ? stageFiles.get(dir) : shelfFiles.get(dir);
     for (const e of files) desired.set(`${dir}/${e.path}`, { sha: e.sha, mode: e.mode, from: f.from });
   }
-  const loose = shelf.files.filter((f) => !shelf.folders.some((h) => within(f.path, h.dir))).length;
-  mirror(opts.shelf, stage.usable ? stage.stageRoot : stageRoot, desired);
+  mirror(opts.shelf, applied ? applied.stageRoot : stageRoot, desired);
   const changed = stageIndex(opts.shelf, desired);
-  const rewound = stage.usable && REWINDS.has(stage.order);
-  const stagedTree = stage.usable ? new Map(stage.folders.map((s) => [s.dir, s.tree])) : new Map();
+  const rewound = Boolean(applied) && REWINDS.has(applied.order);
+  const stagedTree = applied ? new Map(applied.folders.map((s) => [s.dir, s.tree])) : new Map();
   const heldBack = plan.keep
     .filter((k) => stagedTree.has(k.dir) && stagedTree.get(k.dir) !== k.shelf.tree)
     .flatMap((k) => (k.shelf.ids.size ? [...k.shelf.ids] : ['']));
   let commit = null;
   if (changed || rewound) {
-    const message = enforceCommitMessage({ plan, words, stage, heldBack, loose, count: plan.final.size, rewoundFrom: rewound ? stage.last : null });
+    const message = enforceCommitMessage({ plan, words, applied, heldBack, loose: shelf.loose, count: plan.final.size, rewoundFrom: rewound ? applied.last : null });
     commit = commitAndPush(opts.shelf, message, { allowEmpty: !changed });
     log(`shelf: pushed ${commit.slice(0, 7)}`);
   } else log('shelf: no change to commit');
@@ -1285,7 +1328,7 @@ async function enforceRun(opts, deps, mode) {
     throw err;
   }
   finishRows(rows, { firstSeen, today });
-  const carried = rows.filter((r) => firstSeen.has(r.slug)).length;
+  const carried = rows.filter((r) => firstSeen.has(r.id)).length;
   const frozenUsed = [...plan.final.values()].reduce((n, f) => n + (f.built.frozenUsed ?? 0), 0);
   log(`listing: ${plural(rows.length, 'row')} built from the shelf's files · first_seen carried for ${carried} · frozen text on ${frozenUsed}`);
 
@@ -1294,8 +1337,8 @@ async function enforceRun(opts, deps, mode) {
   const atlasShrink = rowsBefore > 0 && rows.length < rowsBefore / 2 && rows.length + rowsByAtlas >= rowsBefore / 2;
   if (atlasShrink) log('note: the removals Atlas asked for take the listings under half, so the post carries allow_shrink');
 
-  const workbenchSha = stage.usable ? stage.manifest.workbench_sha : lastWorkbenchCommit(opts.shelf);
-  if (!workbenchSha) refuse('no workbench commit to name in the post (no usable stage, and no Workbench-Commit trailer on the shelf)');
+  const workbenchSha = applied ? applied.manifest.workbench_sha : lastWorkbenchCommit(opts.shelf);
+  if (!workbenchSha) refuse('no workbench commit to name in the post (no stage taken from, and no Workbench-Commit trailer on the shelf)');
   const startedAt = await runStartedAt({ env, fetchImpl });
   const body = buildBody({ workbenchSha, committedAt: startedAt, prune, allowShrink: opts.allowShrink || atlasShrink, rows });
   const answer = await postToSite({ url: siteUrl, body, secret, sourceSha: workbenchSha, fetchImpl });

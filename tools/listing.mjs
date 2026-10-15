@@ -627,9 +627,12 @@ export function deriveFolder(view, { frozen = null, today = isoDay(new Date()) }
   return { rows, manifest: ingested.manifest, installable, frozenUsed, fileText: fileText_ };
 }
 
-/** first_seen from the row zynkr.ai holds for the slug, else the run's date. */
+/**
+ * first_seen from the row zynkr.ai holds for the listing's id — the workbench keeps it by id too, so a
+ * skill renamed under the same sheetId keeps its date — else the run's date.
+ */
 export function finishRows(rows, { firstSeen, today }) {
-  for (const row of rows) row.first_seen = firstSeen.has(row.slug) ? firstSeen.get(row.slug) : today;
+  for (const row of rows) row.first_seen = firstSeen.has(row.id) ? firstSeen.get(row.id) : today;
   return rows;
 }
 
@@ -648,8 +651,9 @@ export function sortRows(rows) {
 // ── zynkr.ai's own answer: first_seen ────────────────────────────────────────
 
 /**
- * Map(slug → first_seen) from zynkr.ai's public /api/skills/details (its live rows). Throws
- * ListingError when the answer cannot be read: a row would otherwise get today's date.
+ * Map(id → first_seen) from zynkr.ai's public /api/skills/details: its live rows, keyed by id. A row
+ * without a text id can match no listing and is passed over. Throws ListingError when the answer
+ * cannot be read: a row would otherwise get today's date.
  */
 export async function readSiteFirstSeen({ url, fetchImpl, bust = null, timeoutMs = 30_000 }) {
   const target = new URL(url);
@@ -673,14 +677,14 @@ export async function readSiteFirstSeen({ url, fetchImpl, bust = null, timeoutMs
   if (!isPlainObject(data)) cannot('zynkr.ai\'s skill list is not an object');
   const firstSeen = new Map();
   for (const row of Object.values(data)) {
-    if (!isPlainObject(row) || typeof row.slug !== 'string' || !SITE_SLUG_RE.test(row.slug) || firstSeen.has(row.slug)) {
-      cannot('zynkr.ai\'s skill list holds a row the shelf cannot read');
-    }
-    const fs = row.first_seen;
-    if (!(fs === null || fs === undefined || (typeof fs === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fs)))) {
+    if (!isPlainObject(row)) cannot('zynkr.ai\'s skill list holds a row the shelf cannot read');
+    if (typeof row.id !== 'string' || row.id === '' || row.id.length > 64) continue;
+    if (firstSeen.has(row.id)) cannot('zynkr.ai\'s skill list holds one id twice');
+    const seen = row.first_seen;
+    if (!(seen === null || seen === undefined || (typeof seen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(seen)))) {
       cannot('zynkr.ai\'s skill list holds a first_seen the shelf cannot read');
     }
-    firstSeen.set(row.slug, fs ?? null);
+    firstSeen.set(row.id, seen ?? null);
   }
   return firstSeen;
 }

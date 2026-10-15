@@ -19,13 +19,14 @@ import {
   makeShelf,
   network,
   placeOnShelf,
+  scratch,
   skill,
   writeFile,
 } from './fixtures.mjs';
 import { Refusal, SHELF_URL } from './common.mjs';
 import { DEFAULT_ATLAS_MODE, atlasMode, idWords } from './enforce.mjs';
 import { textHash } from './listing.mjs';
-import { main, publish } from './publish.mjs';
+import { MAX_STAGE_FOLDERS, main, publish, readStage } from './publish.mjs';
 
 const F = (slug, sheetId, spec = {}) => skill(slug, { full: true, sheetId, ...spec });
 const opts = (stage, shelf, more = {}) => ({
@@ -195,20 +196,26 @@ describe('the listings are the shelf’s own (AC-13)', () => {
     }
   });
 
-  test('first_seen is carried from the row zynkr.ai holds; a new row gets the run\'s date; the order key is the run\'s own start', async () => {
+  test('first_seen is carried by id from the row zynkr.ai holds, through a rename; a new row gets the run\'s date; the order key is the run\'s own start', async () => {
     const { shelf } = makeShelf();
     placeOnShelf(shelf, buildStage([F('alpha', '1.01')]), ['alpha'], WB.a);
     // The stage claims a commit time far older than anything the site has applied: it is never used.
-    const stage = buildStage([F('alpha', '1.01'), F('beta', '1.02')], { sha: WB.b, committedAt: '2020-01-01T00:00:00Z' });
+    const stage = buildStage([F('alpha', '1.01'), F('beta', '1.02'), F('gamma', '1.03')], { sha: WB.b, committedAt: '2020-01-01T00:00:00Z' });
     const net = network({
-      atlas: atlasList(listed(stage, 'alpha', 'beta')),
-      details: { '1.01': { slug: 'alpha', first_seen: '2026-08-17' }, '9.99': { slug: 'retired-elsewhere', first_seen: '2026-01-01' } },
+      atlas: atlasList(listed(stage, 'alpha', 'beta', 'gamma')),
+      details: {
+        '1.01': { id: '1.01', slug: 'alpha', first_seen: '2026-08-17' },
+        // gamma's skill, listed on zynkr.ai under the name it had before a rename: same sheetId.
+        '1.03': { id: '1.03', slug: 'gamma-before-rename', first_seen: '2026-05-05' },
+        '9.99': { id: '9.99', slug: 'retired-elsewhere', first_seen: '2026-01-01' },
+      },
     });
     await publish(opts(stage, shelf), enforce(net));
     const body = bodyOf(net);
     assert.equal(body.workbench_committed_at, RUN_STARTED);
     assert.equal(body.workbench_sha, WB.b);
     assert.equal(rowsBy(net).alpha.first_seen, '2026-08-17');
+    assert.equal(rowsBy(net).gamma.first_seen, '2026-05-05', 'a renamed skill keeps its date');
     assert.equal(rowsBy(net).beta.first_seen, '2026-10-15');
     assert.equal(rowsBy(net).beta.updated_at, '2026-10-15');
     const details = net.calls.find((c) => c.url.includes('/details'));
@@ -581,5 +588,107 @@ describe('the public log (AC-20, D-73)', () => {
     assert.equal(net.posts().length, 0);
     assert.ok(!everything(d).includes('acme-portal'));
     assert.ok(fs.existsSync(shelf));
+  });
+});
+
+// Review round 1 (qa3): nothing the stage holds may stop the removals Atlas asks for, and a stage the
+// shrink guard set aside is not recorded as taken.
+describe('rule 5, whatever the stage holds', () => {
+  const threeOnShelf = () => {
+    const shelves = makeShelf();
+    const earlier = buildStage([F('alpha', '1.01'), F('beta', '1.02'), F('gamma', '1.03')]);
+    placeOnShelf(shelves.shelf, earlier, ['alpha', 'beta', 'gamma'], WB.a);
+    // Atlas withdrew gamma: it lists alpha and beta at the trees the shelf holds.
+    const atlas = atlasList([[earlier.dir('alpha'), earlier.tree('alpha')], [earlier.dir('beta'), earlier.tree('beta')]]);
+    return { ...shelves, earlier, atlas };
+  };
+
+  // A file the runner cannot read throws EACCES, not a refusal. Root reads it anyway, so this cannot
+  // be shown as root.
+  const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+  test('a staged file the runner cannot read sets the stage aside: Atlas is still asked and its removals made', { skip: asRoot && 'root reads a mode-000 file' }, async () => {
+    const { shelf, remote, atlas } = threeOnShelf();
+    const stage = buildStage([F('alpha', '1.01', { files: { 'references/extra.md': 'x\n' } }), F('beta', '1.02'), F('gamma', '1.03')], { sha: WB.b });
+    const unreadable = path.join(stage.stageRoot, stage.dir('alpha'), 'references/extra.md');
+    fs.chmodSync(unreadable, 0o000);
+    try {
+      const net = network({ atlas });
+      const d = enforce(net, { GITHUB_ACTIONS: 'true' });
+      assert.equal(await main(argv(stage, shelf), d), 1);
+      assert.equal(net.atlasCalls().length, 1, 'Atlas was asked');
+      assert.doesNotMatch(filesOn(remote), /gamma/, 'the withdrawal reached the shelf');
+      assert.equal(net.posts().length, 1, 'and zynkr.ai');
+      assert.deepEqual(Object.keys(rowsBy(net)).sort(), ['alpha', 'beta']);
+      const text = everything(d, remote);
+      assert.match(text, /the stage was refused: the stage could not be read \(unexpected failure: Error EACCES/);
+      assert.doesNotMatch(text, /extra\.md|shelf-tests-/, 'the error says what kind, never which path');
+    } finally {
+      fs.chmodSync(unreadable, 0o644);
+    }
+  });
+
+  test(`a stage of more than ${MAX_STAGE_FOLDERS} folders is refused unread, at once`, { timeout: 15_000 }, () => {
+    // 40,000 folders took 75 s in the old pairwise checks; refused by count now, before any is read.
+    const root = scratch('huge-stage');
+    const stageRoot = path.join(root, 'stage');
+    fs.mkdirSync(path.join(stageRoot, 'skills'), { recursive: true });
+    const sha = 'a'.repeat(40);
+    const skills = [];
+    const files = [];
+    for (let i = 0; i < 40_000; i++) {
+      skills.push({ dir: `skills/c/s${i}`, manifest: `skills/c/s${i}/SKILL.md`, slug: `s${i}`, name: `s${i}`, installable: true });
+      files.push({ path: `skills/c/s${i}/SKILL.md`, mode: '100644', sha });
+    }
+    fs.writeFileSync(path.join(stageRoot, 'manifest.json'), JSON.stringify({ format: 'stage-v1', workbench_sha: sha, workbench_committed_at: '2026-10-15T00:00:00Z', files, skills }));
+    fs.writeFileSync(path.join(stageRoot, 'payload.json'), '[]');
+    assert.throws(() => readStage(stageRoot), (err) => {
+      assert.ok(err instanceof Refusal);
+      assert.match(err.message, /manifest\.json lists 40000 skill folders, more than the 5000 a stage may hold/);
+      return true;
+    });
+  });
+
+  test('at the bound the folder checks stay linear, and still catch a nested or repeated folder', { timeout: 15_000 }, () => {
+    const make = (extra) => {
+      const root = scratch('bound-stage');
+      const stageRoot = path.join(root, 'stage');
+      fs.mkdirSync(path.join(stageRoot, 'skills'), { recursive: true });
+      const sha = 'a'.repeat(40);
+      const skills = [];
+      const files = [];
+      for (let i = 0; i < MAX_STAGE_FOLDERS - 1; i++) {
+        skills.push({ dir: `skills/c/s${i}`, manifest: `skills/c/s${i}/SKILL.md`, slug: `s${i}`, name: `s${i}`, installable: true });
+        files.push({ path: `skills/c/s${i}/SKILL.md`, mode: '100644', sha });
+      }
+      skills.push(extra);
+      files.push({ path: extra.manifest, mode: '100644', sha });
+      fs.writeFileSync(path.join(stageRoot, 'manifest.json'), JSON.stringify({ format: 'stage-v1', workbench_sha: sha, workbench_committed_at: '2026-10-15T00:00:00Z', files, skills }));
+      fs.writeFileSync(path.join(stageRoot, 'payload.json'), '[]');
+      return stageRoot;
+    };
+    const refusedWith = (stageRoot, pattern) =>
+      assert.throws(() => readStage(stageRoot), (err) => err instanceof Refusal && pattern.test(err.message));
+    const t0 = Date.now();
+    refusedWith(make({ dir: 'skills/c/s7/inner', manifest: 'skills/c/s7/inner/SKILL.md', slug: 'x', name: 'x', installable: true }), /nests one inside another/);
+    refusedWith(make({ dir: 'skills/c', manifest: 'skills/c/SKILL.md', slug: 'y', name: 'y', installable: true }), /nests one inside another/);
+    // A clean manifest of 5,000 folders passes the shape checks; the tree check then finds no files.
+    refusedWith(make({ dir: 'skills/d/last', manifest: 'skills/d/last/SKILL.md', slug: 'z', name: 'z', installable: true }), /5000 listed files missing/);
+    assert.ok(Date.now() - t0 < 10_000, 'three checks of 5,000 folders, in well under the pairwise time');
+  });
+
+  test('a stage the shrink guard sets aside is not recorded as taken', async () => {
+    const { shelf, remote } = makeShelf();
+    const earlier = buildStage([F('alpha', '1.01'), F('beta', '1.02'), F('gamma', '1.03'), F('delta', '1.04')]);
+    placeOnShelf(shelf, earlier, ['alpha', 'beta', 'gamma', 'delta'], WB.a);
+    // The stage drops three of four folders; Atlas withdrew delta and lists the other three.
+    const stage = buildStage([F('alpha', '1.01')], { sha: WB.b });
+    const net = network({ atlas: atlasList(['alpha', 'beta', 'gamma'].map((s) => [earlier.dir(s), earlier.tree(s)])) });
+    const d = enforce(net);
+    assert.equal(await main(argv(stage, shelf), d), 1);
+    const message = lastMessage(remote);
+    assert.match(message, /^export: 3 skills, only the removals Atlas asked for$/m);
+    assert.match(message, /^Removed: delta$/m);
+    assert.doesNotMatch(message, /Workbench-Commit|2222222/, 'the set-aside stage is not recorded');
+    assert.equal(bodyOf(net).workbench_sha, WB.a, 'the post names the last stage taken from');
   });
 });

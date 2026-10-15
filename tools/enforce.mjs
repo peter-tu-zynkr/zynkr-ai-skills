@@ -115,13 +115,15 @@ export function markProblem(view, manifest) {
 
 // ── the plan ─────────────────────────────────────────────────────────────────
 
-/** Rows a folder's files build, or null (with the ListingError's phrase) when they build none. */
+/**
+ * Rows a folder's files build, or null when they build none: `why` is the ListingError's phrase, or a
+ * fixed one for anything else (a staged file that cannot be read, say) — never stopping the run.
+ */
 function tryRows(view, opts) {
   try {
     return { built: deriveFolder(view, opts), why: null };
   } catch (err) {
-    if (err instanceof ListingError) return { built: null, why: err.message };
-    throw err;
+    return { built: null, why: err instanceof ListingError ? err.message : 'an unexpected failure' };
   }
 }
 
@@ -203,7 +205,12 @@ export function planEnforce({ stage, shelf, atlas, allowShrink = false, frozen =
       hold(`its listing does not build (${why})`);
       continue;
     }
-    const problem = markProblem(s.view, built.manifest);
+    let problem;
+    try {
+      problem = markProblem(s.view, built.manifest);
+    } catch {
+      problem = 'its marks cannot be read';
+    }
     if (problem) {
       hold(problem);
       continue;
@@ -220,10 +227,29 @@ export function planEnforce({ stage, shelf, atlas, allowShrink = false, frozen =
 
   // Rule 7: the rows on the shelf after the run must not share an id, a slug or a name. Start from
   // everything that stays if no candidate is published; take candidates claimants-first, by path.
-  const standing = new Map();
-  for (const k of plan.keep) standing.set(k.dir, rowsOfShelf(k.shelf).built?.rows ?? []);
-  for (const c of candidates) if (c.h) standing.set(c.h.dir, rowsOfShelf(c.h).built?.rows ?? []);
-  for (const h of provisionally) standing.set(h.dir, rowsOfShelf(h).built?.rows ?? []);
+  // Each key maps to the folders whose rows hold it, so a candidate costs its own keys, not the shelf's.
+  const owners = new Map(); // key → Map(dir → how many of that folder's rows hold the key)
+  const standing = new Map(); // dir → rows
+  const unstand = (dir) => {
+    for (const k of keysOf(standing.get(dir) ?? [])) {
+      const holders = owners.get(k);
+      const n = (holders?.get(dir) ?? 0) - 1;
+      if (n > 0) holders.set(dir, n);
+      else holders?.delete(dir);
+    }
+    standing.delete(dir);
+  };
+  const stand = (dir, rows) => {
+    unstand(dir);
+    standing.set(dir, rows);
+    for (const k of keysOf(rows)) {
+      if (!owners.has(k)) owners.set(k, new Map());
+      owners.get(k).set(dir, (owners.get(k).get(dir) ?? 0) + 1);
+    }
+  };
+  for (const k of plan.keep) stand(k.dir, rowsOfShelf(k.shelf).built?.rows ?? []);
+  for (const c of candidates) if (c.h) stand(c.h.dir, rowsOfShelf(c.h).built?.rows ?? []);
+  for (const h of provisionally) stand(h.dir, rowsOfShelf(h).built?.rows ?? []);
   const order = [...candidates].sort((a, b) => {
     const ca = claimed.has(a.s.dir) ? 0 : 1;
     const cb = claimed.has(b.s.dir) ? 0 : 1;
@@ -232,18 +258,16 @@ export function planEnforce({ stage, shelf, atlas, allowShrink = false, frozen =
   const published = new Set();
   for (const c of order) {
     const replaced = claimed.get(c.s.dir);
-    const others = new Set();
-    for (const [dir, rows] of standing) {
-      if (dir === c.s.dir || dir === replaced) continue;
-      for (const k of keysOf(rows)) others.add(k);
-    }
-    if (keysOf(c.built.rows).some((k) => others.has(k))) {
+    const collides = keysOf(c.built.rows).some((k) =>
+      [...(owners.get(k)?.keys() ?? [])].some((dir) => dir !== c.s.dir && dir !== replaced),
+    );
+    if (collides) {
       if (c.h) keep(c.h, 'its rows would collide with another folder\'s');
       else plan.wait.push({ dir: c.s.dir, why: 'its rows would collide with another folder\'s', folder: c.s });
       continue;
     }
-    standing.set(c.s.dir, c.built.rows);
-    if (replaced) standing.delete(replaced);
+    stand(c.s.dir, c.built.rows);
+    if (replaced) unstand(replaced);
     published.add(c.s.dir);
     plan.publish.push({ dir: c.s.dir, folder: c.s, built: c.built, onShelf: Boolean(c.h), sameTree: Boolean(c.h) && c.h.tree === c.s.tree });
   }
