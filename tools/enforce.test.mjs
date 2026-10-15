@@ -23,7 +23,7 @@ import {
   skill,
   writeFile,
 } from './fixtures.mjs';
-import { Refusal, SHELF_URL } from './common.mjs';
+import { Refusal, SHELF_URL, unexpectedWords } from './common.mjs';
 import { DEFAULT_ATLAS_MODE, atlasMode, idWords } from './enforce.mjs';
 import { textHash } from './listing.mjs';
 import { MAX_STAGE_FOLDERS, main, publish, readStage } from './publish.mjs';
@@ -362,7 +362,11 @@ describe('rule 5: one side is enough to remove (AC-16, AC-19)', () => {
   });
 
   test('seeded proofs: a wrong door and a wrong audience are each red, and still remove', async () => {
-    for (const [seed, words] of [['unreachable', /could not be reached/], ['wrong_audience', /refused this job's token \(wrong_audience\)/]]) {
+    // The door names no reason (every refusal is the same 401); the run says what it seeded.
+    for (const [seed, words] of [
+      ['unreachable', /the door could not be reached \(a seeded dispatch: a door address that never resolves\)/],
+      ['wrong_audience', /Atlas refused this job's token \(a seeded dispatch: a token asked for another audience\)/],
+    ]) {
       const { shelf, remote, stage } = setup();
       const net = network({ atlas: atlasList(listed(stage, 'alpha', 'gamma')) });
       const d = enforce(net, { GITHUB_ACTIONS: 'true' });
@@ -690,5 +694,102 @@ describe('rule 5, whatever the stage holds', () => {
     assert.match(message, /^Removed: delta$/m);
     assert.doesNotMatch(message, /Workbench-Commit|2222222/, 'the set-aside stage is not recorded');
     assert.equal(bodyOf(net).workbench_sha, WB.a, 'the post names the last stage taken from');
+  });
+});
+
+// Review round 2: what git's attributes do to bytes on the way in or out may not stop a run either,
+// and an unexpected error's message never reaches the log, however its frames are searched.
+describe("rule 5, whatever git's attributes do", () => {
+  const withGamma = (alphaSpec = {}) => {
+    const shelves = makeShelf();
+    const earlier = buildStage([F('alpha', '1.01', alphaSpec), F('beta', '1.02'), F('gamma', '1.03')]);
+    placeOnShelf(shelves.shelf, earlier, ['alpha', 'beta', 'gamma'], WB.a);
+    return { ...shelves, earlier };
+  };
+
+  test('a listed folder whose bytes git would change on the way in is kept as the shelf has it, and the run goes on', async () => {
+    const { shelf, remote, earlier } = withGamma();
+    const before = git(remote, ['rev-parse', `main:${earlier.dir('alpha')}`]).trim();
+    // alpha's approved tree holds a CRLF file under `* text`: `git add` would store it as LF.
+    const stage = buildStage(
+      [
+        F('alpha', '1.01', { files: { '.gitattributes': '* text\n', 'references/win.md': 'line one\r\nline two\r\n' } }),
+        F('beta', '1.02'),
+        F('gamma', '1.03'),
+        F('newcomer', '1.04', { files: { '.gitattributes': '* text\n', 'notes.md': 'a\r\nb\r\n' } }),
+      ],
+      { sha: WB.b },
+    );
+    // Atlas lists alpha and the newcomer at their staged trees, beta at the shelf's, and withdrew gamma.
+    const net = network({ atlas: atlasList([...listed(stage, 'alpha', 'newcomer'), [earlier.dir('beta'), earlier.tree('beta')]]) });
+    const d = enforce(net);
+    assert.equal(await main(argv(stage, shelf), d), 0, d.err.join('\n'));
+    const files = filesOn(remote);
+    assert.doesNotMatch(files, /gamma/, 'the withdrawal Atlas asked for was made');
+    assert.equal(git(remote, ['rev-parse', `main:${earlier.dir('alpha')}`]).trim(), before, 'alpha is exactly the copy the shelf had');
+    assert.doesNotMatch(files, /newcomer/, 'the newcomer waits');
+    assert.ok(d.out.some((l) => /why kept or waiting: git would change its bytes 2/.test(l)), d.out.join('\n'));
+    assert.match(lastMessage(remote), /^Kept as the shelf has it: 1\.01$/m);
+    assert.match(lastMessage(remote), /^Waiting for Atlas: 1\.04$/m);
+    assert.deepEqual(Object.keys(rowsBy(net)).sort(), ['alpha', 'beta']);
+  });
+
+  test('a kept folder whose checkout git rewrote (eol=crlf) is held as the shelf holds it: its blobs, not its working tree', async () => {
+    const attrs = { files: { '.gitattributes': '*.md text eol=crlf\n' } };
+    const { shelf, remote, earlier } = withGamma(attrs);
+    // A fresh checkout, as the job gets one: alpha's .md files are CRLF in the working tree now.
+    fs.rmSync(path.join(shelf, earlier.dir('alpha')), { recursive: true, force: true });
+    git(shelf, ['checkout', '--', 'skills']);
+    assert.ok(fs.readFileSync(path.join(shelf, earlier.dir('alpha'), 'SKILL.md'), 'utf8').includes('\r\n'));
+    const before = git(remote, ['rev-parse', `main:${earlier.dir('alpha')}`]).trim();
+    const stage = buildStage([F('alpha', '1.01', attrs), F('beta', '1.02'), F('gamma', '1.03')], { sha: WB.b });
+    // Atlas keeps alpha 「as is」, lists beta at the shelf's tree, and withdrew gamma.
+    const net = network({ atlas: atlasList([[earlier.dir('beta'), earlier.tree('beta')]], [earlier.dir('alpha')]) });
+    const d = enforce(net);
+    assert.equal(await main(argv(stage, shelf), d), 0, d.err.join('\n'));
+    assert.doesNotMatch(filesOn(remote), /gamma/);
+    assert.equal(git(remote, ['rev-parse', `main:${earlier.dir('alpha')}`]).trim(), before);
+    assert.deepEqual(Object.keys(rowsBy(net)).sort(), ['alpha', 'beta']);
+  });
+
+  test('the same folder, published at its approved tree, goes through: its blobs are LF and stay so', async () => {
+    const { shelf, remote } = makeShelf();
+    const stage = buildStage([F('alpha', '1.01', { files: { '.gitattributes': '*.md text eol=crlf\n', 'references/notes.md': 'one\ntwo\n' } })]);
+    const net = network({ atlas: atlasList(listed(stage, 'alpha')) });
+    assert.equal(await main(argv(stage, shelf), enforce(net)), 0);
+    assert.equal(git(remote, ['rev-parse', `main:${stage.dir('alpha')}`]).trim(), stage.tree('alpha'), 'byte for byte the tree Atlas approved');
+  });
+});
+
+describe('an unexpected error in the public log (D-73)', () => {
+  test("is named by a frame of this repo's code, never by anything in its message", () => {
+    const err = new Error("EACCES: permission denied, open '/tmp/stage/skills/1-x/acme-portal/tools/acme-portal-sync.mjs:7'");
+    err.code = 'EACCES';
+    // This test file is no module of the publisher's (its name has a dot), so no frame qualifies here;
+    // the end-to-end test below sees the real one, tools/publish.mjs.
+    assert.equal(unexpectedWords(err), 'unexpected failure: Error EACCES');
+    // A message over several lines, one of them dressed as a frame.
+    const forged = new Error('first line\n    at tools/acme-portal.mjs:7\nlast line');
+    assert.doesNotMatch(unexpectedWords(forged), /acme-portal/);
+    assert.equal(unexpectedWords({ name: 'Error', message: 'x tools/acme-portal.mjs:1', stack: 'Error: x tools/acme-portal.mjs:1' }), 'unexpected failure: Error');
+  });
+
+  test('end to end: a staged file named like a code line, unreadable, never names its folder', { skip: typeof process.getuid === 'function' && process.getuid() === 0 && 'root reads a mode-000 file' }, async () => {
+    const { shelf, remote } = makeShelf();
+    const earlier = buildStage([F('alpha', '1.01'), F('beta', '1.02')]);
+    placeOnShelf(shelf, earlier, ['alpha', 'beta'], WB.a);
+    const stage = buildStage([F('alpha', '1.01'), F('beta', '1.02'), F('acme-portal', '1.09', { files: { 'tools/acme-portal-sync.mjs:7': 'x\n' } })], { sha: WB.b });
+    const bad = path.join(stage.stageRoot, stage.dir('acme-portal'), 'tools/acme-portal-sync.mjs:7');
+    fs.chmodSync(bad, 0o000);
+    try {
+      const net = network({ atlas: atlasList([[earlier.dir('alpha'), earlier.tree('alpha')], [earlier.dir('beta'), earlier.tree('beta')]]) });
+      const d = enforce(net, { GITHUB_ACTIONS: 'true' });
+      assert.equal(await main(argv(stage, shelf), d), 1);
+      const text = everything(d, remote);
+      assert.match(text, /the stage could not be read \(unexpected failure: Error EACCES at tools\/publish\.mjs:\d+\)/);
+      assert.doesNotMatch(text, /acme-portal/);
+    } finally {
+      fs.chmodSync(bad, 0o644);
+    }
   });
 });

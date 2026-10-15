@@ -641,6 +641,25 @@ export function mirror(shelfRoot, stageRoot, desired) {
   if (isDir(root) && fs.readdirSync(root).length === 0) fs.rmdirSync(root);
 }
 
+/** git's index under skills/: Map(path → { mode, sha }), the bytes git holds, after any attribute. */
+function readIndex(shelfRoot) {
+  const index = new Map();
+  for (const line of git(shelfRoot, ['ls-files', '-s', '-z', '--', 'skills']).split('\0').filter(Boolean)) {
+    const [meta, p] = line.split('\t');
+    const [mode, sha] = meta.split(' ');
+    index.set(p, { mode, sha });
+  }
+  return index;
+}
+
+/** The paths where the index and `desired` disagree: missing on one side, or another sha or mode. */
+const indexMismatches = (index, desired) =>
+  [...new Set([...index.keys(), ...desired.keys()])].filter((p) => {
+    const a = index.get(p);
+    const b = desired.get(p);
+    return !a || !b || a.mode !== b.mode || a.sha !== b.sha;
+  });
+
 /**
  * Stage skills/ in git's index and prove the index equals the stage (a .gitattributes filter in a
  * skill folder could otherwise rewrite bytes on the way in). Returns whether anything changed.
@@ -649,17 +668,7 @@ export function stageIndex(shelfRoot, desired) {
   git(shelfRoot, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', 'skills']);
   // -f: a skill's own .gitignore must not keep one of its tracked files off the shelf.
   if (isDir(path.join(shelfRoot, 'skills'))) git(shelfRoot, ['add', '-f', '--', 'skills']);
-  const index = new Map();
-  for (const line of git(shelfRoot, ['ls-files', '-s', '-z', '--', 'skills']).split('\0').filter(Boolean)) {
-    const [meta, p] = line.split('\t');
-    const [mode, sha] = meta.split(' ');
-    index.set(p, { mode, sha });
-  }
-  const off = [...new Set([...index.keys(), ...desired.keys()])].filter((p) => {
-    const a = index.get(p);
-    const b = desired.get(p);
-    return !a || !b || a.mode !== b.mode || a.sha !== b.sha;
-  });
+  const off = indexMismatches(readIndex(shelfRoot), desired);
   if (off.length) {
     // Only a path the shelf already published is named: one new to it may belong to a client build
     // marked public by mistake (wordsFor; workbench SKB-054, review round 5).
@@ -678,6 +687,20 @@ export function stageIndex(shelfRoot, desired) {
     );
   }
   return git(shelfRoot, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
+}
+
+/**
+ * Under SHELF_ATLAS=enforce: stage skills/ as stageIndex does, then put the folders the shelf keeps
+ * back to HEAD's own entries (`git reset HEAD -- <folder>`), so a kept folder is exactly the blobs
+ * the shelf already holds, whatever its attributes made of the working tree on checkout. Returns the
+ * paths where the index differs from `desired` and refuses nothing: the caller sets the published
+ * folders they sit in aside (git would change their bytes) and plans again.
+ */
+export function stageIndexEnforce(shelfRoot, desired, keptDirs) {
+  git(shelfRoot, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', 'skills']);
+  if (isDir(path.join(shelfRoot, 'skills'))) git(shelfRoot, ['add', '-f', '--', 'skills']);
+  if (keptDirs.length) git(shelfRoot, ['reset', '-q', 'HEAD', '--', ...keptDirs]);
+  return indexMismatches(readIndex(shelfRoot), desired);
 }
 
 /** The mirror's adds and removes with renames taken out: a rename is reported once, as a rename. */
@@ -843,16 +866,18 @@ export function loadFrozen(shelfRoot) {
 /**
  * The shelf as it is before the run: its folders (shelfSkills, which never nest) with their files,
  * tree ids and a view for the listing build; every file it holds; and how many sit in no folder.
+ * A file's sha and mode are git's, from the index the checkout made (the committed blob), never a
+ * hash of the working tree: a folder's .gitattributes (`eol=crlf`, say) can make a checkout write
+ * other bytes than the shelf holds. Its text is read from the working tree, which differs from the
+ * blob only in line ends, and the listing build reads line ends alike.
  */
 export function readShelfState(shelfRoot) {
-  const tree = walk(path.join(shelfRoot, 'skills'), shelfRoot);
-  const files = tree.files.map((p) => {
-    const abs = path.join(shelfRoot, p);
-    return { path: p, sha: blobSha(fs.readFileSync(abs)), mode: modeOf(fs.lstatSync(abs)) };
-  });
-  const found = shelfSkills(shelfRoot);
-  const dirs = new Set(found.map((h) => h.dir));
+  const files = [...readIndex(shelfRoot)].map(([p, f]) => ({ path: p, sha: f.sha, mode: f.mode }));
+  const indexed = shelfSkills(shelfRoot);
+  const dirs = new Set(indexed.map((h) => h.dir));
   const byFolder = groupByFolder(files, dirs);
+  // A folder with no file in the index is nothing the shelf holds (the mirror clears it).
+  const found = indexed.filter((h) => byFolder.get(h.dir).length > 0);
   const folders = found.map((h) => {
     const entries = byFolder.get(h.dir);
     return {
@@ -862,7 +887,8 @@ export function readShelfState(shelfRoot) {
       view: folderView(h.dir, entries.map((e) => e.path), (rel) => fs.readFileSync(path.join(shelfRoot, h.dir, rel), 'utf8')),
     };
   });
-  return { folders, files, loose: files.filter((f) => !folderOf(f.path, dirs)).length };
+  const held = new Set(found.map((h) => h.dir));
+  return { folders, files, loose: files.filter((f) => !folderOf(f.path, held)).length };
 }
 
 /** A staged folder for the rule: its files, its recomputed tree, its manifest's own line, a view. */
@@ -908,12 +934,13 @@ export async function loadStageForAtlas(opts, { env, fetchImpl }) {
   }
 }
 
-/** Ask Atlas, or a seeded dispatch's wrong door or wrong audience (AC-18, AC-19 red proofs). */
+/** Ask Atlas, or a seeded dispatch's wrong door or wrong audience (AC-18, AC-19 red proofs). The
+ *  answer carries the seed, so the run's own words can say a failure was seeded. */
 async function askAtlasFor(opts, { env, fetchImpl }) {
   const url = opts.seedAtlas === 'unreachable' ? SEED_UNREACHABLE : env.ATLAS_SHELF_URL || ATLAS_SHELF_URL;
   if (new URL(url).protocol !== 'https:') refuse('ATLAS_SHELF_URL must be an https URL');
   const audience = opts.seedAtlas === 'wrong_audience' ? `${ATLAS_AUDIENCE}-seed` : ATLAS_AUDIENCE;
-  return askAtlas({ env, fetchImpl, url, audience });
+  return { ...(await askAtlas({ env, fetchImpl, url, audience })), seed: opts.seedAtlas || '' };
 }
 
 const stageLine = (stage) =>
@@ -925,7 +952,7 @@ const stageLine = (stage) =>
         ? `stage: set aside — ${stage.words}`
         : `stage: refused — ${stage.words}`;
 
-const atlasLine = (atlas) => (atlas.ok ? 'atlas: asked; it answered' : `atlas: could not be asked — ${atlasWords(atlas)}`);
+const atlasLine = (atlas) => (atlas.ok ? 'atlas: asked; it answered' : `atlas: could not be asked — ${atlasWords(atlas, atlas.seed)}`);
 
 /** The plan in words, for the log and the summary (enforce.mjs planWords). */
 function planLines(plan, words, prefix) {
@@ -1201,7 +1228,7 @@ export async function rehearse(opts, { fetchImpl = globalThis.fetch, env = proce
         );
       }
     }
-    return { lines, failed: atlas.ok ? null : `Atlas could not be asked (${atlasWords(atlas)})` };
+    return { lines, failed: atlas.ok ? null : `Atlas could not be asked (${atlasWords(atlas, atlas.seed)})` };
   } catch (err) {
     const why = err instanceof Refusal || err instanceof ListingError ? err.message : unexpectedWords(err);
     lines.push(`report: the rehearsal stopped — ${why}`);
@@ -1261,35 +1288,63 @@ async function enforceRun(opts, deps, mode) {
   const atlas = await askAtlasFor(opts, { env, fetchImpl });
   const shelf = readShelfState(opts.shelf);
   const stage = await loadStageForAtlas(opts, { env, fetchImpl });
-  const plan = planEnforce({ stage, shelf: shelf.folders, atlas, allowShrink: opts.allowShrink, frozen, today });
-  // The stage this run takes from: not one the shrink guard set aside.
-  const applied = stage.usable && !plan.stageRefused ? stage : null;
-  const words = planWords(plan);
-  const lines = [stageLine(stage), atlasLine(atlas), ...planLines(plan, words, 'rule: ')];
-  for (const line of lines) log(line);
-  const summary = ['### Export to the shelf (SHELF_ATLAS=enforce)', '', `- Prune: \`${prune}\``, ...lines.map((l) => `- ${l.trim()}`)];
+  // Staged folders whose bytes git changed on the way into the index; filled below, and planned again.
+  const setAside = new Set();
+  const planFor = () => planEnforce({ stage, shelf: shelf.folders, atlas, allowShrink: opts.allowShrink, frozen, today, setAside });
+  let plan = planFor();
   // How many rows the shelf listed before, and how many of them the removals Atlas asks for take —
-  // read now, while every folder is still on disk.
+  // read now, while every folder is still on disk (setting a folder aside never changes those).
   const rowCount = (h) => rowsOf(h.view, { frozen, today }).built?.rows.length ?? 0;
   const rowsBefore = shelf.folders.reduce((n, h) => n + rowCount(h), 0);
   const rowsByAtlas = plan.remove.filter((r) => r.by === 'atlas').reduce((n, r) => n + rowCount(r.shelf), 0);
+  const tell = (p) => {
+    const lines = [stageLine(stage), atlasLine(atlas), ...planLines(p, planWords(p), 'rule: ')];
+    for (const line of lines) log(line);
+    return ['### Export to the shelf (SHELF_ATLAS=enforce)', '', `- Prune: \`${prune}\``, ...lines.map((l) => `- ${l.trim()}`)];
+  };
 
   if (opts.dryRun) {
+    const summary = tell(plan);
+    const words = planWords(plan);
     log(JSON.stringify({ dry_run: true, atlas: 'enforce', prune, counts: words.counts, ...words }, null, 2));
     summarize(env, [...summary, '- Dry run: nothing changed, nothing posted', '']);
     return { outcome: 'dry-run', plan, stage, atlas };
   }
 
   // i: the shelf after the run — published folders from the stage, kept ones as the shelf has them.
+  // A published folder whose bytes git would change (a .gitattributes rule) is set aside — kept as the
+  // shelf has it, or waiting — and the run plans and mirrors again: rule 5, nothing in the stage stops
+  // the removals Atlas asks for. Each round sets at least one folder aside, so this ends.
   const shelfFiles = new Map(shelf.folders.map((h) => [h.dir, h.files]));
-  const stageFiles = applied ? new Map(applied.folders.map((s) => [s.dir, s.files])) : new Map();
-  const desired = new Map();
-  for (const [dir, f] of plan.final) {
-    const files = f.from === 'stage' ? stageFiles.get(dir) : shelfFiles.get(dir);
-    for (const e of files) desired.set(`${dir}/${e.path}`, { sha: e.sha, mode: e.mode, from: f.from });
+  let applied;
+  let desired;
+  for (;;) {
+    // The stage this run takes from: not one the shrink guard set aside.
+    applied = stage.usable && !plan.stageRefused ? stage : null;
+    const stageFiles = applied ? new Map(applied.folders.map((s) => [s.dir, s.files])) : new Map();
+    desired = new Map();
+    for (const [dir, f] of plan.final) {
+      const files = f.from === 'stage' ? stageFiles.get(dir) : shelfFiles.get(dir);
+      for (const e of files) desired.set(`${dir}/${e.path}`, { sha: e.sha, mode: e.mode, from: f.from });
+    }
+    mirror(opts.shelf, applied ? applied.stageRoot : stageRoot, desired);
+    const kept = [...plan.final].filter(([, f]) => f.from === 'shelf').map(([dir]) => dir);
+    const off = stageIndexEnforce(opts.shelf, desired, kept);
+    if (!off.length) break;
+    const published = new Set(plan.publish.map((p) => p.dir));
+    const culprits = [...new Set(off.map((p) => folderOf(p, published)).filter(Boolean))];
+    if (!culprits.length) {
+      refuse(`after the mirror, git's index differs from the copies the shelf keeps at ${plural(off.length, 'path')}, so nothing is committed`);
+    }
+    for (const dir of culprits) setAside.add(dir);
+    // Those the shelf already held go back to its own copy before the next mirror.
+    const held = culprits.filter((dir) => shelfFiles.has(dir));
+    if (held.length) git(opts.shelf, ['checkout', '-q', 'HEAD', '--', ...held]);
+    plan = planFor();
   }
-  mirror(opts.shelf, applied ? applied.stageRoot : stageRoot, desired);
-  const changed = stageIndex(opts.shelf, desired);
+  const words = planWords(plan);
+  const summary = tell(plan);
+  const changed = git(opts.shelf, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
   const rewound = Boolean(applied) && REWINDS.has(applied.order);
   const stagedTree = applied ? new Map(applied.folders.map((s) => [s.dir, s.tree])) : new Map();
   const heldBack = plan.keep
@@ -1348,7 +1403,7 @@ async function enforceRun(opts, deps, mode) {
 
   // Rule 5: the removals were made and the rows posted; a missing side still makes the run red.
   const missing = [];
-  if (!atlas.ok) missing.push(`Atlas could not be asked (${atlasWords(atlas)})`);
+  if (!atlas.ok) missing.push(`Atlas could not be asked (${atlasWords(atlas, atlas.seed)})`);
   if (plan.stageRefused) missing.push(plan.stageRefused);
   else if (!stage.usable && stage.why !== 'stale') missing.push(stage.why === 'none' ? 'no stage was fetched' : `the stage was refused: ${stage.words}`);
   if (missing.length) {

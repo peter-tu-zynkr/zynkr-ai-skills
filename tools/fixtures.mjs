@@ -280,8 +280,9 @@ export function network({
     }
     if (u === ATLAS) {
       if (atlas === 'down') throw new TypeError('fetch failed');
+      // The door names no reason: every refusal is the same 401 (it logs the reason on its own side).
       const audience = JSON.parse(Buffer.from(String(init.headers?.Authorization).split('.')[1], 'base64url')).aud;
-      if (audience !== 'zynkr-atlas-shelf') return new Response(JSON.stringify({ error: 'refused', reason: 'wrong_audience' }), { status: 401 });
+      if (audience !== 'zynkr-atlas-shelf') return new Response(JSON.stringify({ error: 'refused' }), { status: 401 });
       return atlas && typeof atlas.status === 'number'
         ? new Response(JSON.stringify(atlas.body), { status: atlas.status })
         : new Response(JSON.stringify(atlas), { status: 200 });

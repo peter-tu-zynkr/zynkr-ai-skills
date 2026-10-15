@@ -50,11 +50,14 @@ export const annotation = (message) =>
 /**
  * An unexpected error, as this public log may show it: its kind, its code and the line of this
  * repo's code it came from — never its message, which can quote the path of a staged file that is
- * new to the shelf (and may be a client build marked public by mistake).
+ * new to the shelf (and may be a client build marked public by mistake). The stack opens with that
+ * message, over as many lines as it has, so only the frame lines after it are searched.
  */
 export function unexpectedWords(err) {
   const name = typeof err?.name === 'string' && /^[A-Za-z]{1,40}$/.test(err.name) ? err.name : 'Error';
   const code = typeof err?.code === 'string' && /^[A-Z0-9_]{1,40}$/.test(err.code) ? ` ${err.code}` : '';
-  const frame = /tools\/[a-z-]+\.mjs:\d+/.exec(String(err?.stack ?? ''));
+  const header = String(err?.message ?? '').split('\n').length;
+  const frames = String(err?.stack ?? '').split('\n').slice(header).filter((line) => /^\s+at /.test(line));
+  const frame = frames.map((line) => /tools\/[a-z-]+\.mjs:\d+/.exec(line)).find(Boolean);
   return `unexpected failure: ${name}${code}${frame ? ` at ${frame[0]}` : ''}`;
 }

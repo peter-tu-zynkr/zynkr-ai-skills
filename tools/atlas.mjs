@@ -21,12 +21,6 @@ const PATH_SHAPE = /^skills(\/[A-Za-z0-9._-]+)+$/;
 const DOT_SEGMENT = /(^|\/)\.\.?(\/|$)/;
 const MAX_ANSWER = 2 * 1024 * 1024;
 
-/** The door's refusal codes; only these are ever printed. */
-export const REFUSAL_CODES = new Set([
-  'no_token', 'bad_token', 'expired', 'wrong_issuer', 'wrong_audience', 'wrong_repository',
-  'wrong_ref', 'wrong_event', 'wrong_workflow', 'wrong_environment', 'wrong_subject',
-]);
-
 /** The claims the door pins, by name: printed in `report` so the pins can be checked against a real token. */
 export const PINNED_CLAIMS = [
   'aud', 'sub', 'repository', 'repository_id', 'repository_owner_id', 'ref', 'event_name',
@@ -72,7 +66,7 @@ export function pinnedClaims(token) {
  * Ask Atlas. Resolves to { ok: true, list, claims } or { ok: false, why, reason?, status?, claims? }:
  *   no_token     GitHub gave no OIDC token (the job lacks id-token: write, or this is not Actions)
  *   unreachable  the door could not be reached or did not answer in time
- *   refused      401 — `reason` is the door's code when it is one of REFUSAL_CODES
+ *   refused      401 — the door names no reason (it keeps it in its own log)
  *   try_later    503 — Atlas could not read its keys or its database
  *   unreadable   any other answer, or a body that is not exactly the list (`status` its HTTP status)
  */
@@ -114,16 +108,7 @@ export async function askAtlas({ env, fetchImpl = globalThis.fetch, url = ATLAS_
   } catch {
     return { ok: false, why: 'unreachable', claims };
   }
-  if (res.status === 401) {
-    let reason;
-    try {
-      const code = JSON.parse(text)?.reason;
-      if (REFUSAL_CODES.has(code)) reason = code;
-    } catch {
-      // no readable reason; the status says enough
-    }
-    return { ok: false, why: 'refused', reason, claims };
-  }
+  if (res.status === 401) return { ok: false, why: 'refused', claims };
   if (res.status === 503) return { ok: false, why: 'try_later', claims };
   if (res.status !== 200 || text.length > MAX_ANSWER) return { ok: false, why: 'unreadable', status: res.status, claims };
   let data;
@@ -136,18 +121,25 @@ export async function askAtlas({ env, fetchImpl = globalThis.fetch, url = ATLAS_
   return list ? { ok: true, list, claims } : { ok: false, why: 'unreadable', status: res.status, claims };
 }
 
-/** One phrase for a failed ask, safe for the public log. */
-export function atlasWords(answer) {
+/** What a seeded dispatch did to the ask (AC-18, AC-19 red proofs), in this run's own words. */
+const SEED_WORDS = {
+  unreachable: 'a seeded dispatch: a door address that never resolves',
+  wrong_audience: 'a seeded dispatch: a token asked for another audience',
+};
+
+/** One phrase for a failed ask, safe for the public log; `seed` names a seeded dispatch's change. */
+export function atlasWords(answer, seed = '') {
+  const seeded = SEED_WORDS[seed] ? ` (${SEED_WORDS[seed]})` : '';
   switch (answer.why) {
     case 'no_token':
-      return 'GitHub gave this job no OIDC token (does the publish job hold id-token: write?)';
+      return `GitHub gave this job no OIDC token (does the publish job hold id-token: write?)${seeded}`;
     case 'unreachable':
-      return 'the door could not be reached';
+      return `the door could not be reached${seeded}`;
     case 'refused':
-      return `the door refused this job's token${answer.reason ? ` (${answer.reason})` : ''}`;
+      return `Atlas refused this job's token${seeded}`;
     case 'try_later':
-      return 'Atlas answered try_later (its keys or its database could not be read)';
+      return `Atlas answered try_later (its keys or its database could not be read)${seeded}`;
     default:
-      return `the door's answer could not be read${answer.status ? ` (HTTP ${answer.status})` : ''}`;
+      return `the door's answer could not be read${answer.status ? ` (HTTP ${answer.status})` : ''}${seeded}`;
   }
 }

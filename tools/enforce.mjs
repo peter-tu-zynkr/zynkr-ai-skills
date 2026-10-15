@@ -136,6 +136,8 @@ const keysOf = (rows) => rows.flatMap((r) => [`id ${r.id}`, `slug ${r.slug}`, `n
  *          or { usable: false, why } when there is none, it is refused, or it is older than the shelf
  *   shelf: [{ dir, tree, names: Set, ids: Set, view }]
  *   atlas: { ok: true, list: { folders: Map(path → tree), asIs: Set } } or { ok: false, … }
+ *   setAside: staged folders whose bytes git changed on the way into the index (a .gitattributes
+ *          rule): never published, kept as the shelf has them or waiting
  * Returns { publish, keep, wait, remove, final, stageRefused, unbuildable }:
  *   publish  [{ dir, folder, built, onShelf, sameTree }] — copy these from the stage
  *   keep     [{ dir, why, shelf }]   — the shelf's copy stays
@@ -145,7 +147,7 @@ const keysOf = (rows) => rows.flatMap((r) => [`id ${r.id}`, `slug ${r.slug}`, `n
  *   stageRefused  null, or why the stage was set aside (the shrink guard)
  *   unbuildable   [dir] — folders the shelf keeps whose rows its files do not build
  */
-export function planEnforce({ stage, shelf, atlas, allowShrink = false, frozen = null, today }) {
+export function planEnforce({ stage, shelf, atlas, allowShrink = false, frozen = null, today, setAside = new Set() }) {
   const listOpts = { frozen, today };
   const shelfRows = new Map();
   const rowsOfShelf = (h) => {
@@ -198,6 +200,10 @@ export function planEnforce({ stage, shelf, atlas, allowShrink = false, frozen =
     }
     if (listed !== s.tree) {
       hold('another tree');
+      continue;
+    }
+    if (setAside.has(s.dir)) {
+      hold('git would change its bytes');
       continue;
     }
     const { built, why } = tryRows(s.view, listOpts);

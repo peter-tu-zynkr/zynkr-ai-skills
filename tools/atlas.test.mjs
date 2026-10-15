@@ -49,7 +49,8 @@ describe('asking the door', () => {
     const cases = [
       [{}, network(), 'no_token'],
       [env, network({ atlas: 'down' }), 'unreachable'],
-      [env, network({ atlas: { status: 401, body: { error: 'refused', reason: 'wrong_subject' } } }), 'refused'],
+      // The door's own answers: 401 {"error":"refused"} and 503 {"error":"try_later"}, no reason.
+      [env, network({ atlas: { status: 401, body: { error: 'refused' } } }), 'refused'],
       [env, network({ atlas: { status: 503, body: { error: 'try_later' } } }), 'try_later'],
       [env, network({ atlas: { status: 500, body: { error: 'boom' } } }), 'unreadable'],
       [env, network({ atlas: { format: 'atlas-shelf-v1', folders: 'all of them', as_is: [] } }), 'unreadable'],
@@ -60,18 +61,18 @@ describe('asking the door', () => {
       assert.equal(answer.why, why);
       assert.ok(!('list' in answer));
     }
-    const refused = await askAtlas({ env, fetchImpl: network({ atlas: { status: 401, body: { reason: 'wrong_subject' } } }).fetchImpl, url: ATLAS });
-    assert.equal(refused.reason, 'wrong_subject');
-    assert.match(atlasWords(refused), /refused this job's token \(wrong_subject\)/);
-    const odd = await askAtlas({ env, fetchImpl: network({ atlas: { status: 401, body: { reason: 'quiet-internal-tool' } } }).fetchImpl, url: ATLAS });
-    assert.equal(odd.reason, undefined, 'only a known refusal code is ever repeated');
+    // Whatever a refusal's body says, the run says it in its own words, and repeats none of it.
+    const refused = await askAtlas({ env, fetchImpl: network({ atlas: { status: 401, body: { error: 'refused', reason: 'quiet-internal-tool' } } }).fetchImpl, url: ATLAS });
+    assert.equal(atlasWords(refused), "Atlas refused this job's token");
+    assert.equal(atlasWords(refused, 'wrong_audience'), "Atlas refused this job's token (a seeded dispatch: a token asked for another audience)");
+    assert.ok(!JSON.stringify(refused).includes('quiet-internal-tool'));
   });
 
   test('a token for another audience is refused by the door (the seeded proof)', async () => {
     const net = network({ atlas: atlasList() });
     const answer = await askAtlas({ env, fetchImpl: net.fetchImpl, url: ATLAS, audience: `${ATLAS_AUDIENCE}-seed` });
     assert.equal(answer.why, 'refused');
-    assert.equal(answer.reason, 'wrong_audience');
+    assert.equal(answer.ok, false);
   });
 
   test('the claims it prints are only the pinned ones, and only printable values', () => {
