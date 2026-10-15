@@ -1,0 +1,600 @@
+{
+  "format": "shelf-frozen-text-v1",
+  "about": "ATL-113 D-142 (Q11 a): input/process/output zynkr.ai served for entries whose text came from a workbench index file no skill folder holds, frozen at the switch. A field applies while the shelf's own files still give the text whose sha256 is while_files_say (null: none). Written by tools/freeze-text.mjs.",
+  "captured_at": "2026-10-15T17:02:02Z",
+  "source": "https://zynkr.ai/api/skills/details",
+  "entries": [
+    {
+      "slug": "zynkr-content-writer",
+      "id": "1.01",
+      "input": {
+        "text": "The user provides an abstract philosophical question and answers assistant's prompts.",
+        "while_files_say": "sha256:a24358930c7211328036ae57ffd8692f767f84d8d1b862ccdd63367576e9e9b0"
+      },
+      "process": {
+        "text": "Use single-step Socratic questions, give a score and brief comment, add a short parable if shallow, and guide through ~5 rounds toward clarity.",
+        "while_files_say": "sha256:101c428c78371be72472ff1538d8cc58fb0bc8065837338721b7faf998f348c5"
+      },
+      "output": {
+        "text": "A score, commentary, optional parable, and the next, more focused philosophical question.",
+        "while_files_say": "sha256:56e3a6a5f9b98172a855cf421050cf3c767ad89a871eba376de9f4954cf22773"
+      }
+    },
+    {
+      "slug": "content-idea",
+      "id": "1.02",
+      "input": {
+        "text": "User gives article draft (topic + core ideas); templates and style guide are preloaded.",
+        "while_files_say": "sha256:30dd5080121c0db0e091ff6fd45e9de202135a0c7a6d645c394c1bbb739d5de2"
+      },
+      "process": {
+        "text": "Multi-turn - propose 3 outlines, 3 key points per section, then write paragraphs stepwise with user review, following the style guide.",
+        "while_files_say": "sha256:5e9a2433b0da83cc17e60cf487b7d78b9cbfde28a65d59a39f8cc3579e504995"
+      },
+      "output": {
+        "text": "Clear outline, section bullet lists, and a 1000–1200-word article drafted in the user’s style.",
+        "while_files_say": "sha256:14d5b0a3b5e5a5aa77a46f2c423ad1a6226a709147526ac86aee89a0887fa41e"
+      }
+    },
+    {
+      "slug": "content-fission",
+      "id": "1.03",
+      "input": {
+        "text": "User provides an article draft; a Style Guide exists in the knowledge base.",
+        "while_files_say": "sha256:ad688956981a5621354231f529676dfd5ce13360cb3acf63b14f02868570b661"
+      },
+      "process": {
+        "text": "Check presence of article, verify relevance to Style Guide, then list edit suggestions: original text, proposed revision, and reason. Ensure mobile-friendly style, avoid “不是⋯而是⋯”, and confirm choices with the user.",
+        "while_files_say": "sha256:31f830b1206c356faf9b63a9b34d9d270de58bc4faa4b8e5e153dd0a00fcd90c"
+      },
+      "output": {
+        "text": "A numbered list of edit suggestions and a question asking which to adopt.",
+        "while_files_say": "sha256:4455442df0c31a5f81344acf7a274d65066f40671a5a0d45bf8e435e5a9d80d3"
+      }
+    },
+    {
+      "slug": "content-style-select",
+      "id": "1.04",
+      "input": {
+        "text": "User provides an article for critique; limited Memory (SEO + style prefs) may be used.",
+        "while_files_say": "sha256:c28cbc52e26aae809e86c7d8fd292ec7066ec1419102ba275aa3e0e62ecc54a3"
+      },
+      "process": {
+        "text": "Evaluate structure, persuasiveness, SEO, and readability; analyze flaws from a third-person, oppositional stance; give scores with reasons; list SEO keywords using allowed Memory; provide directional improvements without rewriting.",
+        "while_files_say": "sha256:721e4c813f5e38e97ea7229c19cd7ed5b00e50661174608cc0933ee3fc4f7fe6"
+      },
+      "output": {
+        "text": "Fixed-format: scoring table, opponent-style critique, SEO keyword list with rationale, and non-rewriting improvement suggestions.",
+        "while_files_say": "sha256:4af6688652b90e1c0854bda66f772b399732c818f7b0fc8683653c8a978a4a00"
+      }
+    },
+    {
+      "slug": "content-draft",
+      "id": "1.05",
+      "input": {
+        "text": "User provides an article, topic, or file; limited Memory (SEO + style preferences) may be referenced.",
+        "while_files_say": "sha256:5f380401673d6ed1e8564878260a053b995390e44305eeb4da63a02373675bd0"
+      },
+      "process": {
+        "text": "Generate either 10 SEO titles or a full SEO strategy. Use Taiwan search habits, five MECE topic categories, keyword groups, outlines, and optimization advice. Never invent memory or rewrite user content.",
+        "while_files_say": "sha256:176f573408e82dc105ad34da95ffb28799ddf4a54f2ebcf36309c41ace1ae61b"
+      },
+      "output": {
+        "text": "SEO titles with reasons and MECE classification, or a complete SEO strategy with keywords, outline, and recommendations.",
+        "while_files_say": "sha256:fb32befd2e6fb49e52bad89a85709e9ab48346eb2a8fb3b82d25cb7cb1b83a84"
+      }
+    },
+    {
+      "slug": "content-newsletter-draft",
+      "id": "1.06",
+      "input": {
+        "text": "An article draft provided by the author.",
+        "while_files_say": "sha256:c139689385f62937d6d18c518c72572e8fed1e2dfb12dcf8b899e1c9cde56b73"
+      },
+      "process": {
+        "text": "Analyze the article’s theme, audience, and conversion goal, then match it to approved CTA categories and templates defined in Zynkr’s CTA handbook .",
+        "while_files_say": "sha256:464c97e739882508978da1a56955ecdbccd06ba07c3972f3bff8846dfc76d78c"
+      },
+      "output": {
+        "text": "Three ready-to-use CTA options with titles, copy, category, sub-goal, placement advice, and validated links.",
+        "while_files_say": "sha256:2ed220e7920891da8cb5158685beff8801883c328dff9f1d4e5ddc7a67540ef9"
+      }
+    },
+    {
+      "slug": "content-reader",
+      "id": "1.08",
+      "input": {
+        "text": "A full or partial article text, optionally with a writing or critique goal.",
+        "while_files_say": "sha256:a5048d281e2e954436e7f14f4679f636cb6e2a80844c09aa59003af35fcc79fb"
+      },
+      "process": {
+        "text": "Analyze structure and ideas, extract an outline and summary, reflect through guided questions, then synthesize refined insights.",
+        "while_files_say": "sha256:ed01954c79c32657236809cbb5a6962ebeb7cabab373ccb13623e92f24e2778f"
+      },
+      "output": {
+        "text": "Clear outlines, summaries, virality analysis, reflective dialogue, and a new actionable outline.",
+        "while_files_say": "sha256:af27542726f9ed875f7b561c3e92335076a5ca28d4535cbbeb66942a2fb3e5a9"
+      }
+    },
+    {
+      "slug": "content-title",
+      "id": "1.09",
+      "input": {
+        "text": "User provides text in English or another language.",
+        "while_files_say": "sha256:91a09fecaad9adf74a39d91bd999f5c7789fd82ac1226e446ea5f8dfd698765a"
+      },
+      "process": {
+        "text": "I translate it into natural, conversational Traditional Chinese using Taiwanese expressions and tone.",
+        "while_files_say": "sha256:ff8cb05091e0a7486dd20f520eccd67595a93ba3de253207006dbccf24c76352"
+      },
+      "output": {
+        "text": "Fluent, localized Traditional Chinese (Taiwan) text that sounds like everyday spoken or written language.",
+        "while_files_say": "sha256:0f276c8372100b83f126466e5f28cf622a6b6a2d6f2e5a84a0fb58cd96c652a4"
+      }
+    },
+    {
+      "slug": "content-cta",
+      "id": "1.10",
+      "input": {
+        "text": "Unstructured user context (intent, knowledge, audience, workflow) plus two reference documents: AI rules (K1) and role distribution (K2).",
+        "while_files_say": "sha256:91a09fecaad9adf74a39d91bd999f5c7789fd82ac1226e446ea5f8dfd698765a"
+      },
+      "process": {
+        "text": "Validate context → select target role → generate role-specific workplace problems using a strict 3-stage IPO pipeline.",
+        "while_files_say": "sha256:ccb09878175888828e2680713cf4c7b79902b8cdc0f368deb3e3398fd3588e51"
+      },
+      "output": {
+        "text": "Clear validation result, ranked role options, and 3 realistic workplace problems for AI learning use cases.",
+        "while_files_say": "sha256:c8168c543a7fdae18df66bca439426de48bec405527be7619e00deedc3c946db"
+      }
+    },
+    {
+      "slug": "sales-client-sourcing",
+      "id": "2.01",
+      "input": {
+        "text": "Job description or application link (or minimal role/company details).",
+        "while_files_say": "sha256:b095ae69ec8e133b880bc24e499105ab6712e291b7d618536bac5a6bd85844a1"
+      },
+      "process": {
+        "text": "Decode hiring intent, role context, priorities, success metrics, and ATS filters using structured analysis (MECE, 80/20).",
+        "while_files_say": "sha256:5ae47e2c698d7d98d426d18ae52e8603fac623b1e23a40cf77d9881dfbbd20c2"
+      },
+      "output": {
+        "text": "Clear role summary, prioritized skills, success KPIs, and ATS-ready keywords for CV tailoring and interview prep.",
+        "while_files_say": "sha256:a235a703b141d3402349d3d4e6d4dcfcedcc6d17443e709dcac39cc645943d16"
+      }
+    },
+    {
+      "slug": "sales-specialist",
+      "id": "2.02",
+      "input": {
+        "text": "User’s CV, target job requirements, and past experience descriptions",
+        "while_files_say": "sha256:cb1c5afb39d9935c139bf5b93f7d48945b9aac2b4863fdf3cc62fdd1fb731f35"
+      },
+      "process": {
+        "text": "Identify skill gaps, guide structured SCQA storytelling, probe for clarity, and refine impact-focused narratives",
+        "while_files_say": "sha256:7bc154bff12fdd346c36d8ede558592623d9235c78a7d1fe64a898d6f06e6268"
+      },
+      "output": {
+        "text": "Clear, job-aligned skill stories ready for CV bullets, interviews, or fit assessment",
+        "while_files_say": "sha256:1c57838231cc3fd91e04410ab6136cb6f6482ddc087855bb2523e16b9ce5b836"
+      }
+    },
+    {
+      "slug": "sales-follow-up-mail",
+      "id": "2.03",
+      "input": {
+        "text": "Candidate CV plus target role context and prior discussion insights",
+        "while_files_say": null
+      },
+      "process": {
+        "text": "Score fit across relevance, value, narrative, and ATS; benchmark against top peers; identify gaps; coach improvements step-by-step",
+        "while_files_say": null
+      },
+      "output": {
+        "text": "Clear fit scores, competitive benchmarking, and actionable recommendations to optimize the CV and career positioning",
+        "while_files_say": null
+      }
+    },
+    {
+      "slug": "sales-inbound",
+      "id": "2.04",
+      "input": {
+        "text": "User’s resume content and prior contextual analysis from earlier phases.",
+        "while_files_say": "sha256:8d60b3c67a2e63281e4ccf369a1f1edb97ecd2f2a1c6c21cff099797da10eb1e"
+      },
+      "process": {
+        "text": "Automatically analyze skill placement, depth, progression, and leadership signals across roles to assess career growth credibility.",
+        "while_files_say": "sha256:bd8029af3971197099a45f67741516391bd036840cc187c3882b6c770dd422d1"
+      },
+      "output": {
+        "text": "A structured diagnosis of progression quality, flagged risks, and concrete rewrite recommendations to strengthen the growth narrative.",
+        "while_files_say": "sha256:74223f906c48b7dc051cfdab368cf317dae92bf44b85ef33fae1a52caa88e798"
+      }
+    },
+    {
+      "slug": "sales-discovery",
+      "id": "2.06",
+      "input": {
+        "text": "Resume or key experiences, job description, interview stage, and company context (inferred if missing).",
+        "while_files_say": "sha256:bfde87e56d04d6164d351fd4df9fad2c77fbf1affbf1f27899b49b1ea7ff6542"
+      },
+      "process": {
+        "text": "Analyze the interview context from an interviewer’s perspective and identify likely questions and evaluation signals.",
+        "while_files_say": "sha256:bb5ad3d05aa598e05ad149c36ca308af8c3b2038661be4e76dc79bf266c88751"
+      },
+      "output": {
+        "text": "A concise interview question map with rationale, priority, and suggested questions for the recap Q&A.",
+        "while_files_say": "sha256:746acfbe7b3a5ff1c955c0eb9e491ba2d216c0c1c65e0bbb247c13f4cad77696"
+      }
+    },
+    {
+      "slug": "sales-discovery-vision",
+      "id": "2.07",
+      "input": {
+        "text": "Resume, job description, interview stage, and company interview criteria or culture (if unavailable, inferred from public sources with disclosure).",
+        "while_files_say": "sha256:212df475a8dad980fc6b8202861934628c3f709622db10fda7df9baecc194d2f"
+      },
+      "process": {
+        "text": "Analyze interview context, generate likely questions, and refine answers through structured, interviewer-perspective feedback.",
+        "while_files_say": "sha256:77701f82a408200a633e60322ecac355de724e67621c0c4c3eca5db911e3f148"
+      },
+      "output": {
+        "text": "Clear, stage-ready interview answers with anticipated follow-ups and three tailored questions to ask the interviewer.",
+        "while_files_say": "sha256:029d8366d206bd63fd3d51fa0436e83623c77ba84bf4b48a195a78d60ca33767"
+      }
+    },
+    {
+      "slug": "sales-research",
+      "id": "2.11",
+      "input": {
+        "text": "User shares business context, team structure, challenges, and goals through guided Q&A.",
+        "while_files_say": "sha256:a4ca6ff6668f0e55da041f8fd40a1816bc6ef5fa97a94ff927d984b543c24e72"
+      },
+      "process": {
+        "text": "Conducts structured, step-by-step needs discovery by asking one question at a time, confirming understanding, and probing deeper.",
+        "while_files_say": "sha256:78d8b9c81e6499e53cb89969ebd8985032bd6f7ea90306b2b5ba40327b589e33"
+      },
+      "output": {
+        "text": "Clear, organized summary of user background, challenges, and needs, ready for strategic follow-up.",
+        "while_files_say": "sha256:8f73e0d18736b989cf47bf683d6d90bf63ee76151ca0e8607f21533f980e3d73"
+      }
+    },
+    {
+      "slug": "consult-brd-writer",
+      "id": "2.12",
+      "input": {
+        "text": "Strategic context from founders or senior managers about vision, products, organization, and decision dynamics.",
+        "while_files_say": "sha256:12e563798322574d731ea881448c20eed2c0ee1aa248c7c499215dc429097cf7"
+      },
+      "process": {
+        "text": "Guided, structured conversation—one question at a time—to uncover long-term goals, value propositions, and operational realities.",
+        "while_files_say": "sha256:51c0fdbee1bee490dd77cb6ab7f02e84ad124c7aeb36b7230f59476fbecc77d7"
+      },
+      "output": {
+        "text": "Concise strategic discovery summary to support downstream process mapping or pain point validation.",
+        "while_files_say": "sha256:75176a62b3d7efa7cd1036526706e19dfef7f8deb1c6ddf914d72e27a29cc022"
+      }
+    },
+    {
+      "slug": "gtm-uat-writer",
+      "id": "2.14",
+      "input": {
+        "text": "A client’s description of an inefficient or unclear business process",
+        "while_files_say": "sha256:1cc564e0f11c1e56cbf894bb096adfcc68bc6b2aa45b15e52589abbd16be6acc"
+      },
+      "process": {
+        "text": "Guide structured questioning to map end-to-end steps, identify suppliers and customers, and infer standard inputs/outputs",
+        "while_files_say": "sha256:bdf6178ea8e5cdc65a663faec390758da790ad308e2cdeb86f1cf3b07f1a0834"
+      },
+      "output": {
+        "text": "A clear, reviewable process map presented as a structured table for improvement planning",
+        "while_files_say": "sha256:ed4ed1e71354a7b009bd0abea5d21472e263d2f72c18f5ea0afa34aa0e9c120d"
+      }
+    },
+    {
+      "slug": "gtm-adoption-reporter",
+      "id": "2.15",
+      "input": {
+        "text": "SIPOC-style process steps and contextual details (frequency, objectivity, decision rules).",
+        "while_files_say": "sha256:525f767f681ab38479a8e6754b10d532612c27a5393f605cb5cc7f532bc9010e"
+      },
+      "process": {
+        "text": "Diagnose automation suitability, assess ROI, classify tasks, and recommend appropriate technologies with concise rationale.",
+        "while_files_say": "sha256:e7dd1b70c3f40dbe6a1bc4521ac4b090d7c62d6f135d54a03940435bee880c6b"
+      },
+      "output": {
+        "text": "A structured evaluation table, transformation recommendations, and a handoff prompt for solution design.",
+        "while_files_say": "sha256:f519c732c396e89b3a4ba7521a230d3fd229ea5d6833a9b89bbaa9ce8b263bae"
+      }
+    },
+    {
+      "slug": "gtm-bug-ticket",
+      "id": "2.16",
+      "input": {
+        "text": "Diagnosed process steps with automation readiness scores",
+        "while_files_say": "sha256:2532aa38b7c8d6a7e7b243de4bf2e1b6a613b255aeff05811ab6682542a364fc"
+      },
+      "process": {
+        "text": "Redesign each step into structured, automation-ready workflows with task breakdowns, system layer mapping, and tool suggestions",
+        "while_files_say": "sha256:83fc3b8763ac5ba8cb6e866d7897dfcf86309c3dce7fc3d759fa7b821f5149d0"
+      },
+      "output": {
+        "text": "Builder-ready tables with sub-tasks, flow type, MVP stack, and a summary for digital transformation execution",
+        "while_files_say": "sha256:d7fdc42dbcb4f98aa9142d9b8169921e382e49c854935f2c3881327d4bc9af9e"
+      }
+    },
+    {
+      "slug": "admin-meeting-prep",
+      "id": "3.03",
+      "input": {
+        "text": "A proposed project, initiative, or problem the user wants to validate before execution.",
+        "while_files_say": "sha256:855878938defc9465a41ce8e1853d5b863ba367760d2b1e28b1a6dc61df01fc3"
+      },
+      "process": {
+        "text": "Structured, Socratic facilitation that stress-tests logic across purpose, problem, execution, governance, timing, metrics, and risks.",
+        "while_files_say": "sha256:194e6fdd21a5ea116700e385152eecc5b00c033ead44c7f169814e3daf22e769"
+      },
+      "output": {
+        "text": "A clarified, execution-ready project foundation with aligned rationale, plan, roles, timeline, success measures, and risk mitigation.",
+        "while_files_say": "sha256:5c1dfa47d12f0c597ac16ada3bd27a099b8daae06b5d85125d5b620b0d66a1f3"
+      }
+    },
+    {
+      "slug": "admin-video-document",
+      "id": "3.06",
+      "input": {
+        "text": "Raw meeting notes, transcripts, or unstructured updates.",
+        "while_files_say": "sha256:7925e766feefe5db3618fd568ec5d618dfc1733792da731d857a0c952b4188cd"
+      },
+      "process": {
+        "text": "Reorganize scattered details into logical categories, inferring context while maintaining professional clarity.",
+        "while_files_say": "sha256:77b4f11c5b98adb1974131df0383d42aff71cd70786f99b479340ccc29c5926a"
+      },
+      "output": {
+        "text": "A structured \"Weekly Project Update\" featuring Summary, Progress, Blockers, and What’s Next.",
+        "while_files_say": "sha256:d05cc94d3ec54259451e4e43c3d6556e100adf103747426c1821c62e92c7ae85"
+      }
+    },
+    {
+      "slug": "project-planning",
+      "id": "3.07",
+      "input": {
+        "text": "Bi-weekly meeting document with weekly summaries and sectioned updates.",
+        "while_files_say": "sha256:671a9f5d8f196226f697d42acebff5bc1c6309456cd3782c36530f424b2e38ac"
+      },
+      "process": {
+        "text": "Identify latest and previous weeks, compare changes, detect additions/updates/deletions, surface risks and remaining actions, then structure notes per team.",
+        "while_files_say": "sha256:56db6c5711a69f545e3c1965d406bcd85ef27759f8721a86fa38354dc19b20bb"
+      },
+      "output": {
+        "text": "Concise Chinese meeting notes by team, each with Progress, Callouts/Risks, and Action Items, bullets under 20 characters.",
+        "while_files_say": "sha256:2e8448b6e01a202ec5b0fa6e98b6d012a35bdd307bc53446776269ba01f9ccf5"
+      }
+    },
+    {
+      "slug": "training-lecture-transcript",
+      "id": "4.01",
+      "input": {
+        "text": "User-provided video file or the transcript.",
+        "while_files_say": "sha256:5b36826079c536882b3f53fefb362270635d01aff8cec6e3f90111b714c1e197"
+      },
+      "process": {
+        "text": "Transcribe the video, remove filler words, and map the content to the reference outline (strictly ignoring reference text detail).",
+        "while_files_say": "sha256:ef5fe3d56b4e2c73e2563fd1b5df3c4dbc81214d7e9c4294f04170229a066d53"
+      },
+      "output": {
+        "text": "A reader-friendly document structured into Summary, Theme, Q&A, Tools, and Call to Action sections.",
+        "while_files_say": "sha256:fbd0ea2f5791a1624eb25a4495b9bceb7758a132f484e42ae1a4c069b12f68b8"
+      }
+    },
+    {
+      "slug": "product-planning",
+      "id": "5.02",
+      "input": {
+        "text": "User provides a prompt to optimize.",
+        "while_files_say": "sha256:c8f8e6d3e07d68e45ed88028c70a873dabe5e7b60daf1bb5054d357fb0035789"
+      },
+      "process": {
+        "text": "Apply GUIDE and IPO, clarify only when needed, restructure into system/developer/user layers, and define goals, reasoning steps, and output format.",
+        "while_files_say": "sha256:c8f8e6d3e07d68e45ed88028c70a873dabe5e7b60daf1bb5054d357fb0035789"
+      },
+      "output": {
+        "text": "A clear, testable prompt package with explicit roles, instructions, and structure, plus variants or blueprints when useful.",
+        "while_files_say": "sha256:c8f8e6d3e07d68e45ed88028c70a873dabe5e7b60daf1bb5054d357fb0035789"
+      }
+    },
+    {
+      "slug": "cv-customizer",
+      "id": "7.01",
+      "input": {
+        "text": "Hiring manager provides rough notes or ideas about the role.",
+        "while_files_say": "sha256:9cff448cfea582641e0f4d7d0dc7413041dbca673f2d4eda23d9355359ebd3e8"
+      },
+      "process": {
+        "text": "Assistant asks structured clarifying questions and guides the user through a JD-creation workflow.",
+        "while_files_say": "sha256:f0837efabec24192502a16adcc38ef04676ad15d62fb204fd8840437e5b8bfb9"
+      },
+      "output": {
+        "text": "A complete JD draft in YAML with versioning and an optional alignment summary.",
+        "while_files_say": "sha256:76c61d8ecd83d671791676a9f69a3f56150b28a0495ab2318b5e313ec5ac2cea"
+      }
+    },
+    {
+      "slug": "cv-job-decoder",
+      "id": "7.02",
+      "input": {
+        "text": "JD criteria, one or more candidate resumes, optional company culture notes, and optional desired shortlist size.",
+        "while_files_say": null
+      },
+      "process": {
+        "text": "Decode JD → analyze resumes → score candidates using hard-skill gate, domain fit, weighted metrics, and risk indicators.",
+        "while_files_say": null
+      },
+      "output": {
+        "text": "Ranked candidate evaluation with scores, risks, cultural fit notes, and a final HR decision summary.",
+        "while_files_say": null
+      }
+    },
+    {
+      "slug": "cv-story-extractor",
+      "id": "7.03",
+      "input": {
+        "text": "JD Blueprint, competency requirements, role context, and candidate risk insights (from resume screening).",
+        "while_files_say": null
+      },
+      "process": {
+        "text": "Convert role requirements into a competency model → assign competencies to interview rounds → generate structured question bank (behavioral, situational, technical, culture) → produce tailored risk-based questions → build weighted scorecard with behavioral...",
+        "while_files_say": null
+      },
+      "output": {
+        "text": "A complete bilingual interview kit including competency model, question sets, risk questions, scoring rubrics, and a finalized scorecard ready for interviewers to use.",
+        "while_files_say": null
+      }
+    },
+    {
+      "slug": "cv-fit-scorer",
+      "id": "7.04",
+      "input": {
+        "text": "Interview transcripts, interviewer scorecards, Assistant A’s question set and scoring standards, and hiring manager/HR inputs.",
+        "while_files_say": null
+      },
+      "process": {
+        "text": "Extract behavioral evidence → compile independent feedback → detect discrepancies across interviewers → prepare pre-calibration summaries → support calibration discussions → document final hire/no-hire decisions with rationale and risk considerations.",
+        "while_files_say": null
+      },
+      "output": {
+        "text": "A structured final evaluation package including evidence summaries, discrepancy analysis, calibration notes, final decision record, and candidate communication guidelines.",
+        "while_files_say": null
+      }
+    },
+    {
+      "slug": "cv-progression",
+      "id": "7.05",
+      "input": {
+        "text": "Candidate information, hiring stage, interview details (if applicable), and any specific instructions regarding tone or language preference.",
+        "while_files_say": null
+      },
+      "process": {
+        "text": "Auto-detect communication scenario → classify risk level → check required information → generate a compliant formal email using structured templates and context-aware tone → provide optional refinements.",
+        "while_files_say": null
+      },
+      "output": {
+        "text": "A polished, risk-compliant, formal business email (Chinese, English, or bilingual), fully personalized and ready to send.",
+        "while_files_say": null
+      }
+    },
+    {
+      "slug": "cv-rewrite",
+      "id": "7.06",
+      "input": {
+        "text": "Student questions or answers about AI writing concepts from the course, or a request to be quizzed or taught.",
+        "while_files_say": null
+      },
+      "process": {
+        "text": "Apply course frameworks to quiz, evaluate, or explain through guided questioning and structured feedback.",
+        "while_files_say": null
+      },
+      "output": {
+        "text": "Scored assessments or clear, practical explanations that deepen understanding and improve AI-assisted writing skills.",
+        "while_files_say": null
+      }
+    },
+    {
+      "slug": "zynkr-recruiter",
+      "id": "7.07",
+      "input": {
+        "text": "Student questions or answers about AI writing concepts from the course, or a request to be quizzed or taught.",
+        "while_files_say": "sha256:320b013ca5c54f4af83364be4e8165dd0a109b1b2e3fa1068b352d650965cd88"
+      },
+      "process": {
+        "text": "Apply course frameworks to quiz, evaluate, or explain through guided questioning and structured feedback.",
+        "while_files_say": "sha256:2d0e96e8e1ad1efb5ec956ce9be91789d2999e6331a6bb488ee08f1614590152"
+      },
+      "output": {
+        "text": "Scored assessments or clear, practical explanations that deepen understanding and improve AI-assisted writing skills.",
+        "while_files_say": "sha256:cc35bc83a97570e5c0c3022fa413e9327fa4ab2637a17191c797727a159bd045"
+      }
+    },
+    {
+      "slug": "recruiter-jd-architect",
+      "id": "7.08",
+      "input": {
+        "text": "Student questions or answers about AI writing concepts from the course, or a request to be quizzed or taught.",
+        "while_files_say": "sha256:6dcc4b43761c206b8a81405c6f6a3df4966b579edc6a9c0eb4b2ab454a6cad08"
+      },
+      "process": {
+        "text": "Apply course frameworks to quiz, evaluate, or explain through guided questioning and structured feedback.",
+        "while_files_say": "sha256:0ed66a404b2af145ed2e4bba4c726673ba3d656a9c11dc24049fa73d9df7c737"
+      },
+      "output": {
+        "text": "Scored assessments or clear, practical explanations that deepen understanding and improve AI-assisted writing skills.",
+        "while_files_say": "sha256:05a948246e6f1696baf60db1babc2061f562d9fa9987df2eb1605c69b4eed806"
+      }
+    },
+    {
+      "slug": "recruiter-resume-screener",
+      "id": "7.09",
+      "input": {
+        "text": "Student questions or answers about AI writing concepts from the course, or a request to be quizzed or taught.",
+        "while_files_say": "sha256:20ca2054eda5d5d99a1779b3ea35464d52440b629ee3554d1e60e4501590382e"
+      },
+      "process": {
+        "text": "Apply course frameworks to quiz, evaluate, or explain through guided questioning and structured feedback.",
+        "while_files_say": "sha256:bbe011596e73a0ec8b0d97c103649341b58cbc1c4efe2601582ec7e6af3b2afc"
+      },
+      "output": {
+        "text": "Scored assessments or clear, practical explanations that deepen understanding and improve AI-assisted writing skills.",
+        "while_files_say": "sha256:6be3cfd26df4597056dfeb9151677b101b91d9840c44b7e6c50a87d26bd022ee"
+      }
+    },
+    {
+      "slug": "recruiter-interview-question-customize",
+      "id": "7.11",
+      "input": {
+        "text": "User’s career-related question or unclear bottleneck tied to the course content.",
+        "while_files_say": "sha256:a3b170b8e3b16f1da8f280da54f436bc7737c5dea4669031fb6567463fbf9ef3"
+      },
+      "process": {
+        "text": "Clarify the situation, map it to the course’s eight principles, and reason strictly from the provided transcript.",
+        "while_files_say": "sha256:ec8de0701d2df2fdd2de147407eaf3345a186af7430817f3f2bdf3ee3a864ab0"
+      },
+      "output": {
+        "text": "A validated interpretation, relevant principle alignment, and a concrete next action grounded in the course.",
+        "while_files_say": "sha256:d7652a08f78291f7803475b7376e7f215378a12114fd7ded51ee46a6717b1425"
+      }
+    },
+    {
+      "slug": "recruiter-mock-interview",
+      "id": "7.12",
+      "input": {
+        "text": "User’s career background, constraints, goals, preferences, and reflections provided through guided questions.",
+        "while_files_say": "sha256:6c19f03496e96c288404f818ba63078626f9c7f8402eca4173bbf2653958506d"
+      },
+      "process": {
+        "text": "Structured, stage-based coaching—ask clarifying questions, synthesize answers, propose options, validate choices, and iteratively refine strategy.",
+        "while_files_say": "sha256:6a07fca7104d451e999ac3beb7a6937fd247b2a3a0a691b42d23fea2d1e6221c"
+      },
+      "output": {
+        "text": "A clear 3-year vision, 3–5 strategic pillars, RAG assessments with upgrade hypotheses, and one prioritized one-page project charter.",
+        "while_files_say": "sha256:83b60a31e5d197b2fe1825e6356aecd359e3eac4df8cd4ba98c1949a8c7ab085"
+      }
+    },
+    {
+      "slug": "zynkr-accounting",
+      "id": "8.01",
+      "input": {
+        "text": "User background information (professional role, services or expertise) and one or more business cards (image or text).",
+        "while_files_say": "sha256:f8563769363372dbba6ff6a6e695a238e3c6bd1bbf459523f50af5b3cd8639f5"
+      },
+      "process": {
+        "text": "Extract and normalize only the information explicitly visible on each business card, handling incomplete or noisy inputs without fabrication. Capture uncertainty and missing fields for later enrichment, while keeping all non-visible attributes empty.",
+        "while_files_say": "sha256:f7decd887a9dfa257a94a274f57e1d872ce35b8bd6241a33bb2290564234f101"
+      },
+      "output": {
+        "text": "Structured lead records aligned with the master sheet schema, containing clean contact details, remarks on uncertainty, and placeholders for downstream enrichment and scoring.",
+        "while_files_say": "sha256:7ad4c701dca564fb1b1db8b48e63a7f4340cc5479bb334005882642d86ccbb79"
+      }
+    }
+  ]
+}
