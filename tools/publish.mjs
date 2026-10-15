@@ -699,7 +699,8 @@ export function stageIndex(shelfRoot, desired) {
 export function stageIndexEnforce(shelfRoot, desired, keptDirs) {
   git(shelfRoot, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', 'skills']);
   if (isDir(path.join(shelfRoot, 'skills'))) git(shelfRoot, ['add', '-f', '--', 'skills']);
-  if (keptDirs.length) git(shelfRoot, ['reset', '-q', 'HEAD', '--', ...keptDirs]);
+  // Literal: a kept folder named `x*` must not put a published neighbour back to HEAD as well.
+  if (keptDirs.length) git(shelfRoot, ['--literal-pathspecs', 'reset', '-q', 'HEAD', '--', ...keptDirs]);
   return indexMismatches(readIndex(shelfRoot), desired);
 }
 
@@ -866,10 +867,10 @@ export function loadFrozen(shelfRoot) {
 /**
  * The shelf as it is before the run: its folders (shelfSkills, which never nest) with their files,
  * tree ids and a view for the listing build; every file it holds; and how many sit in no folder.
- * A file's sha and mode are git's, from the index the checkout made (the committed blob), never a
- * hash of the working tree: a folder's .gitattributes (`eol=crlf`, say) can make a checkout write
- * other bytes than the shelf holds. Its text is read from the working tree, which differs from the
- * blob only in line ends, and the listing build reads line ends alike.
+ * Everything is git's own, never the working tree's: a file's sha and mode come from the index the
+ * checkout made (the committed blob), and the view reads that blob's text (`git cat-file`). A
+ * folder's .gitattributes can make a checkout write other bytes than the shelf holds (`eol=crlf`,
+ * `ident`), and under enforce a mirror may rewrite or remove a folder the run then keeps.
  */
 export function readShelfState(shelfRoot) {
   const files = [...readIndex(shelfRoot)].map(([p, f]) => ({ path: p, sha: f.sha, mode: f.mode }));
@@ -880,11 +881,13 @@ export function readShelfState(shelfRoot) {
   const found = indexed.filter((h) => byFolder.get(h.dir).length > 0);
   const folders = found.map((h) => {
     const entries = byFolder.get(h.dir);
+    // The view lists regular files only, as the working tree's walk did.
+    const blobOf = new Map(entries.filter((e) => MODES.has(e.mode)).map((e) => [e.path, e.sha]));
     return {
       ...h,
       files: entries,
       tree: treeId(entries),
-      view: folderView(h.dir, entries.map((e) => e.path), (rel) => fs.readFileSync(path.join(shelfRoot, h.dir, rel), 'utf8')),
+      view: folderView(h.dir, [...blobOf.keys()], (rel) => git(shelfRoot, ['cat-file', 'blob', blobOf.get(rel)])),
     };
   });
   const held = new Set(found.map((h) => h.dir));
@@ -1339,7 +1342,7 @@ async function enforceRun(opts, deps, mode) {
     for (const dir of culprits) setAside.add(dir);
     // Those the shelf already held go back to its own copy before the next mirror.
     const held = culprits.filter((dir) => shelfFiles.has(dir));
-    if (held.length) git(opts.shelf, ['checkout', '-q', 'HEAD', '--', ...held]);
+    if (held.length) git(opts.shelf, ['--literal-pathspecs', 'checkout', '-q', 'HEAD', '--', ...held]);
     plan = planFor();
   }
   const words = planWords(plan);

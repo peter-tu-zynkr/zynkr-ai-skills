@@ -26,7 +26,7 @@ import {
 import { Refusal, SHELF_URL, unexpectedWords } from './common.mjs';
 import { DEFAULT_ATLAS_MODE, atlasMode, idWords } from './enforce.mjs';
 import { textHash } from './listing.mjs';
-import { MAX_STAGE_FOLDERS, main, publish, readStage } from './publish.mjs';
+import { MAX_STAGE_FOLDERS, main, publish, readStage, stageIndexEnforce } from './publish.mjs';
 
 const F = (slug, sheetId, spec = {}) => skill(slug, { full: true, sheetId, ...spec });
 const opts = (stage, shelf, more = {}) => ({
@@ -758,6 +758,59 @@ describe("rule 5, whatever git's attributes do", () => {
     const net = network({ atlas: atlasList(listed(stage, 'alpha')) });
     assert.equal(await main(argv(stage, shelf), enforce(net)), 0);
     assert.equal(git(remote, ['rev-parse', `main:${stage.dir('alpha')}`]).trim(), stage.tree('alpha'), 'byte for byte the tree Atlas approved');
+  });
+
+  test('a move whose new place git would change keeps the old place, which the first mirror had taken away', async () => {
+    const { shelf, remote, earlier } = withGamma();
+    const before = git(remote, ['rev-parse', `main:${earlier.dir('alpha')}`]).trim();
+    const stage = buildStage(
+      [F('alpha', '1.01', { cat: '3-operations', files: { '.gitattributes': '* text\n', 'references/win.md': 'one\r\ntwo\r\n' } }), F('beta', '1.02'), F('gamma', '1.03')],
+      { sha: WB.b },
+    );
+    // Atlas approves the new place, still lists the old one at the shelf's tree, and withdrew gamma.
+    const net = network({
+      atlas: atlasList([[earlier.dir('alpha'), earlier.tree('alpha')], ...listed(stage, 'alpha'), [earlier.dir('beta'), earlier.tree('beta')]]),
+    });
+    const d = enforce(net);
+    assert.equal(await main(argv(stage, shelf), d), 0, d.err.join('\n'));
+    const files = filesOn(remote);
+    assert.doesNotMatch(files, /gamma|3-operations/);
+    assert.equal(git(remote, ['rev-parse', `main:${earlier.dir('alpha')}`]).trim(), before, 'the old place stays, as the shelf had it');
+    assert.match(lastMessage(remote), /^Waiting for Atlas: 1\.01$/m);
+    assert.equal(rowsBy(net).alpha.source_path, `${earlier.dir('alpha')}/SKILL.md`, "alpha's row is built from the old place's files");
+  });
+
+  test("a kept folder's rows are built from the blobs the shelf holds, not from what a checkout wrote (ident)", async () => {
+    const attrs = { files: { '.gitattributes': '* ident\n' }, description: 'Pinned at $Id$ on purpose' };
+    const { shelf, remote, earlier } = withGamma(attrs);
+    fs.rmSync(path.join(shelf, earlier.dir('alpha')), { recursive: true, force: true });
+    git(shelf, ['checkout', '--', 'skills']);
+    assert.match(fs.readFileSync(path.join(shelf, earlier.dir('alpha'), 'SKILL.md'), 'utf8'), /\$Id: [0-9a-f]{40} \$/, 'the checkout expanded it');
+    const stage = buildStage([F('alpha', '1.01', attrs), F('beta', '1.02'), F('gamma', '1.03')], { sha: WB.b });
+    const net = network({ atlas: atlasList([[earlier.dir('beta'), earlier.tree('beta')]], [earlier.dir('alpha')]) });
+    const d = enforce(net);
+    assert.equal(await main(argv(stage, shelf), d), 0, d.err.join('\n'));
+    assert.doesNotMatch(filesOn(remote), /gamma/);
+    const row = JSON.stringify(rowsBy(net).alpha);
+    assert.match(row, /Pinned at \$Id\$ on purpose/);
+    assert.doesNotMatch(row, /\$Id: /);
+  });
+
+  test('a kept folder named like a pathspec glob puts only itself back to HEAD', () => {
+    const repo = scratch('literal');
+    git(repo, ['init', '-q']);
+    writeFile(repo, 'skills/c/a*/SKILL.md', 'kept\n');
+    writeFile(repo, 'skills/c/aXb/SKILL.md', 'old\n');
+    git(repo, ['add', '-A']);
+    git(repo, ['-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-q', '-m', 'one']);
+    const kept = git(repo, ['rev-parse', 'HEAD:skills/c/a*/SKILL.md']).trim();
+    writeFile(repo, 'skills/c/aXb/SKILL.md', 'new\n');
+    const published = git(repo, ['hash-object', '--', 'skills/c/aXb/SKILL.md']).trim();
+    const desired = new Map([
+      ['skills/c/a*/SKILL.md', { sha: kept, mode: '100644', from: 'shelf' }],
+      ['skills/c/aXb/SKILL.md', { sha: published, mode: '100644', from: 'stage' }],
+    ]);
+    assert.deepEqual(stageIndexEnforce(repo, desired, ['skills/c/a*']), []);
   });
 });
 
