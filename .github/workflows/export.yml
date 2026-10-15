@@ -17,6 +17,26 @@ name: Export to the shelf
 # with prune: true (never promote) within 15 minutes of each new green stage, and does nothing
 # while SHELF_LIVE is not 'true'. If GitHub's schedule recovers, both together are harmless:
 # one concurrency group, and writes only on change.
+#
+# ATL-113 Part D — only what Zynkr Atlas lists leaves the team (rulings D-138…D-142). The repository
+# variable SHELF_ATLAS chooses:
+#   off      the stage is published as above. Unset means off until the switch.
+#   report   every run asks Atlas, prints what enforce would publish, keep, hold and remove and the
+#            parity check of the listings, then publishes as off does. Red if Atlas can't be asked.
+#   enforce  a staged folder is published only at the git tree Atlas lists for it; every zynkr.ai
+#            row is built from the files the shelf holds; promote is retired. Atlas unreachable, or
+#            no usable stage: the run still makes the removals the other side asks for, posts the
+#            rows, and is red.
+# Atlas is asked with GitHub's OIDC token (audience zynkr-atlas-shelf), so the publish job holds
+# id-token: write and no secret: the door at atlas.zynkr.ai checks that GitHub signed it for this
+# workflow, on main, in the export environment. Because the job holds that beside contents: write,
+# every action is pinned to a commit.
+#
+# Switching it on (spec §15.4): `gh variable set SHELF_ATLAS -R peter-tu-zynkr/zynkr-ai-skills -b report`;
+# after a clean report run and the spec's other preconditions, `-b enforce`. Then change
+# DEFAULT_ATLAS_MODE in tools/enforce.mjs to 'enforce' in a PR, so an unset variable enforces and off
+# must be set on purpose (each run logs which). Before enforcing, refresh the frozen listing text:
+# `node tools/freeze-text.mjs --shelf .` and merge the result (D-142).
 on:
   schedule:
     # Every 15 minutes, off the hour on purpose: GitHub drops scheduled runs under load and names the
@@ -33,7 +53,7 @@ on:
           - 'true'
         default: report
       promote:
-        description: 'Publish skills new to the shelf: sheetIds (e.g. 3.24) or slugs, separated by commas, or all. The run summary lists held skills by sheetId.'
+        description: 'Publish skills new to the shelf: sheetIds (e.g. 3.24) or slugs, separated by commas, or all. The run summary lists held skills by sheetId. Retired under SHELF_ATLAS=enforce, where Atlas is the only way on.'
         type: string
         default: ''
       allow_shrink:
@@ -48,6 +68,14 @@ on:
         description: 'Red proof: plant an unlisted file in the stage, so the publisher must refuse'
         type: boolean
         default: false
+      seed_atlas:
+        description: 'Red proof (SHELF_ATLAS report or enforce): ask Atlas at an address that never resolves, or with the wrong audience'
+        type: choice
+        options:
+          - none
+          - unreachable
+          - wrong_audience
+        default: none
 
 concurrency:
   group: shelf-export
@@ -63,10 +91,15 @@ jobs:
     timeout-minutes: 10
     environment: export
     permissions:
+      # The export commit.
       contents: write
+      # GitHub's OIDC token, which Atlas's door checks (ATL-113 Part D). No secret is stored for it.
+      id-token: write
+      # This run's own start time: the order key of every post to zynkr.ai.
+      actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           # main's tip, not github.sha: a run that waited in the concurrency group behind a run
           # that pushed would otherwise mirror onto the older commit, read an older
@@ -77,7 +110,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           package-manager-cache: false
@@ -86,8 +119,11 @@ jobs:
         run: node --test 'tools/*.test.mjs'
 
       # Refuses a run that is not on the workbench's main; writes run.json beside stage/ for the
-      # publisher, which refuses a stage whose workbench_sha is not that run's commit.
+      # publisher, which refuses a stage whose workbench_sha is not that run's commit. A failed
+      # download does not stop the job: under SHELF_ATLAS the removals Atlas asks for still go
+      # (rule 5). The publisher finds no run.json and says so; with SHELF_ATLAS off it refuses.
       - name: Download the stage
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.WORKBENCH_READ_TOKEN }}
         run: node tools/fetch-stage.mjs --out "$RUNNER_TEMP/in"
@@ -103,12 +139,15 @@ jobs:
         env:
           WORKBENCH_READ_TOKEN: ${{ secrets.WORKBENCH_READ_TOKEN }}
           SKILLS_SYNC_HMAC_SECRET: ${{ secrets.SKILLS_SYNC_HMAC_SECRET }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SHELF_ATLAS: ${{ vars.SHELF_ATLAS }}
           EVENT: ${{ github.event_name }}
           PRUNE: ${{ inputs.prune }}
           PROMOTE: ${{ inputs.promote }}
           ALLOW_SHRINK: ${{ inputs.allow_shrink }}
           ALLOW_REWIND: ${{ inputs.allow_rewind }}
           SEED_FAIL: ${{ inputs.seed_fail }}
+          SEED_ATLAS: ${{ inputs.seed_atlas }}
         run: |
           args=(--stage "$RUNNER_TEMP/in" --shelf "$GITHUB_WORKSPACE" --event "$EVENT" --run "$RUNNER_TEMP/in/run.json")
           if [ "$EVENT" = "workflow_dispatch" ]; then
@@ -117,5 +156,6 @@ jobs:
             if [ "$ALLOW_SHRINK" = "true" ]; then args+=(--allow-shrink); fi
             if [ "$ALLOW_REWIND" = "true" ]; then args+=(--allow-rewind); fi
             if [ "$SEED_FAIL" = "true" ]; then args+=(--seed-fail); fi
+            if [ -n "$SEED_ATLAS" ] && [ "$SEED_ATLAS" != "none" ]; then args+=(--seed-atlas "$SEED_ATLAS"); fi
           fi
           node tools/publish.mjs "${args[@]}"
