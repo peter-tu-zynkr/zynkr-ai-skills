@@ -1390,15 +1390,16 @@ async function enforceRun(opts, deps, mode) {
   const frozenUsed = [...plan.final.values()].reduce((n, f) => n + (f.built.frozenUsed ?? 0), 0);
   log(`listing: ${plural(rows.length, 'row')} built from the shelf's files · first_seen carried for ${carried} · frozen text on ${frozenUsed}`);
 
-  // Atlas asks for removals with no shrink guard (rule 5), and that holds for the site's valve too:
-  // when the removals Atlas asked for are what takes the post under half, the body says allow_shrink.
+  // Atlas asks for removals with no shrink guard (rule 5), but the site keeps its valve (the owner's
+  // ruling, 16 Oct, dropping choice 3): when the removals Atlas asked for take the post under half,
+  // zynkr.ai keeps those listings and the run turns red until one is dispatched with allow_shrink.
   const atlasShrink = rowsBefore > 0 && rows.length < rowsBefore / 2 && rows.length + rowsByAtlas >= rowsBefore / 2;
-  if (atlasShrink) log('note: the removals Atlas asked for take the listings under half, so the post carries allow_shrink');
+  if (atlasShrink && !opts.allowShrink) log('note: the removals Atlas asked for take the listings under half; zynkr.ai keeps them until a run is dispatched with allow_shrink');
 
   const workbenchSha = applied ? applied.manifest.workbench_sha : lastWorkbenchCommit(opts.shelf);
   if (!workbenchSha) refuse('no workbench commit to name in the post (no stage taken from, and no Workbench-Commit trailer on the shelf)');
   const startedAt = await runStartedAt({ env, fetchImpl });
-  const body = buildBody({ workbenchSha, committedAt: startedAt, prune, allowShrink: opts.allowShrink || atlasShrink, rows });
+  const body = buildBody({ workbenchSha, committedAt: startedAt, prune, allowShrink: opts.allowShrink, rows });
   const answer = await postToSite({ url: siteUrl, body, secret, sourceSha: workbenchSha, fetchImpl });
   const described = describeAnswer(answer.status, answer.text);
   log(`site: ${described}`);

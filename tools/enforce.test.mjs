@@ -144,7 +144,7 @@ describe('rules 2 and 3: kept, 「as is」, waiting, out', () => {
     assert.ok(d.out.some((l) => /waiting for Atlas \(sheetId\): 5\.21/.test(l)));
   });
 
-  test('a folder Atlas does not list leaves, even past half the shelf: Atlas asks, so no shrink guard', async () => {
+  test('a folder Atlas does not list leaves, even past half the shelf: Atlas asks, so no shrink guard here, and the site keeps its valve', async () => {
     const { shelf, remote } = makeShelf();
     const four = ['a1', 'a2', 'a3', 'a4'].map((s, i) => F(s, `2.0${i + 1}`));
     placeOnShelf(shelf, buildStage(four), ['a1', 'a2', 'a3', 'a4'], WB.a);
@@ -154,10 +154,21 @@ describe('rules 2 and 3: kept, 「as is」, waiting, out', () => {
     await publish(opts(stage, shelf), d);
     assert.deepEqual(filesOn(remote).split('\n').filter((p) => p.startsWith('skills/')), [`${stage.dir('a1')}/SKILL.md`]);
     assert.deepEqual(Object.keys(rowsBy(net)), ['a1']);
-    assert.equal(bodyOf(net).allow_shrink, true, "the site's valve does not hold back what Atlas asked to remove");
+    assert.equal(bodyOf(net).allow_shrink, undefined, "the site keeps its valve: choice 3 was dropped (16 Oct)");
     assert.match(lastMessage(remote), /^Removed: a2, a3, a4$/m);
     assert.match(lastMessage(remote), /^Waiting for Atlas: 3\.40$/m);
     assert.doesNotMatch(everything(d, remote), /acme-portal/);
+  });
+
+  test('a run dispatched with allow_shrink lets the site prune what Atlas asked to remove', async () => {
+    const { shelf } = makeShelf();
+    const four = ['a1', 'a2', 'a3', 'a4'].map((s, i) => F(s, `2.0${i + 1}`));
+    placeOnShelf(shelf, buildStage(four), ['a1', 'a2', 'a3', 'a4'], WB.a);
+    const stage = buildStage(four, { sha: WB.b });
+    const net = network({ atlas: atlasList(listed(stage, 'a1')) });
+    await publish(opts(stage, shelf, { allowShrink: true }), enforce(net));
+    assert.equal(bodyOf(net).allow_shrink, true);
+    assert.deepEqual(Object.keys(rowsBy(net)), ['a1']);
   });
 });
 
