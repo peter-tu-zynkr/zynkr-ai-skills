@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SECRET, SITE, TOKEN, WB, buildStage, deps, git, head, makeShelf, network, placeOnShelf, skill, writeFile } from './fixtures.mjs';
+import { RUNS, RUN_STARTED, SECRET, SITE, TOKEN, WB, buildStage, deps, git, head, makeShelf, network, placeOnShelf, skill, writeFile } from './fixtures.mjs';
 import { Refusal, SHELF_URL } from './common.mjs';
 import {
   checkShrink,
@@ -134,7 +134,8 @@ describe('a clean stage', () => {
     assert.deepEqual(Object.keys(body), ['format', 'repo_url', 'prune', 'workbench_sha', 'workbench_committed_at', 'skills']);
     assert.equal(body.repo_url, SHELF_URL);
     assert.equal(body.prune, 'report');
-    assert.equal(body.workbench_committed_at, '2026-09-28T10:00:00Z');
+    // The order key is this run's own start (GitHub's API), never the stage's claimed commit time.
+    assert.equal(body.workbench_committed_at, RUN_STARTED);
     assert.equal(body.skills.length, 5);
     assert.match(d.summary(), /### Export to the shelf/);
   });
@@ -149,7 +150,7 @@ describe('a clean stage', () => {
     assert.equal(result.order, 'identical');
     assert.equal(result.commit, null);
     assert.equal(head(shelf), after);
-    assert.equal(net.calls.length, 1, 'no compare call for an identical commit');
+    assert.equal(net.calls.filter((c) => c.url.includes('/compare/')).length, 0, 'no compare call for an identical commit');
     assert.equal(net.posts().length, 1);
   });
 
@@ -358,8 +359,10 @@ describe('the stage is checked before anything happens', () => {
     assert.equal(dry.outcome, 'dry-run');
 
     const d = deps(network());
+    // No run.json means fetch-stage fetched nothing (the workflow lets the publisher run on, for
+    // SHELF_ATLAS's removals); with SHELF_ATLAS off nothing changes.
     assert.equal(await main(['--stage', stage.root, '--shelf', shelf, '--event', 'workflow_dispatch', '--run', path.join(stage.root, 'nope.json')], d), 1);
-    assert.match(d.err.join('\n'), /--run names no file/);
+    assert.match(d.err.join('\n'), /no stage was fetched/);
   });
 
   test('seed_fail plants an unlisted file and refuses (AC-18)', async () => {
@@ -759,6 +762,7 @@ describe("the site's answer in this public log", () => {
     const { shelf } = makeShelf();
     const fetchImpl = async (url) => {
       if (String(url) === SITE) return new Response('<html>quiet-internal-tool</html>', { status: 502 });
+      if (String(url) === RUNS) return new Response(JSON.stringify({ run_started_at: RUN_STARTED }), { status: 200 });
       throw new Error(`unexpected fetch ${url}`);
     };
     const d = deps({ fetchImpl });

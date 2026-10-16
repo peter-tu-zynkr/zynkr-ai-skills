@@ -26,6 +26,20 @@
  *   j. The signed shelf-v1 body is posted on every run, whether the shelf changed or not. The
  *      site's answer is logged as its status and counts: its would_prune / pruned lists name
  *      live rows the shelf does not carry, team skills among them, so they never reach this log.
+ *      The body's order key (`workbench_committed_at`) is this run's own start, read from GitHub's
+ *      API — never the stage's claimed commit time, which a rewritten stage job could set to
+ *      anything (ATL-113 Part D).
+ *   k. SHELF_ATLAS (ATL-113 Part D, rulings D-138…D-142), a repository variable:
+ *        off      — (a)–(j) as above. Unset means off until the switch (enforce.mjs
+ *                   DEFAULT_ATLAS_MODE); after it, unset means enforce and off is set on purpose.
+ *        report   — first rehearses: asks Atlas, plans what enforce would publish, keep, hold and
+ *                   remove, builds every row from the staged files and prints how many differ from
+ *                   today's (the parity check); then (a)–(j) exactly as off. Red if Atlas could not
+ *                   be asked.
+ *        enforce  — only what Atlas lists leaves the team, byte for byte (enforce.mjs rules 1–7);
+ *                   every row zynkr.ai gets is built from the files the shelf holds (listing.mjs);
+ *                   promote is retired. Atlas unreachable, or no usable stage: one side is enough to
+ *                   remove, nothing new is published, the rows are posted, and the run is red.
  *
  * Any refusal exits 1 before anything is pushed or posted (a failed post after a push exits 1
  * too; the next run posts again). This repo's logs are public, so until the marks are checked (c)
@@ -33,15 +47,19 @@
  * name must not reach this log. After (c) a refusal names a file the shelf already publishes by its
  * path, and one new to the shelf by its sheetId or not at all (wordsFor; stageIndex counts them): it
  * comes before the hold (e), and a new file may belong to a client build marked public by mistake.
+ * Under enforce a folder is named by its slug only when it is published or removed, and by its
+ * sheetId when it is kept or waits; Atlas's answer is never printed, nor any count of it.
  * Rebuild the stage in the workbench to see which files (`npx tsx scripts/export-shelf.ts --out <dir>`).
  *
  *   node tools/publish.mjs --stage <dir holding stage/> --shelf <this checkout>
  *        --event schedule|workflow_dispatch --run <run.json> [--prune report|true]
  *        [--promote <sheetIds or slugs, comma-separated>|all] [--allow-shrink] [--allow-rewind]
- *        [--seed-fail] [--dry-run]
+ *        [--seed-fail] [--seed-atlas unreachable|wrong_audience] [--dry-run]
  *
  * Env: WORKBENCH_READ_TOKEN (the compare call), SKILLS_SYNC_HMAC_SECRET, SITE_SYNC_URL
- * (default https://zynkr.ai/api/skills/sync), GITHUB_STEP_SUMMARY (optional).
+ * (default https://zynkr.ai/api/skills/sync), GITHUB_STEP_SUMMARY (optional), SHELF_ATLAS,
+ * GITHUB_RUN_ID and GITHUB_TOKEN (this run's start time), ACTIONS_ID_TOKEN_REQUEST_URL and
+ * ACTIONS_ID_TOKEN_REQUEST_TOKEN (the OIDC token Atlas checks; GitHub sets them).
  */
 
 import crypto from 'node:crypto';
@@ -53,7 +71,9 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import {
   Refusal,
+  SHELF_REPO,
   SHELF_URL,
+  SITE_DETAILS_URL,
   SITE_SYNC_URL,
   WORKBENCH,
   annotation,
@@ -61,20 +81,47 @@ import {
   httpHint,
   plural,
   refuse,
+  unexpectedWords,
 } from './common.mjs';
+import { ATLAS_AUDIENCE, ATLAS_SHELF_URL, askAtlas, atlasWords } from './atlas.mjs';
+import { atlasMode, checkedId, idWords, planEnforce, planWords, slugWords } from './enforce.mjs';
+import {
+  ListingError,
+  deriveFolder,
+  finishRows,
+  folderView,
+  isoDay,
+  parity,
+  readFrozen,
+  readSiteFirstSeen,
+  shelfFields,
+  sortRows,
+  textHash,
+} from './listing.mjs';
+import { MANIFEST_NAMES, NAME_RE, OVERRIDE_RE, nameOf, parseFrontmatter, renamedFromOf, sheetIdOf } from './manifest.mjs';
+import { planPromotion } from './promotion.mjs';
+import { treeId } from './tree.mjs';
 
-export const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-export const OVERRIDE_RE =
-  /^npx skills add https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+ --skill [a-z0-9][a-z0-9-]*$/;
+export { NAME_RE, OVERRIDE_RE, parseFrontmatter, planPromotion, renamedFromOf, sheetIdOf };
+
 const SHA_RE = /^[0-9a-f]{40}$/;
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 const MODES = new Set(['100644', '100755']);
 const KINDS = new Set(['skill', 'orchestrator', 'subagent']);
-const MANIFEST_NAMES = new Set(['SKILL.md', 'CLAUDE.md']);
 const STAGE_ENTRIES = ['manifest.json', 'payload.json', 'skills'];
 const BOT = { name: 'github-actions[bot]', email: '41898282+github-actions[bot]@users.noreply.github.com' };
+const FROZEN_FILE = 'listing/frozen-text.json';
+/** A seeded dispatch's door: `.invalid` never resolves (RFC 2606), so the ask fails as unreachable. */
+const SEED_UNREACHABLE = 'https://atlas.invalid/api/shelf';
+const SEEDS = new Set(['unreachable', 'wrong_audience']);
+/** A committer's clock may run a little ahead of GitHub's; a stage's claimed commit time may not run further. */
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
+/** More skill folders than any stage holds (94 on 2026-10-15): a stage past this is refused unread. */
+export const MAX_STAGE_FOLDERS = 5000;
 const USAGE =
   'usage: publish.mjs --stage <dir holding stage/> --shelf <checkout> --event schedule|workflow_dispatch ' +
-  '--run <run.json> [--prune report|true] [--promote a,b|all] [--allow-shrink] [--allow-rewind] [--seed-fail] [--dry-run]';
+  '--run <run.json> [--prune report|true] [--promote a,b|all] [--allow-shrink] [--allow-rewind] [--seed-fail] ' +
+  '[--seed-atlas unreachable|wrong_audience] [--dry-run]';
 
 // ── small helpers ────────────────────────────────────────────────────────────
 
@@ -89,7 +136,29 @@ const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v)
 const lstat = (p) => fs.lstatSync(p, { throwIfNoEntry: false });
 const isDir = (p) => lstat(p)?.isDirectory() === true;
 const isFile = (p) => lstat(p)?.isFile() === true;
-const within = (file, dir) => file.startsWith(`${dir}/`);
+
+/**
+ * The folder in `dirs` (a Set of folders that never nest) that holds `p`: the one proper prefix of it
+ * that ends at a "/", or null. Linear in the path's depth, so a lookup per file never costs a scan of
+ * every folder.
+ */
+function folderOf(p, dirs) {
+  for (let i = p.indexOf('/'); i !== -1; i = p.indexOf('/', i + 1)) {
+    const prefix = p.slice(0, i);
+    if (dirs.has(prefix)) return prefix;
+  }
+  return null;
+}
+
+/** Map(folder → its files [{ path relative to the folder, mode, sha }]) for folders that never nest. */
+function groupByFolder(files, dirs) {
+  const out = new Map([...dirs].map((d) => [d, []]));
+  for (const f of files) {
+    const d = folderOf(f.path, dirs);
+    if (d) out.get(d).push({ path: f.path.slice(d.length + 1), mode: f.mode, sha: f.sha });
+  }
+  return out;
+}
 
 /** A relative path under skills/ with no empty, `.` or `..` segment. */
 const isSkillsPath = (p) =>
@@ -136,49 +205,6 @@ function git(cwd, args, options = {}) {
   });
 }
 
-// ── frontmatter ──────────────────────────────────────────────────────────────
-
-/** One top-level YAML scalar: quotes removed, a trailing comment dropped; block and empty → null. */
-function scalar(raw) {
-  const v = raw.trim();
-  if (v.startsWith('"')) {
-    let end = 1;
-    while (end < v.length && v[end] !== '"') end += v[end] === '\\' ? 2 : 1;
-    try {
-      return JSON.parse(v.slice(0, end + 1));
-    } catch {
-      return v.slice(1, end);
-    }
-  }
-  if (v.startsWith("'")) {
-    const m = /^'((?:[^']|'')*)'/.exec(v);
-    return m ? m[1].replace(/''/g, "'") : v.slice(1);
-  }
-  const plain = v.replace(/\s+#.*$/, '').trim();
-  return plain === '' || plain.startsWith('|') || plain.startsWith('>') ? null : plain;
-}
-
-/**
- * The top-level scalar keys of a `---` frontmatter block: { keys: Map, dupes: Set }, or null when
- * the file has none. Indented lines (folded descriptions, lists) are skipped; only name,
- * visibility, install_command, sheetId and renamed_from are read, and a repeated one is reported
- * in `dupes`.
- */
-export function parseFrontmatter(text) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
-  if (lines[0] !== '---') return null;
-  const keys = new Map();
-  const dupes = new Set();
-  for (const line of lines.slice(1)) {
-    if (line === '---' || line === '...') return { keys, dupes };
-    const m = /^([A-Za-z_][\w.-]*)\s*:(?:\s+(.*))?$/.exec(line);
-    if (!m) continue;
-    if (keys.has(m[1])) dupes.add(m[1]);
-    keys.set(m[1], scalar(m[2] ?? ''));
-  }
-  return null;
-}
-
 // ── a. the red proof ─────────────────────────────────────────────────────────
 
 export function seedFail(stageRoot) {
@@ -202,6 +228,9 @@ function checkManifestShape(manifest) {
   }
   if (!Array.isArray(manifest.files) || !Array.isArray(manifest.skills)) {
     refuse('manifest.json lacks its files or skills list');
+  }
+  if (manifest.skills.length > MAX_STAGE_FOLDERS) {
+    refuse(`manifest.json lists ${manifest.skills.length} skill folders, more than the ${MAX_STAGE_FOLDERS} a stage may hold`);
   }
 
   const paths = new Set();
@@ -231,10 +260,13 @@ function checkManifestShape(manifest) {
       );
     }
   });
-  const dirs = manifest.skills.map((s) => s.dir);
-  if (dirs.some((d, i) => dirs.some((e, j) => i !== j && (d === e || within(d, e))))) {
-    refuse('manifest.skills repeats a folder or nests one inside another');
+  // A repeated folder, or one inside another: a Set and each folder's own prefixes, never every pair.
+  const dirs = new Set();
+  for (const s of manifest.skills) {
+    if (dirs.has(s.dir)) refuse('manifest.skills repeats a folder or nests one inside another');
+    dirs.add(s.dir);
   }
+  for (const d of dirs) if (folderOf(d, dirs)) refuse('manifest.skills repeats a folder or nests one inside another');
   const slugs = new Set(manifest.skills.map((s) => s.slug));
   if (slugs.size !== manifest.skills.length) refuse('manifest.skills repeats a slug');
 }
@@ -269,8 +301,8 @@ function checkTree(stageRoot, manifest) {
   count(badSha, 'file whose bytes differ from its listed sha', 'files whose bytes differ from their listed sha');
   count(badMode, 'file whose executable bit differs from its listed mode', 'files whose executable bit differs from their listed mode');
 
-  const dirs = manifest.skills.map((s) => s.dir);
-  const loose = [...listed.keys()].filter((p) => !dirs.some((d) => within(p, d))).length;
+  const dirs = new Set(manifest.skills.map((s) => s.dir));
+  const loose = [...listed.keys()].filter((p) => !folderOf(p, dirs)).length;
   count(loose, 'listed file outside every skill folder', 'listed files outside every skill folder');
 
   if (problems.length) {
@@ -300,6 +332,19 @@ export function checkRunSha(run, manifest, dryRun = false) {
   }
 }
 
+/**
+ * (b, under SHELF_ATLAS): a stage may not claim a workbench commit time later than the run that built
+ * it was created (run.json's created_at, which fetch-stage.mjs took from GitHub's API). Five minutes
+ * are allowed for a committer's clock running ahead.
+ */
+export function checkCommitTime(run, manifest) {
+  const created = Date.parse(run?.created_at);
+  if (Number.isNaN(created)) refuse("run.json has no created_at, so the stage's commit time cannot be checked");
+  if (Date.parse(manifest.workbench_committed_at) > created + CLOCK_SKEW_MS) {
+    refuse('the stage claims a workbench commit time later than the run that built it');
+  }
+}
+
 /** (b): the stage's shape, and its tree against manifest.files. Returns the parsed JSON. */
 export function readStage(stageRoot) {
   if (!isDir(stageRoot)) refuse('there is no stage/ folder under --stage');
@@ -323,7 +368,6 @@ export function readStage(stageRoot) {
 
 const says = (fm, key, value) => !fm.dupes.has(key) && fm.keys.get(key) === value;
 
-/** (c): returns Map(dir → { entry, fm }) once every owning manifest is marked public. */
 /**
  * How a refusal names a stage file: by its path when the shelf already publishes that file, else by its
  * sheetId. A refusal comes before the hold (e), and a file new to the shelf may belong to a client build
@@ -335,6 +379,7 @@ export function wordsFor(shelfHas, file, id) {
   return id ? `a file new to the shelf (sheetId ${id})` : 'a file new to the shelf, with no sheetId';
 }
 
+/** (c): returns Map(dir → { entry, fm }) once every owning manifest is marked public. */
 export function checkMarks(stageRoot, manifest, shelfHas = () => false) {
   const frontmatter = (p) => parseFrontmatter(fs.readFileSync(path.join(stageRoot, p), 'utf8'));
   const owners = new Map();
@@ -390,24 +435,11 @@ export function checkMarks(stageRoot, manifest, shelfHas = () => false) {
 
 /** The public fields of one row, from the tree: never from what the stage carried. */
 export function deriveFields(rec, { entry, fm }, shelfHas = () => false) {
-  const src = rec.source_path;
-  const github_url =
-    path.posix.basename(src) === 'CLAUDE.md'
-      ? `${SHELF_URL}/tree/main/${path.posix.dirname(src)}`
-      : `${SHELF_URL}/blob/main/${src}`;
-  let install_command = null;
-  if (rec.kind !== 'subagent' && entry.installable) {
-    if (fm.keys.has('install_command')) {
-      const override = fm.keys.get('install_command');
-      if (fm.dupes.has('install_command') || typeof override !== 'string' || !OVERRIDE_RE.test(override)) {
-        refuse(`${wordsFor(shelfHas, entry.manifest, sheetIdOf(fm))}: install_command must be an "npx skills add https://github.com/<owner>/<repo> --skill <name>" line`);
-      }
-      install_command = override;
-    } else {
-      install_command = `npx skills add ${SHELF_URL} --skill ${fm.keys.get('name')}`;
-    }
+  const fields = shelfFields({ sourcePath: rec.source_path, kind: rec.kind, installable: entry.installable, fm });
+  if (!fields) {
+    refuse(`${wordsFor(shelfHas, entry.manifest, sheetIdOf(fm))}: install_command must be an "npx skills add https://github.com/<owner>/<repo> --skill <name>" line`);
   }
-  return { repo_url: SHELF_URL, github_url, install_command };
+  return fields;
 }
 
 /** (d): [{ dir, row }] — each row with its owning folder and its derived fields. A refusal names a row
@@ -415,13 +447,15 @@ export function deriveFields(rec, { entry, fm }, shelfHas = () => false) {
 export function derivePayload(payload, manifest, owners, shelfHas = () => false) {
   if (!Array.isArray(payload)) refuse('payload.json is not an array');
   const files = new Set(manifest.files.map((f) => f.path));
-  const dirs = [...owners.keys()];
+  const dirs = new Set(owners.keys());
   const slugs = new Set();
   const rows = payload.map((rec, i) => {
     if (!isObject(rec) || typeof rec.source_path !== 'string' || !files.has(rec.source_path)) {
       refuse(`payload[${i}].source_path is not a file in the stage`);
     }
-    const hits = dirs.filter((d) => within(rec.source_path, d));
+    // The stage's folders never nest (checkManifestShape), so a file sits in one folder or none.
+    const owner = folderOf(rec.source_path, dirs);
+    const hits = owner ? [owner] : [];
     if (hits.length !== 1) refuse(`payload[${i}].source_path sits in ${hits.length} skill folders, not one`);
     const known = shelfHas(rec.source_path);
     const where = wordsFor(shelfHas, rec.source_path, typeof rec.id === 'string' ? rec.id : null);
@@ -439,18 +473,6 @@ export function derivePayload(payload, manifest, owners, shelfHas = () => false)
 }
 
 // ── e, f. promotion and shrink ───────────────────────────────────────────────
-
-/** One frontmatter key as a non-empty string; missing, empty or repeated → null. */
-const keyOf = (fm, key) => {
-  const v = fm && !fm.dupes.has(key) ? fm.keys.get(key) : null;
-  return typeof v === 'string' && v !== '' ? v : null;
-};
-
-/** A manifest's sheetId: the skill's pinned id, which a rename keeps. */
-export const sheetIdOf = (fm) => keyOf(fm, 'sheetId');
-
-/** A manifest's `renamed_from`: the name the skill had before a rename, written by whoever renamed it. */
-export const renamedFromOf = (fm) => keyOf(fm, 'renamed_from');
 
 /**
  * The skill folders on the shelf now: the topmost folders under skills/ holding a SKILL.md or
@@ -480,76 +502,6 @@ export function shelfSkills(shelfRoot) {
   const root = path.join(shelfRoot, 'skills');
   if (isDir(root)) visit(root, 'skills');
   return found.sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));
-}
-
-/**
- * (e): a stage folder the shelf does not hold is held unless `promote` is `all` or names its slug.
- * The shelf holds a folder under the same path. A skill moved between categories stays published
- * when the shelf holds a folder of the same folder name that the stage no longer has, whose
- * manifest carries the same frontmatter name. A new skill that only reuses a public folder name is
- * held like any other: folder names are not unique across categories, names are.
- *
- * A renamed skill stays published too, when two things agree: its manifest says which public
- * skill it was (`renamed_from: <old name>`), and that skill's shelf folder carries the same pinned
- * sheetId. A sheetId alone is not enough: the workbench can hand a retired skill's id to a new one,
- * so a retirement and a new skill in one run would pass as a rename. The old folder must also have
- * left the stage and be no other folder's category move; the id must be carried by no other stage
- * folder; and one old folder renames into one new folder only. Anything less certain — no mark, a
- * mark the id does not back, an id or an old folder two folders claim — is held for the owner as
- * before (D-76). `renamed` lists { skill, from } with `from` the shelf folder it replaces.
- *
- * `skills` are manifest.skills entries; publish() adds `sheetId` and `renamedFrom` from each one's
- * manifest.
- */
-export function planPromotion(skills, shelf, promote = '') {
-  const paths = new Set(shelf.map((h) => h.dir));
-  const stageDirs = new Set(skills.map((s) => s.dir));
-  const movedFrom = (s) =>
-    shelf.some(
-      (h) =>
-        !stageDirs.has(h.dir) &&
-        path.posix.basename(h.dir) === path.posix.basename(s.dir) &&
-        h.names.has(s.name),
-    );
-  const movedTo = (h) =>
-    skills.some((t) => path.posix.basename(t.dir) === path.posix.basename(h.dir) && h.names.has(t.name));
-  const renameOf = (s) => {
-    if (!s.renamedFrom || !s.sheetId) return null;
-    if (skills.filter((t) => t.sheetId === s.sheetId).length !== 1) return null;
-    const holders = shelf.filter((h) => h.names.has(s.renamedFrom) && h.ids.has(s.sheetId));
-    if (holders.length !== 1) return null;
-    const [h] = holders;
-    // Gone from the stage, and not already explained as a category move of another stage folder.
-    return !stageDirs.has(h.dir) && !movedTo(h) ? h.dir : null;
-  };
-  const isNew = (s) => !paths.has(s.dir) && !movedFrom(s);
-  const claims = skills.filter(isNew).map(renameOf).filter(Boolean);
-  const renamedFrom = (s) => {
-    const from = renameOf(s);
-    return from && claims.filter((c) => c === from).length === 1 ? from : null;
-  };
-  const all = promote.trim() === 'all';
-  const named = new Set(all ? [] : promote.split(',').map((s) => s.trim()).filter(Boolean));
-  const kept = [];
-  const held = [];
-  const promoted = [];
-  const renamed = [];
-  for (const s of skills) {
-    if (!isNew(s)) {
-      kept.push(s);
-      continue;
-    }
-    const from = renamedFrom(s);
-    if (from) {
-      kept.push(s);
-      renamed.push({ skill: s, from });
-    } else if (all || named.has(s.slug) || (s.sheetId && named.has(s.sheetId))) {
-      kept.push(s);
-      promoted.push(s);
-    } else held.push(s);
-  }
-  const unmatched = [...named].filter((n) => !skills.some((s) => s.slug === n || s.sheetId === n)).length;
-  return { kept, held, promoted, renamed, unmatched };
 }
 
 /** (f): a stage that would leave fewer than half the shelf's folders needs --allow-shrink. */
@@ -606,6 +558,21 @@ export async function ordering({ last, next, token, fetchImpl }) {
   return status;
 }
 
+/** The refusal for a rewind not dispatched with allow_rewind (g). */
+function refuseRewind(order, last, next) {
+  if (order === 'diverged') {
+    refuse(
+      `the stage's workbench commit ${next.slice(0, 7)} is not a descendant of the last export ` +
+        `${last.slice(0, 7)} (a rewritten workbench main?). Dispatch with allow_rewind if that is intended.`,
+    );
+  }
+  refuse(
+    `the last export ${last.slice(0, 7)} shares no history with the stage's workbench commit ` +
+      `${next.slice(0, 7)}, or no longer exists in the workbench (a rewritten main?). ` +
+      'Dispatch with allow_rewind if that is intended.',
+  );
+}
+
 /** (h): a scheduled run prunes; a dispatch reports unless told `true`. */
 export function pruneValue(event, prune) {
   if (event === 'schedule') return true;
@@ -620,10 +587,8 @@ export function pruneValue(event, prune) {
 
 /** What the mirror will do: the wanted files, and which folders it adds, changes and removes. */
 export function planMirror(shelfRoot, manifest, kept, shelfDirs) {
-  const keptDirs = kept.map((s) => s.dir);
-  const desired = new Map(
-    manifest.files.filter((f) => keptDirs.some((d) => within(f.path, d))).map((f) => [f.path, f]),
-  );
+  const keptDirs = new Set(kept.map((s) => s.dir));
+  const desired = new Map(manifest.files.filter((f) => folderOf(f.path, keptDirs)).map((f) => [f.path, f]));
   const tree = walk(path.join(shelfRoot, 'skills'), shelfRoot);
   const current = new Map(tree.other.map((p) => [p, null]));
   for (const p of tree.files) {
@@ -636,17 +601,26 @@ export function planMirror(shelfRoot, manifest, kept, shelfDirs) {
     return !want || !have || want.sha !== have.sha || want.mode !== have.mode;
   };
   const onShelf = new Set(shelfDirs);
-  const everyPath = [...new Set([...desired.keys(), ...current.keys()])];
+  // The kept folders that hold a path that differs, found per path (folders never nest), not per pair.
+  const differing = new Set();
+  for (const p of new Set([...desired.keys(), ...current.keys()])) {
+    const d = differs(p) ? folderOf(p, keptDirs) : null;
+    if (d) differing.add(d);
+  }
   return {
     desired,
     added: kept.filter((s) => !onShelf.has(s.dir)),
-    changed: kept.filter((s) => onShelf.has(s.dir) && everyPath.some((p) => within(p, s.dir) && differs(p))),
-    removed: shelfDirs.filter((d) => !keptDirs.includes(d)),
-    loose: [...current.keys()].filter((p) => !desired.has(p) && !shelfDirs.some((d) => within(p, d))).length,
+    changed: kept.filter((s) => onShelf.has(s.dir) && differing.has(s.dir)),
+    removed: shelfDirs.filter((d) => !keptDirs.has(d)),
+    loose: [...current.keys()].filter((p) => !desired.has(p) && !folderOf(p, onShelf)).length,
   };
 }
 
-/** Make <shelf>/skills hold exactly `desired`, copied from the stage with their modes. */
+/**
+ * Make <shelf>/skills hold exactly `desired`. A file whose entry says `from: 'shelf'` is the shelf's
+ * own and stays where it is (SHELF_ATLAS keeps a folder as the shelf has it); every other one is
+ * copied from the stage with its mode.
+ */
 export function mirror(shelfRoot, stageRoot, desired) {
   const root = path.join(shelfRoot, 'skills');
   const tree = walk(root, shelfRoot);
@@ -658,6 +632,7 @@ export function mirror(shelfRoot, stageRoot, desired) {
     if (fs.readdirSync(abs).length === 0) fs.rmdirSync(abs);
   }
   for (const [p, f] of desired) {
+    if (f.from === 'shelf') continue;
     const dst = path.join(shelfRoot, p);
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.copyFileSync(path.join(stageRoot, p), dst);
@@ -665,6 +640,25 @@ export function mirror(shelfRoot, stageRoot, desired) {
   }
   if (isDir(root) && fs.readdirSync(root).length === 0) fs.rmdirSync(root);
 }
+
+/** git's index under skills/: Map(path → { mode, sha }), the bytes git holds, after any attribute. */
+function readIndex(shelfRoot) {
+  const index = new Map();
+  for (const line of git(shelfRoot, ['ls-files', '-s', '-z', '--', 'skills']).split('\0').filter(Boolean)) {
+    const [meta, p] = line.split('\t');
+    const [mode, sha] = meta.split(' ');
+    index.set(p, { mode, sha });
+  }
+  return index;
+}
+
+/** The paths where the index and `desired` disagree: missing on one side, or another sha or mode. */
+const indexMismatches = (index, desired) =>
+  [...new Set([...index.keys(), ...desired.keys()])].filter((p) => {
+    const a = index.get(p);
+    const b = desired.get(p);
+    return !a || !b || a.mode !== b.mode || a.sha !== b.sha;
+  });
 
 /**
  * Stage skills/ in git's index and prove the index equals the stage (a .gitattributes filter in a
@@ -674,17 +668,7 @@ export function stageIndex(shelfRoot, desired) {
   git(shelfRoot, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', 'skills']);
   // -f: a skill's own .gitignore must not keep one of its tracked files off the shelf.
   if (isDir(path.join(shelfRoot, 'skills'))) git(shelfRoot, ['add', '-f', '--', 'skills']);
-  const index = new Map();
-  for (const line of git(shelfRoot, ['ls-files', '-s', '-z', '--', 'skills']).split('\0').filter(Boolean)) {
-    const [meta, p] = line.split('\t');
-    const [mode, sha] = meta.split(' ');
-    index.set(p, { mode, sha });
-  }
-  const off = [...new Set([...index.keys(), ...desired.keys()])].filter((p) => {
-    const a = index.get(p);
-    const b = desired.get(p);
-    return !a || !b || a.mode !== b.mode || a.sha !== b.sha;
-  });
+  const off = indexMismatches(readIndex(shelfRoot), desired);
   if (off.length) {
     // Only a path the shelf already published is named: one new to it may belong to a client build
     // marked public by mistake (wordsFor; workbench SKB-054, review round 5).
@@ -705,6 +689,21 @@ export function stageIndex(shelfRoot, desired) {
   return git(shelfRoot, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
 }
 
+/**
+ * Under SHELF_ATLAS=enforce: stage skills/ as stageIndex does, then put the folders the shelf keeps
+ * back to HEAD's own entries (`git reset HEAD -- <folder>`), so a kept folder is exactly the blobs
+ * the shelf already holds, whatever its attributes made of the working tree on checkout. Returns the
+ * paths where the index differs from `desired` and refuses nothing: the caller sets the published
+ * folders they sit in aside (git would change their bytes) and plans again.
+ */
+export function stageIndexEnforce(shelfRoot, desired, keptDirs) {
+  git(shelfRoot, ['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', 'skills']);
+  if (isDir(path.join(shelfRoot, 'skills'))) git(shelfRoot, ['add', '-f', '--', 'skills']);
+  // Literal: a kept folder named `x*` must not put a published neighbour back to HEAD as well.
+  if (keptDirs.length) git(shelfRoot, ['--literal-pathspecs', 'reset', '-q', 'HEAD', '--', ...keptDirs]);
+  return indexMismatches(readIndex(shelfRoot), desired);
+}
+
 /** The mirror's adds and removes with renames taken out: a rename is reported once, as a rename. */
 export function netOfRenames(plan, renamed = []) {
   const to = new Set(renamed.map((r) => r.skill.dir));
@@ -713,10 +712,10 @@ export function netOfRenames(plan, renamed = []) {
 }
 
 /** How held skills are named in public: by sheetId, never by slug (e). A held skill may be a client
- *  build marked public by mistake, and its slug would name the client. One without a sheetId is
- *  counted; promote it by slug from the workbench's own export log, which is private. */
+ *  build marked public by mistake, and its slug would name the client. One without a checkable sheetId
+ *  is counted; promote it by slug from the workbench's own export log, which is private. */
 export function heldWords(held) {
-  const ids = held.map((s) => s.sheetId).filter(Boolean);
+  const ids = held.map((s) => checkedId(s.sheetId)).filter(Boolean);
   const unnumbered = held.length - ids.length;
   return unnumbered ? [...ids, `${plural(unnumbered, 'skill')} with no sheetId`] : ids;
 }
@@ -768,12 +767,13 @@ export function commitAndPush(shelfRoot, message, { allowEmpty = false } = {}) {
 
 // ── j. post ──────────────────────────────────────────────────────────────────
 
-/** The shelf-v1 body, keys in the contract's order; allow_shrink only when dispatched with it. */
-export function buildBody({ manifest, prune, allowShrink, rows }) {
+/** The shelf-v1 body, keys in the contract's order; allow_shrink only when it is set. `committedAt` is
+ *  the order key: this run's own start (runStartedAt), never a time the stage claims. */
+export function buildBody({ workbenchSha, committedAt, prune, allowShrink, rows }) {
   const body = { format: 'shelf-v1', repo_url: SHELF_URL, prune };
   if (allowShrink) body.allow_shrink = true;
-  body.workbench_sha = manifest.workbench_sha;
-  body.workbench_committed_at = manifest.workbench_committed_at;
+  body.workbench_sha = workbenchSha;
+  body.workbench_committed_at = committedAt;
   body.skills = rows;
   return JSON.stringify(body);
 }
@@ -821,6 +821,165 @@ export async function postToSite({ url, body, secret, sourceSha, fetchImpl }) {
   return { status: res.status, text };
 }
 
+/**
+ * (j): this run's own start time, from GitHub's API (the shelf's run, read with the job's token):
+ * the order key of every post. The site refuses a body older than the newest it applied, so a run
+ * that started later always wins, whatever the stage claims.
+ */
+export async function runStartedAt({ env, fetchImpl }) {
+  const id = String(env.GITHUB_RUN_ID ?? '');
+  if (!/^\d+$/.test(id)) refuse("this run's start time cannot be read outside GitHub Actions (GITHUB_RUN_ID is not set)");
+  const headers = env.GITHUB_TOKEN
+    ? githubHeaders(env.GITHUB_TOKEN)
+    : { Accept: 'application/vnd.github+json', 'User-Agent': 'zynkr-ai-skills-export' };
+  let res;
+  try {
+    res = await fetchImpl(`https://api.github.com/repos/${SHELF_REPO}/actions/runs/${id}`, { headers });
+  } catch (err) {
+    refuse(`reading this run's start time failed: ${err.message}`);
+  }
+  if (!res.ok) refuse(`reading this run's start time answered ${res.status}`);
+  let run;
+  try {
+    run = await res.json();
+  } catch {
+    refuse("GitHub's answer for this run is not JSON");
+  }
+  const at = run?.run_started_at;
+  if (typeof at !== 'string' || !ISO_RE.test(at) || Number.isNaN(Date.parse(at))) refuse('GitHub gave no start time for this run');
+  return at;
+}
+
+// ── k. SHELF_ATLAS: the shelf, the stage and Atlas, read for the rule ────────
+
+/** listing/frozen-text.json from this checkout (D-142), or none. A malformed file refuses the run. */
+export function loadFrozen(shelfRoot) {
+  const file = path.join(shelfRoot, FROZEN_FILE);
+  if (!isFile(file)) return null;
+  try {
+    return readFrozen(readJson(file, FROZEN_FILE));
+  } catch (err) {
+    if (err instanceof ListingError) refuse(err.message);
+    throw err;
+  }
+}
+
+/**
+ * The shelf as it is before the run: its folders (shelfSkills, which never nest) with their files,
+ * tree ids and a view for the listing build; every file it holds; and how many sit in no folder.
+ * Everything is git's own, never the working tree's: a file's sha and mode come from the index the
+ * checkout made (the committed blob), and the view reads that blob's text (`git cat-file`). A
+ * folder's .gitattributes can make a checkout write other bytes than the shelf holds (`eol=crlf`,
+ * `ident`), and under enforce a mirror may rewrite or remove a folder the run then keeps.
+ */
+export function readShelfState(shelfRoot) {
+  const files = [...readIndex(shelfRoot)].map(([p, f]) => ({ path: p, sha: f.sha, mode: f.mode }));
+  const indexed = shelfSkills(shelfRoot);
+  const dirs = new Set(indexed.map((h) => h.dir));
+  const byFolder = groupByFolder(files, dirs);
+  // A folder with no file in the index is nothing the shelf holds (the mirror clears it).
+  const found = indexed.filter((h) => byFolder.get(h.dir).length > 0);
+  const folders = found.map((h) => {
+    const entries = byFolder.get(h.dir);
+    // The view lists regular files only, as the working tree's walk did.
+    const blobOf = new Map(entries.filter((e) => MODES.has(e.mode)).map((e) => [e.path, e.sha]));
+    return {
+      ...h,
+      files: entries,
+      tree: treeId(entries),
+      view: folderView(h.dir, [...blobOf.keys()], (rel) => git(shelfRoot, ['cat-file', 'blob', blobOf.get(rel)])),
+    };
+  });
+  const held = new Set(found.map((h) => h.dir));
+  return { folders, files, loose: files.filter((f) => !folderOf(f.path, held)).length };
+}
+
+/** A staged folder for the rule: its files, its recomputed tree, its manifest's own line, a view. */
+function stageFolder(stageRoot, entry, entries) {
+  const fm = parseFrontmatter(fs.readFileSync(path.join(stageRoot, entry.manifest), 'utf8'));
+  return {
+    dir: entry.dir,
+    files: entries,
+    tree: treeId(entries),
+    name: nameOf(fm),
+    sheetId: sheetIdOf(fm),
+    renamedFrom: renamedFromOf(fm),
+    view: folderView(entry.dir, entries.map((e) => e.path), (rel) => fs.readFileSync(path.join(stageRoot, entry.dir, rel), 'utf8')),
+  };
+}
+
+/**
+ * The stage, read for the rule. { usable: true, manifest, payload, order, last, folders, stageRoot }
+ * or { usable: false, why: 'none' | 'refused' | 'stale', words }. Whatever goes wrong while it is read
+ * — a refusal, an unreadable file, anything — sets the stage aside and never stops the run: the
+ * removals Atlas asks for still go (rule 5). An unexpected error is described by its kind and code
+ * only, never its message, which could name a staged path new to the shelf.
+ */
+export async function loadStageForAtlas(opts, { env, fetchImpl }) {
+  const stageRoot = path.join(opts.stage, 'stage');
+  if (opts.run === undefined || !isDir(stageRoot)) return { usable: false, why: 'none', words: 'no stage was fetched' };
+  try {
+    const { manifest, payload } = readStage(stageRoot);
+    checkRunSha(opts.run, manifest);
+    checkCommitTime(opts.run, manifest);
+    const last = lastWorkbenchCommit(opts.shelf);
+    const order = await ordering({ last, next: manifest.workbench_sha, token: env.WORKBENCH_READ_TOKEN, fetchImpl });
+    if (REWINDS.has(order) && !opts.allowRewind) refuseRewind(order, last, manifest.workbench_sha);
+    if (order === 'behind') {
+      return { usable: false, why: 'stale', words: `the stage (${manifest.workbench_sha.slice(0, 7)}) is older than the last export (${last.slice(0, 7)})`, manifest, last };
+    }
+    const byFolder = groupByFolder(manifest.files, new Set(manifest.skills.map((s) => s.dir)));
+    const folders = manifest.skills.map((entry) => stageFolder(stageRoot, entry, byFolder.get(entry.dir)));
+    return { usable: true, manifest, payload, order, last, folders, stageRoot };
+  } catch (err) {
+    if (err instanceof Refusal) return { usable: false, why: 'refused', words: err.message };
+    return { usable: false, why: 'refused', words: `the stage could not be read (${unexpectedWords(err)})` };
+  }
+}
+
+/** Ask Atlas, or a seeded dispatch's wrong door or wrong audience (AC-18, AC-19 red proofs). The
+ *  answer carries the seed, so the run's own words can say a failure was seeded. */
+async function askAtlasFor(opts, { env, fetchImpl }) {
+  const url = opts.seedAtlas === 'unreachable' ? SEED_UNREACHABLE : env.ATLAS_SHELF_URL || ATLAS_SHELF_URL;
+  if (new URL(url).protocol !== 'https:') refuse('ATLAS_SHELF_URL must be an https URL');
+  const audience = opts.seedAtlas === 'wrong_audience' ? `${ATLAS_AUDIENCE}-seed` : ATLAS_AUDIENCE;
+  return { ...(await askAtlas({ env, fetchImpl, url, audience })), seed: opts.seedAtlas || '' };
+}
+
+const stageLine = (stage) =>
+  stage.usable
+    ? `stage: workbench ${stage.manifest.workbench_sha.slice(0, 7)}, ${plural(stage.folders.length, 'skill')} (${ORDER_WORDS[stage.order]})`
+    : stage.why === 'none'
+      ? 'stage: none — no stage was fetched (see the step before)'
+      : stage.why === 'stale'
+        ? `stage: set aside — ${stage.words}`
+        : `stage: refused — ${stage.words}`;
+
+const atlasLine = (atlas) => (atlas.ok ? 'atlas: asked; it answered' : `atlas: could not be asked — ${atlasWords(atlas, atlas.seed)}`);
+
+/** The plan in words, for the log and the summary (enforce.mjs planWords). */
+function planLines(plan, words, prefix) {
+  const lines = [`${prefix}${words.counts}`];
+  if (words.added.length) lines.push(`  new on the shelf: ${words.added.join(', ')}`);
+  if (words.changed.length) lines.push(`  changed: ${words.changed.join(', ')}`);
+  if (words.moved.length) lines.push(`  moved or renamed: ${words.moved.join(', ')}`);
+  if (words.removed.length) lines.push(`  removed: ${words.removed.join(', ')}`);
+  if (words.kept.length) lines.push(`  kept as the shelf has it (sheetId): ${words.kept.join(', ')}`);
+  if (words.waiting.length) lines.push(`  waiting for Atlas (sheetId): ${words.waiting.join(', ')}`);
+  if (words.reasons.length) lines.push(`  why kept or waiting: ${words.reasons.join(' · ')}`);
+  if (plan.stageRefused) lines.push(`  the stage was set aside: ${plan.stageRefused}`);
+  return lines;
+}
+
+/** Build a folder's rows, or null: `why` is the ListingError's phrase, or a fixed one for anything else. */
+function rowsOf(view, opts) {
+  try {
+    return { built: deriveFolder(view, opts), why: null };
+  } catch (err) {
+    return { built: null, why: err instanceof ListingError ? err.message : 'an unexpected failure' };
+  }
+}
+
 // ── the run ──────────────────────────────────────────────────────────────────
 
 function summarize(env, lines) {
@@ -841,15 +1000,44 @@ const ORDER_WORDS = {
 const REWINDS = new Set(['diverged', 'unrelated']);
 
 /**
- * Steps a–j. Resolves to { outcome: 'dry-run' | 'behind' | 'published', … }; a failed check
+ * Steps a–k. Resolves to { outcome: 'dry-run' | 'behind' | 'published', … }; a failed check
  * rejects with a Refusal before anything is pushed or posted.
  */
-export async function publish(opts, { fetchImpl = globalThis.fetch, env = process.env, log = console.log } = {}) {
+export async function publish(opts, deps = {}) {
+  const env = deps.env ?? process.env;
+  const log = deps.log ?? console.log;
+  const mode = atlasMode(env.SHELF_ATLAS);
+  if (opts.seedAtlas && !SEEDS.has(opts.seedAtlas)) refuse('--seed-atlas must be unreachable or wrong_audience');
+  if (mode.mode === 'enforce') return enforceRun(opts, deps, mode);
+  if (mode.mode === 'off') {
+    log(`atlas: off${mode.explicit ? ' (SHELF_ATLAS=off, set on purpose)' : ' (SHELF_ATLAS is not set)'} — the shelf publishes the stage as it did before Part D`);
+    if (opts.seedAtlas) log('note: seed_atlas does nothing while SHELF_ATLAS is off');
+    return publishAsToday(opts, deps);
+  }
+  // report: rehearse enforce first (it changes nothing), then publish as today.
+  if (opts.seedFail) {
+    const stageRoot = path.join(opts.stage, 'stage');
+    if (isDir(stageRoot)) seedFail(stageRoot);
+  }
+  log('atlas: report — rehearsing what SHELF_ATLAS=enforce would do, then publishing as before');
+  const rehearsal = await rehearse(opts, deps);
+  for (const line of rehearsal.lines) log(line);
+  summarize(env, ['### SHELF_ATLAS=report: the rehearsal', '', ...rehearsal.lines.map((l) => `- ${l.trim()}`), '']);
+  const result = await publishAsToday({ ...opts, seedFail: false }, deps);
+  if (rehearsal.failed) {
+    refuse(`SHELF_ATLAS=report: ${rehearsal.failed}. The stage was published as before; under enforce this run would publish nothing new.`);
+  }
+  return { ...result, rehearsal };
+}
+
+/** (a)–(j): the publish as it was before Part D (SHELF_ATLAS off, and report's second half). */
+async function publishAsToday(opts, { fetchImpl = globalThis.fetch, env = process.env, log = console.log, now = () => new Date() } = {}) {
   const prune = pruneValue(opts.event, opts.prune);
   const siteUrl = env.SITE_SYNC_URL || SITE_SYNC_URL;
   const secret = env.SKILLS_SYNC_HMAC_SECRET;
   if (!opts.dryRun && !secret) refuse('the secret SKILLS_SYNC_HMAC_SECRET is not set (the export environment holds it)');
   if (!opts.dryRun && new URL(siteUrl).protocol !== 'https:') refuse('SITE_SYNC_URL must be an https URL');
+  if (opts.stageMissing) refuse('no stage was fetched (the download step failed; see it above), so nothing changed');
 
   const stageRoot = path.join(opts.stage, 'stage');
   if (opts.seedFail) seedFail(stageRoot); // a
@@ -868,23 +1056,12 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   checkShrink(promotion.kept.length, shelfDirs.length, opts.allowShrink); // f
   const last = lastWorkbenchCommit(opts.shelf);
   const order = await ordering({ last, next: manifest.workbench_sha, token: env.WORKBENCH_READ_TOKEN, fetchImpl }); // g
-  if (order === 'diverged' && !opts.allowRewind) {
-    refuse(
-      `the stage's workbench commit ${manifest.workbench_sha.slice(0, 7)} is not a descendant of the last export ` +
-        `${last.slice(0, 7)} (a rewritten workbench main?). Dispatch with allow_rewind if that is intended.`,
-    );
-  }
-  if (order === 'unrelated' && !opts.allowRewind) {
-    refuse(
-      `the last export ${last.slice(0, 7)} shares no history with the stage's workbench commit ` +
-        `${manifest.workbench_sha.slice(0, 7)}, or no longer exists in the workbench (a rewritten main?). ` +
-        'Dispatch with allow_rewind if that is intended.',
-    );
-  }
+  if (REWINDS.has(order) && !opts.allowRewind) refuseRewind(order, last, manifest.workbench_sha);
 
   const heldDirs = new Set(promotion.held.map((s) => s.dir));
   const posted = rows.filter((r) => !heldDirs.has(r.dir)).map((r) => r.row);
-  const body = buildBody({ manifest, prune, allowShrink: opts.allowShrink, rows: posted });
+  const bodyFor = (committedAt) =>
+    buildBody({ workbenchSha: manifest.workbench_sha, committedAt, prune, allowShrink: opts.allowShrink, rows: posted });
   const plan = planMirror(opts.shelf, manifest, promotion.kept, shelfDirs);
   const net = netOfRenames(plan, promotion.renamed);
   const counts =
@@ -918,6 +1095,7 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
   }
 
   if (opts.dryRun) {
+    const body = bodyFor(now().toISOString());
     const planJson = {
       dry_run: true,
       workbench_sha: manifest.workbench_sha,
@@ -962,7 +1140,8 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
     log(`shelf: ${counts}; pushed ${commit.slice(0, 7)}`);
   } else log('shelf: no change to commit');
 
-  const answer = await postToSite({ url: siteUrl, body, secret, sourceSha: manifest.workbench_sha, fetchImpl }); // j
+  const body = bodyFor(await runStartedAt({ env, fetchImpl })); // j
+  const answer = await postToSite({ url: siteUrl, body, secret, sourceSha: manifest.workbench_sha, fetchImpl });
   const described = describeAnswer(answer.status, answer.text);
   log(`site: ${described}`);
   summarize(env, [
@@ -972,6 +1151,269 @@ export async function publish(opts, { fetchImpl = globalThis.fetch, env = proces
     '',
   ]);
   return { outcome: 'published', order, prune, plan, promotion, body, commit, answer };
+}
+
+/**
+ * report's first half: everything enforce would read and decide, changing nothing. Never throws a
+ * Refusal: `failed` says why the rehearsal could not finish, and makes the run red after it has
+ * published as before.
+ */
+export async function rehearse(opts, { fetchImpl = globalThis.fetch, env = process.env, now = () => new Date() } = {}) {
+  const lines = [];
+  try {
+    const today = isoDay(now());
+    const frozen = loadFrozen(opts.shelf);
+    // Atlas first, as enforce asks it: whatever the stage turns out to be, its answer is in hand.
+    const atlas = await askAtlasFor(opts, { env, fetchImpl });
+    const shelf = readShelfState(opts.shelf);
+    const stage = await loadStageForAtlas(opts, { env, fetchImpl });
+    lines.push(stageLine(stage));
+    lines.push(atlasLine(atlas));
+    if (atlas.claims) {
+      lines.push(`atlas: this job's token, as the door reads it: ${Object.entries(atlas.claims).map(([k, v]) => `${k}=${v}`).join(' · ')}`);
+    }
+    const plan = planEnforce({ stage, shelf: shelf.folders, atlas, allowShrink: opts.allowShrink, frozen, today });
+    lines.push(...planLines(plan, planWords(plan), 'report: enforce would '));
+    if (plan.unbuildable.length) {
+      lines.push(`report: ${plural(plan.unbuildable.length, 'folder')} the shelf would keep build no rows from their files: enforce would post nothing`);
+    }
+
+    if (stage.usable) {
+      // The parity check: rows built from the staged files beside the rows this run posts as before.
+      const built = [];
+      const unbuilt = [];
+      let frozenUsed = 0;
+      const fileText = new Map();
+      for (const s of stage.folders) {
+        const r = rowsOf(s.view, { frozen, today });
+        if (!r.built) {
+          unbuilt.push(s.sheetId);
+          continue;
+        }
+        built.push(...r.built.rows);
+        frozenUsed += r.built.frozenUsed;
+        for (const [p, t] of r.built.fileText) fileText.set(p, t);
+      }
+      let todays = null;
+      try {
+        const shelfHas = (p) => isFile(path.join(opts.shelf, p));
+        const owners = checkMarks(stage.stageRoot, stage.manifest, shelfHas);
+        todays = derivePayload(stage.payload, stage.manifest, owners, shelfHas).map((r) => r.row);
+      } catch (err) {
+        if (!(err instanceof Refusal)) throw err;
+        lines.push('parity: the stage fails the checks it is published under today, so there is nothing to compare');
+      }
+      if (todays) {
+        const p = parity(built, todays);
+        const fields = [...p.fields].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([f, n]) => `${f} ${n}`);
+        lines.push(
+          `parity: ${p.built} rows built from the staged files · ${p.matched} beside today's · ${p.differ.length} differ` +
+            `${fields.length ? ` (${fields.join(' · ')})` : ''} · ${p.missing} only today's · ${p.extra} only built`,
+        );
+        if (p.differ.length) lines.push(`parity: rows that differ (sheetId): ${idWords(p.differ.map((d) => d.id)).join(', ')}`);
+      }
+      if (unbuilt.length) lines.push(`parity: ${plural(unbuilt.length, 'staged folder')} build no rows (sheetId): ${idWords(unbuilt).join(', ')}`);
+      if (frozen) {
+        let moved = 0;
+        let unused = 0;
+        for (const [slug, f] of frozen) {
+          const row = built.find((r) => r.slug === slug && r.id === f.id);
+          if (!row) {
+            unused++;
+            continue;
+          }
+          const own = fileText.get(row.source_path);
+          if ([...f.fields].some(([field, v]) => textHash(own?.[field]) !== v.whileFilesSay)) moved++;
+        }
+        lines.push(
+          `frozen text: ${frozen.size} entries · applied to ${frozenUsed} rows · ${moved} whose own files now say something else` +
+            ` · ${unused} with no row`,
+        );
+      }
+    }
+    return { lines, failed: atlas.ok ? null : `Atlas could not be asked (${atlasWords(atlas, atlas.seed)})` };
+  } catch (err) {
+    const why = err instanceof Refusal || err instanceof ListingError ? err.message : unexpectedWords(err);
+    lines.push(`report: the rehearsal stopped — ${why}`);
+    return { lines, failed: `the rehearsal stopped (${why})` };
+  }
+}
+
+/**
+ * Under enforce, the commit message: what was published and removed by slug, what waits by sheetId.
+ * `applied` is the stage this run took from, or null — none fetched, refused, older than the shelf,
+ * or set aside by the shrink guard — and only a stage taken from is recorded in the trailer.
+ */
+export function enforceCommitMessage({ plan, words, applied, heldBack, loose, count, rewoundFrom }) {
+  const lines = [];
+  const claimants = new Set(plan.remove.filter((r) => r.claimant).map((r) => r.claimant.dir));
+  const added = slugWords(plan.publish.filter((p) => !p.onShelf && !claimants.has(p.dir)).map((p) => p.built.rows[0]?.slug));
+  if (added.length) lines.push(`Added: ${added.join(', ')}`);
+  if (words.moved.length) lines.push(`Moved or renamed: ${words.moved.join(', ')}`);
+  if (words.changed.length) lines.push(`Changed: ${words.changed.join(', ')}`);
+  const removed = slugWords(plan.remove.filter((r) => !r.claimant).map((r) => path.posix.basename(r.dir)));
+  if (removed.length) lines.push(`Removed: ${removed.join(', ')}`);
+  if (loose) lines.push(`Removed ${plural(loose, 'file')} outside every skill folder`);
+  if (heldBack.length) lines.push(`Kept as the shelf has it: ${idWords(heldBack).join(', ')}`);
+  if (words.waiting.length) lines.push(`Waiting for Atlas: ${words.waiting.join(', ')}`);
+  if (rewoundFrom) lines.push(`Rewound from ${rewoundFrom.slice(0, 7)}, dispatched with allow_rewind`);
+  const subject = applied
+    ? `export: ${plural(count, 'skill')} from ${applied.manifest.workbench_sha.slice(0, 7)}`
+    : `export: ${plural(count, 'skill')}, only the removals Atlas asked for`;
+  return [
+    subject,
+    '',
+    ...(lines.length ? [...lines, ''] : []),
+    ...(applied ? [`Workbench-Commit: ${applied.manifest.workbench_sha}`, ''] : []),
+  ].join('\n');
+}
+
+/** k: SHELF_ATLAS=enforce. */
+async function enforceRun(opts, deps, mode) {
+  const { fetchImpl = globalThis.fetch, env = process.env, log = console.log, now = () => new Date() } = deps;
+  const prune = pruneValue(opts.event, opts.prune);
+  const siteUrl = env.SITE_SYNC_URL || SITE_SYNC_URL;
+  const detailsUrl = env.SITE_DETAILS_URL || SITE_DETAILS_URL;
+  const secret = env.SKILLS_SYNC_HMAC_SECRET;
+  if (!opts.dryRun && !secret) refuse('the secret SKILLS_SYNC_HMAC_SECRET is not set (the export environment holds it)');
+  if (!opts.dryRun && (new URL(siteUrl).protocol !== 'https:' || new URL(detailsUrl).protocol !== 'https:')) {
+    refuse('SITE_SYNC_URL and SITE_DETAILS_URL must be https URLs');
+  }
+  log(`atlas: enforce${mode.explicit ? '' : ' (SHELF_ATLAS is not set: the default)'} — only what Atlas lists leaves the team`);
+  if (opts.promote) log('note: promote is retired under SHELF_ATLAS=enforce — Atlas is the only way onto the shelf; ignored');
+
+  const stageRoot = path.join(opts.stage, 'stage');
+  if (opts.seedFail && isDir(stageRoot)) seedFail(stageRoot); // a: the stage is then refused (rule 5)
+  const today = isoDay(now());
+  const frozen = loadFrozen(opts.shelf);
+  // Atlas is asked first, so its answer is in hand whatever the stage turns out to be; the stage read
+  // never throws (loadStageForAtlas sets anything it cannot read aside, rule 5).
+  const atlas = await askAtlasFor(opts, { env, fetchImpl });
+  const shelf = readShelfState(opts.shelf);
+  const stage = await loadStageForAtlas(opts, { env, fetchImpl });
+  // Staged folders whose bytes git changed on the way into the index; filled below, and planned again.
+  const setAside = new Set();
+  const planFor = () => planEnforce({ stage, shelf: shelf.folders, atlas, allowShrink: opts.allowShrink, frozen, today, setAside });
+  let plan = planFor();
+  // How many rows the shelf listed before, and how many of them the removals Atlas asks for take —
+  // read now, while every folder is still on disk (setting a folder aside never changes those).
+  const rowCount = (h) => rowsOf(h.view, { frozen, today }).built?.rows.length ?? 0;
+  const rowsBefore = shelf.folders.reduce((n, h) => n + rowCount(h), 0);
+  const rowsByAtlas = plan.remove.filter((r) => r.by === 'atlas').reduce((n, r) => n + rowCount(r.shelf), 0);
+  const tell = (p) => {
+    const lines = [stageLine(stage), atlasLine(atlas), ...planLines(p, planWords(p), 'rule: ')];
+    for (const line of lines) log(line);
+    return ['### Export to the shelf (SHELF_ATLAS=enforce)', '', `- Prune: \`${prune}\``, ...lines.map((l) => `- ${l.trim()}`)];
+  };
+
+  if (opts.dryRun) {
+    const summary = tell(plan);
+    const words = planWords(plan);
+    log(JSON.stringify({ dry_run: true, atlas: 'enforce', prune, counts: words.counts, ...words }, null, 2));
+    summarize(env, [...summary, '- Dry run: nothing changed, nothing posted', '']);
+    return { outcome: 'dry-run', plan, stage, atlas };
+  }
+
+  // i: the shelf after the run — published folders from the stage, kept ones as the shelf has them.
+  // A published folder whose bytes git would change (a .gitattributes rule) is set aside — kept as the
+  // shelf has it, or waiting — and the run plans and mirrors again: rule 5, nothing in the stage stops
+  // the removals Atlas asks for. Each round sets at least one folder aside, so this ends.
+  const shelfFiles = new Map(shelf.folders.map((h) => [h.dir, h.files]));
+  let applied;
+  let desired;
+  for (;;) {
+    // The stage this run takes from: not one the shrink guard set aside.
+    applied = stage.usable && !plan.stageRefused ? stage : null;
+    const stageFiles = applied ? new Map(applied.folders.map((s) => [s.dir, s.files])) : new Map();
+    desired = new Map();
+    for (const [dir, f] of plan.final) {
+      const files = f.from === 'stage' ? stageFiles.get(dir) : shelfFiles.get(dir);
+      for (const e of files) desired.set(`${dir}/${e.path}`, { sha: e.sha, mode: e.mode, from: f.from });
+    }
+    mirror(opts.shelf, applied ? applied.stageRoot : stageRoot, desired);
+    const kept = [...plan.final].filter(([, f]) => f.from === 'shelf').map(([dir]) => dir);
+    const off = stageIndexEnforce(opts.shelf, desired, kept);
+    if (!off.length) break;
+    const published = new Set(plan.publish.map((p) => p.dir));
+    const culprits = [...new Set(off.map((p) => folderOf(p, published)).filter(Boolean))];
+    if (!culprits.length) {
+      refuse(`after the mirror, git's index differs from the copies the shelf keeps at ${plural(off.length, 'path')}, so nothing is committed`);
+    }
+    for (const dir of culprits) setAside.add(dir);
+    // Those the shelf already held go back to its own copy before the next mirror.
+    const held = culprits.filter((dir) => shelfFiles.has(dir));
+    if (held.length) git(opts.shelf, ['--literal-pathspecs', 'checkout', '-q', 'HEAD', '--', ...held]);
+    plan = planFor();
+  }
+  const words = planWords(plan);
+  const summary = tell(plan);
+  const changed = git(opts.shelf, ['diff', '--cached', '--name-only', '--', 'skills']).trim() !== '';
+  const rewound = Boolean(applied) && REWINDS.has(applied.order);
+  const stagedTree = applied ? new Map(applied.folders.map((s) => [s.dir, s.tree])) : new Map();
+  const heldBack = plan.keep
+    .filter((k) => stagedTree.has(k.dir) && stagedTree.get(k.dir) !== k.shelf.tree)
+    .flatMap((k) => (k.shelf.ids.size ? [...k.shelf.ids] : ['']));
+  let commit = null;
+  if (changed || rewound) {
+    const message = enforceCommitMessage({ plan, words, applied, heldBack, loose: shelf.loose, count: plan.final.size, rewoundFrom: rewound ? applied.last : null });
+    commit = commitAndPush(opts.shelf, message, { allowEmpty: !changed });
+    log(`shelf: pushed ${commit.slice(0, 7)}`);
+  } else log('shelf: no change to commit');
+  summary.push(`- Shelf: ${commit ? `pushed \`${commit.slice(0, 7)}\`` : 'no change to commit'}`);
+
+  // j: every row is built from the files the shelf now holds; nothing from the stage's payload.
+  if (plan.unbuildable.length) {
+    summarize(env, [...summary, '']);
+    refuse(
+      `${plural(plan.unbuildable.length, 'folder')} the shelf keeps ${plan.unbuildable.length === 1 ? 'builds' : 'build'} no rows from ` +
+        `${plan.unbuildable.length === 1 ? 'its' : 'their'} files (sheetId: ${idWords(plan.unbuildable.flatMap((d) => [...(shelf.folders.find((h) => h.dir === d)?.ids ?? [])])).join(', ') || 'none'}), ` +
+        'so nothing is posted: a partial body would prune live listings',
+    );
+  }
+  const rows = sortRows([...plan.final.values()].flatMap((f) => f.built.rows));
+  const ids = new Set();
+  const slugs = new Set();
+  for (const r of rows) {
+    if (ids.has(r.id) || slugs.has(r.slug)) refuse('two rows the shelf holds share an id or a slug, so nothing is posted');
+    ids.add(r.id);
+    slugs.add(r.slug);
+  }
+  let firstSeen;
+  try {
+    firstSeen = await readSiteFirstSeen({ url: detailsUrl, fetchImpl, bust: env.GITHUB_RUN_ID });
+  } catch (err) {
+    if (err instanceof ListingError) refuse(`${err.message}: first_seen cannot be carried, so nothing is posted`);
+    throw err;
+  }
+  finishRows(rows, { firstSeen, today });
+  const carried = rows.filter((r) => firstSeen.has(r.id)).length;
+  const frozenUsed = [...plan.final.values()].reduce((n, f) => n + (f.built.frozenUsed ?? 0), 0);
+  log(`listing: ${plural(rows.length, 'row')} built from the shelf's files · first_seen carried for ${carried} · frozen text on ${frozenUsed}`);
+
+  // Atlas asks for removals with no shrink guard (rule 5), but the site keeps its valve (the owner's
+  // ruling, 16 Oct, dropping choice 3): when the removals Atlas asked for take the post under half,
+  // zynkr.ai keeps those listings and the run turns red until one is dispatched with allow_shrink.
+  const atlasShrink = rowsBefore > 0 && rows.length < rowsBefore / 2 && rows.length + rowsByAtlas >= rowsBefore / 2;
+  if (atlasShrink && !opts.allowShrink) log('note: the removals Atlas asked for take the listings under half; zynkr.ai keeps them until a run is dispatched with allow_shrink');
+
+  const workbenchSha = applied ? applied.manifest.workbench_sha : lastWorkbenchCommit(opts.shelf);
+  if (!workbenchSha) refuse('no workbench commit to name in the post (no stage taken from, and no Workbench-Commit trailer on the shelf)');
+  const startedAt = await runStartedAt({ env, fetchImpl });
+  const body = buildBody({ workbenchSha, committedAt: startedAt, prune, allowShrink: opts.allowShrink, rows });
+  const answer = await postToSite({ url: siteUrl, body, secret, sourceSha: workbenchSha, fetchImpl });
+  const described = describeAnswer(answer.status, answer.text);
+  log(`site: ${described}`);
+  summarize(env, [...summary, `- Listing: ${plural(rows.length, 'row')} built from the shelf's files`, `- Site: ${described}`, '']);
+
+  // Rule 5: the removals were made and the rows posted; a missing side still makes the run red.
+  const missing = [];
+  if (!atlas.ok) missing.push(`Atlas could not be asked (${atlasWords(atlas, atlas.seed)})`);
+  if (plan.stageRefused) missing.push(plan.stageRefused);
+  else if (!stage.usable && stage.why !== 'stale') missing.push(stage.why === 'none' ? 'no stage was fetched' : `the stage was refused: ${stage.words}`);
+  if (missing.length) {
+    refuse(`${missing.join('; ')}. Only the removals one side asked for were made, nothing new was published, and the rows were posted.`);
+  }
+  return { outcome: 'published', plan, stage, atlas, body, commit, answer };
 }
 
 export async function main(argv = process.argv.slice(2), deps = {}) {
@@ -992,6 +1434,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
           'allow-shrink': { type: 'boolean' },
           'allow-rewind': { type: 'boolean' },
           'seed-fail': { type: 'boolean' },
+          'seed-atlas': { type: 'string' },
           'dry-run': { type: 'boolean' },
         },
       }));
@@ -999,25 +1442,29 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
       refuse(`${err.message}\n${USAGE}`);
     }
     if (!values.stage || !values.shelf || !values.event) refuse(USAGE);
-    if (values.run && !isFile(path.resolve(values.run))) refuse(`--run names no file: ${values.run}`);
+    // fetch-stage.mjs writes run.json only beside a stage it fetched and checked: no file means no stage.
+    const runFile = values.run ? path.resolve(values.run) : null;
+    const stageMissing = runFile !== null && !isFile(runFile);
     await publish(
       {
         stage: path.resolve(values.stage),
         shelf: path.resolve(values.shelf),
         event: values.event,
-        run: values.run ? readJson(path.resolve(values.run), 'run.json') : undefined,
+        run: runFile && !stageMissing ? readJson(runFile, 'run.json') : undefined,
+        stageMissing,
         prune: values.prune,
         promote: values.promote ?? '',
         allowShrink: Boolean(values['allow-shrink']),
         allowRewind: Boolean(values['allow-rewind']),
         seedFail: Boolean(values['seed-fail']),
+        seedAtlas: values['seed-atlas'] ?? '',
         dryRun: Boolean(values['dry-run']),
       },
       { ...deps, env },
     );
     return 0;
   } catch (err) {
-    const message = err instanceof Refusal ? err.message : `unexpected failure: ${err.message}`;
+    const message = err instanceof Refusal ? err.message : unexpectedWords(err);
     error(env.GITHUB_ACTIONS === 'true' ? `::error::${annotation(message)}` : `refused: ${message}`);
     summarize(env, ['### Export refused', '', message, '']);
     return 1;
