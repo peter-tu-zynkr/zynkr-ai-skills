@@ -8,15 +8,18 @@ name: Export to the shelf
 # This repo's run logs are public: no workbench code is checked out here, nothing is uploaded, and
 # the publisher names no path until it has proved the stage public.
 #
-# Scheduled runs stay off until the repository variable SHELF_LIVE is 'true'; a dispatch always
-# runs. The first publish is a dispatch with promote: all. Never add pull_request_target or any
+# Scheduled runs stay off until the repository variable SHELF_LIVE is 'true'. The owner's dispatch
+# always runs; a run anyone else starts must pass the gate job first (D-145, below). The first
+# publish is a dispatch with promote: all. Never add pull_request_target or any
 # trigger a fork can reach: the export environment holds WORKBENCH_READ_TOKEN and
 # SKILLS_SYNC_HMAC_SECRET. GitHub disables the schedule after 60 days without repository activity:
 # `gh workflow enable export.yml -R peter-tu-zynkr/zynkr-ai-skills`, then dispatch once.
 # On 2026-10-02 this schedule fired once and then stopped, so a job on the owner's Mac dispatches
 # with prune: true (never promote) within 15 minutes of each new green stage, and does nothing
-# while SHELF_LIVE is not 'true'. If GitHub's schedule recovers, both together are harmless:
-# one concurrency group, and writes only on change.
+# while SHELF_LIVE is not 'true'. D-145 (ATL-113 D6) moves that job to an hourly cron in zynkr.ai's
+# Vercel project, which dispatches with prune alone through a GitHub App of the owner's own; the
+# Mac job is switched off once the cron has a green day. If GitHub's schedule recovers, any of
+# them together are harmless: one concurrency group, and writes only on change.
 #
 # ATL-113 Part D — only what Zynkr Atlas lists leaves the team (rulings D-138…D-142). The repository
 # variable SHELF_ATLAS chooses:
@@ -85,8 +88,47 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  # D-145: the tick's App holds Actions write, which can dispatch and also re-run any run of the
+  # last 30 days at its original inputs and commit. tools/gate.mjs decides, before the export
+  # environment, what a run the owner did not start may do: a first, plain dispatch on main (prune
+  # alone), and only while SHELF_LIVE is 'true'. The owner's runs and GitHub's schedule pass as before.
+  # The gate lives in this file, so it can't stop a dispatch on another ref, which runs that ref's
+  # own export.yml. What stops those is the export environment's deployment-branch rule (main
+  # only): its secrets never reach a job from any other ref. Keep that rule.
+  gate:
     if: github.event_name == 'workflow_dispatch' || vars.SHELF_LIVE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      go: ${{ steps.gate.outputs.go }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Who started this run, and with what
+        id: gate
+        env:
+          OWNER: ${{ github.repository_owner }}
+          TRIGGERED_BY: ${{ github.triggering_actor }}
+          ATTEMPT: ${{ github.run_attempt }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHELF_LIVE: ${{ vars.SHELF_LIVE }}
+          PROMOTE: ${{ inputs.promote }}
+          ALLOW_SHRINK: ${{ inputs.allow_shrink }}
+          ALLOW_REWIND: ${{ inputs.allow_rewind }}
+          SEED_FAIL: ${{ inputs.seed_fail }}
+          SEED_ATLAS: ${{ inputs.seed_atlas }}
+        run: node tools/gate.mjs
+
+  publish:
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: export
@@ -108,6 +150,15 @@ jobs:
           ref: main
           # The whole history, so the last Workbench-Commit trailer is readable.
           fetch-depth: 0
+
+      # Re-running this job alone reuses the gate job's answer from the first attempt, so the
+      # re-run rule is asked again here, before any step that reads a secret (D-145).
+      - name: Refuse a re-run the owner did not start
+        env:
+          OWNER: ${{ github.repository_owner }}
+          TRIGGERED_BY: ${{ github.triggering_actor }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: node tools/gate.mjs --rerun
 
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
