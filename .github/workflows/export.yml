@@ -92,6 +92,9 @@ jobs:
   # last 30 days at its original inputs and commit. tools/gate.mjs decides, before the export
   # environment, what a run the owner did not start may do: a first, plain dispatch on main (prune
   # alone), and only while SHELF_LIVE is 'true'. The owner's runs and GitHub's schedule pass as before.
+  # The gate lives in this file, so it can't stop a dispatch on another ref, which runs that ref's
+  # own export.yml. What stops those is the export environment's deployment-branch rule (main
+  # only): its secrets never reach a job from any other ref. Keep that rule.
   gate:
     if: github.event_name == 'workflow_dispatch' || vars.SHELF_LIVE == 'true'
     runs-on: ubuntu-latest
