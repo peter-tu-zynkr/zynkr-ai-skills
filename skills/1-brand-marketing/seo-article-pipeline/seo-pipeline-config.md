@@ -99,7 +99,7 @@ Stage 12 (`seo-publish-article`) takes the finalizer's publish-ready Doc, publis
 
 ```
 published_article_folder_id: <your-published-archive-folder-id>   # company fact — Atlas key company.published-archive-folder · 「04 Published article」(under seo_kb_folder_id) — source Doc archived here AFTER publish, not before
-tracker_sheet_id:            <your-seo-sheet-id>   # company fact — Atlas key company.seo-tracker-sheet · Zynkr SEO 關鍵字地圖 + 主題清單 — Topic List (Status=Done / Published URL / Published Date) + Keyword Pool (coverage URL on the cluster rows)
+tracker_sheet_id:            <your-seo-sheet-id>   # company fact — Atlas key company.seo-tracker-sheet · Zynkr SEO 關鍵字地圖 + 主題清單 — Topic List (Status / Published URL / Published Date) + Keyword Pool (coverage URL on the cluster rows)
 site_blog_url:               https://zynkr.ai/blog/<slug>
 cms_repo_path:               <your-cms-repo-path>   # zynkr-cms local checkout; its .env.local holds NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
 ```

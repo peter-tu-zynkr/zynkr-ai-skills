@@ -116,8 +116,11 @@ Once published and verified, close the loop so the draft doesn't linger in Drive
    ```
 
 2. **Update the SEO content tracker** (`<your-seo-sheet-id>`) — match this article to its rows by intent cluster / primary keyword:
-   - **Topic List tab** (article-level): on the article's row, set `Status=Done` · `Published URL=<site>/blog/<slug>` · `Published Date=<today>`. Add those three header columns once if they don't exist. (`Status=Done` = fully shipped: live + archived + tracked. The DB `articles.status` is separately `published` — don't confuse the two.)
+   - **Topic List tab** (article-level): on the article's row, set `Status` · `Published URL=<site>/blog/<slug>` · `Published Date=<today>`. `Status` takes the value the tab's live rows already use, `已發布` on the live tracker; never introduce a second value set. Add the three header columns once if they don't exist. The DB `articles.status` is separately `published`; don't confuse the two.
    - **Keyword Pool tab** (keyword coverage): write `<site>/blog/<slug>` into the `Published URL` column for **every keyword row in this article's intent cluster**, so the keyword map reflects what's now covered. If the grid is too narrow for the new column, append one first: `resize_sheet_dimensions(sheet_name=..., insert_columns=1)` — Sheets rejects writes beyond the current grid width.
+   - **Both tabs in one pass.** This is governance rule G9 (`seo-program-planner/references/governance-guardrails.md`): a publish that updates one tab only is not done, and the tracker drifts.
+
+**Scheduled posts skip this step.** When an article goes out on its `scheduled_at`, the CMS cron flips `articles.status` to `published` and nobody runs this skill that day, so Step 7 never fires. G9 makes that a weekly duty: at least once a week, and whenever you are in the tracker anyway, find Topic List rows still marked `🟡 已排程` whose date has passed, confirm each is `published` in the CMS `articles` table, and fill both tabs as above.
 
 Report which rows were marked. (The column scheme lives in `references/cms-publishing.md`; the two ids come from Atlas, as above.)
 

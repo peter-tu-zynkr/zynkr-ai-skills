@@ -108,8 +108,12 @@ company facts the skill reads from Atlas at run time (`SKILL.md` Step 7 says how
 - **Content tracker** = the SEO keyword/topic sheet (`<your-seo-sheet-id>`), two tabs:
   - **Topic List** (one row per planned article): columns `Status` · `Published URL` ·
     `Published Date`. Append these headers once; set them on the article's row at publish.
+    `Status` reuses the value the tab's live rows carry (`已發布`), never a new one.
   - **Keyword Pool** (one row per keyword): a `Published URL` column; set it on **every
     row whose Intent Cluster matches** the published article, so the keyword map shows
     what's now covered. Sheets rejects writes past the current grid width — if the column
     doesn't exist yet, `resize_sheet_dimensions(insert_columns=1)` first.
 - Match article → rows by **Intent Cluster** (Keyword Pool) / **Primary Keyword** (Topic List).
+- **Both tabs, every time:** governance rule G9 (`seo-program-planner/references/governance-guardrails.md`).
+  A post the CMS publishes on its `scheduled_at` skips Step 7, so `SKILL.md` Step 7 also sets a
+  weekly check for `🟡 已排程` rows whose date has passed.

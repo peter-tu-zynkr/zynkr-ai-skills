@@ -43,6 +43,7 @@ The atomic unit. One row per keyword. This is the tab the pipeline reads to pick
 | `maps-to-shipped-capability` | The already-shipped product capability this keyword sells; blank is disallowed |
 | `money page` | The destination money page / conversion target this keyword should route toward (must exist in Tab 7) |
 | `layer` | IA layer this lives in: blog-article · /free-resource · 新 category · glossary · in-product tool · comparison-page |
+| `Published URL` | Blank until the topic this keyword clusters into is live, then `<site>/blog/<slug>`. Written into **every** keyword row of that topic's intent cluster, not just one, when the post goes live; never filled from Tab 2 later. See G9 in `governance-guardrails.md`. |
 
 ### Tab 2 — Topic List
 
@@ -61,7 +62,11 @@ One row per **publishable article** (the backlog `seo-article-pipeline` selects 
 | `internal links to` | Which pillar hub / money page it should link into |
 | `priority` | P0 · P1 · P2 (P0 = first wave) |
 | `demand 信號` | Signal + basis; `待驗證` if inferred |
-| `status` | backlog · briefed · drafting · published (planner seeds everything as `backlog`) |
+| `status` | backlog · briefed · drafting · published (planner seeds everything as `backlog`). A tracker already in production keeps the values its rows use and never gains a second set: the live tracker marks a scheduled post `🟡 已排程` and a live one `已發布`. |
+| `Published URL` | Blank until the post is live, then `<site>/blog/<slug>`. |
+| `Published Date` | Blank until the post is live, then the date it went live. |
+
+**G9, in `governance-guardrails.md`:** `status`, `Published URL` and `Published Date` are written by hand when a post goes live, in the same pass as Tab 1's `Published URL`; neither the planner nor the pipeline fills them later. A post the CMS publishes on its `scheduled_at` runs no publish flow that day, so the weekly G9 check is what catches it: rows still at `🟡 已排程` after their date has passed.
 
 ### Tab 3 — Use-Case / Comparison
 

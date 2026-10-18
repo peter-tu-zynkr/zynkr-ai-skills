@@ -58,7 +58,7 @@ The config keeps only what is not a company fact: your Google account (`<your-go
 | 10 | (10) Titling | `content-title` (existing, Agent tool) | Title candidates |
 | 11a | (11) Scored proofreading | `content-editor` (existing, with SEO review criteria) | Proofread article |
 | 11b | (11) SEO setup | `seo-article-finalizer` | **Publish-ready Google Doc** (article body + 「SEO 交付物」block: meta/schema/links + slug/seo_title/meta_description/keywords/category) |
-| 12 | (12) Publish to web | `seo-publish-article` | Live at `zynkr.ai/blog/<slug>` + source Doc archived to 「04 Published article」 + SEO tracker updated (Topic List `Status=Done`/URL/date + Keyword Pool coverage URL) |
+| 12 | (12) Publish to web | `seo-publish-article` | Live at `zynkr.ai/blog/<slug>` + source Doc archived to 「04 Published article」 + SEO tracker updated in both tabs, rule G9 (Topic List `Status`/URL/date + Keyword Pool coverage URL) |
 | ＋ | EN flagship | `content-translator` (zh→EN mode) | EN flagship version (optional, after publish) |
 
 For the first half (1–8, 11b, 12) use the **Skill tool** to call the corresponding SEO skill; for the second half (9, 10, 11a) use the **Agent** tool to call the existing write-article sub-agents.
@@ -97,7 +97,7 @@ SEO KB ▸ 01 Rubrics ｜ 02 Seed Knowledge ｜ 03 Article brief & outline & dra
 2. **Always ask the user before advancing into each stage; never auto-jump across stages.** This corresponds to all the light-blue nodes in the flowchart (review-and-approve / Trigger / scan articles / validate-and-supplement / review outline and FAQ / publish article) and the diamond decision (whether to supplement information).
 3. Pass the previous stage's complete `SEO_PACKET` block intact to the next stage.
 4. Stage 8's handoff summary deliberately uses the same format as `content-style-select`, so `content-draft` can take over seamlessly.
-5. After 11b (finalizer emits the publish-ready Doc), hand off to stage 12 `seo-publish-article` to publish it to the web — it also archives the Doc to 「04 Published article」 and flips the SEO tracker (Topic List `Status=Done` + Keyword Pool coverage). After publish, ask the user whether to produce the EN flagship version (`content-translator` zh→EN).
+5. After 11b (finalizer emits the publish-ready Doc), hand off to stage 12 `seo-publish-article` to publish it to the web — it also archives the Doc to 「04 Published article」 and updates both tabs of the SEO tracker under rule G9 (Topic List `Status` + Keyword Pool coverage). After publish, ask the user whether to produce the EN flagship version (`content-translator` zh→EN).
 
 ## Progress Board
 

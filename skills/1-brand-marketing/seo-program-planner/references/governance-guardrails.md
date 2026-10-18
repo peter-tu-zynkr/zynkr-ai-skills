@@ -20,6 +20,7 @@
 | G6 | AEO 誠實：引用是非決定性動量指標，不是硬 gate | 退回，把引用從驗收門檻降為觀察指標 |
 | G7 | 內外語氣分線：策略 land-grab 語言不上對外頁 | 退回，把對內戰略語言留在計畫，對外文案改中性 |
 | G8 | 零孤兒：每個規劃的內部頁都有上下游連結路徑 | 退回，補 hub→spoke / spoke→money page 連結契約 |
+| G9 | 發布後雙表同步：Topic List × Keyword Pool 不漏更新 | 退回，Topic List 補 Status · Published URL · Published Date，Keyword Pool 補 Published URL，缺一邊不算完成 |
 
 ---
 
@@ -107,6 +108,19 @@
 - **money page 可被收錄前置檢查**：在把任何 money page 設為內部連結目標前,先查它是否可被收錄（noindex / SSR / meta / canonical / schema / sitemap)；不可收錄的頁先進技術 SEO recon（Sheet「Money-Page/Tech-SEO Recon」分頁）,修好前不當作可導流目標。
 - **無懸空連結**：計畫不得規劃連到尚不存在的頁、未出貨的頁、或已知 noindex 的頁。
 - **檢核**：交付前對 Topic List 跑一次「每列是否都有 上游 pillar + 下游 money page/CTA」掃描;缺任一端即補,不得留孤兒。
+
+---
+
+## G9 — 發布後雙表同步（Topic List × Keyword Pool 不漏更新）
+
+**原則**：一篇文章上線後，追蹤表有兩個分頁各自記著它：Topic List 記文章層級，Keyword Pool 記關鍵字層級。兩個分頁不會互相同步，各自要有人寫入。漏寫任一邊，Keyword Pool 就會出現「文章已上線、關鍵字列還是空白」的假缺口，下一次規劃會把已經補上的缺口再算一次。
+
+- **誰負責**：觸發發布的人。互動發布時是跑 `seo-publish-article` 的人，它的 Step 7 會同時寫兩個分頁；排程發布時是負責追蹤表的 SEO specialist。這一步是發布的一部分，不是有空再補的額外工作。
+- **Topic List**：在該文章那一列寫 `Status` · `Published URL`（`<site>/blog/<slug>`）· `Published Date`。`Status` 沿用分頁裡已上線列的既有值，不新創一套：追蹤表用 `🟡 已排程` 表示已排程，`已發布` 表示已上線。
+- **Keyword Pool**：把同一個 `Published URL` 寫進這篇文章所屬 intent cluster 的**每一列**，通常不只一列。只填語意上直接對應這篇文章的列，不為了填滿而牽強關聯。
+- **排程發布最容易漏**：CMS 在 `scheduled_at` 到時自動把 `articles.status` 翻成 `published`，那天沒有人跑 `seo-publish-article`，Step 7 也就不會觸發。所以這是**每週的稽核責任**：至少每週一次，找出 Topic List 上還標 `🟡 已排程`、日期卻已過的列，對照 CMS `articles` 表確認已上線，再把兩個分頁一次補齊。
+- **只補一邊不算完成**：只更新 Topic List 或只更新 Keyword Pool，該次發布在 G0 checklist 不算過關。
+- **檢核**：Topic List 上每一列已上線的文章，用它的 Primary Keyword 或 Published URL 回 Keyword Pool 搜一次，確認同一個 URL 已出現在該 intent cluster 的每一列；缺列即補。
 
 ---
 
