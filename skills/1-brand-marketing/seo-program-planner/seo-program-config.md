@@ -92,15 +92,12 @@ These cover the program-synthesis steps no existing `seo-*` skill performs. **Re
 
 | Program-synthesis step | Drive doc (name) | Drive doc ID | Local fallback |
 |---|---|---|---|
-| Pillar-group definition (hub & spoke) | pillar-rubric | _TBD_ | ./references/pillar-rubric.md |
-| IA decision rubric (CMS articles vs /free-resource vs new category vs sub-site) | ia-decision-rubric | _TBD_ | ./references/ia-decision-rubric.md |
-| Money-page & tech-SEO recon (noindex/SSR/meta/canonical/schema/sitemap) | money-page-recon | _TBD_ | ./references/money-page-recon.md |
-| AEO citation-gap & answer-engine coverage | aeo-citation-gap | _TBD_ | ./references/aeo-citation-gap.md |
-| CTA ladder (TOFU→BOFU) | cta-ladder-rubric | _TBD_ | ./references/cta-ladder-rubric.md |
-| KPIs & governance gates | kpi-governance-rubric | _TBD_ | ./references/kpi-governance-rubric.md |
-| Topic-backlog & month-by-month calendar | backlog-calendar-rubric | _TBD_ | ./references/backlog-calendar-rubric.md |
+| End-to-end method (stages, backlog + win-first order, AEO citation gap, money pages + CTA ladder + KPIs, calendar) | program-planning-method | _TBD_ | ./references/program-planning-method.md |
+| Persona reverse-map | persona-reverse-map | _TBD_ | ./references/persona-reverse-map.md |
+| Pillars + IA decision + tech-SEO indexability | pillar-and-ia-framework | _TBD_ | ./references/pillar-and-ia-framework.md |
+| Keyword pool + 9-tab Sheet schema | keyword-pool-and-sheet-schema | _TBD_ | ./references/keyword-pool-and-sheet-schema.md |
+| Governance guardrails | governance-guardrails | _TBD_ | ./references/governance-guardrails.md |
 | 14-section plan Doc template | plan-doc-template | _TBD_ | ./references/plan-doc-template.md |
-| 9-tab keyword Sheet template | keyword-sheet-template | _TBD_ | ./references/keyword-sheet-template.md |
 
 ---
 

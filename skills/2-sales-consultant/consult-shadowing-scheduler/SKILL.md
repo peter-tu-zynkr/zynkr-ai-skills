@@ -91,8 +91,7 @@ The user hands over a deal URL or a company name.
 
 `get_deal` returns `notes`, `contact_id` and `company_id`. The contact name and
 email come from `mcp__zynkr__get_contact(id=…)`, the company name from
-`mcp__zynkr__get_company(id=…)` — the two follow-up reads that replace what the
-old join returned in one row.
+`mcp__zynkr__get_company(id=…)`.
 
 Capture the **contact name + email**, and scan `notes` for the 專案資料夾 line
 that project-init appended
@@ -258,8 +257,8 @@ it — the user reviews and sends it.
 
 **d) CRM task + notes backlink** —
 
-**Check before you create.** The old statement was idempotent; `create_task` is
-not, so a re-run would book the session twice. Call
+**Check before you create.** `create_task` is not idempotent, so a re-run would
+book the session twice. Call
 `mcp__zynkr__list_tasks(filter="all", limit=200)` first and look for a task on
 this deal whose subject is already `跟拍 shadowing @ <YYYY-MM-DD>`. Found →
 skip, and say so. (That listing is capped at 200; if it returns exactly 200,
@@ -286,7 +285,7 @@ Finally, **offer (ask-only)** a stage nudge: if the deal is still
 `new`/`contacted`, ask whether to move it to `qualified`. On yes, use
 `mcp__zynkr__move_deal_stage(id="<deal_id>", stage="qualified", confirm=true)`
 — **only that tool.** Writing the column directly moves the stage but skips the
-`stage_change` timeline entry and the automation event. Never nudge unasked.
+`stage_change` timeline entry. Never nudge unasked.
 
 ### 6 · Report
 

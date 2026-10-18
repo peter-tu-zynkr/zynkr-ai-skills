@@ -15,7 +15,7 @@ The recap is a **newsletter-style message** written in first person from the spe
 ________________
 
 一、[Section title — names the topic]
-[2–5 short bullet points or lines. Use 👉 to introduce the most important single point in the section. Keep the section under 80 words.]
+[2–5 short bullet points or lines, short enough to read at a glance on a phone. Use 👉 to introduce the most important single point in the section.]
 ________________
 
 二、[Section title]

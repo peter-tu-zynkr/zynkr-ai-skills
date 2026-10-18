@@ -146,7 +146,7 @@ YYYY-MM-DD`. If the user's cycle label and the tracker title disagree, stop and 
   the **target folder** for the two new files is the first folder on the row (the `[N]`
   parent) unless the user names another.
 - **Plan Doc** — sources §A per-LOB row; 6.0 → `get_drive_file_permissions` on the
-  shortcut → `shortcutDetails.targetId`. `inspect_doc_structure` reveals tabs; note the
+  shortcut returns the TARGET's metadata — take its `ID:` line. `inspect_doc_structure` reveals tabs; note the
   TITLE of the tab holding the plan body (`get_doc_as_markdown` has no `tab_id` — it
   returns every tab, each under a top-level heading).
 - **Tracker rows** — `read_sheet_values` on the SOR tab (`<cycle> 專案項目`, columns per

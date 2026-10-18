@@ -25,7 +25,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill trainin
 
 Turn a recorded lecture, livestream, or workshop into a publishable five-section recap. Use this skill when you have a video or transcript and need a reader-friendly summary in the canonical Zynkr recap format. **Different from sibling skills**:
 - `training-lecture-transcript` polishes the raw transcript itself (preserves every line).
-- `training-process-video` produces four parallel workstreams (slides, social posts, etc.) — not a single doc.
+- `training-process-video` produces four parallel workstreams (an event-recap Doc, a Q&A knowledge-base diff, lecture-note proposals and content-idea seeds) — not a single doc.
 - `training-lecture-recap` (this skill) produces **one** narrative recap doc with five fixed sections.
 
 ---
@@ -130,7 +130,7 @@ Render in zh-TW unless the lecture is in English (then English). Use this templa
 ## Step 5 — Quality checks before delivery
 
 Before handing the recap to the user, verify:
-- [ ] Summary is under 80 words
+- [ ] Summary is 2–3 sentences a reader takes in at a glance
 - [ ] Theme has 3–5 bullets, no overlap with Summary
 - [ ] Q&A pulls from actual transcript content, not invented
 - [ ] No detail copied verbatim from `OUTLINE_REF`

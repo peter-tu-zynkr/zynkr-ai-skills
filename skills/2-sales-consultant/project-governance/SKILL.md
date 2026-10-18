@@ -326,8 +326,7 @@ that errored mid-sweep. An audit that silently skips is worse than no audit.
 - **"Open deal"** → any stage that isn't `won` or `lost` per
   `list_deal_stages` (confirm the actual slugs at run time).
 - **"Qualified or later"** → `qualified`, `proposal` or `won`: the stages at
-  which a client project should be open (`SKB-045` D2; it was `won` until
-  2026-10-03).
+  which a client project should be open (`SKB-045` D2).
 - **I3's stages** → `proposal` or `won`. An opened `qualified` project is not
   checked for session records yet; I5's activity pulse covers it.
 - **Report language** → zh-TW body; invariant IDs stay English (I1–I6).

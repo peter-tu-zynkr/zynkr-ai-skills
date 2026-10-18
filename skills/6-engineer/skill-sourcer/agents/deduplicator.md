@@ -34,7 +34,7 @@ Each item is a GitHub Issue in `peter-tu-zynkr/zynkr-skill-idea` plus custom Pro
 - `pipeline Status` — `proposed` | `researching` | `approved` | `building` | `shipped` | `parked`
 - `keep` — `yes` | `no` | `?`
 - `intake Source` — `skill-sourcer` | `master-table` | `manual`
-- `labels` — includes `skill-proposal`, optionally `triage-ready`, optionally `category:N-name`
+- `labels` — includes `skill-proposal`, optionally `category:N-name`, and the status of record: `triage-ready`, `building`, `shipped`, `parked` or `rejected`
 
 ## Your task
 
@@ -48,8 +48,8 @@ Compare the incoming skill against every Project item. Look for:
 Important rules:
 
 - Do NOT just compare names — also compare source URL, what the skill does, its input/output, and who it helps. The body field contains the long-form description.
-- Treat items with `keep = no` as previously reviewed and rejected — flag any re-proposal as `near_duplicate` and require new rationale.
-- Items with `pipeline Status` in {`approved`, `building`, `shipped`} are already in the active pipeline — overlap with these is more significant than overlap with `proposed` items.
+- Treat items labelled `rejected` as previously reviewed and rejected, and so, for proposals closed before the labels existed, items with `keep = no` and no status label. Flag any re-proposal as `near_duplicate` and require new rationale.
+- Items labelled `triage-ready`, `building` or `shipped` are already in the active pipeline — overlap with these is more significant than overlap with items that carry none of those labels yet.
 - A skill that is part of a larger bundle (e.g., `pdf` inside `docx / pdf / pptx / xlsx (Anthropic official)`) is an `exact_duplicate` unless the user is explicitly splitting it out.
 
 Since we have no fixed threshold yet, lean toward flagging ambiguous cases as `partial_overlap` with a clear explanation — we'll refine the boundary over iterations.
@@ -60,7 +60,7 @@ Since we have no fixed threshold yet, lean toward flagging ambiguous cases as `p
 verdict: exact_duplicate | near_duplicate | partial_overlap | new
 overlapping_item_title: (issue title from Project, if applicable)
 overlapping_item_url: (issue URL, if applicable)
-overlapping_pipeline_status: (proposed | researching | approved | building | shipped | parked)
+overlapping_label: (the overlapping issue's status label: triage-ready | building | shipped | parked | rejected | none)
 overlapping_keep: (yes | no | ?)
 overlap_summary: (what they share and how they differ)
 recommendation: ADD | SKIP | REVIEW

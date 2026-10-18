@@ -69,13 +69,11 @@ user_google_email: <your-google-workspace-account>
 | **Tone** | Professional, warm, brief — reference one specific detail from company research |
 | **Style guide** | TBD — outbound reference examples to be added in v2 |
 
-## Email Signature Placeholder
+## Email Sign-off
 
 ```
----
-Peter Tu
-[Title] | Zynkr
-<your-google-workspace-account>
+Best regards,
+Peter
 ```
 
-> Note: Update this signature once confirmed. It will be appended to every drafted email.
+> Every drafted email ends with these two lines and nothing after them: no title, phone, address or signature block, the same as sales-follow-up's drafts.

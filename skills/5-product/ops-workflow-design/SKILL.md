@@ -248,7 +248,7 @@ All flow charts live in the Lucid process-flows folder (folder id `422779259`). 
 
 `[N.M] <Process name> (<qualifier>) vK`
 
-- **`[N.M]`** — `N` is the Zynkr LOB taxonomy digit (0 strategy · 1 brand-marketing · 2 sales-consultant · 3 operations · 4 training · 5 product · 6 tech · 7 people-talent · 8 finance-admin · 9 legal). `M` is the next free sequence number within that LOB — check the folder before assigning; never reuse a number. Client consulting charts go under `2`.
+- **`[N.M]`** — `N` is the Zynkr LOB taxonomy digit (0 strategy · 1 brand-marketing · 2 sales-consultant · 3 operations · 4 training · 5 product · 6 engineer · 7 people-talent · 8 finance-admin · 9 legal). `M` is the next free sequence number within that LOB — check the folder before assigning; never reuse a number. Client consulting charts go under `2`.
 - **Process name** — noun phrase ≤5 words, zh-TW or English to match the audience, no trailing 。
 - **`(qualifier)`** — optional scope/variant in parens: `(AI knowledge)`, `(manual lane)`, `(presentation)`.
 - **`vK`** — bump for real revisions of the same process. **Never `_updated`** — a revision either bumps `vK` or supersedes in place; a new file is only for a genuinely different process.

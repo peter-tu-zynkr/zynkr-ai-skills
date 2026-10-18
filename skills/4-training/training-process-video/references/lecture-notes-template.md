@@ -1,6 +1,6 @@
 # Lecture Notes Template
 
-Use this template when appending speaker notes to a chapter file (`claude-code-ops-ch*.md`).
+Use this template when appending speaker notes to a chapter file (`[chapter_prefix]-ch[N].md`, named in the stream's `stream-config.md`).
 Append the entire block below at the end of the target chapter file. Never modify existing content.
 
 ---
@@ -33,7 +33,7 @@ Keep sentences short. Preserve the speaker's terminology and examples exactly.
 - If no title was given, derive a short slug from the main topic
 
 **Chapter alignment**
-- State the chapter number and title from `4.4.1 course.md`
+- State the chapter number and title from the stream's course outline (`course_outline` in `stream-config.md`)
 
 **Content type** — pick one:
 - `example` — a concrete case or scenario the speaker walked through

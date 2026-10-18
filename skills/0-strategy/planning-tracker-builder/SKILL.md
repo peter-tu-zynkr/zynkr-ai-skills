@@ -305,7 +305,8 @@ Nothing below runs without it.
 ### Step 6 — Fill or extend an existing tracker (mode = fill | extend)
 
 1. `get_spreadsheet_info` on the tracker the user named, then
-   `read_sheet_values("'<SOR tab>'!A1:M1000")` (`<SOR tab>` = `<cycle> 專案項目`,
+   `read_sheet_values("'<SOR tab>'!A1:M50")`, then `A51:M100`, … until a page comes back short
+   (≤50 rows per call — pack §6) (`<SOR tab>` = `<cycle> 專案項目`,
    or the tab the user points at) and `read_sheet_values("'專案項目小記'!A1:K40")`.
    Classify:
    - **SOR tab missing / row 1 empty, AND `專案項目小記` missing or empty** ⇒

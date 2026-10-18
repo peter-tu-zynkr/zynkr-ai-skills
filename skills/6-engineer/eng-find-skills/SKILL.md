@@ -13,8 +13,9 @@ process: "Identify the user's task verb / artifact / domain, check the skills.sh
 output: "A small set of installable skill recommendations with install commands + links to skills.sh, or an honest 'no matches found' response"
 synergy: []
 upstream_repo: https://github.com/vercel-labs/skills
-original_source_url: https://github.com/vercel-labs/skills/blob/main/skills/eng-find-skills/SKILL.md
+original_source_url: https://github.com/vercel-labs/skills/blob/main/skills/find-skills/SKILL.md
 original_author: vercel-labs
+install_command: npx skills add https://github.com/vercel-labs/skills --skill find-skills
 house-style: exempt — pure router — selects a child skill, drafts nothing itself
 
 ---
@@ -22,10 +23,10 @@ house-style: exempt — pure router — selects a child skill, drafts nothing it
 # Find Skills
 
 ```bash
-npx skills add https://github.com/vercel-labs/skills --skill eng-find-skills
+npx skills add https://github.com/vercel-labs/skills --skill find-skills
 ```
 
-> Lift-and-shift mirror of [`vercel-labs/skills/eng-find-skills`](https://github.com/vercel-labs/skills/tree/main/skills/eng-find-skills) — original content by **vercel-labs** (20k+ ★). Sourced via [issue #84](https://github.com/peter-tu-zynkr/zynkr-skill-idea/issues/84).
+> Lift-and-shift mirror of [`vercel-labs/skills/find-skills`](https://github.com/vercel-labs/skills/tree/main/skills/find-skills) — original content by **vercel-labs** (20k+ ★). Sourced via [issue #84](https://github.com/peter-tu-zynkr/zynkr-skill-idea/issues/84).
 
 This skill helps you discover and install skills from the open agent skills ecosystem.
 

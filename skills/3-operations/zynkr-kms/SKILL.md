@@ -2,25 +2,18 @@
 name: zynkr-kms
 sheetId: "3.02"
 description: >-
-  The knowledge-curator (WRITE) half of Peter's support loop: it turns resolved support
-  threads into KB cards in the Zynkr platform 知識庫 (the source of truth), then mirrors every
-  change to a Google Drive backup. After a support / inbound-sales ticket is resolved,
-  zynkr-kms reads the thread, learns Peter's actual answer, and writes it as a clean,
-  LLM-friendly card into the **Zynkr platform 知識庫** (platform.zynkr.ai/kb, via the `zynkr`
-  MCP server) — the single source of truth since the 2026-07-15 cutover. Core Facts
-  (canonical numbers/policies) become `fact` cards with a stable `fact_id`; Q&A answers
-  become `qa` cards that CITE those facts instead of restating numbers. It reasons like a
-  KMS specialist (intent taxonomy → which KB section → how to structure for retrieval),
-  proposes entries, and only writes after Peter approves. /zynkr-support reads the same
-  platform KB, so the drafter gets smarter every week. It also GOVERNS BOTH STORES: after
-  every approved write it mirrors the change to the Google Drive backup (`[3.2] 客服知識庫
-  (KMS)`) — one Doc per section plus a full-fidelity JSON snapshot — so the knowledge
-  survives a Supabase incident and stays human-readable. The mirror is one-way (platform →
-  Drive) and never authoritative. Trigger whenever Peter says "/zynkr-kms", "learn from
+  The knowledge-curator (WRITE) half of Peter's support loop. After a support /
+  inbound-sales ticket is resolved it reads the thread, learns Peter's actual answer and — only
+  after Peter approves — writes it as a clean, LLM-friendly card into the **Zynkr platform 知識庫**
+  (platform.zynkr.ai/kb, via the `zynkr` MCP server; the single source of truth): canonical
+  numbers and policies become `fact` cards with a stable `fact_id`, answers become `qa` cards that
+  CITE those facts instead of restating numbers. After every approved write it mirrors the change
+  one way to the Google Drive backup (`[3.2] 客服知識庫 (KMS)`, one Doc per section plus a JSON
+  snapshot), which is never authoritative. Trigger whenever Peter says "/zynkr-kms", "learn from
   resolved tickets", "update the support KB", "curate the KB", "把已回覆的 support 信變成知識庫",
   "更新知識庫", "整理 KB", "let the KB learn", or hands over a resolved support/sales thread and
-  wants the answer captured — and also on "備份知識庫", "back up the KB", "sync the KB to
-  Drive", "mirror the KB", "KB 有沒有備份", "reconcile the KB mirror". This is the WRITE side;
+  wants the answer captured — and also on "備份知識庫", "back up the KB", "sync the KB to Drive",
+  "mirror the KB", "KB 有沒有備份", "reconcile the KB mirror". This is the WRITE side;
   /zynkr-support is the READ side.
 category: operations
 project: zynkr-kms
@@ -72,11 +65,6 @@ KB without Peter's approval.**
 >   from the platform on every run (Step 6). Never authoritative, never read back into the KB;
 >   a human edit made there is destroyed on the next mirror. If the two disagree, the platform
 >   is right.
->
-> History: one monolith Google Doc → nested one-doc-per-section Google Docs (2026-06-06) →
-> seeded into the platform KB (2026-06-09) → **full cutover 2026-07-15**, after which Drive was
-> a frozen archive → **2026-08-26: Drive relit as a live one-way mirror**, closing a 6-week gap
-> where 22 cards existed only in Supabase.
 
 ---
 
@@ -84,7 +72,7 @@ KB without Peter's approval.**
 
 - **KB access** — the **`zynkr` MCP server** (the platform's own MCP at `platform.zynkr.ai`,
   authenticated as Peter's workspace). The tools you'll use:
-  - `mcp__zynkr__list_kb_sections` — the live section vocabulary (13 sections; run this first)
+  - `mcp__zynkr__list_kb_sections` — the live section vocabulary (run this first)
   - `mcp__zynkr__search_kb` / `mcp__zynkr__list_kb_articles` — dedupe & lookup
   - `mcp__zynkr__get_kb_article` — fetch one card by uuid **or by `fact_id`** (qa cards resolve
     their cited facts inline)
@@ -386,8 +374,8 @@ If a new section was created, confirm it's added to `references/intent-taxonomy.
 - **One source of truth: the platform KB.** Drive is a *backup*, not a second KB. Never author a
   card in Drive, never cite the mirror as current, and never read a Drive edit back into the
   platform. If the two disagree, the platform is right and the mirror is stale.
-- **A write that isn't mirrored is drift.** Step 6 runs in the same pass as Step 5, every time.
-  Leaving it for later is how the 2026-07-15 → 08-26 gap happened (22 cards in one store only).
+- **A write that isn't mirrored is drift.** Step 6 runs in the same pass as Step 5, every time;
+  a write left for later leaves cards in one store only.
 - **Never mirror unscoped.** `crm_kb_*` is shared/multi-tenant; always pass Peter's
   `--workspace`. An unscoped run leaks other tenants' cards into Peter's Drive.
 - **Canonical numbers live once.** Pricing/policy/rates go in a `fact` card; qa cards **cite** it

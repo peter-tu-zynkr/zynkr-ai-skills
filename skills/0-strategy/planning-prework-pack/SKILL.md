@@ -152,9 +152,9 @@ owner · source tag`:
    row's `# · 主類別 · 項目 · Priority · 負責人 · 開始 · 結束 · 狀態`. `read_sheet_values`
    returns at most 50 rows per call — page the tab (`A1:M50`, `A51:M100`, … until a
    short page) and count rows before bucketing. The `#` prefix is POSITIONAL, not the L1
-   number: the L1 lives in the 主類別 text (live tracker: `#5.0x` rows are `6.0 Tech`,
-   `#6.0x` rows are `7.0 People`) — bucket by 主類別, and quote `#` verbatim with the L1
-   beside it (`tracker #5.02 (L1 6.0)`). Normalise 狀態 to the
+   number: the L1 lives in the 主類別 text (the July tracker carried `6.0 Tech` under
+   `#5.0x`) — bucket by 主類別, and quote `#` verbatim with the L1
+   beside it (`tracker #6.02 (L1 6.0)`). Normalise 狀態 to the
    exact strings `完成` / `進行中` / `未開始` / `放棄` (trim; anything else ⇒ keep raw and
    flag `狀態未知`). Bucket by L1 and by 負責人: 完成 ⇒ "delivered" candidates; 進行中 +
    未開始 ⇒ "forward" + laundry-list candidates. Also read `專案項目小記` for the counts.

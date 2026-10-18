@@ -3,29 +3,19 @@ name: zynkr-gm
 sheetId: "0.02"
 description: >-
   The GM operating-rhythm skill for a small company run from Google Docs/Sheets. Reads the
-  source-of-record chain in precedence order (strategy alignment section → H2 project tracker
-  (status SOR) → the ops team's weekly log → OKR & KPI tracker → per-function progress sheets),
-  derives per-item state (ends-soon · overdue · undated · propose-done · direction-unlabelled),
-  and produces a fixed-shape WEEKLY GM BRIEF: runway line first, the ≤3 things only the GM can
-  unblock, two clocks, P0/P1 status by LOB, per-owner rollup, KPI off-target + asks, decisions
-  register, deliberately-not-this-week, machine health. Delivers as a Gmail draft (interactive)
-  or an auto-sent email (the Monday cloud routine rendered from this skill). Trigger EAGERLY on
-  "/zynkr-gm", "zynkr-gm week", "GM 週報", "這週重點", "本週 focus", "本月重點", "what should I
-  focus on this week", "as a GM what will I do this week", "week focus", "month focus", "GM
-  brief", "run the GM pass", "哪些 P0 delay 了", "KPI 有沒有 off target", "H2 進度盤點", "幫我盤一下
-  H2 專案", or any ask for a company-level (not one project's) week/month focus, progress
-  roll-up, or KPI variance. BOUNDARY — do NOT hijack: /project-status-update (one project's
-  weekly status email from its own tracker), /project-client-status and /project-governance
-  (consulting portfolio), /zynkr-ops-weekly (the team's weekly loop, its Monday recap and the
-  Friday tracker approvals — this skill only reads its Weekly Ledger), /sales-manager (deal-level
-  pipeline review), /admin-governance (file-level Drive↔local index drift),
-  /admin-meeting-prep (per-meeting packets), /skill-finder (which skill for a task),
-  /planning-tracker-sync (the TEAM weekly tracker block, nudges and snapshots — it consumes this
-  skill's derived-state rules, but the founder brief stays here), the rest of the planning suite
-  0.03-0.10 (a planning CYCLE: pre-work, offsite synthesis, tracker build, OKR reconcile),
-  /curate-livestream-transcripts (it produces the notes this skill only health-checks). This
-  skill reads broadly and writes narrowly: it never edits the tracker, the onboarding master
-  doc, or another owner's doc.
+  source-of-record chain in precedence order (strategy alignment → H2 project tracker → Weekly
+  Ledger and ops weekly log → OKR & KPI tracker → function sheets), derives per-item state, and
+  delivers one fixed-shape WEEKLY GM BRIEF — runway first, the ≤3 decisions only the GM can
+  close, two clocks, P0/P1 by LOB, owners, KPI asks, decisions register, machine health — as a
+  Gmail draft, or sent by the Monday cloud routine. Trigger EAGERLY on any company-level (not
+  one project's) week/month focus, progress roll-up or KPI-variance ask: "/zynkr-gm", "GM 週報",
+  "這週重點", "本週 focus", "本月重點", "哪些 P0 delay 了", "KPI 有沒有 off target", "H2 進度盤點",
+  "幫我盤一下 H2 專案", "what should I focus on this week", "GM brief". BOUNDARY: one project's
+  status mail → /project-status-update; the team tracker block, nudges and snapshots →
+  /planning-tracker-sync; the team's weekly loop and Friday approvals → /zynkr-ops-weekly; deal
+  pipeline → /sales-manager; consulting portfolio → /project-client-status and
+  /project-governance; a planning cycle → the planning-* suite. Reads broadly, writes narrowly:
+  never edits the tracker, the onboarding master doc, or another owner's doc.
 category: strategy
 project: zynkr-gm
 platform: claude
@@ -160,8 +150,9 @@ row in the text, and note the degradation once in block 08.
 
 ### 3.1 Tracker — the status source (every run)
 
-`mcp__google-workspace__read_sheet_values` on `sources.main_tracker.id`, range
-`<tab>!A1:M200`. Keep rows whose `#` looks like `N.NN` and whose 項目 is non-empty (rows like
+`mcp__google-workspace__read_sheet_values` on `sources.main_tracker.id` in ≤50-row pages
+(`<tab>!A1:M50`, then `A51:M100`, … until a page comes back short — the tool shows at most 50
+rows per call, the limit `scripts/ledger_read.py` also guards). Keep rows whose `#` looks like `N.NN` and whose 項目 is non-empty (rows like
 `1.0` with an empty 項目 are category headers). Save as JSON rows (keys = header cells) to the
 dump dir. Status vocabulary is 未開始 · 進行中 · 放棄 · 完成 · 暫停 (完成 · 暫停 added 2026-08-24).
 完成 and 放棄 are **terminal** — exclude them from open-work counts and from owner load; 暫停 keeps
@@ -243,10 +234,9 @@ header text (`Tracker #`, `Q3 target`, `Q4 target`, `Actual`, and — if present
 - `sources.course_tracker`: tab per config; take stage/milestone rows with End dates and
   Status only (this skill does **not** produce that project's status email —
   /project-status-update does).
-- `sources.finance_ledger` (Zynkr Finance Ledger): tab `Monthly Summary` — the books, and the
-  runway/burn source since 2026-09-13. Readable in **both** environments, so the runway line is no
-  longer environment-dependent. **Read-only**; never append, and never write into the
-  `Financial Model` tab's month columns (spilled arrays → `#REF!`).
+- `sources.finance_ledger` (Zynkr Finance Ledger): tab `Monthly Summary` — the books and the
+  runway/burn source, readable in **both** environments. **Read-only**; never append, and never
+  write into the `Financial Model` tab's month columns (spilled arrays → `#REF!`).
 - Local runs may add CRM (`mcp__zynkr__list_deals`, `list_tasks`) for sales/consulting
   evidence. In the cloud routine the CRM is unavailable — the brief marks those lines
   `（排程執行無法讀取 · 待本地補）` rather than guessing.
@@ -295,8 +285,9 @@ and `references/` are enough. Any change here goes into block 08 as "SOR doc cha
 
 - `sources.livestream_notes_folder`: list files, take the newest `逐字稿_*` date; if older
   than 8 days → flag "weekly curation did not run".
-- Calendar (local only, if the Calendar API is enabled): this week's events as anchors.
-  Skip silently in unattended mode.
+- Calendar (local runs only, through the `claude_ai_Google_Calendar` connector — the
+  workspace-mcp Calendar API is disabled): this week's events as anchors. Skip silently in
+  unattended mode.
 
 ## Step 4 — Derive state, then roll up
 
@@ -368,7 +359,8 @@ are the difference between a brief that gets acted on and one that gets skimmed)
   address.
 - Never restate numbers from narrative docs; never invent a HUMAN metric; when a source could
   not be read, say so in 08 instead of filling in.
-- Respect the word budgets. If block 03 is over, it is carrying prose that belongs nowhere.
+- Keep the brief scannable (template § Length). If block 03 grows, it is carrying prose that
+  belongs nowhere.
 
 ## Step 6 — Deliver
 
@@ -466,8 +458,7 @@ connectors, model). Differences from a local run, by design:
   adds `learn` (knowledge-directory curation, propose → `--apply` interactive only).
 - The tracker's status vocabulary has no 延遲; overdue and undated are inferred from
   dates that are often placeholders — the brief makes that visible rather than hiding it.
-- Cloud runs cannot see CRM/calendar; those lines say so. (Runway is no longer in that set — the
-  finance ledger is a Drive Sheet the connector can read.)
+- Cloud runs cannot see CRM/calendar; those lines say so.
 - The brief is company-level. One project's status email is `/project-status-update`.
 
 ## Self-checks

@@ -33,7 +33,7 @@ Scan the transcript for segments that could serve as lecture material:
 Each segment should be 2–10 sentences. Break longer passages at natural topic shifts.
 Aim for 5–15 segments total depending on transcript length.
 
-### Step 2 — Score each segment against the 6 chapters
+### Step 2 — Score each segment against every chapter
 
 For each segment, evaluate its fit with each chapter using this rubric:
 
@@ -125,5 +125,4 @@ SUMMARY: 本場逐字稿內容與現有課程章節重疊度不高，建議人�
 - Read files only — do not write anything
 - Score conservatively: when uncertain between 2 and 3, use 2
 - Do not propose content that merely repeats what already exists in the chapter files verbatim
-- Keep each lecture note block under 200 words (excluding the template fields)
 - If a chapter file cannot be read, note the error and skip scoring for that chapter

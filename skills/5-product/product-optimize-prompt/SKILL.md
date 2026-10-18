@@ -37,7 +37,7 @@ Use GUIDE to analyze and fill gaps in any prompt:
 ### IPO Framework (Prompt Structure)
 Refactor every prompt using **Input → Process → Output**:
 - **Input**: What the model receives (user data, examples, constraints, context, tools).
-- **Process**: How the model should reason (steps, checks, tool usage, intermediate structure).
+- **Process**: What the model must do and check — constraints, tool usage, the order of steps where order matters, and how to verify the result. Leave the reasoning itself to the model.
 - **Output**: What the model produces (format, style, length, quality criteria).
 
 Make IPO explicit with section headings or inline comments in every refactored prompt.
@@ -48,9 +48,9 @@ Place content in the correct message layer. When refactoring, move content to th
 | Layer      | Purpose                                                                  |
 |------------|--------------------------------------------------------------------------|
 | System     | Stable rules, tone, safety, global behavior, core identity               |
-| Developer  | Task-specific logic, IPO details, reasoning steps, evaluation criteria  |
+| Developer  | Task-specific logic, IPO details, constraints, evaluation criteria       |
 | User       | Concrete problem or data for a specific run — no meta-instructions       |
-| Assistant  | Example responses or output templates                                    |
+| Assistant  | Few-shot example responses, placed before the final user turn — never as the last message (current Claude models reject a trailing assistant turn); put output templates in the system layer or use structured outputs |
 | Tools      | When/how to use tools and how to integrate results (if relevant)         |
 
 **Guiding principle:**
@@ -149,7 +149,7 @@ Add enforcement rules (e.g., must complete Stage 1 before moving on).
 
 ### Response Discipline
 - Keep responses focused and concise
-- Stay under **8,000 characters**
+- When the package targets Custom GPT instructions, keep it within that field's 8,000-character limit
 - One phase per turn
 - Think like an experiment designer
 - Focus on real use cases, not abstract metrics

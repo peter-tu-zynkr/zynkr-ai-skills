@@ -52,7 +52,7 @@ I don't touch visuals, and I don't rewrite the story (see ## Limitations).
 
 ## Resources you'll use
 
-- **Paging principle cards**: see the built-in guidelines in Step 2 and Step 3 below (one point per page, per-page information cap, titles that carry their own conclusion). If `paging-principles.md` / `slide-density-rubric.md` exist under `./references/`, read those first as a finer-grained rubric; if they're unavailable, use the built-in guidelines in this document — **do not stall over a missing file**.
+- **Paging principle cards**: the built-in guidelines in Step 2 and Step 3 below (one point per page, per-page information cap, titles that carry their own conclusion).
 - **Brand assets**: the paging stage **does not** need to touch brand colors/fonts (that's the visual leg's job); but if ▸ Storyline carries audience/occasion information, adjust the level of detail per page accordingly (external pitches should be lean; internal updates/training can be denser).
 - **Save location**: this presentation's working subfolder (it shares the same SLIDE_PACKET durable record with 1.25 and 1.27).
 

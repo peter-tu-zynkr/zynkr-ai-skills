@@ -182,7 +182,7 @@ Wait for user input.
 
 ## Step 4 — Launch 4 agents in parallel
 
-Launch all four agents simultaneously using the Task tool. Show the status board immediately after launching:
+Launch all four agents simultaneously using the Agent tool. Show the status board immediately after launching:
 
 ```
 ─────────────────────────────────────────

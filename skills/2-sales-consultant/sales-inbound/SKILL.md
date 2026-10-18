@@ -43,8 +43,7 @@ track and a **first-reply draft** so the lead hears back.
 
 The client folder and its kickoff doc are not this skill's. A lead is not a project
 yet: `/project-init` opens the numbered folder, the kickoff documents and the deal's
-`專案資料夾：` line once the deal reaches **qualified**, after the discovery call
-(Peter's rule of 2026-10-03; decision D2 took them out of this skill on 2026-10-05).
+`專案資料夾：` line once the deal reaches **qualified**, after the discovery call.
 
 It runs **fully autonomously**: parse → filter → create → draft → report. No mid-run
 confirmation. The whole point is that Peter runs it (or a cron does) and comes
@@ -55,8 +54,7 @@ is only ever a draft: Peter reads it and sends it himself.
 
 ## One owner per inbox
 
-Two skills used to draft on the same threads, so a lead could get two drafts. The
-rule now:
+Each inbox has exactly one owner, so a lead never gets two drafts:
 
 - **This skill** owns the website's `Interest: AI 顧問服務` inquiries and every thread
   under `[2] Sales & consultant/[2.1] Inbound Sales`: it logs the lead and drafts the
@@ -193,12 +191,11 @@ Every write previews first — call it once without `confirm`, then again with
 3. **Deal** — `mcp__zynkr__create_deal(name="<DEAL_NAME>", contact_id=…,
    company_id=…, stage="new", service_tier="advisory", priority="medium",
    lead_source="content", close_date="<today + 30 days>", notes="<NOTES>",
-   confirm=true)`. The pipeline, the 交易 number, the owner, the `created`
-   activity and the automation event are all handled for you.
+   confirm=true)`. The pipeline, the 交易 number, the owner and the `created`
+   activity are all handled for you.
 
-**One field does not survive the move.** The contact's `lead_status` /
-`deal_status` cannot be set through the MCP and stay empty. The attribution
-still lives on the deal as `lead_source="content"` — look there, not on the
+**`lead_status` / `deal_status` stay empty** — the MCP cannot set them on the
+contact. The attribution lives on the deal as `lead_source="content"` — look there, not on the
 contact.
 
 Values:
@@ -284,10 +281,9 @@ any `[[NEEDS PETER]]` drafts, and state the headline in prose (e.g. "Created 2 d
   is what makes an unattended or scheduled re-run safe.
 - **The platform creates the deal, not a hand-written statement.**
   `mcp__zynkr__create_deal` is the same path the CRM's own "Create Deal" uses,
-  so it assigns the pipeline and 交易 number, logs the `created` activity and
-  emits the automation event on its own. A skill run leaves the database in the
-  state a manual click would. The trade against the old single atomic statement
-  is that company → contact → deal are now three writes: if one fails midway you
+  so it assigns the pipeline and 交易 number and logs the `created` activity on
+  its own. A skill run leaves the database in the state a manual click would.
+  Company → contact → deal are three writes: if one fails midway you
   can be left with a company and contact but no deal. That is recoverable and
   visible; re-running finds them and continues. Report it rather than retrying
   blindly.

@@ -142,16 +142,3 @@ the receipt for `status=ok` and nothing else. `parse_reports.py` emits both, as 
 
 This is a deliberate split, not drift. Do not "fix" it by unifying them: a label without a
 year is wrong for a state file, and an ordinal nobody can place is wrong for a chat message.
-
-## The changeover
-
-The label changed from `W38` to `WB 9/14` on **2026-09-15**. Sections written before that
-carry the old shape. Until no live section predates the change — three weeks, given the
-archive — every idempotency search must accept **both**:
-
-- `〔自動彙整 WB 9/14` **or** `〔自動彙整 2026-W38`
-- `— zynkr-ops-weekly · WB 9/14` **or** `— zynkr-ops-weekly · W38`
-
-Matching only the new shape makes `rollup` write a second block into a section that already
-has one, and makes `decisions` conclude the loop never ran and refuse to send the recap. Drop
-the legacy arm once three weeks have passed, the same way `--accept-untagged` gets dropped.

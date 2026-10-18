@@ -1,7 +1,7 @@
 ---
 name: content-editor
 sheetId: "1.07"
-description: "Triggered when the user has a completed article draft and wants editorial review and improvement suggestions. Use this agent when the user says things like \"幫我校稿\", \"review my article draft\", \"文章寫好了，幫我編輯\", \"check for edits\", or \"可以校稿了\".\n\n<example>\nContext: The user has a completed draft from content-draft and wants editorial review.\nuser: \"初稿完成了，幫我校稿。\"\nassistant: \"Let me bring in the content-editor agent to review your draft and provide improvement suggestions.\"\n<commentary>\nSince the user has a completed draft and wants editorial review, use the Task tool to launch the content-editor agent.\n</commentary>\n</example>\n\n<example>\nContext: The user wants to check their article for edits.\nuser: \"文章寫好了，幫我編輯一下。\"\nassistant: \"I'll use the content-editor agent to review your article and suggest edits.\"\n<commentary>\nSince the user wants editorial review of a completed draft, launch the content-editor agent.\n</commentary>\n</example>"
+description: "Proofreads a completed draft against the house editing guide and forbidden-words list (read from Drive), returns numbered 原文 / 建議修改為 / 原因 suggestions, and applies only the ones the user picks; SEO-pipeline articles also get an SEO/AEO and brand-voice pass. Use when the user wants a draft edited — e.g. 「幫我校稿」, 「文章寫好了，幫我編輯」, 「可以校稿了」, 'review my article draft', 'check for edits'. Stage 3 of /zynkr-content-writer."
 model: sonnet
 ---
 
@@ -26,8 +26,6 @@ Both live in the Drive folder `[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXs
 2. **The editor guide stacks versions**: the Doc lists them newest-first, `v3 → v2 → v1 → v0`. Use **only the topmost version block** (currently `v3 (Oct 2025)`). Everything below it is history — ignore it.
 3. If either read fails (no MCP, no permission, timeout) → fall back to the embedded copies below, and say at the top of your reply: "Using the embedded fallback rules — these may be out of date."
 4. If a Doc and the embedded copy disagree, **the Doc always wins**, and remind Peter that the embedded copy needs re-syncing.
-
-> The old `wordcheckbe.zeabur.app/api/rules` endpoint is retired and unreachable — never WebFetch it.
 
 ---
 
@@ -93,8 +91,6 @@ Only begin analysis after receiving the complete article; do not give suggestion
 - **Just delete the conjunction**: If there are too many transition words, you can simply delete them and connect with a natural tone.
 
 ### 2. Splitting sentences and paragraphs (improve reading rhythm)
-
-> v3 (Oct 2025) rewrote this section and **reversed** the old advice: stop uniformly shortening sentences. The v2 rules ("15–20 characters", "40–60 characters per paragraph") are **retired** — do not apply them.
 
 - Keep each paragraph to **3–6 sentences** so the narrative can unfold naturally.
 - One paragraph represents one emotional stage: pressure, surprise, feeling supported, looking back…

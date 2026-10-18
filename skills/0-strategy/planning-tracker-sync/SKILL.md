@@ -51,8 +51,8 @@ weekly pass, packaged: read the SOR tab, derive each item's state with `zynkr-gm
 (never its own vocabulary), diff against the last snapshot, print the agenda block in one
 fixed zh-TW shape plus a nudge block per owner. It writes exactly one thing, only when asked,
 and never into the Main Tracker: a dated row-level snapshot into the OKR & KPI Tracker
-(`tracker-latest` + `tracker-snapshots`) — the history `zynkr-gm`'s STALLED rule,
-`planning-evidence-pack` and the year-end retro read back.
+(`tracker-latest` + `tracker-snapshots`) — the history this skill's Δ, `planning-evidence-pack`
+and the year-end retro read back (zynkr-gm reads the Weekly Ledger's snapshots, not these tabs).
 
 ---
 
@@ -269,7 +269,7 @@ Only when the invocation says `--retro` (the last weeks of the cycle, before
 `planning-prework-pack` runs). From the normalised rows plus `tracker-snapshots`, print
 `./references/sync-formats.md` §7: 完成／PROPOSE_DONE by LOB (`n/m` per L1, `⚠ 無項目` where an
 L1 has zero items — pack §2 coverage gap; group by the 主類別 column TEXT, never by the `#`
-prefix — in the live tracker `#5.0x` rows are 主類別 `6.0 Tech` and `#6.0x` are `7.0 People`;
+prefix — the `#` prefix is positional (the July tracker carried `6.0 Tech` under `#5.0x`);
 quote `#` verbatim), P0 結案率, Slipped (OVERDUE at cycle end), Dropped
 (放棄 with 備註 quoted), owner load, the snapshot trend (first → last `snapshot_date`, or
 `（待補）— 需要 snapshot`), the fields prework-pack can take, and the sources not read. Chat
@@ -318,8 +318,8 @@ that snapshots are taken locally.
   fix the cell, the skill never infers.
 - **STALLED and DIRECTION_UNLABELLED are zynkr-gm's calls.** They need the ops weekly log,
   SOT activity and plan-Doc Refresh blocks this skill never reads; here they print `n/a` /
-  備註-only unless zynkr-gm's output is supplied. This skill's contribution is the snapshot
-  history the STALLED rule needs.
+  備註-only unless zynkr-gm's output is supplied. zynkr-gm computes STALLED from the Weekly
+  Ledger's `Snapshot` tab, not from `tracker-snapshots`.
 - **Δ needs a snapshot.** Per-field transitions exist only from `tracker-snapshots`; a pasted
   block or Gmail draft gives status-level Δ only; the first run has none.
 - **Meeting evidence is opportunistic.** Only Fireflies recaps in Gmail are read; Google Chat

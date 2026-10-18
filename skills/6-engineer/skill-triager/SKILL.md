@@ -75,9 +75,7 @@ For the chosen issue, gather and display in one screen:
 
 > **The Google Sheet is retired — do not read or write it.** `Zynkr Skills Pipeline`
 > (`1_0bYyZ…`) was the pipeline SOT until the move to GitHub; its own header cell now
-> reads *"⚠️ SOT moved to GitHub Project DO NOT EDIT THIS SHEET"*. Earlier versions of
-> this skill still wrote `Pipeline Status` / `Build Status` / `Build Target` back to it,
-> which meant triage was updating a retired store. Everything it used to hold is on the
+> reads *"⚠️ SOT moved to GitHub Project DO NOT EDIT THIS SHEET"*. Everything it used to hold is on the
 > issue: status and category as labels, source and dedup verdict in the body, the slug
 > in the title. The Sheet stays readable as the pre-cutover history.
 
@@ -184,7 +182,7 @@ Not happening.
 
 The artifact is **already built and committed** (typical for `/skill-publish` intakes). No scaffold is needed — just verify it landed correctly and close the loop on the issue.
 
-> **QA is pre-ship; confirm-ship is post-ship.** By the time you reach Option D the skill has *necessarily* passed QA — the PR could not have merged otherwise, because the `qa.yml` / `publish-skill.yml` QA check blocks any ERROR-tier skill. So Option D does **not** re-run QA; it trusts the merged PR's green QA check as the receipt and verifies the *live* artifact (the post-ship checks below).
+> **QA is pre-ship; confirm-ship is post-ship.** Option D does **not** re-run QA: it takes the merged PR's green QA check as the receipt and verifies the *live* artifact (the post-ship checks below). A merge alone proves nothing — nothing on GitHub requires `qa.yml` to pass, and a direct push to `main` has no PR — so when the check was red or missing, or there was no PR, say so in the report instead of treating the skill as QA-passed.
 
 **Precondition:** the issue body has a `**Built Skill URL**:` line. If it doesn't, tell the user "the SKILL.md hasn't been committed yet — commit to `zynkr-skill-builder`, then come back" and exit this option.
 

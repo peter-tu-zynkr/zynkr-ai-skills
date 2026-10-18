@@ -53,8 +53,8 @@ Phase 1: Unpack What the Company Wants
 Analyzing job description...
 ```
 
-Launch the `cv-job-decoder` agent using the Agent tool:
-- Pass the full `JD_TEXT` as the prompt
+Launch a subagent with the Agent tool, `model: "sonnet"`:
+- Its prompt is the full text of `./agents/cv-job-decoder.md` followed by the full `JD_TEXT` (a skill's `agents/` files are not registered subagent types, so the instructions travel in the prompt)
 - Wait for completion
 
 Display the structured output (Role Context Summary, Skills Table, KPI Mapping, ATS Keywords).
@@ -121,8 +121,8 @@ Phase 4: Career Skill Progression Analysis
 Analyzing career trajectory...
 ```
 
-Launch the `cv-progression` agent using the Agent tool.
-Pass all accumulated context in the prompt:
+Launch a subagent with the Agent tool, `model: "sonnet"`, whose prompt is the full text of
+`./agents/cv-progression.md` followed by all accumulated context:
 ```
 ## Context from Prior Phases
 

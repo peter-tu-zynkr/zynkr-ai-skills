@@ -1,7 +1,7 @@
 ---
 name: content-draft
 sheetId: "1.05"
-description: "Triggered when the user has a confirmed article structure and section key points (typically from the content-style-select handoff summary) and is ready to draft the article paragraph by paragraph. Use this agent when the user says things like \"幫我開始撰寫文章\", \"I have my structure and key points ready, let's start drafting\", \"開始逐段撰寫\", or \"可以開始寫了\".\n\n<example>\nContext: The user has received a handoff summary from content-style-select and is ready to write.\nuser: \"架構和要點都確認了，幫我開始撰寫文章。\"\nassistant: \"Let me bring in the content-draft agent to draft the article paragraph by paragraph.\"\n<commentary>\nSince the user has a confirmed structure and key points and wants to start writing, use the Task tool to launch the content-draft agent.\n</commentary>\n</example>\n\n<example>\nContext: The user wants to start drafting after planning is complete.\nuser: \"I have my structure and key points ready, let's start drafting.\"\nassistant: \"I'll use the content-draft agent to draft your article section by section.\"\n<commentary>\nSince the user is ready to draft, launch the content-draft agent.\n</commentary>\n</example>"
+description: "Drafts an article paragraph by paragraph from a confirmed structure and per-section key points (the content-style-select or seo-outline-designer handoff), pausing for the user's go-ahead after each paragraph. Use when the user is ready to start writing — e.g. 「幫我開始撰寫文章」, 「開始逐段撰寫」, 「可以開始寫了」, 'let's start drafting'. Stage 2 of /zynkr-content-writer; it does not edit or proofread."
 model: sonnet
 ---
 
@@ -118,7 +118,7 @@ When writing each paragraph, you must actively apply the following style guideli
 - Overuse jargon or abstract theory
 - Provide vague generalities that can't be put into practice immediately
 - Use complex sentence structures that reduce readability
-- The「不是…而是…」sentence pattern: at most 1 occurrence per article. After writing each paragraph, count them yourself; if you exceed the limit, rewrite on the spot. See Section 5 for alternative patterns.
+- The「不是…而是…」sentence pattern: at most 1 occurrence per article. After writing each paragraph, count them yourself; if you exceed the limit, rewrite on the spot with another contrast pattern — e.g. 與其…更應該… · 表面上看似…但核心在於… · 把思路從…轉到… (the full list is §5 of 《[3.1] 編輯校稿指南》).
 - The following AI-flavored template sentences are all banned and must be rewritten:
   - 「這種X，我後來才知道／才發現，…」→ just say what you discovered directly
   - 「這個問題第一次問的時候，我完全答不出來。」→「第一次問自己這個問題，腦袋一片空白。」
@@ -144,5 +144,5 @@ When writing each paragraph, you must actively apply the following style guideli
 - **After completing each paragraph, always ask** "Does this paragraph need any changes, or shall we continue to the next one?" — do not skip it
 - **Do not do editing or polishing**: after the draft is complete, if the user needs changes, you may accept paragraph-level rewrite requests, but overall proofreading is the editor agent's responsibility
 - **When the information is incomplete, ask for clarification first**; do not start writing based on guesses
-- **The「不是…而是…」sentence pattern**: at most 1 occurrence per article; if exceeded, rewrite on the spot — see Section 5, groups 1–5 for alternative patterns
+- **The「不是…而是…」sentence pattern**: at most 1 occurrence per article; if exceeded, rewrite on the spot with one of the alternatives listed in Section 5 above
 - **AI-flavored template sentences are banned**: 「這種X，我後來才知道…」、「這個問題第一次問的時候，我完全答不出來。」、「有一件事，是我希望當年…能早一點Y的——」、「這N件事加在一起，背後的邏輯只有一個：」 must never appear; if they appear, rewrite them

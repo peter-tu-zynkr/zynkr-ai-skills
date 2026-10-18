@@ -28,7 +28,7 @@ output: "A GitHub issue (URL), a CRM tracking task linked on the deal, and an ac
 synergy:
   - "zynkr-support"
   - "gtm-uat-writer"
-house-style: exempt — machine artifact — structured ticket fields, no prose output
+house-style: bound
 
 ---
 
@@ -58,8 +58,8 @@ company + defect in the issue, person + thread in the CRM task — by design.
   zynkr-support answers "how do I…", gtm-bug-ticket tracks "it broke".
 - **skill-sourcer** — files skill IDEAS as proposals in the idea backlog; it
   never touches defects or client threads.
-- **gtm-uat-writer** — upstream: its UAT guide's 問題回報方式 (steps /
-  expected / actual / screenshot) shapes these mails — they parse almost 1:1
+- **gtm-uat-writer** — upstream: its UAT guide's 問題回報方式 (發生了什麼 /
+  預期看到什麼 / 操作步驟 / 截圖) shapes these mails — they map field by field
   into step 2; free-form mails need best-guess reconstruction with 未確認.
 
 ## Fixed facts (don't re-derive these)
@@ -139,8 +139,10 @@ Three arrival shapes:
 
 Capture: reporter name + email, company, report date, and the **thread id**
 (needed for the threaded draft in step 8; pasted text has none — note that).
-Mails following gtm-uat-writer's 問題回報方式 arrive semi-structured — map
-those blocks (操作步驟 / 預期結果 / 實際結果 / 截圖) straight into step 2.
+Mails following gtm-uat-writer's 問題回報方式 arrive semi-structured, as the
+guide's four numbered items — map each straight into step 2: **發生了什麼** →
+Symptom and Actual, **預期看到什麼** → Expected (keep the S-n scenario id when
+the client gives one), **操作步驟** → Repro steps, **截圖** → Screenshots.
 
 ### 2 · Extract the defect
 
@@ -240,7 +242,8 @@ not appended, and skipping the read loses every earlier backlink.
 
 `mcp__google-workspace__draft_gmail_message` with `thread_id` set (hard rule 3
 — it stays a draft; the thread id makes it a proper reply that references the
-original message). In the **inbound language**, the draft says three things:
+original message). In the **inbound language** and the house voice (House style
+below), the draft says three things:
 
 1. **Received** — thanks for the report, briefly mirroring the symptom.
 2. **Tracked** — 問題編號 **#<n>** (the issue number ONLY — no repo path, no
@@ -318,3 +321,16 @@ Bug 單已建立：[宏宇精密] 報價單送出後畫面凍結
   thread; pasted text yields a fresh draft (or none, if no address is known).
 - It answers nothing: if the "bug" turns out to be a how-do-I question, hand
   the thread to /zynkr-support instead of filing an issue.
+
+## House style
+
+Writing style is **not owned by this file**. The house voice lives in two Google Docs under
+`[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime:
+
+- 《[2.0] Zynkr 通用風格指南 House Voice》 `10bOIQwRm9Pxwgct4hlwCwK_B4Pipai1HqBPZKzyRHSE` —
+  the universal core, plus the addendum for this surface
+- 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
+
+Read both before producing client- or reader-facing text, and scan the draft against 《[3.2]》
+before handing it over. If Drive is unreachable, say so in the output rather than proceeding
+unchecked. Never re-implement either list inside this file.

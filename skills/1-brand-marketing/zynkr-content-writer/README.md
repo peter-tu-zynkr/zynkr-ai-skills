@@ -92,7 +92,7 @@ Claude will automatically route to the `content-editor` agent, as long as the `.
             ├── stage-2-style-guide.md
             ├── stage-3-editor.md
             ├── stage-3-editor-guide.md
-            ├── stage-3-5-content-reader.md
+            ├── stage-3-5-reader-perspective.md
             ├── stage-4-article-title.md
             ├── stage-4-seo-list.md
             ├── stage-5-cta-writing.md

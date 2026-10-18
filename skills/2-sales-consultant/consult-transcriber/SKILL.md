@@ -134,8 +134,8 @@ Set **SOURCE_MODE**:
   and confirm the row by title + date + attendees. If Peter hands you a recording
   but the same session is also in Fireflies, **prefer Fireflies** and say so.
 - **`recording`** — an audio/video file with no Fireflies counterpart (an
-  in-person session, a phone call, anything Fred did not join). This is the
-  original path: §2 → §3 → §4.
+  in-person session, a phone call, anything Fred did not join). It runs
+  §2 → §3 → §4.
 
 ⚠️ **Fireflies request budget.** The free plan allows **50 API requests per day**
 and every call spends one. Resolve in a single search, fetch once, never loop.

@@ -2,7 +2,7 @@
 
 The KB lives in the Zynkr platform (browsable at `https://platform.zynkr.ai/kb`), organized
 as **sections** (the intent taxonomy) holding **fact/qa cards**. You don't create the KB —
-the 13 sections already exist (see `intent-taxonomy.md` / `mcp__zynkr__list_kb_sections`).
+the sections already exist (see `intent-taxonomy.md` / `mcp__zynkr__list_kb_sections`).
 You only use this playbook when a Peter-approved card has an intent with **no section yet**
 (Step 5d of the skill).
 

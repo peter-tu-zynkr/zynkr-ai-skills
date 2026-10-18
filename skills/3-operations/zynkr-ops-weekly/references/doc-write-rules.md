@@ -23,11 +23,6 @@ the reader has to stop and count, and everything else in this Doc is dated.
   human has written there.
 - The stamp is also the idempotency key. Before writing, search the target section for
   `〔自動彙整 <week>`. Present → do not write a second block.
-- **During the changeover, match both shapes.** Sections written before 2026-09-15 carry
-  `〔自動彙整 2026-W38 · …〕`. A search for only the new shape will not find them and will
-  write a second block into a section that already has one. Accept `〔自動彙整 WB 9/14` **or**
-  `〔自動彙整 2026-W38` until no live section predates the change — which, with the archive in
-  place, is three weeks. Then drop the legacy arm.
 - Never modify, reflow, or delete a line outside a stamped block.
 - Promotion (turning an auto line into a real Doc line) and deletion are **human acts**, done at
   Thursday's meeting. The skill never promotes its own output.

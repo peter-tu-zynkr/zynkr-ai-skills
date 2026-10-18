@@ -76,9 +76,12 @@ instead of reading a 逐字稿 tab.
 
 ⚠️ **Request budget.** The free plan allows **50 API requests per day** and every
 call spends one. That is *one* `fireflies_search` for the whole sweep (never one
-per folder), then at most one `fireflies_get_transcript` per create candidate. If
-the candidate list is long, report the count and ask Peter before fetching them
-all — a 30-session sweep would exhaust the day's budget.
+per folder), then at most one `fireflies_get_transcript` per create candidate, and
+**at most 20 of those in one run**, newest session first, so a long backlog cannot
+use up the day's requests. Never stop to ask. Candidates past the 20th stay unfetched;
+Step 11 lists them as 待下次 with their dates. To fetch them, run the skill by hand with a
+window that starts at the oldest listed date. The Monday cloud routine reads Drive only and
+never runs this step.
 
 ⚠️ A Fireflies row and a 直播筆記 Doc can describe the **same** session. Step 7's
 cross-source duplication check must treat them as one: match on normalized date +
@@ -171,6 +174,7 @@ Output (zh-TW):
 - **略過 M（已存在）** — each with the matched existing destination filename
 - **新建 K** — each with its new filename + Doc URL
 - **重複註記** — any cross-source duplications flagged
+- **待下次 J** — Fireflies candidates past this run's budget of 20 transcripts, each with its date and title, for a run by hand whose window starts at the oldest of them
 - **錯誤** — per-source errors (e.g. 無逐字稿 tab, read failure). Never swallow errors silently.
 
 ---

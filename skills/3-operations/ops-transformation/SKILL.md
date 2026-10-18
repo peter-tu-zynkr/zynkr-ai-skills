@@ -112,7 +112,6 @@ The agent will produce:
 - **Diagnostic table** per step, keyed by the Stage 1 step number — Classification (four quadrants), Tech suggestion (LLM / State Machine / Rule-based / Human) with the layer it becomes (Backend · AI / Backend · rules / Backend · human), ROI, Gaps, Rationale
 - **Recommendation summary** — which steps to transform now, which to defer
 - **Gaps to raise with the client** — per step, the two gaps clients rarely see on their own: knowledge that should be pulled out of the step into a source it reads (RAG when it is searched by meaning, codified rules or a table when it is applied exactly), and data the step needs but is not connected to. One line each, with a link when the canonical source is known (`references/process-step-card.md` §7)
-- A hand-off prompt to Stage 3
 
 Store as `DIAGNOSTIC_RESULT`.
 

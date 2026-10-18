@@ -30,11 +30,9 @@ Help a user pick the right Zynkr assistant for what they're trying to do. This s
 
 ## Step 1 — Load the assistant index
 
-Read the canonical taxonomy and index from these references (relative to `{{SKILL_DIR}}`):
-- `./references/assistant-index.md` — list of assistants with category, slug, one-line description, IPO summary, and stage status
-- `../../../taxonomy.md` (repo root) — category definitions
+Read the category definitions from `../../../taxonomy.md` (repo root, relative to `{{SKILL_DIR}}`) when it is present.
 
-If the index file is missing or stale, fall back to fetching the current marketplace API:
+Read the assistant index from the current marketplace API:
 ```
 GET https://zynkr.ai/api/skills
 ```

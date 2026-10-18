@@ -5,7 +5,7 @@ description: >-
   The conductor of the Zynkr sales family — it decides which sales skill a given
   input needs, chains them when a job takes more than one, and reads the CRM
   across deals to say which ones need attention now. It owns the deal lifecycle;
-  the five skills under it each own one step. Three modes: ROUTE (one input →
+  the six skills under it each own one step. Three modes: ROUTE (one input →
   the right child skill), SEQUENCE (a job that needs two or more, e.g. triage a
   whole event survey with sales-client-sourcing then run sales-outbound on each
   Hot Lead row), and REVIEW (deal-level pipeline sweep — what is stalled, what
@@ -42,7 +42,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-manager
 ```
 
-The sales family has five good single-step skills and nobody holding them together.
+The sales family has six good single-step skills and nobody holding them together.
 Each one takes one input shape and does one job well; none of them knows what happened
 before it, what should happen next, or that a deal has been sitting untouched for three
 weeks. `sales-manager` is that missing layer — the same relationship `/zynkr-slide` has
@@ -78,7 +78,7 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
 - **`/project-client-status`, `/project-governance`** — the consulting portfolio and its
   hygiene sweep. Different pipeline, different objects.
 - **`/zynkr-skills`** — routes the whole skill ecosystem. This one routes *within* sales.
-- **The five children** — each is still a first-class entry point. When Peter names a
+- **The six children** — each is still a first-class entry point. When Peter names a
   skill, run that skill; don't insist on going through the conductor.
 
 ## Fixed facts (don't re-derive these)
@@ -196,7 +196,7 @@ say so plainly and leave the list.
 
 ## Why it's built this way
 
-- **A conductor, not a sixth sibling.** The five children were already good; what was
+- **A conductor, not another sibling.** The child skills were already good; what was
   missing was someone holding the baton. So this skill adds no new sales capability — it
   adds routing, sequencing and the cross-deal view, and delegates the actual work.
 - **Batch-preview writes, not read-only and not autonomous.** Read-only was rejected

@@ -21,7 +21,7 @@ every row. Row 1 = header. All 13 columns are kept **raw** for the snapshot and 
 | Col | Header | Used for |
 |---|---|---|
 | A | `#` | `N.0` = L1 header row (skip in counts) · `N.NN` = item id quoted in every line |
-| B | `主類別` | L1 label — the ONLY key for any "by LOB" grouping (retro 「完成 by LOB」, coverage gap). Never group by the `#` prefix: in the live tracker `#5.0x` rows carry 主類別 `6.0 Tech` and `#6.0x` carry `7.0 People`; `#` is quoted verbatim, never re-derived |
+| B | `主類別` | L1 label — the ONLY key for any "by LOB" grouping (retro 「完成 by LOB」, coverage gap). Never group by the `#` prefix: it is positional (the July tracker carried `6.0 Tech` under `#5.0x`); `#` is quoted verbatim, never re-derived |
 | C | `子類別` | shown in the retro only |
 | D | `項目（正規化）` | the item text printed in every line |
 | G | `Priority` | `P0`–`P3` (formula result; blank ⇒ 未評 — listed, not guessed) |
@@ -207,9 +207,9 @@ Snapshot 走勢（tracker-snapshots）：<first snapshot_date> P0 open <a> → <
 
 Every number is a count over the SOR tab or `tracker-snapshots`; nothing else is consulted
 unless the user pastes it (then it is marked `（使用者提供）`). 「by LOB」 groups on the 主類別
-column text (`1.0 …` · `2.0 …` labels as written there), NOT on the `#` prefix — the live
-tracker's `#5.0x` items are 主類別 `6.0 Tech` and `#6.0x` are `7.0 People`, so a prefix
-grouping mislabels two LOBs; `#` ids are quoted verbatim inside each group.
+column text (`1.0 …` · `2.0 …` labels as written there), NOT on the `#` prefix — the prefix is
+positional (the July tracker carried `6.0 Tech` under `#5.0x`), so a prefix grouping can
+mislabel LOBs; `#` ids are quoted verbatim inside each group.
 
 ## 8 · Baseline for Δ (first hit wins)
 

@@ -63,8 +63,7 @@ first, the prose second.
   Consult: the numbered as-is process, the diagnosis and the knowledge and data
   gaps. This skill takes the BRD's as-is flow from it, keeping the step numbers.
 - **ops-prd-writer** — downstream: once the client signs this BRD, it writes the
-  buildable PRD from the BRD and the redesign blueprint. (PRD mode used to live
-  in this skill.)
+  buildable PRD from the BRD and the redesign blueprint.
 
 ## Fixed facts (don't re-derive these)
 
@@ -213,7 +212,7 @@ Then **ask** two optional follow-ups — never do them unprompted:
   backwards, so never offer it then.
   On yes: `mcp__zynkr__move_deal_stage(id="<deal_id>", stage="proposal", confirm=true)`.
   **Only this tool moves a stage.** Writing the column directly changes the stage
-  but skips the `stage_change` timeline entry and the automation event, so the
+  but skips the `stage_change` timeline entry, so the
   move stops being visible to anyone reading the deal afterwards.
 - **Review task** — "Log a 客戶審閱 follow-up task?" On yes:
   `mcp__zynkr__create_task(deal_id="<deal_id>", …, confirm=true)`. It is created

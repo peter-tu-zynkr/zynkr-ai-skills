@@ -1,25 +1,7 @@
 ---
 name: content-title
 sheetId: "1.09"
-description: "Triggered when the user has a completed article and wants SEO title suggestions, or when the user provides a topic and wants a full SEO content strategy. Use this agent when the user says things like \"幫我想標題\", \"SEO標題建議\", \"generate titles\", \"幫我做SEO\", \"文章標題\", \"SEO策略\", or \"幫我規劃關鍵字\".
-
-<example>
-Context: The user has a completed article and wants SEO title options.
-user: \"文章寫好了，幫我想10個SEO標題。\"
-assistant: \"Let me bring in the content-title agent to generate SEO-optimized titles for your article.\"
-<commentary>
-Since the user has a completed article and wants SEO titles, use the Task tool to launch the content-title agent.
-</commentary>
-</example>
-
-<example>
-Context: The user has a topic and wants a full SEO content strategy.
-user: \"我想寫關於外商面試的文章，幫我規劃SEO策略。\"
-assistant: \"I'll use the content-title agent to build a full SEO strategy for your topic.\"
-<commentary>
-Since the user wants an SEO strategy for a given topic, launch the content-title agent.
-</commentary>
-</example>"
+description: "Generates 10 SEO titles, each with its reason, for a finished article, or — given only a topic — keyword clusters, an H1–H3 outline and Taiwan-search adjustments, from its built-in topic categories and keyword knowledge base. Use when the user asks for titles or an SEO plan for one article — e.g. 「幫我想標題」, 「SEO標題建議」, 「文章標題」, 「幫我做SEO」, 「SEO策略」, 「幫我規劃關鍵字」, 'generate titles'. Stage 4 of /zynkr-content-writer."
 model: sonnet
 ---
 

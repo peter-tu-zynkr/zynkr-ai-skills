@@ -43,7 +43,7 @@ Read the contact schema at:
 `./references/contact-schema.md`
 
 Store:
-- `EMAIL_SIGNATURE` — signature block from config
+- `EMAIL_SIGN_OFF` — the sign-off from config: `Best regards,` then `Peter`, with nothing after it
 - `SCHEMA_FIELDS` — the 12-field list: name, title, company, email, phone, mobile, website, address, linkedin, industry, notes, card_date
 - `CRM_PROJECT_ID` — Supabase project id from config (the Zynkr platform)
 - `CONTACT_SQL` — the contents of `./references/contact-insert.sql` (read it now; you'll fill its placeholders per contact in Step 4)
@@ -58,15 +58,6 @@ Stop and ask the user — without it there is nowhere to write the cards.
 ---
 
 ## Step 1 — Card Intake
-
-Display:
-```
----------------------------------------------
-📇 Business Card Pipeline
----------------------------------------------
-Phase: Card Intake
----------------------------------------------
-```
 
 Ask the user:
 ```
@@ -84,13 +75,6 @@ Store images as `CARD_IMAGES[]`.
 
 ## Step 2 — OCR & Extract
 
-Display:
-```
----------------------------------------------
-Extracting contact info from card(s)...
----------------------------------------------
-```
-
 For each card image, use Claude Vision to extract all visible text and map it to the 12-field schema:
 
 **Extraction rules:**
@@ -106,13 +90,6 @@ Store extracted data as `CONTACTS[]` — one object per card with all 12 fields.
 ---
 
 ## Step 3 — Schema Review
-
-Display:
-```
----------------------------------------------
-Review Extracted Contact Info
----------------------------------------------
-```
 
 For each contact, display a clean table:
 
@@ -173,13 +150,6 @@ Update `CONTACTS[]` with the resolved website before proceeding to the platform 
 
 ## Step 4 — Zynkr Platform Write
 
-Display:
-```
----------------------------------------------
-Writing to the Zynkr platform...
----------------------------------------------
-```
-
 The **Zynkr platform is the only destination** for a card. Everything lands at
 `https://platform.zynkr.ai/contacts`, where the funnel is actually worked — there
 is no spreadsheet copy to keep in sync, and no field is dropped on the way:
@@ -197,11 +167,8 @@ is no spreadsheet copy to keep in sync, and no field is dropped on the way:
 | phone (office) | `crm_companies.phone` — belongs to the company, not the person |
 | linkedin · notes · card_date | a `名片` note on the contact (`crm_activities`) |
 
-> Earlier versions of this skill also appended a row to a `B2B Customer List`
-> Google Sheet, because `crm_contacts` had no home for 7 of the 12 fields. It has
-> since grown `domain` / `industry` / `address` / `phone` on the company side, so
-> the platform now holds the whole card and the Sheet write has been retired. The
-> old Sheet stays readable as the historical record — just don't append to it.
+> Never append to the retired `B2B Customer List` Google Sheet: the platform holds the whole
+> card.
 
 Run this **autonomously** for every confirmed contact (no extra approval gate —
 they already signed off in Step 3). For each contact in `CONTACTS[]`:
@@ -265,7 +232,7 @@ owner = Peter), and attach the 名片 note.
 
 If the insert errors, surface it, keep the card in `CONTACTS[]` so it can be
 retried at the end, and continue with the rest of the pipeline — the follow-up
-email shouldn't be blocked by a platform hiccup. Because this is now the only
+email shouldn't be blocked by a platform hiccup. Because the platform is the only
 destination, an unretried failure means the card is **not recorded anywhere**: say
 so explicitly in the Step 8 summary rather than reporting the contact as processed.
 
@@ -273,19 +240,11 @@ so explicitly in the Step 8 summary rather than reporting the contact as process
 
 ## Step 5 — Company Research
 
-Display:
-```
----------------------------------------------
-Researching Company...
----------------------------------------------
-[Company Name]
-```
-
 For each contact, run 3 WebSearch queries in sequence:
 
 1. **Company overview**: `"[company name]" company overview products services`
-2. **Recent news**: `"[company name]" news 2024 OR 2025`
-3. **Industry context**: `[industry] Taiwan market trends 2025` (or adjust region based on company location)
+2. **Recent news**: `"[company name]" news <this year> OR <last year>` (years from today's date)
+3. **Industry context**: `[industry] Taiwan market trends <this year>` (or adjust region based on company location)
 
 Synthesize the search results into a `RESEARCH_SUMMARY` for each contact:
 
@@ -312,14 +271,6 @@ Research looks good? [OK] or [EDIT] to add/change context.
 
 ## Step 6 — Follow-up Email Draft
 
-Display:
-```
----------------------------------------------
-Drafting Follow-up Email...
----------------------------------------------
-[Contact Name] @ [Company]
-```
-
 For each contact, launch the `followup-email-writer` agent using the Agent tool.
 
 Pass the following in the prompt:
@@ -336,8 +287,8 @@ Pass the following in the prompt:
 ## Language
 [Detect from card: if Chinese characters on card → zh-TW; otherwise → en]
 
-## Email Signature
-[EMAIL_SIGNATURE from config]
+## Sign-off
+[EMAIL_SIGN_OFF from config]
 ```
 
 Wait for the agent to complete. Display the drafted email.
@@ -346,7 +297,6 @@ Ask:
 ```
 Email looks good?
 - [OK] → save to Gmail Drafts
-- [SEND] → send immediately
 - [EDIT subject=...] / [EDIT body=...] → adjust the email
 - [SKIP] → skip this contact's email
 ```
@@ -355,27 +305,20 @@ Accept edits until user approves.
 
 ---
 
-## Step 7 — Save to Gmail Drafts / Send
+## Step 7 — Save to Gmail Drafts
 
-For each approved email:
+This skill never sends. Every approved email is saved as a draft for a person to send, like the rest of the sales family.
 
-**If user chose [OK] (save as draft):**
-Use `mcp__gmail__draft_email`:
+For each approved email, use `mcp__google-workspace__draft_gmail_message`:
+- `user_google_email`: `<your-google-workspace-account>`
 - `to`: contact email from `CONTACTS[i]`
 - `subject`: subject line from agent output
-- `body`: email body from agent output
-- `from`: `<your-google-workspace-account>`
-
-**If user chose [SEND]:**
-Use `mcp__gmail__send_email`:
-- `to`: contact email from `CONTACTS[i]`
-- `subject`: subject line from agent output
-- `body`: email body from agent output
-- `from`: `<your-google-workspace-account>`
+- `body`: the email body from agent output, with its sign-off
+- `include_signature`: `false` — the body already ends with the sign-off, and Gmail's own signature would add a second one
 
 Display confirmation per contact:
 ```
-✓ [Contact Name] — email saved to Drafts / sent
+✓ [Contact Name] — email saved to Drafts
 ```
 
 ---
@@ -394,7 +337,7 @@ Processed: [N] contact(s)
 [Contact 1 Name] @ [Company]
   ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
   ✓ 名片 note attached
-  ✓ Email drafted / sent
+  ✓ Email saved to Drafts
 
 [Contact 2 Name] @ [Company]
   ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
@@ -411,24 +354,12 @@ the platform write — a failed card exists nowhere but the image it came from.
 
 ---
 
-## Progress Indicator
-
-Show this line at the top of each phase:
-
-```
-📇 Intake → Extract → Review → Website → Platform → Research → Email → Done
-```
-
-Use `▶` for current phase, `✓` for completed, `○` for upcoming.
-
----
-
 ## Error Handling
 
 - If OCR fails to extract a field: mark it `?` and flag it in the review table
 - If the platform write fails: surface the error and continue the pipeline, but keep the card flagged. It is the only destination, so a failed card is recorded nowhere — always offer to retry at the end, and never report it as processed.
 - If WebSearch returns no results: note "No recent news found" and proceed to email with overview only
-- If Gmail draft/send fails: display the error; offer to copy email text to clipboard instead
+- If saving the Gmail draft fails: display the error; offer to copy email text to clipboard instead
 - Never silently skip a step — always surface errors clearly
 
 ## House style

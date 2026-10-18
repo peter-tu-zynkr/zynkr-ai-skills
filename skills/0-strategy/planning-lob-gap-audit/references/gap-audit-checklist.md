@@ -16,7 +16,7 @@
 |---|---|---|
 | `lob` — one L1 number (`1.0` … `8.0`) | the user | ask; never audit "all LOBs" in one run |
 | `cycle` — `H1` / `H2` / `YE` + year | the user; default = the cycle in sources §A | print the assumption |
-| Plan Doc (+ its Refresh addendum) | sources §A "Per-LOB plan Docs" row (6.0 = shortcut → resolve `shortcutDetails.targetId` via `get_drive_file_permissions`) | user gives the ID |
+| Plan Doc (+ its Refresh addendum) | sources §A "Per-LOB plan Docs" row (6.0 = shortcut → `get_drive_file_permissions` on it returns the target's metadata; take the `ID:` line) | user gives the ID |
 | Main Tracker SOR tab | sources §A Main Tracker row + SOR tab gid | user gives the ID |
 | LOB Drive folder | `~/.claude/skills/admin-governance/references/lob-folder-map.md` when that skill is installed → the row for `lob`. Its rows are labelled `0` · `1.0` · `2.0` · `3.0` · `4.0` · `5 (SDLC, legacy)` · `5.0 (Product)` · `7 (People)` · `8.0`; match on the L1 number — `5.0` → `5.0 (Product)` (never the legacy `5` row, whose children sit at Drive root) · `7.0` → `7 (People)` (three sibling folders — audit each) · `6.0` → no row. The **target folder** for the two new files is the first folder on the row, i.e. the `[N]` parent, unless the user names another. The map may lag a rename (pack §2 notes 5.0 was re-scoped 2026-08) — if the folder name it returns does not match the LOB, ask | no row for the LOB (`6.0`) or not installed → ask for the folder ID; never guess or search by name and assume |
 | Prior audit (`[N.0.1] … Gap Audit` Doc + `行動追蹤表` Sheet) | found during the folder inventory (title prefix `[N.0.1]`) | none = first audit |
@@ -152,7 +152,7 @@ pass the target folder and no move is needed. `create_spreadsheet` (and the `cre
 fallback) take no folder and land in My Drive root → `update_drive_file(file_id,
 add_parents=<target folder id>, remove_parents="root")`; creating directly inside a
 folder via `create_drive_file` returns HTTP 400. Never move a shortcut (the tool moves
-its target — resolve `shortcutDetails.targetId` instead). Tabbed Docs: `get_doc_as_markdown`
+its target — take the target ID from `get_drive_file_permissions`' `ID:` line instead). Tabbed Docs: `get_doc_as_markdown`
 has NO `tab_id` parameter — it returns every tab, each under a top-level heading; run
 `inspect_doc_structure` first to learn the tab titles, then read the plan body under its
 tab's heading. Listing: `list_drive_items` pages on `nextPageToken` → `page_token` (see

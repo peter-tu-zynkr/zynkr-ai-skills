@@ -1,11 +1,11 @@
 # Zynkr Skills Taxonomy & Pipeline Index
 
-## Source of truth — the GitHub Project
+## The pipeline — issues, labels and the GitHub Project
 
-The skills pipeline lives in GitHub Project `<your-skills-pipeline-project>`, a company fact
-read from Atlas (`SKILL.md` says how). Every entry is an issue in `zynkr-skill-idea` added to
-the Project with custom fields (Pipeline Status, Keep, Category, Intake Source, Build *); the
-values each step sets are in `SKILL.md` and `agents/proposer.md`.
+Every pipeline entry is an issue in `zynkr-skill-idea`, and its labels are the status of record.
+The issue is also added to GitHub Project `<your-skills-pipeline-project>`, a company fact read
+from Atlas (`SKILL.md` says how), with custom fields (Pipeline Status, Keep, Category, Intake
+Source, Build *) for display; the values each step sets are in `SKILL.md` and `agents/proposer.md`.
 
 ### Retired 2026-05-15 — the Skills Pipeline sheet (do not read or write)
 
@@ -34,8 +34,8 @@ Category, Category Name, Status, Overlap, Keep, GitHub Issue, Notes · **Status 
 | 2 | Sales & Consulting | proposals, pitches, CRM, client documents |
 | 3 | Operations | SOPs, project tracking, process automation |
 | 4 | Training | learning content, transcripts, courses, onboarding |
-| 5 | Development Ops | CI/CD, code review, deployment, infrastructure |
-| 6 | Tech | engineering tools, APIs, agent infra, dev utilities |
+| 5 | Product (`product`) | roadmap, UX, GTM, product analytics |
+| 6 | Engineer (`engineer`) | platform, infra, automation, data, tooling, CI/CD, code review, deployment, APIs, agent infra, dev utilities |
 | 7 | People & Talent | recruiting, performance, org design, HR |
 | 8 | Finance & Admin | budgeting, invoicing, reporting, admin |
 | 9 | Legal | contracts, compliance, legal research, risk |

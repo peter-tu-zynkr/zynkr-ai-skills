@@ -31,9 +31,9 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill skill-s
 
 Ingest a skill candidate from any source, classify it, check for duplicates in the pipeline, and propose it for review.
 
-> **Where this fits:** the **first step** of the canonical skill chain — `/skill-sourcer` → `/skill-triager` → `/skill-author` → `/skill-qa` → `/skill-publish` → `/skill-triager` (confirm-ship). After you approve (`Keep=yes`), the next hop is `/skill-triager` picking up the `triage-ready` label. See `process.md` in the repo root for the full chain.
+> **Where this fits:** the **first step** of the canonical skill chain — `/skill-sourcer` → `/skill-triager` → `/skill-author` → `/skill-qa` → `/skill-publish` → `/skill-triager` (confirm-ship). After you approve (`Keep=yes`), the next hop is `/skill-triager` picking up the `triage-ready` label. See `architecture.md` in the repo root for the full chain.
 
-> **Source of truth:** the skills pipeline lives in GitHub Project `<your-skills-pipeline-project>` (e.g., `owner/N`). Every pipeline entry is a GitHub Issue in the idea repo, added to the Project with custom fields (Pipeline Status, Keep, Category, Intake Source, Build *). The legacy Google Sheet is deprecated — do not read or write to it.
+> **Source of truth:** every pipeline entry is a GitHub Issue in the idea repo, and its **labels are the status of record**: `triage-ready` once approved, then `building`, `shipped`, `parked` or `rejected`. The issue is also added to GitHub Project `<your-skills-pipeline-project>` (e.g., `owner/N`) with custom fields (Pipeline Status, Keep, Category, Intake Source, Build *); those fields are for display only, and nothing routes on them. The legacy Google Sheet is deprecated — do not read or write to it.
 
 > **`<your-skills-pipeline-project>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.skills-pipeline-project`, on the `zynkr-atlas` MCP server; the value is the `value:` line, and its `cli:` line is the ready `gh project item-list` command). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it. Pass the value to both subagents.
 
@@ -98,7 +98,7 @@ It reads all items from GitHub Project `<your-skills-pipeline-project>` via `gh 
 It returns a verdict: `exact_duplicate`, `near_duplicate`, `partial_overlap`, or `new`.
 
 **If `exact_duplicate` or `near_duplicate`:**
-> "We already have **[skill name]** (Pipeline Status: [status], Keep: [keep]) which covers this. Here's how they overlap: [summary]. Skipping."
+> "We already have **[skill name]** (status label: [label], Keep: [keep]) which covers this. Here's how they overlap: [summary]. Skipping."
 > Stop here.
 
 **If `partial_overlap`:**
@@ -117,11 +117,11 @@ Spawn the **skill-proposer** subagent with all outputs from previous steps.
 It will:
 1. Create a GitHub Issue in `peter-tu-zynkr/zynkr-skill-idea` titled `[Skill Proposal] {{category_number}} — {{title}}` with structured body and label `skill-proposal`
 2. Add the issue to GitHub Project `<your-skills-pipeline-project>` and set custom fields: `Pipeline Status=proposed`, `Keep=?`, `Category={{category_number}}-{{slug}}`, `Intake Source=skill-sourcer`, `Build Repo=zynkr-skill-builder`, `Build Target Path={{category_number}}-{{cat-slug}}/{{slug}}`, `Build Status=not-started`, `Artifact=issue-only`
-3. Display the issue URL and ask: **"Set Keep=yes to approve now, or leave as ? for later review."**
+3. Display the issue URL and ask: **"Approve now (this adds the `triage-ready` label; Keep=yes mirrors it on the board), or leave it for later review?"**
 
 If the user approves immediately:
-4. Update the Project item: `Keep=yes`, `Pipeline Status=approved`
-5. Add the `triage-ready` label to the issue (this is the signal for `/skill-triager` to pick it up)
+4. Update the Project item for display: `Keep=yes`, `Pipeline Status=approved`
+5. Add the `triage-ready` label to the issue: the label is the approval of record, and the signal for `/skill-triager` to pick it up
 6. Optionally create a markdown idea record in `peter-tu-zynkr/zynkr-skill-idea` at `skills/approved/{{slug}}.md`. If created, set `Artifact=synced`.
 
 ---
@@ -132,18 +132,17 @@ This step runs when the user says **"sync approved skills"** outside of the norm
 
 Use this as a **reconciliation / backfill** command, not the primary approval path.
 
-1. List all Project items where `Keep=yes`
-2. For each item, check:
-   - Issue exists in `zynkr-skill-idea`? (should always be true since items are issues)
-   - Issue has `triage-ready` label?
+1. List the approved set of record: the open issues in `zynkr-skill-idea` labelled `triage-ready`
+2. For each issue, check:
+   - Is it on the board, with `Keep=yes` and `Pipeline Status=approved`?
    - Markdown idea record exists at `skills/approved/{slug}.md`?
    - `Artifact` field matches actual state?
 3. Repair gaps:
-   - Add `triage-ready` label if missing
+   - Add the issue to the board if missing, and set `Keep=yes` and `Pipeline Status=approved` for display
    - Create the markdown idea record if absent
    - Update `Artifact` to `synced` / `issue-only` / `spec-only` to match reality
-   - If item is still `Pipeline Status=proposed`, update to `approved`
-4. Report repairs grouped by action taken
+4. List the board items with `Keep=yes` whose issue carries none of `triage-ready`, `building`, `shipped`, `parked` or `rejected`: approved on the board only. Don't add the label; the label is the approval of record, so ask the user whether to approve each one
+5. Report repairs grouped by action taken
 
 ---
 
@@ -153,7 +152,7 @@ Run this step **after every approval** (in normal intake flow) and **at the end 
 
 ### A — Local README
 
-Append the new skill name to the relevant row of the **Taxonomy table** in the local skills README. Format: `skill-name (proposed)`. If the category row has no skills yet, replace `—` with `skill-name (proposed)`.
+Nothing to edit by hand: the skills README's Taxonomy table lists categories only, and its skill tree is generated by `scripts/build-taxonomy-tree.ts` when `ingest-skills.yml` runs.
 
 ### B — GitHub idea artifacts
 
@@ -186,11 +185,11 @@ Maintain handoff-ready tracker fields on every approved Project item:
 - `Build Status` → starts as `not-started`
 - `Built Skill URL` → empty until shipped
 
-`/skill-triager` (the middle layer) consumes these fields to triage approved issues and dispatch builds to `zynkr-skill-builder`.
+These fields are for display. `/skill-triager` (the middle layer) reads the issue's labels and body to triage approved issues and dispatch builds to `zynkr-skill-builder`.
 
 ### Status model
 
-Use the tracker as two separate layers:
+The board shows two layers, for display only (the issue's label is the status of record):
 
 - `Pipeline Status` = business / curation stage
   - `proposed`, `researching`, `approved`, `building`, `shipped`, `parked`
@@ -224,7 +223,6 @@ Summarize:
 - [ ] If new: issue added to Project with `Pipeline Status=proposed`, `Keep=?`, Category set
 - [ ] If approved: `Keep=yes`, `Pipeline Status=approved`, `triage-ready` label added
 - [ ] If approved: `Build Repo=zynkr-skill-builder`, `Build Status=not-started`, `Build Target Path` set
-- [ ] If approved: Local README taxonomy table updated
 - [ ] If approved: `SOURCED.md` in `zynkr-skill-idea` updated
 
 Ask: **"Want to source another skill?"**

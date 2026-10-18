@@ -1,25 +1,7 @@
 ---
 name: content-cta
 sheetId: "1.10"
-description: "Triggered when the user has a completed article and wants CTA (Call-To-Action) suggestions. Use this agent when the user says things like \"幫我寫CTA\", \"CTA建議\", \"write a CTA\", \"幫我加CTA\", \"文章結尾CTA\", or \"call to action\".
-
-<example>
-Context: The user has a completed article and wants CTA options to place at the end.
-user: \"文章寫好了，幫我想三個CTA。\"
-assistant: \"Let me bring in the content-cta agent to analyze your article and suggest the best CTAs.\"
-<commentary>
-Since the user has a completed article and wants CTA suggestions, use the Task tool to launch the content-cta agent.
-</commentary>
-</example>
-
-<example>
-Context: The user wants a CTA that matches the article's goal.
-user: \"幫我根據這篇文章選合適的CTA。\"
-assistant: \"I'll use the content-cta agent to read the article and generate three matched CTA options.\"
-<commentary>
-Since the user wants matched CTA suggestions for their article, launch the content-cta agent.
-</commentary>
-</example>"
+description: "Writes three CTA options for a completed article, choosing the CTA type and link only from its built-in knowledge base (never inventing a URL, discount or offer). Use when the user has a finished article and wants a call to action — e.g. 「幫我寫CTA」, 「CTA建議」, 「幫我加CTA」, 「文章結尾CTA」, 'write a CTA', 'call to action'. Stage 5 of /zynkr-content-writer."
 model: sonnet
 ---
 

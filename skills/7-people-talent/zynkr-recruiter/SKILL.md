@@ -44,7 +44,7 @@ Use the answer to determine the starting stage. Skip earlier stages if their art
 
 ---
 
-## Step 2 — Stage 1: JD Architecture (subagent)
+## Step 2 — Stage 1: JD Architecture (interactive)
 
 Display:
 
@@ -54,9 +54,9 @@ Stage 1: JD Architecture (The RoleCrafter)
 ---------------------------------------------
 ```
 
-Launch the `recruiter-jd-architect` agent (`./agents/recruiter-jd-architect.md`) using the Agent tool.
+Read `./agents/recruiter-jd-architect.md` and run its flow in the main conversation, not as a subagent: it asks the hiring manager questions over several turns, and a subagent cannot ask the user anything.
 
-The agent will collect: role context → daily tasks → success metrics → requirements → reporting line → career level → work mode → optional salary → optional stakeholder alignment.
+Collect: role context → daily tasks → success metrics → requirements → reporting line → career level → work mode → optional salary → optional stakeholder alignment.
 
 Output a structured JD in YAML with version label. Store as `JD_BLUEPRINT`.
 
@@ -95,7 +95,7 @@ Stage 3: Interview Design (Competency + Scorecard)
 ---------------------------------------------
 ```
 
-For each shortlisted candidate, launch the `recruiter-interview-question` agent (`./agents/recruiter-interview-question.md`), passing `JD_BLUEPRINT` and the candidate's `Candidate Strength Profile` from Stage 2.
+First ask the user, in the main conversation, the agent's Phase 2 question (A: their own questions, B: auto-generated, C: hybrid); a subagent cannot ask it. Then, for each shortlisted candidate, launch a subagent with the Agent tool whose prompt is the full text of `./agents/recruiter-interview-question.md` plus `JD_BLUEPRINT`, the candidate's `Candidate Strength Profile` from Stage 2, and that answer, with the user's own questions when they choose A or C.
 
 The agent produces:
 1. Competency model (5–7 items)

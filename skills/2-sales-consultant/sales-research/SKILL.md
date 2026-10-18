@@ -52,8 +52,8 @@ company or contact tied to the CRM.
 Zynkr CRM itself (`platform.zynkr.ai`) has an "AI 背景研究" button on the
 company/contact/deal detail page that runs a Claude tool-use loop
 (`app/lib/ai/research.ts`, `generateBrief`: up to 8 web searches, `RESEARCH_MODEL`)
-and saves a zh-TW markdown brief as a CRM note. Since then it has an MCP twin,
-`mcp__zynkr__research_company`, so the button *can* now be pressed from here.
+and saves a zh-TW markdown brief as a CRM note. Its MCP twin,
+`mcp__zynkr__research_company`, presses the same button from here.
 
 **Prefer this skill anyway.** Both platform-side routes bill the workspace AI
 quota and cap out at ~8 generic web searches. This skill runs the research on the
@@ -210,8 +210,7 @@ timeline, not read a report.
 
 ### 4 · Write it back as a CRM note — NOT into `description`
 
-**The write target is a note.** This step has gone wrong before, so be blunt
-about why:
+**The write target is a note**, for these reasons:
 
 - On `platform.zynkr.ai`, **備註 is the note tab** — `crm_activities` rows with
   `kind='note'`. That is what Peter sees on a record.
@@ -286,8 +285,7 @@ under a success line that papers over them.
 - **Never fabricate.** If web research doesn't surface something (size,
   funding, a contact's role), leave it out rather than guessing.
 - **Write to notes, never to `description`.** The UI never renders that column,
-  so a brief filed there is silently lost — that is exactly how a 09-18 brief
-  and its 09-20 correction both went unseen. Step 4 has the detail.
+  so a brief filed there is silently lost. Step 4 has the detail.
 - **Don't spend CRM AI quota unasked.** `mcp__zynkr__research_company` and the
   in-app button both bill the workspace AI budget. This skill exists to do the
   same job from the Claude Code side, where it costs nothing.

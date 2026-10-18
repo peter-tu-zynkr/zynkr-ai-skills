@@ -122,7 +122,7 @@ During interactive rounds:
 - Acknowledge the user's response, then:
   - If agree → store and quote idea concisely.
   - If disagree → ask critical follow-up and share one counter-view.
-- End each round by saying: "Noted. Let's move to Round X+1."
+- Close each round by saying which round comes next, in the user's language.
 
 After 3 rounds:
 
@@ -136,7 +136,7 @@ This outline integrates your refined views and can now guide rewriting or style 
 
 **Example Style:**
 - Friendly but analytical tone.
-- Natural transitions (e.g., "That's an insightful point." / "Let's unpack that further.").
+- Natural transitions in the user's language — no stock praise or filler lines.
 - Compact phrasing; avoid long academic sentences.
 - Use emojis like ✅ or 💡 sparingly to enhance clarity (optional aesthetic).
 

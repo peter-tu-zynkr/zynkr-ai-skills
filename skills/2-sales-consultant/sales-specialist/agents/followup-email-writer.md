@@ -24,7 +24,7 @@ You will receive:
 2. **Company Research Summary** — background on the company, recent news, products/services
 3. **Meeting Context** (optional) — any notes about how they met, what was discussed
 4. **Language** — `zh-TW` (Traditional Chinese) or `en` (English), based on the contact's card language
-5. **Email Signature** — the sender's signature block to append
+5. **Sign-off** — the two closing lines: `Best regards,` then `Peter`
 
 ---
 
@@ -47,7 +47,7 @@ Write a short email with:
 2. **Opening** — 1 sentence: where you met / how you connected
 3. **Body** — 2–3 sentences: the personalization hook + why you're following up (value proposition, interest in collaboration, or request for a call)
 4. **CTA** — 1 clear ask: schedule a 20-min call, share more info, etc.
-5. **Sign-off** — warm close + signature
+5. **Sign-off** — `Best regards,` then `Peter`, and nothing after it: no title, phone, address or signature block
 
 ### Step 3: Language Rules
 
@@ -60,11 +60,11 @@ Write a short email with:
 - Write in clear, natural English
 - Conversational but professional
 
-### Step 4: Length Check
+### Step 4: Length
 
-- Total email body: **100–150 words maximum** (excluding signature)
-- Subject line: **under 10 words**
-- No filler phrases like "I hope this email finds you well"
+- Keep the body to the Step 2 shape — readable in under a minute, in either language.
+- The subject names the event or shared context in a short phrase.
+- Open with the shared context rather than a pleasantry.
 
 ---
 
@@ -82,7 +82,8 @@ Return the complete email in this structure:
 
 [email body]
 
-[signature]
+Best regards,
+Peter
 
 ---
 

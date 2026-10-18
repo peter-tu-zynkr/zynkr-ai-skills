@@ -49,8 +49,6 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 
 **資料夾名稱一律以 `[3.3]` 為準**：Drive 上的真正名稱是 `[3.3] 專案管理 PMO｜Playbook & Templates`，模板只從 `[3.3]/[1] Templates 模板庫` 複製。
 
-> 2026-09-02：五份 PMO Doc 裡殘留的 17 處 `[3.4]` 已全部更正為 `[3.3]`（Playbook 12 · Business Case 1 · Kickoff 1 · 會議記錄 1 · 復盤 2）。鐵律 2 的**原文現在就寫 `[3.3]`**，引用時照抄即可——不要再「保留 `[3.4]`」、不要再加漂移註記。這是一則已完成的更正紀錄，不是還在生效的警告。
-
 ---
 
 ## 一眼看完流程
@@ -107,7 +105,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 
 ### 2.1 · 客戶案：qualified 時開案，只讀交易、不建交易
 
-`客戶案` 在**交易標為 `qualified` 的那一刻**開案：探索會議（discovery call）後確認是值得投入的潛在客戶，就在 Zynkr 把交易標成 `qualified`。開案只由本技能做（`SKB-045`，決策 D2；2026-10-03 由成交改為 qualified，因為簽約前的來回討論、workshop 準備、提案與客戶素材都需要一個家）。交易本身由 Sales 建立（`/sales-inbound`、`/sales-outbound`），本技能**只讀交易、絕不建交易**，也不建公司或聯絡人。
+`客戶案` 在**交易標為 `qualified` 的那一刻**開案：探索會議（discovery call）後確認是值得投入的潛在客戶，就在 Zynkr 把交易標成 `qualified`。開案只由本技能做（`SKB-045` D2：簽約前的來回討論、workshop 準備、提案與客戶素材都需要一個家）。交易本身由 Sales 建立（`/sales-inbound`、`/sales-outbound`），本技能**只讀交易、絕不建交易**，也不建公司或聯絡人。
 
 1. **找到交易。** 交易網址 `…/deals/<id>` ⇒ `mcp__zynkr__get_deal(id)`。交易編號或公司名 ⇒ `mcp__zynkr__list_deals(search="<編號或公司名>")`，留下編號或公司相符的列，再 `get_deal`。找到不只一筆就列出來問，不要自己挑；一筆都沒有就停，並說「交易要先由 Sales 建立」。CRM 連不上就停並照實回報，不要退回去用公司名猜資料夾。
 2. **確認交易階段。** `qualified`、`proposal`、`won` ⇒ 開案。`new` 或 `contacted` ⇒ 停，回報「客戶案在交易標為 qualified（探索會議後）時開案；這筆交易目前在 `<stage>`」；只有 Peter 明說要提前開，才照做，並在交付清單第一行標明「交易尚未 qualified」。`lost` ⇒ 停，不開案。

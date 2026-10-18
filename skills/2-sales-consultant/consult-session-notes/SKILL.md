@@ -133,10 +133,10 @@ Preserve the source skill's format faithfully — same sections, order, labels:
 ```
 {{COMPANY}} — {{SESSION_TYPE}} {{YYYY-MM-DD}}
 
-1. Summary Update      — a concise overview of this session's key activities or themes
-2. Progress            — specific actions completed, decisions made, facts confirmed
-3. Blockers / challenges — issues or delays surfaced, with root causes or dependencies
-4. What's Next         — planned actions, decisions needed, priorities agreed in-session
+1 Summary Update      — a concise overview of this session's key activities or themes
+2 Progress            — specific actions completed, decisions made, facts confirmed
+3 Blockers/Challenges — issues or delays surfaced, with root causes or dependencies
+4 What's Next         — planned actions, decisions needed, priorities agreed in-session
 ```
 
 (In the real output each label sits on its own line, content beneath it — the worked example below shows the exact rendered shape.)
@@ -235,17 +235,17 @@ The four sections:
 ```
 宏宇精密 — 訪談 2026-08-03
 
-1. Summary Update
+1 Summary Update
 報價與出貨兩條流程皆為手動作業，錯誤與月底對帳成本是主要痛點；新價格表下週定案。
 
-2. Progress
+2 Progress
 - 完成報價流程訪談：確認現況為 Excel 手動拉單，單張約 40 分鐘；新價格表下週定案
 
-3. Blockers / challenges
+3 Blockers/Challenges
 - 報價型號手動輸入易錯，上週兩張報價單遭客戶退回
 - 出貨單仍為手抄，月底對帳需耗費一個下午
 
-4. What's Next
+4 What's Next
 - 新價格表定案後重新核對報價基準；評估兩條流程自動化的優先順序
 ```
 

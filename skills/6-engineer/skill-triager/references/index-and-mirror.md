@@ -36,7 +36,7 @@ which lists public skills only.
   - `1 Skills/` — `1r92r__bUGZ61ZJP5fGcHGg_mnTaicFhz`
   - `2 Knowledge/` — `1jkloCgEHHfy83R-PFPTZBCllh4znvhi2`
 
-Category folders under `1 Skills/` (the eight that carry skills):
+Category folders under `1 Skills/` (the eight with a recorded ID):
 
 | Repo dir | Drive folder | ID |
 |---|---|---|
@@ -49,9 +49,9 @@ Category folders under `1 Skills/` (the eight that carry skills):
 | `6-engineer` | `6 Engineer 工程` | `1r4ulOn6hW3K1haR5oKhFbE4hzJK6mzU_` |
 | `7-people-talent` | `7 People & Talent 人才與招募` | `1Rn-RrM8TwpUk4O37QjorEf6GmN_b2B9U` |
 
-`8-finance-admin` and `9-legal` exist in `taxonomy.md` but carry no skills and therefore have
-**no Drive folder yet**. If the skill being shipped is the first in one of those, create the
-category folder under `1 Skills/` first, named to match the pattern above.
+`8-finance-admin` and `9-legal` have no row above, so no folder ID is recorded for them. When the
+skill being shipped is in one of those, look for its category folder under `1 Skills/` first, and
+create it, named to match the pattern above, only if it is missing.
 
 ## What gets created
 

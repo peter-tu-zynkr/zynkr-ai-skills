@@ -1,7 +1,7 @@
 ---
 name: seo-program-planner
 sheetId: "1.31"
-description: "The Stage-0 program-scale SEO strategy planner for any Zynkr product or website — it sits UPSTREAM of seo-article-pipeline and turns 'plan the whole product/site's SEO' into a repeatable, callable orchestration. It reuses the existing single-topic seo-* strategy skills at program scale (seo-persona-builder → seo-question-miner → seo-angle-finder → seo-keyword-mapper → seo-keyword-classifier → seo-demand-validator) AND adds the program-level synthesis those skills never do — defining content pillars, IA decisions (CMS articles + an existing /free-resource + a new category → /blog/<slug> SSR, no microsite), money pages + tech-SEO indexability recon, an AEO citation-gap pass, a CTA ladder + KPIs, governance guardrails, a topic backlog with win-first ordering, a month-by-month calendar, and the two durable deliverables: a 14-section plan Doc (imported to the '00 SEO Strategy & Plans' Drive bucket) and a 9-tab keyword/topic Sheet (built with openpyxl, imported to '01 Keyword Maps'). On finish it hands the backlog to seo-article-pipeline, which picks one topic and writes it end-to-end. Worked examples it mirrors: the Zynkr CRM product SEO plan (Doc 1Zbw3zpnA_ev5M2Kt0fLCW-cj-_sOQhYQtB9mB6krzro + 9-tab Sheet 11W4L-iZZ0Z9pqIhPp4x6iCGCJoI4-N_zwZrWcXPR5XY) and the Zynkr AI skills-marketplace SEO plan (Doc 1X-yWQ6OXhkBS-n1MgUnNHntZrGmvcuU0HrHeLPumKPY + Sheet 17f4wSRTyHsBHjsjH4-TK1geWZab_dvMCVlhLhQIzROs). Triggers when the user says 「做 SEO 策略規劃」, 「我要一份完整的 SEO 計畫」, 「建立關鍵字庫」, 「建立關鍵字地圖」, 「規劃整個網站的 SEO」, 「plan the SEO program for this product」, 「build an SEO keyword map + content plan」, or 「/seo-program-planner」, or hands over a product/site and wants its whole-program SEO strategy. BOUNDARY — this is NOT seo-article-pipeline (that writes ONE article from an already-chosen topic; this is upstream of it and produces the backlog it draws from); it is NOT seo-keyword-mapper (that only expands keywords for a SINGLE topic; this builds the program-wide keyword pool + pillar map + IA + governance). This is the project/site-scale strategy + execution-plan producer; when done it hands the backlog to seo-article-pipeline."
+description: "The Stage-0, program-scale SEO strategy planner for a whole Zynkr product or website, upstream of seo-article-pipeline. It runs the single-topic seo-* strategy skills at program scale (persona → questions → angles → keywords → intent → demand) and adds the synthesis they never do: content pillars, IA and money-page decisions (CMS articles + /free-resource + a new category → /blog/<slug> SSR, no microsite), tech-SEO indexability, AEO citation gaps, CTA ladder + KPIs, governance, a win-first topic backlog and a month-by-month calendar. Delivers a 14-section plan Doc (→ 00 SEO Strategy & Plans) and a 9-tab keyword/topic Sheet (→ 01 Keyword Maps), then hands the backlog to seo-article-pipeline. Triggers on 「做 SEO 策略規劃」, 「我要一份完整的 SEO 計畫」, 「建立關鍵字庫」, 「建立關鍵字地圖」, 「規劃整個網站的 SEO」, 「plan the SEO program for this product」, 「build an SEO keyword map + content plan」, 「/seo-program-planner」, or a product/site handed over for whole-program SEO strategy. BOUNDARY: not seo-article-pipeline (writes ONE article from a chosen topic) and not seo-keyword-mapper (one topic's keywords)."
 category: brand-marketing
 project: seo-program-planner
 platform: claude
@@ -48,9 +48,9 @@ The one company fact in the config is the shared SEO knowledge-base folder, `<yo
 | Stage | Phase | Executor | Output (handoff block) |
 |---|---|---|---|
 | ① | 研究 | Intake + reverse-engineer personas — `seo-persona-builder` **at program scale (multiple personas)** | `PROGRAM_PACKET ▸ Personas` |
-| ② | 研究 | Content pillars + message scaffold / named frames — **this skill (synthesis)** | `▸ Pillars` |
-| ③ | 研究 | IA decision (CMS articles + existing /free-resource + new category vs microsite; tech-SEO indexability check of money pages) — **this skill (synthesis)** | `▸ IA` |
-| ④ | 研究 | Program-scale keyword research — `seo-question-miner` → `seo-angle-finder` → `seo-keyword-mapper` → `seo-keyword-classifier` → `seo-demand-validator`, all run over the **whole program** (not one topic) | `▸ KeywordPool` |
+| ② | 研究 | Program-scale keyword research — `seo-question-miner` → `seo-angle-finder` → `seo-keyword-mapper` → `seo-keyword-classifier` → `seo-demand-validator`, all run over the **whole program** (not one topic) | `▸ KeywordPool` |
+| ③ | 研究 | Content pillars + message scaffold / named frames: problem domains built from shipped capabilities, each head term confirmed by the validated keyword pool — **this skill (synthesis)** | `▸ Pillars` |
+| ④ | 研究 | IA decision (CMS articles + existing /free-resource + new category vs microsite; tech-SEO indexability check of money pages) — **this skill (synthesis)** | `▸ IA` |
 | ⑤ | 產製 | Converge into a topic backlog + win-first ordering — **this skill (synthesis)** | `▸ Backlog` |
 | ⑥ | 產製 | AEO citation-gap + off-site GEO — **this skill (synthesis)** | `▸ AEO` |
 | ⑦ | 產製 | Money pages + CTA ladder + KPIs — **this skill (synthesis)** | `▸ Conversion` |
@@ -58,15 +58,15 @@ The one company fact in the config is the shared SEO knowledge-base folder, `<yo
 | ⑨ | 產出 | Assemble the 14-section plan Doc → import to 「00 SEO Strategy & Plans」 — **this skill** | Plan Doc (live) |
 | ⑩ | 產出 | Assemble the 9-tab Sheet (openpyxl → `import_to_google_sheets`) → import to 「01 Keyword Maps」 → **hand backlog to `seo-article-pipeline`** | Keyword/Topic Sheet (live) + handoff |
 
-For the strategy stages (① and the five sub-skills inside ④) call the reused skill via the **Skill tool**, scoped to the whole program. The synthesis stages (②③⑤⑥⑦⑧⑨⑩) you do yourself.
+For the strategy stages (① and the five sub-skills inside ②) call the reused skill via the **Skill tool**, scoped to the whole program. The synthesis stages (③④⑤⑥⑦⑧⑨⑩) you do yourself. Keyword research comes before pillars on purpose: each pillar is a problem domain built from shipped capabilities, and real search demand confirms its head term, so none is drafted first and then filled.
 
-### Stage ④ — program-scale keyword research (the reused chain)
+### Stage ② — program-scale keyword research (the reused chain)
 
 Run the existing single-topic chain across the entire program, accumulating into one pool rather than one topic's terms:
 
-1. `seo-question-miner` — mine the FAQ/seed-question universe across **all** personas + pillars.
+1. `seo-question-miner` — mine the FAQ/seed-question universe across **all** personas and the whole topic space.
 2. `seo-angle-finder` — find the angles for the whole category, not one article.
-3. `seo-keyword-mapper` — expand into the full keyword universe (pillar by pillar).
+3. `seo-keyword-mapper` — expand into the full keyword universe, each keyword tagged with a persona and a draft pillar (stage ③ settles the pillars).
 4. `seo-keyword-classifier` — classify every keyword by intent (informational / commercial / navigational / transactional).
 5. `seo-demand-validator` — validate demand/difficulty; **signal + basis only, never invent search volumes**, mark unverified figures (待驗證).
 
@@ -78,9 +78,10 @@ Carry the accumulated result forward as `PROGRAM_PACKET ▸ KeywordPool`.
 
 Look at what the user has in hand and start from the right stage:
 - Only a product/site idea or 「規劃整個網站的 SEO」 from scratch → stage ①.
-- Already has personas / a `PROGRAM_PACKET ▸ X` → continue from the stage after X.
-- Already has pillars defined → stage ③ (IA) or ④ (keyword research).
-- Already has a keyword pool but no plan → stage ⑤ (backlog) onward.
+- Already has personas / a `PROGRAM_PACKET ▸ X` → continue from the stage after X, unless `▸ KeywordPool` is missing: then stage ②.
+- Already has a keyword pool → stage ③ (pillars).
+- Already has pillars but no keyword pool → stage ② (keyword research) first, then revisit the pillars at ③ against what the pool shows.
+- Already has a keyword pool, pillars and an IA decision but no plan → stage ⑤ (backlog) onward. A packet made in the old order, pillars before keywords, resumes at ③ instead, so its pillars are checked against the pool.
 - Already has the full strategy decided, just needs the artifacts → stages ⑨–⑩ (assemble Doc + Sheet).
 - A finished plan exists and they want to start writing → don't replan; hand straight to `seo-article-pipeline`.
 
@@ -102,7 +103,7 @@ Render this **phase-grouped vertical** board (far more readable on a CLI than a 
 ```
 SEO 程式規劃  ▶️ 4/10
 ──────────────────────────
-研究  ✅ 1人物誌群  ✅ 2內容支柱  ✅ 3資訊架構  ▶️ 4關鍵字研究
+研究  ✅ 1人物誌群  ✅ 2關鍵字研究  ✅ 3內容支柱  ▶️ 4資訊架構
 產製  ⬜ 5主題盤點  ⬜ 6AEO引用缺口  ⬜ 7轉換層  ⬜ 8治理
 產出  ⬜ 9計畫Doc  ⬜ 10關鍵字Sheet → 交棒文章流程
 
@@ -153,8 +154,8 @@ Build the multi-tab `.xlsx` with **openpyxl**, then `import_to_google_sheets` in
 
 ## How to Call
 
-- Strategy stages (①, and the five sub-skills inside ④) — call via the **Skill tool**, scoping the prompt to the **whole program** (e.g. ask `seo-persona-builder` for the full persona set, ask `seo-keyword-mapper` for the whole keyword universe pillar by pillar). Carry each result into the running `PROGRAM_PACKET`.
-- Synthesis stages (②③⑤⑥⑦⑧) — do them yourself against the references below; you are the only thing in the system that does program-level synthesis.
+- Strategy stages (①, and the five sub-skills inside ②) — call via the **Skill tool**, scoping the prompt to the **whole program** (e.g. ask `seo-persona-builder` for the full persona set, ask `seo-keyword-mapper` for the whole keyword universe, each keyword tagged with a persona and a draft pillar). Carry each result into the running `PROGRAM_PACKET`.
+- Synthesis stages (③④⑤⑥⑦⑧) — do them yourself against the references below; you are the only thing in the system that does program-level synthesis.
 - Assembly stages (⑨⑩) — you build the Doc/Sheet and import them; Doc via `import_to_google_doc`, Sheet via openpyxl → `import_to_google_sheets`.
 - Handoff — after ⑩, on HITL confirm call `seo-article-pipeline` (Skill tool) on the top backlog topic; pass it that topic + its target keywords so it enters at its Brief stage.
 
@@ -166,13 +167,12 @@ Each rubric is hosted as an **editable Google Doc master** in the SEO-KB rubrics
 
 | Concern | Rubric (name) | Local fallback |
 |---|---|---|
-| Pillar grouping (hub & spoke) | pillar-rubric | ./references/pillar-rubric.md |
-| IA decision + tech-SEO indexability check | ia-decision-rubric | ./references/ia-decision-rubric.md |
-| Backlog convergence + win-first scoring | backlog-scoring-rubric | ./references/backlog-scoring-rubric.md |
-| AEO citation-gap + off-site GEO | aeo-citation-rubric | ./references/aeo-citation-rubric.md |
-| Money pages + CTA ladder + KPIs | conversion-rubric | ./references/conversion-rubric.md |
-| Governance guardrails (the house rules below) | governance-rubric | ./references/governance-rubric.md |
-| 14-section Doc + 9-tab Sheet templates | deliverable-templates | ./references/deliverable-templates.md |
+| The end-to-end method — every stage, backlog convergence + win-first ordering, AEO citation gap, money pages + CTA ladder + KPIs, HITL gates, handoff | program-planning-method | ./references/program-planning-method.md |
+| Personas (stage ①) | persona-reverse-map | ./references/persona-reverse-map.md |
+| Pillars, IA decision, tech-SEO indexability (③④) | pillar-and-ia-framework | ./references/pillar-and-ia-framework.md |
+| Keyword pool + the 9-tab Sheet schema (②⑩) | keyword-pool-and-sheet-schema | ./references/keyword-pool-and-sheet-schema.md |
+| Governance guardrails (⑧ — the house rules below) | governance-guardrails | ./references/governance-guardrails.md |
+| The 14-section plan Doc (⑨) | plan-doc-template | ./references/plan-doc-template.md |
 
 ---
 

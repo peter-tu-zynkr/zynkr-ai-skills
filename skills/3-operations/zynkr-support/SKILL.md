@@ -30,8 +30,8 @@ This skill is the **READ** half of a two-skill loop:
 So the loop is self-healing: every gap this skill flags becomes a KB card via /zynkr-kms, and the
 next identical question gets a confident auto-draft. The two skills share **one** knowledge base:
 the **Zynkr platform 知識庫** (browsable at `https://platform.zynkr.ai/kb`, Supabase-backed,
-accessed here through the `zynkr` MCP server). The old Google-Docs KB folder is a read-only
-archive since the 2026-07-15 cutover — never read it for answers.
+accessed here through the `zynkr` MCP server). The Google Drive copy (`[3.2] 客服知識庫 (KMS)`)
+is a one-way backup mirror that /zynkr-kms writes — never read it for answers.
 
 The drafts must be **safe to send** — never invent product behavior, pricing, dates, or
 commitments. When the KB doesn't cover something, say so and surface it rather than guessing.
@@ -69,14 +69,14 @@ Steps 1–6 are this run. Steps 7–9 are the learning loop (see **Step 9** belo
   - `mcp__zynkr__search_kb` — scored search over published cards (title/keyword/body, zh or EN)
   - `mcp__zynkr__get_kb_article` — one card by uuid **or `fact_id`**; qa cards come back with
     their cited fact cards resolved inline
-  - `mcp__zynkr__list_kb_sections` — the live section/intent taxonomy (13 sections + aliases)
+  - `mcp__zynkr__list_kb_sections` — the live section/intent taxonomy (+ aliases)
   - `mcp__zynkr__list_kb_articles` — browse a section's card titles (filter by `section_id`)
 - **KB UI** (for links in your summary): `https://platform.zynkr.ai/kb`
 - **Google account**: `<your-google-workspace-account>` — **MCP server `google-workspace`** for all Gmail tools.
 
 ### KB structure (what you're retrieving from)
 
-Two card types, 13 sections:
+Two card types, and the sections `list_kb_sections` returns:
 
 - **`fact` cards** — canonical numbers/policies (pricing table, refund policy, durations), each
   with a stable `fact_id` (e.g. `pricing-rates`). The numbers live here, once.
@@ -85,7 +85,7 @@ Two card types, 13 sections:
   inline, so **one fetch gives you the full answer including current numbers.**
 - **Sections** = the intent taxonomy (`pricing-quoting`, `course-content`, `scheduling-logistics`,
   `team-training-enterprise`, `technical-howto`, `access-account`, `refund-policy`, `other`,
-  `instructor-profile`, `brand-product-vision`, `ai-workflow-architecture`), plus two special ones:
+  `instructor-profile`, `brand-product-vision`, `ai-workflow-architecture`, `gov-subsidy`), plus two special ones:
   - **`core-facts`** — the canonical fact cards qa cards cite.
   - **`tone-style`** — ALWAYS-READ style rules: fetch `get_kb_article("tone-voice-rules")` and
     `get_kb_article("term-mapping-table")` (the anti-Chinglish 晶晶體 用語對照表) once per run;
@@ -361,8 +361,8 @@ curating the KB is /zynkr-kms's job.
   card** and flag the mismatch for /zynkr-kms.
 - **Check card freshness:** cards carry a last-verified date and may carry flags like `HELD` or
   `NEEDS_PETER` — a flagged card is NOT a confident source; treat it as a gap.
-- **The old Google-Docs KB is a read-only archive** (cutover 2026-07-15) — never pull answers from
-  it; it no longer receives updates and its numbers may be stale.
+- **The Google Drive KB copy is a backup mirror, not a source** — never pull answers from it; the
+  platform KB is the source of truth and the mirror can lag it.
 - **Website-form notifications:** reply goes to the customer email in the body, as a fresh email (no
   `thread_id`). In-thread replies silently email `website@zynkr.ai`.
 - **Don't reply on threads Peter already replied to** — Step 2 inspection is the real filter, not the

@@ -222,12 +222,10 @@ Then, in order:
    Attach to **exactly one parent** (the deal) — the deal timeline already widens to
    its contact's activities, so also passing `contact_id` would render the same note
    twice. `body` is required; `subject` is the short title on the timeline.
-   *(Was raw SQL until 2026-08-16 — `create_note` shipped as PLAT-045 and this write
-   now goes through the confirm gate + audit trail + tenant wall like every other one.)*
 2. **Refresh the deal summary** — `mcp__zynkr__update_deal(id=…, notes=<new notes>)` (preview → `confirm:true`). Rewrite the summary paragraph from the pre-demo state to a post-demo recap: what happened, pains, that the follow-up mail is drafted, and the next step. **Replace only that paragraph and keep every other line verbatim, in order.** The summary is the field's first paragraph, up to the first blank line; if the field starts with a link line instead of prose, put the new paragraph before it. Other skills append lines below it: the `專案資料夾：<url>` line (`/project-init`; `/sales-inbound` until 2026-10-05), `部署紀錄（<SPEC_ID>）：<url>`, transcript, BRD, session and UAT links. Readers find the client's folder and deployment record only through those lines, and `update_deal` replaces the whole field, so a line left out is deleted. Read back with `get_deal`: the new paragraph is there and every other line survived.
 3. **Nudge the stage** *only if the call earned it* — `mcp__zynkr__move_deal_stage(id=…, stage=…)`. See *Inference defaults*. Don't force `proposal` unless an actual quote/proposal was discussed; a soft pre-sales follow-up leaves a `qualified` deal at `qualified`.
 4. **Close the stale scheduling task** — `mcp__zynkr__list_tasks(filter="open")`, find the open task on THIS deal about scheduling/chasing the demo (subject mentions demo / 安排 / 追蹤…回覆), and `mcp__zynkr__set_task_status(ids=[…], status="done", confirm:true)`. The demo happened, so it's complete. If no clear match, skip and say so.
-5. **Create the follow-up task** — `mcp__zynkr__create_task(subject=…, body=…, deal_id=…, due_at=<+task_due_days, ISO 8601 UTC 'Z'>, confirm:true)`. Attach to **exactly one parent** (the deal — don't also pass contact_id, it errors). Use UTC `Z` format for `due_at` (e.g. `2026-07-06T01:00:00Z`); an offset like `+08:00` is rejected.
+5. **Create the follow-up task** — `mcp__zynkr__create_task(subject=…, body=…, deal_id=…, due_at=<+task_due_days, ISO 8601>, confirm:true)`. Attach to **exactly one parent** (the deal — don't also pass contact_id, it errors). `due_at` is ISO 8601 with a zone: UTC `Z` (`2026-07-06T01:00:00Z`) or an offset (`2026-07-06T09:00:00+08:00`).
 
 ### 6 · Report
 

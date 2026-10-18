@@ -43,6 +43,7 @@ Store:
 - `HEADER_HINTS` — fuzzy-match keyword lists per role
 - `HOT_LEAD_SIGNALS` — regex phrases that fire the Hot Lead flag
 - `GENERIC_PATTERNS` — company-name skip list
+- `REJECT_DOMAINS` — directory domains Step 5 discards
 - `ADD_SATISFACTION_COLUMNS` — boolean; whether to also write 有普通? + 平均分數
 - `SATISFACTION_SCORE_COLUMNS` — Likert (1–5) columns; auto-detect if blank
 
@@ -57,19 +58,10 @@ Wait for user input. Update `SHEET_ID` in memory for this session.
 
 ## Step 1 — Header Auto-Detection
 
-Display:
-```
----------------------------------------------
-🎯 Sales Client Sourcing
----------------------------------------------
-Phase: Header Detection
----------------------------------------------
-```
-
 Read row 1 with `mcp__google-workspace__read_sheet_values`:
 - `user_google_email`: `<your-google-workspace-account>`
 - `spreadsheet_id`: `SHEET_ID`
-- `range`: `[SHEET_TAB]!A1:Z1`
+- `range_name`: `[SHEET_TAB]!A1:Z1`
 
 Fuzzy-match each header cell to one of these roles using `HEADER_HINTS`:
 - `company_col` — required
@@ -97,7 +89,7 @@ Accept overrides until user types `OK`. If a required role can't be matched and 
 ## Step 2 — Generic-Name Filter
 
 Read the full company column with `mcp__google-workspace__read_sheet_values`:
-- `range`: `[SHEET_TAB]![company_col]2:[company_col]`
+- `range_name`: `[SHEET_TAB]![company_col]2:[company_col]`
 
 For each row, classify:
 - **`generic`** if the cell value (trimmed, lowercased) matches any `GENERIC_PATTERNS` entry, is blank, or is purely numeric.
@@ -117,7 +109,7 @@ Survey rows: [N] total
 ## Step 3 — Output Column Provisioning
 
 Identify the next available empty column block at the right edge of the data. Write headers using `mcp__google-workspace__modify_sheet_values`:
-- `range`: `[SHEET_TAB]![first_new_col]1:[last_new_col]1`
+- `range_name`: `[SHEET_TAB]![first_new_col]1:[last_new_col]1`
 - `value_input_option`: `USER_ENTERED`
 
 Always-on headers:
@@ -170,19 +162,12 @@ Both formulas propagate automatically — no fill-down needed.
 
 ## Step 5 — Company Enrichment
 
-Display:
-```
----------------------------------------------
-Phase: Company Enrichment ([N1] searchable rows)
----------------------------------------------
-```
-
 Initialize `ENRICHMENT_CACHE = {}` and `UNKNOWNS = []`.
 
 Read full challenges + topics columns so the strategy synthesis (Step 6) has the participant context:
 ```
 mcp__google-workspace__read_sheet_values
-  range: [SHEET_TAB]![company_col]2:[topics_col]
+  range_name: [SHEET_TAB]![company_col]2:[topics_col]
 ```
 
 For each unique company name in the `searchable` set, in **parallel batches of 8**:
@@ -190,7 +175,7 @@ For each unique company name in the `searchable` set, in **parallel batches of 8
 1. Run a single WebSearch: `"[company name]" 台灣 公司 官網`
 2. Parse top results:
    - **Accept** the company's own domain (typical patterns: `*.com.tw`, `*.com`, `*.org.tw`, `*.gov.tw`, `*.edu.tw`, `*.ai`).
-   - **Reject** directory domains: `twincn.com`, `iyp.com.tw`, `alphaloan.co`, `findcompany.com.tw`, `1111.com.tw`, `104.com.tw`, `518.com.tw`, `taiwantrade.com`, `dnb.com`, `companys.com.tw`, `twfile.com`, `business.com.tw`, `aibee.com.tw`, `costring.com`, `1111人力銀行`, any other generic lookup site.
+   - **Reject** every domain in `REJECT_DOMAINS`, and any other generic lookup or job-board site.
 3. Compose 1-line `company_background`: industry + scale (上市/上櫃/SME/外商/NPO/政府) + location + founding year if obvious + parent group if applicable.
 4. **Move on within one search attempt if nothing useful** — push `{company_name, reason}` to `UNKNOWNS[]` and leave `website` as `""`.
 5. Store `ENRICHMENT_CACHE[company_name] = {website, background}`.
@@ -235,7 +220,7 @@ Store strategy in `ENRICHMENT_CACHE[company_name].strategies[sheet_row]` — key
 
 ```
 mcp__google-workspace__read_sheet_values
-  range: [SHEET_TAB]![company_col]2:[company_col]
+  range_name: [SHEET_TAB]![company_col]2:[company_col]
 ```
 
 For each current row in the re-read company column:
@@ -246,7 +231,7 @@ For each current row in the re-read company column:
 Write the 2D array in **chunks of ≤55 rows** to avoid oversized payloads:
 ```
 mcp__google-workspace__modify_sheet_values
-  range: [SHEET_TAB]![OUT.website_col]2:[OUT.well_known_col]56
+  range_name: [SHEET_TAB]![OUT.website_col]2:[OUT.well_known_col]56
   value_input_option: USER_ENTERED
   values: [chunk 1]
 ```
@@ -268,7 +253,7 @@ Default to `N` for SMEs, niche-domain firms, and unknowns.
 Re-read company column once more (in case of more sorting), build the Well-Known column array in current row order, write:
 ```
 mcp__google-workspace__modify_sheet_values
-  range: [SHEET_TAB]![OUT.well_known_col]2:[OUT.well_known_col][last_row]
+  range_name: [SHEET_TAB]![OUT.well_known_col]2:[OUT.well_known_col][last_row]
   value_input_option: USER_ENTERED
   values: [[Y/N], [Y/N], ...]
 ```
@@ -299,18 +284,6 @@ Unknowns (need manual follow-up):
 Google Sheet: https://docs.google.com/spreadsheets/d/[SHEET_ID]
 =============================================
 ```
-
----
-
-## Progress Indicator
-
-Show this line at the top of each phase:
-
-```
-🎯 Config → Headers → Filter → Provision → Formulas → Enrich → Strategy → Write → Brand → Done
-```
-
-Use `▶` for current phase, `✓` for completed, `○` for upcoming.
 
 ---
 

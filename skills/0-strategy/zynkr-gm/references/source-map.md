@@ -40,7 +40,7 @@ The Drive connector's `read_file_content` **samples** a Sheet: about 22 rows of 
 
 When the result is too big for one tool reply, the harness saves it to a file: slice that file with python, one `# <tab>` section at a time.
 
-⚠ Runway / burn used to be listed here as "accounting Supabase". **That was never true** — the `zynkr-accounting` app is stalled and holds no books. Since 2026-09-13 the source is `sources.finance_ledger`, a Drive Sheet, which is why runway is now computable on a scheduled cloud run as well as locally.
+⚠ Runway / burn come from `sources.finance_ledger`, a Drive Sheet readable on a scheduled cloud run as well as locally. The `zynkr-accounting` app is stalled and holds no books — never read runway from it.
 
 ## Precedence
 

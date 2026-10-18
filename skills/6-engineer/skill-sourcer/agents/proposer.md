@@ -89,14 +89,14 @@ To resolve field and option IDs, first call `gh project field-list <number> --ow
 
 Display the issue URL and the Project item state, then say:
 
-> "Added to the pipeline as `<issue_url>`. Review the entry and set Keep=yes to approve, or I can set it for you now."
+> "Added to the pipeline as `<issue_url>`. Approving it adds the `triage-ready` label, the approval of record (Keep=yes mirrors it on the board). Approve it now, or leave it for later review?"
 
 ### 5. If user says approve now
 
 If the user confirms approval in the same session:
 
-1. Update the Project item: `Keep=yes`, `Pipeline Status=approved`
-2. Add the `triage-ready` label to the issue (this is the signal for `/skill-triager` to pick it up):
+1. Update the Project item for display: `Keep=yes`, `Pipeline Status=approved`
+2. Add the `triage-ready` label to the issue (the approval of record, and the signal for `/skill-triager` to pick it up):
    ```bash
    gh issue edit <issue_number> --repo peter-tu-zynkr/zynkr-skill-idea --add-label triage-ready
    ```

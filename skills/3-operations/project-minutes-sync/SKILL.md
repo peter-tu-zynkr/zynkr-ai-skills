@@ -82,7 +82,7 @@ Google 帳號、時區、週起始日與門檻值全部從 `pm.json` 讀（`pm-s
 
 ## Step 2 — 讀 Doc，逐表解析
 
-用 `get_doc_content` 或 `get_doc_as_markdown` 取內容，必要時以 `inspect_doc_structure` 對照表格結構。若頂層 body 讀出來是空的，改帶 `tab_id` 再讀一次（Docs tabs 的已知行為），不要當成「這份 Doc 是空的」。
+用 `get_doc_as_markdown` 取內容（它把每個分頁都當成頂層 `#` 標題一起回傳），必要時以 `inspect_doc_structure` 對照表格結構。讀出來是空的，先用 `inspect_doc_structure` 看分頁清單，不要當成「這份 Doc 是空的」。
 
 要解析的四張表，其餘（討論摘要 · 下次會議 · 出席）一律不動：
 
@@ -122,7 +122,7 @@ Google 帳號、時區、週起始日與門檻值全部從 `pm.json` 讀（`pm-s
 
 3. **不要用人工比對代替 CLI。** CLI 與它要讀的兩份 seed 都隨技能一起安裝（`./scripts/pm-schema.py` · `./references/*.json`），所以「拿不到 CLI」不再是一種正常情況——那代表安裝壞了或參數給錯，是要修的事，不是要繞過的事。退場碼 3 一律回報並停。
 
-4. **永遠不得寫死範圍**。`project-status-update` 曾寫死 `A1:M44`，在 v2 表上把 `前置任務` 當成 `Reference` 讀——那是這批變更要修掉的活 bug，不要在這裡複製一次。
+4. **永遠不得寫死範圍**：寫死的範圍在 v2 表上會把 `前置任務` 當成 `Reference` 讀，之後每一欄都錯位。範圍一律由上面兩步判定。
 
 ## Step 4 — Action Items → tab 1 專案管理總表
 

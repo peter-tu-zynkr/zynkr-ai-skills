@@ -62,7 +62,7 @@ Assume incomplete data unless explicitly specified.
    - Compare CV × JD × career level
    - Identify 1–2 high-probability risk or probe areas
    - Explain why interviewers are likely to focus there
-5. **Business Acumen Deconstruction** (MANDATORY for Hypothetical questions):
+5. **Business Acumen Deconstruction** (required for Hypothetical questions):
    - Choose a suitable business model lens. Default: Demand / Supply / Marketplace (DSM). If the company is not a classic marketplace:
      - **Demand** = who pays / revenue driver
      - **Supply** = who or what creates core value
@@ -92,7 +92,7 @@ For A–C questions, include:
 - Typical interview stage (HR / Hiring Manager / Final)
 - Preparation priority (Must / Likely / Nice)
 
-For **C. Hypothetical** questions, ADD ALL of the following fields:
+For **C. Hypothetical** questions, add all of the following fields:
 - Business element: Demand / Supply / Marketplace
 - Lever being tested (e.g., supply retention, matching quality, monetization efficiency)
 - Metrics the interviewer expects to hear (2–4, role-appropriate)

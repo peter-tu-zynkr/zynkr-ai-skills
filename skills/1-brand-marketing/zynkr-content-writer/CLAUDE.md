@@ -25,7 +25,7 @@ Zynkr Writing Agent is a modular, multi-stage article writing pipeline built ent
 ```
 Entry: /zynkr-content-writer skill → SKILL.md orchestrator
   ↓ detects user's current stage from input
-  ↓ routes via Task tool to one of 7 agents:
+  ↓ routes via the Agent tool to one of 7 agents:
 
 Stage 0: content-idea  — Socratic dialogue for vague ideas
 Stage 1: content-style-select     — Picks from 10 structure templates (read from Drive)
@@ -55,7 +55,7 @@ Guide files are stage-specific reference material that map to the pipeline:
 - `stage-1-style-selection.md`, `stage-1-article-structure.md` → Stage 1
 - `stage-2-article-draft.md`, `stage-2-style-guide.md` → Stage 2
 - `stage-3-editor.md`, `stage-3-editor-guide.md` → Stage 3
-- `stage-3-5-content-reader.md` → Stage 3.5
+- `stage-3-5-reader-perspective.md` → Stage 3.5
 - `stage-4-article-title.md`, `stage-4-seo-list.md` → Stage 4
 - `stage-5-cta-writing.md`, `stage-5-cta-selection.md` → Stage 5
 

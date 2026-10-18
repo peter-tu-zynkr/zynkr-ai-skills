@@ -61,7 +61,6 @@ From the segmented transcript, extract:
 3. **Main sections** — 3–5 numbered sections (一、二、三…). Each section has:
    - A heading that names the topic
    - 2–5 short bullet points or lines. Use 👉 to introduce the most important single point in the section.
-   - Keep each section under 80 words
 4. **Call to action** — 2–3 lines listing what attendees can do next (join community, book consultation, fill survey, etc.). Use the actual links or instructions mentioned in the transcript.
 5. **Closing** — 1–2 lines of warm personal sign-off from the speaker, including the speaker's first name.
 

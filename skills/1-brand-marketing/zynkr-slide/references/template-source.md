@@ -15,8 +15,8 @@ TEMPLATE_LIBRARY = 1j0lubFMtZ6lFW-ZTOQcvZ2O4r_ix70yF
 ```
 
 - **Drive folder**: "Slide template" — https://drive.google.com/drive/folders/1j0lubFMtZ6lFW-ZTOQcvZ2O4r_ix70yF
-- **Template format**: **native Google Slides** (one Slides file per template). template-fill will `copy_drive_file` to copy → `get_drive_file_download_url(export_format="slide-pptx")` to export → use python-pptx to fill precisely by shape index.
-- A link-gated Drive folder ID is low-sensitivity **configuration** and may be written here (same convention as the repo's existing `inbound-sales-config.md` / `seo-pipeline-config.md`); **the template content itself stays in Drive and never enters the repo.**
+- **Template format**: **native Google Slides** (one Slides file per template). template-fill will `copy_drive_file` to copy → `get_drive_file_download_url(export_format="pptx")` to export → use python-pptx to fill precisely by shape index.
+- **The template content itself stays in Drive and never enters the repo.**
 
 **When not found / not configured** → template-fill falls back to a neutral default: **ask the user to paste the template link directly**, do not auto-search the library; the rest of the flow is unchanged.
 

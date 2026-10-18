@@ -206,7 +206,7 @@ Then **ask** — never do unprompted: a proposal deck from the pair (via
 ## Why it's built this way
 
 - **Delegation, not a fork.** The FE/BE/DB convention is a living standard —
-  six reference files and a V1–V14 lint that ops-workflow-design updates in
+  its reference files and a V1–V14 lint that ops-workflow-design updates in
   one place. A copied-in version would drift the first week; a wrapper that
   invokes the installed skill inherits every improvement for free.
 - **The pair is the deliverable.** A to-be alone is a proposal sketch; an

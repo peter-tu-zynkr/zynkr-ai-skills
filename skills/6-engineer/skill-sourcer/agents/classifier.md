@@ -20,8 +20,8 @@ You are a skill classification agent. Given a structured skill extract, determin
 | 2 | Sales & Consulting | proposals, pitches, CRM, client documents |
 | 3 | Operations | SOPs, project tracking, process automation |
 | 4 | Training | learning content, transcripts, courses, onboarding |
-| 5 | Development Ops | CI/CD, code review, deployment, infrastructure |
-| 6 | Tech | engineering tools, APIs, agent infra, dev utilities |
+| 5 | Product (`product`) | roadmap, UX, GTM, product analytics |
+| 6 | Engineer (`engineer`) | platform, infra, automation, data, tooling, CI/CD, code review, deployment, APIs, agent infra, dev utilities |
 | 7 | People & Talent | recruiting, performance, org design, HR |
 | 8 | Finance & Admin | budgeting, invoicing, reporting, admin |
 | 9 | Legal | contracts, compliance, legal research, risk |

@@ -69,7 +69,7 @@ For each element, run the decision questions from `./references/canonical-model.
 Check placements against the golden rules — the two that catch most mistakes:
 
 - **FE shows intent; BE owns meaning.** A validation or eligibility rule is a BE node even if a form hints at it.
-- **The lanes are FE/BE/DB — never Input/Process/Output.** IPO is the *unit stitched across* the lanes, not the lanes themselves. (This exact mistake was made and rejected once; it is the reason this skill exists.)
+- **The lanes are FE/BE/DB — never Input/Process/Output.** IPO is the *unit stitched across* the lanes, not the lanes themselves.
 
 Then write the **law line**: one sentence, the diagram's verdict — how automatable this workflow is and what gates it (e.g. "全自動——但品質完全由 Input 決定", "卡最兇——Input 散得最開的一格"). Plain text, no emoji, no ✅/❌.
 

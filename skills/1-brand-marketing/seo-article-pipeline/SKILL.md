@@ -42,7 +42,7 @@ The config keeps only what is not a company fact: your Google account (`<your-go
 
 ---
 
-## Nine-Stage Pipeline
+## Pipeline Stages
 
 | Stage | Node | Executor | Output (handoff block) |
 |---|---|---|---|
@@ -54,14 +54,14 @@ The config keeps only what is not a company fact: your Google account (`<your-go
 | 6 | (6) Demand/difficulty validation | `seo-demand-validator` | `▸ Topics` |
 | 7 | (7) Brief | `seo-brief-writer` | `▸ Brief` |
 | 8 | (8) Outline + FAQ | `seo-outline-designer` | Handoff summary (drafter-compatible) |
-| 9 | (9) Drafting | `content-draft` (existing, Task) | Article draft |
-| 10 | (10) Titling | `content-title` (existing, Task) | Title candidates |
+| 9 | (9) Drafting | `content-draft` (existing, Agent tool) | Article draft |
+| 10 | (10) Titling | `content-title` (existing, Agent tool) | Title candidates |
 | 11a | (11) Scored proofreading | `content-editor` (existing, with SEO review criteria) | Proofread article |
 | 11b | (11) SEO setup | `seo-article-finalizer` | **Publish-ready Google Doc** (article body + 「SEO 交付物」block: meta/schema/links + slug/seo_title/meta_description/keywords/category) |
 | 12 | (12) Publish to web | `seo-publish-article` | Live at `zynkr.ai/blog/<slug>` + source Doc archived to 「04 Published article」 + SEO tracker updated (Topic List `Status=Done`/URL/date + Keyword Pool coverage URL) |
 | ＋ | EN flagship | `content-translator` (zh→EN mode) | EN flagship version (optional, after publish) |
 
-For the first half (1–8, 11b, 12) use the **Skill tool** to call the corresponding SEO skill; for the second half (9, 10, 11a) use **Task** to call the existing write-article sub-agents.
+For the first half (1–8, 11b, 12) use the **Skill tool** to call the corresponding SEO skill; for the second half (9, 10, 11a) use the **Agent** tool to call the existing write-article sub-agents.
 
 ---
 
@@ -119,10 +119,10 @@ Legend: ✅完成 · ▶️進行中 · ⬜待辦 · ⏭️跳過
 
 - First half: call via the Skill tool, e.g. first feed brand material to `seo-persona-builder`; after receiving `SEO_PACKET ▸ Persona`, confirm with HITL, then feed it to `seo-question-miner`, and so on.
 - Tail (11b → 12): call `seo-article-finalizer` (Skill tool) → it returns the publish-ready Google Doc; then on HITL confirm call `seo-publish-article` (Skill tool) on that Doc — it publishes to the web and runs governance (archive Doc + flip tracker). It owns its own preview/publish gate; don't re-implement it here.
-- Second half (existing sub-agents, via Task):
-  - `Task(subagent_type="content-draft", prompt="這是 SEO 大綱交棒摘要：\n{階段8交棒摘要}\n請逐段撰寫。")`
-  - `Task(subagent_type="content-title", prompt="這是完成的文章：\n{文章}\n請產出 SEO/AEO 標題候選。")`
-  - `Task(subagent_type="content-editor", prompt="這是初稿：\n{文章}\n請依 style guide 與 SEO 審核準則校稿。")`
+- Second half (existing sub-agents, via the Agent tool):
+  - `Agent(subagent_type="content-draft", prompt="這是 SEO 大綱交棒摘要：\n{階段8交棒摘要}\n請逐段撰寫。")`
+  - `Agent(subagent_type="content-title", prompt="這是完成的文章：\n{文章}\n請產出 SEO/AEO 標題候選。")`
+  - `Agent(subagent_type="content-editor", prompt="這是初稿：\n{文章}\n請依 style guide 與 SEO 審核準則校稿。")`
 
 ## Behavior Rules
 

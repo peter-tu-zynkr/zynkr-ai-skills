@@ -81,15 +81,12 @@ do **not** repeat the code as though it were an address. Say what happened —
 the card's ask fixing the pointer. Passing a dead reference to the reader as a citation is the
 failure this rule exists to stop.
 
-### Word budgets
+### Length — written to be scanned
 
-| Block | Budget |
-|---|---|
-| 01 · each decision card | ≤60 words, ≤5 lines, excluding link text |
-| 02 · each bullet | ≤20 words |
-| 03 · each table cell | ≤12 words |
-| 05 · 07 · 08 · each line | ≤20 words |
-| Whole email | ≤900 words. Over budget means block 03 is carrying prose it should not. |
+Every block is read at a glance: one clause per bullet (C3), each decision card exactly its five
+labelled lines, each table cell a state, a date or a pointer — never an explanation. Detail that
+would not change what the GM does next does not belong in the brief; when block 03 grows, it is
+carrying exactly that kind of prose.
 
 ---
 
@@ -198,7 +195,8 @@ One clause each (C3). A milestone that needs a paragraph belongs in 03.
 One table per LOB in tracker order (1.0 → 8.0). Columns: `#` · Item · Owner · Status · Derived ·
 Evidence · Next. Derived states use the words in `derived-state-rules.md`. Evidence is one clause
 naming where you saw it, **linked** to that row or section. Every P0 appears exactly once. P2
-items appear only if OVERDUE. Cells ≤12 words — this block is a scan surface, not a narrative.
+items appear only if OVERDUE. Cells hold a state, a date or a pointer — this block is a scan
+surface, not a narrative.
 
 Where the tracker and another source disagree, say which one wins under the precedence rules and
 put the reconciliation in Next. A divergence is a fact about the machine, not an opinion.

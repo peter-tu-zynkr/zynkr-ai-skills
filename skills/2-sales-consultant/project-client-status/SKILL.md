@@ -3,7 +3,7 @@ name: project-client-status
 sheetId: "2.44"
 description: >-
   Generate the weekly CLIENT-FACING status email for ONE consulting
-  engagement. Reads the CRM deal's tasks / activities / notes plus the newest
+  engagement. Reads the CRM deal's tasks and notes plus the newest
   [Notes] / [Plan] / [BRD] / [UAT] docs in the client's numbered [N] Drive
   folder, derives health / progress / blockers / next milestone, renders the
   專案狀態看板-style HTML dashboard, and creates a Gmail DRAFT addressed to
@@ -28,7 +28,7 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "The engagement (deal URL / company name); optional 'as of' date and language override"
-process: "Resolve engagement + live client contact → read CRM tasks/activities/notes + recent [N]-folder docs → diff vs last week → derive health/progress/blockers/milestone → client-facing tone pass → render HTML → Gmail DRAFT to the client → deal note + report"
+process: "Resolve engagement + live client contact → read CRM tasks + deal notes + recent [N]-folder docs → diff vs last week → derive health/progress/blockers/milestone → client-facing tone pass → render HTML → Gmail DRAFT to the client → deal note + report"
 output: "A styled 專案狀態看板 HTML weekly as a Gmail DRAFT to the client contact (never auto-sent), plus the deal-note record and a to-Peter summary of what to review before sending"
 synergy:
   - "consult-session-notes"
@@ -48,7 +48,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 Every live engagement owes the client a weekly "where are we" — re-reading the
 deal's tasks, session notes and plan docs, then translating vendor-side
 reality into client-appropriate language. This skill does that end-to-end for
-ONE engagement: read the CRM deal (tasks · activities · notes) and the newest
+ONE engagement: read the CRM deal (tasks · notes) and the newest
 `[Notes]`/`[Plan]`/`[BRD]`/`[UAT]` docs in the `[N]` folder, derive health /
 progress / blockers / next milestone, render the 專案狀態看板 HTML dashboard,
 and leave a Gmail DRAFT addressed to the deal's client contact.
@@ -112,7 +112,7 @@ client** is an incident. Peter reviews, edits, and hits send himself.
 - **Week** — anchor on today (or the "as of" date); window = Monday→Sunday
   containing it; ISO label for the subject (e.g. `2026-W32`).
 
-### 2 · Read the deal's activity timeline
+### 2 · Read the deal's tasks and notes
 
 - **Tasks** — `mcp__zynkr__list_tasks(filter="all", limit=200)`, then keep the
   rows whose `deal_id` is this deal (title, status, due date). The tool has no
@@ -181,17 +181,15 @@ discipline is inherited from the source skill, reshaped for CRM data:
   blocked on a client-side ask. 🟢 `ON_TRACK`: nothing overdue, current-phase
   tasks moving. The `summary` names its evidence (task, doc, date) — auditable.
 - **% complete** — `% = done / (total − dropped)`. Dropped tasks (the `Drop`
-  bucket from step 2) leave the denominator; counting them as `Not started` is
-  the bug this replaces — it inflated the denominator and understated the
-  client's progress. Phase-weight if the `[Plan]` defines phases (a
+  bucket from step 2) leave the denominator; counting them as `Not started` would
+  inflate the denominator and understate the client's progress. Phase-weight if the `[Plan]` defines phases (a
   half-finished phase contributes its true fraction, never rounded up).
   Dropped items are **listed separately, never silently gone**: one
   `decisions[]` entry each（範圍調整：<任務> 本期不做）with the date and the
   reason it was dropped, plus a line in the step-9 report to Peter. A `取消`
   or otherwise illegal status is the mirror case and is **not** symmetric with
   a drop: it stays in `total`, never counts toward `done`, and is named in the
-  step-9 report — removing it would flatter the number the same way the old
-  `Drop → Not started` fold understated it. No CRM tasks yet, or
+  step-9 report — removing it would flatter the number. No CRM tasks yet, or
   `total − dropped = 0` ⇒ omit the stage card (never divide by zero, never
   print a silent 0%). Upstream rule for **both** halves — the dropped-leaves
   rule and the illegal-value-stays rule — is

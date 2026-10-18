@@ -42,7 +42,7 @@ Resolve the target SKILL.md, in priority order:
 
 ## Step 2 — Run the engine
 
-From `scripts/`, run the shared engine in JSON mode:
+From the repo root, run the shared engine in JSON mode:
 
 ```bash
 npx tsx scripts/validate-skill.ts <resolved-path> --tier=all --json
@@ -72,7 +72,7 @@ Never auto-fix prose checks (`body.summary_paragraph`, `attribution.case_c_secti
 
 ## Step 5 — Verdict & handoff
 
-- **PASS** (0 ERROR): say so, note the WARN count, and point to `/skill-publish`. If `/zynkr-skills` chained you here, return a PASS so it can continue to publish.
+- **PASS** (0 ERROR): say so, note the WARN count, and point to `/skill-publish <path>`.
 - **FAIL** (≥1 ERROR): list the blocking ERRORs and stop. Tell the user to fix and re-run `/skill-qa`. Never publish on a FAIL.
 
 QA is a **pre-ship** gate. The live check — for a public skill, that it is on `zynkr.ai/api/skills`; for a team skill, that it is in the workbench's full index — runs **post-ship** in `/skill-triager` Option D. `/skill-qa` only emits an INFO pointer to it.

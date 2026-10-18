@@ -187,8 +187,8 @@ For each **approved** unit:
 
 1. If it targets a 🆕 new folder, create it first:
    `mcp__google-workspace__create_drive_file` with
-   `mimeType = application/vnd.google-apps.folder`, `name = <approved name>`,
-   `parentId = <your-recordings-folder-id>`. Capture the new folder ID.
+   `file_name = <approved name>`, `folder_id = <your-recordings-folder-id>`,
+   `mime_type = application/vnd.google-apps.folder`. Capture the new folder ID.
 2. Move **every file in the unit** (video + Notes + Chat + SRT) into the target:
    for each file call `mcp__google-workspace__update_drive_file` with
    `add_parents = <target folder id>` and

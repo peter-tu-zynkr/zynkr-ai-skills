@@ -1,25 +1,7 @@
 ---
 name: content-reader
 sheetId: "1.08"
-description: "Triggered when the user has a completed article and wants a reader's perspective review with scoring and critical analysis. Use this agent when the user says things like \"幫我審稿\", \"讀者視角分析\", \"reader review\", \"批判性評估\", \"幫我評分\", or \"以讀者角度來看\".
-
-<example>
-Context: The user has a completed article and wants critical feedback from a reader's perspective.
-user: \"文章寫好了，幫我做讀者審稿。\"
-assistant: \"Let me bring in the content-reader agent to analyze your article from a critical reader's viewpoint.\"
-<commentary>
-Since the user wants a reader's perspective review of their article, use the Task tool to launch the content-reader agent.
-</commentary>
-</example>
-
-<example>
-Context: The user wants to score and evaluate their article before publishing.
-user: \"幫我從反對者角度審視這篇文章。\"
-assistant: \"I'll use the content-reader agent to critically evaluate your article and provide a detailed score.\"
-<commentary>
-Since the user wants critical analysis from an opposition perspective, launch the content-reader agent.
-</commentary>
-</example>"
+description: "Reviews a finished article as a critical, opposing reader: scores it out of 100 (structure & logic, persuasiveness, SEO-friendliness, style & readability — 25 each, every score with its reason), lists the argument's weaknesses, and suggests keywords and improvements without rewriting the article. Use when the user asks for a reader review or a score — e.g. 「幫我審稿」, 「讀者視角分析」, 「批判性評估」, 「幫我評分」, 「以讀者角度來看」, 'reader review'. Optional stage 3.5 of /zynkr-content-writer."
 model: sonnet
 ---
 

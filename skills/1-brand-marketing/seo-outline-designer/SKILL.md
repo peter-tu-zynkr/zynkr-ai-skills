@@ -10,7 +10,7 @@ visibility: public
 author: Peter Tu
 input: "seo-brief-writer's SEO_PACKET ▸ Brief; optional: whether to supplement information (other reference articles), client first-hand information"
 process: "Design the H2/H3 outline per outline-patterns (answer-first opening) → build the FAQ from the Brief's must-answer questions → decide whether to supplement information → human review → output an content-draft-compatible handoff summary"
-output: "Article outline + FAQ + handoff summary of target keywords, handed off to content-draft (1.06) for writing"
+output: "Article outline + FAQ + handoff summary of target keywords, handed off to content-draft (1.05) for writing"
 synergy: ["content-draft"]
 handoff: ["content-draft"]
 house-style: bound
@@ -23,7 +23,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill seo-outline-designer
 ```
 
-Stage 8 of the SEO pipeline, corresponding to the flow diagram's 'Structure article' and 'Build FAQ'. It is the **junction** between the front half of the SEO pipeline and the existing writing pipeline: the handoff summary it produces is deliberately formatted so `content-draft` (1.06) can consume it directly (structure + per-section talking points), and additionally carries the target keywords, FAQ, and AEO requirements.
+Stage 8 of the SEO pipeline, corresponding to the flow diagram's 'Structure article' and 'Build FAQ'. It is the **junction** between the front half of the SEO pipeline and the existing writing pipeline: the handoff summary it produces is deliberately formatted so `content-draft` (1.05) can consume it directly (structure + per-section talking points), and additionally carries the target keywords, FAQ, and AEO requirements.
 
 ---
 
@@ -32,7 +32,7 @@ Stage 8 of the SEO pipeline, corresponding to the flow diagram's 'Structure arti
 > **Knowledge source**: The rubrics/templates this skill uses are read preferentially from the SEO Knowledge Base's "01 Rubrics & Templates" (Drive, google-workspace MCP, search by name); when unavailable, fall back to the local `./references/`. See the mapping table in `seo-article-pipeline/seo-pipeline-config.md`.
 
 - **Outline patterns**: `./references/outline-patterns.md`
-- **Downstream**: `content-draft` (1.06) writes, `content-title` (1.09) titles, `content-editor` (1.07) proofreads
+- **Downstream**: `content-draft` (1.05) writes, `content-title` (1.09) titles, `content-editor` (1.07) proofreads
 - **SEO Knowledge Base folder ID**: `<your-seo-kb-folder-id>`
 
 > **`<your-seo-kb-folder-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.seo-kb-folder`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
@@ -67,11 +67,11 @@ Corresponds to "review the outline and FAQ". Once confirmed, save the "article o
 **選定架構：** <對應 content-style-select 的某型，如 思維流程型>
 **目標關鍵字：** 主 <...> ｜輔 <...>
 **章節要點：**
-**第一章：<H2>**（關鍵字落點：<...>）
+**<H2：含關鍵字的讀者問句 — 先給決策的答案>**（關鍵字落點：<...>）
 1. <要點>
 2. <要點>
 3. <要點>
-**第二章：…**
+**<下一個 H2>**
 …
 **FAQ（供 AEO / schema）：**
 - Q：… / A：…（精簡）
@@ -87,7 +87,7 @@ Article outline + FAQ + handoff summary (compatible with `content-draft`).
 
 ## Limitations
 
-Does not write paragraphs, set titles, or proofread — those go to the existing 1.06 / 1.09 / 1.07.
+Does not write paragraphs, set titles, or proofread — those go to content-draft (1.05), content-title (1.09) and content-editor (1.07).
 
 ## House style
 

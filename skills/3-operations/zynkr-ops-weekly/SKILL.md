@@ -2,25 +2,11 @@
 name: zynkr-ops-weekly
 sheetId: "3.19"
 description: >-
-  The weekly operations loop that keeps a Google Chat space and a weekly operations Google Doc
-  in sync. Ten scheduled modes run one beat each: `recap` (Mon 09:00 — mail last week's tracker
-  changes, call-outs, decisions and blockers, read from the Weekly Ledger, never the Doc), `nudge` (Mon 09:00 — post the four-line
-  template plus last week's decisions), `rollup` (Tue 09:00 — read the week's `#週報` posts,
-  route each one to its department heading using the owner person-chips already in the Doc, and
-  write a clearly-marked auto-summary block), `chase` (Tue 09:30 — @ the owners who did not
-  post), `agenda` (Thu 09:00 — re-sweep for late arrivals, set the owner's week against the
-  tracker, then produce carry-over, overdue, KPI-off-target and the ≤3 decisions the meeting
-  must actually make), and `decisions`
-  (Thu 22:00 — post the resolutions back to the space, record them in the Weekly Ledger, send the
-  recap mail and assert it actually went out), and `tidy` (Fri 09:00 — keep the newest
-  auto block under each department, archive the stacked older copies to the 封存 tab, and carry
-  still-open items forward one per line), and `snapshot` (Fri 18:00, catching up through Sun —
-  copy every Main Tracker item into the machine-owned Weekly Ledger once per ISO week), `propose`
-  (Fri 10:00 — suggest the week's tracker changes from the Ledger and mail the owner one numbered
-  list to approve by reply) and `apply` (Fri 18:00 through Sun — read that reply and record each
-  decision; in shadow mode nothing reaches the tracker). Routing is never hardcoded: it is read at
-  run time from the Doc's own owner chips, so changing the Doc changes both the routing and the
-  recap-mail recipient list. Trigger EAGERLY on "/zynkr-ops-weekly", "營運週報", "週報彙整",
+  Runs a small team's weekly operations loop across a Google Chat space, a weekly operations
+  Google Doc and a machine-owned Weekly Ledger. One scheduled beat runs at a time — recap, nudge,
+  rollup, chase, agenda, decisions, tidy, snapshot, propose and apply (times and duties: the
+  cadence table in the body). Routing is read at run time from the Doc's own owner person chips,
+  never hardcoded. Trigger EAGERLY on "/zynkr-ops-weekly", "營運週報", "週報彙整",
   "把大廳的週報整理進 Doc", "roll up the chat updates", "誰還沒回報", "補件提醒", "週四議程",
   "產週會議程", "會後回貼決議", "recap 信", "weekly ops loop", "ops weekly rollup", or any ask to
   collect / chase / summarise the team's weekly updates, build the weekly meeting agenda, or
@@ -28,8 +14,7 @@ description: >-
   company-level Monday brief, reads this Doc but never writes it), /project-status-update (one
   project's status email from its own tracker), /planning-tracker-sync (the H2 tracker block and
   its own nudges), /project-client-status (client-facing consulting status), /admin-meeting-prep
-  (per-meeting packets for external meetings). This skill owns two artefacts — the weekly
-  operations Doc's current week section, with one channel loop around it, and the Weekly Ledger.
+  (per-meeting packets for external meetings).
 category: operations
 project: zynkr-ops-weekly
 platform: claude
@@ -90,8 +75,7 @@ rewrites prose in a doc people are actively editing is a bot nobody trusts by we
 | Fri 18:00 (to Sun 23:00) | `apply` | skill | Read the owner's reply and record each decision. Shadow mode: nothing is written to the tracker yet |
 
 When no beat is due, the runner mails the owner about any beat of the week that gave up or whose
-window closed before it ran (`notice`, 4.12, SKB-070). Before then such a beat left only a line in
-the log.
+window closed before it ran (`notice`, 4.12).
 
 `chase` must run **after** `rollup` — it cannot know who is missing until the roll-up has
 resolved who posted. Both beats sit on Tuesday morning so that the Doc's Thursday section is
@@ -102,19 +86,12 @@ by preference. Duplicating a section is purely mechanical and must never fail, s
 Apps Script, whose authorisation does not expire. In the week this skill breaks entirely, the
 skeleton still opens and Thursday still has a page. See `references/scaffold.md`.
 
-> **Why the Doc used to grow without bound, and what actually stopped it.** Every writer here
-> is insert-only and the scaffold copies the newest section *verbatim*, so each section inherits
-> every `〔自動彙整〕` block ever written. Audited 2026-09-15: 34 sections / 5,325 lines, the
-> newest section holding 22 blocks of which only 4 were that week's, sections grown 130 → 292
-> lines in four weeks.
->
-> Two fixes were attempted. Moving whole old **sections** to an archive tab was built and
-> **rolled back the same day** (`SKB-029`) — it had to move human-written content, risked the
-> owner person chips, and did not fit in one Apps Script run. Trimming the stacked **blocks**
-> inside the newest section (`SKB-030`, the Friday `tidy` beat) does fit: it only ever touches
-> this skill's own output, never reaches a chip, and deletes only copies whose originals sit in
-> the frozen previous section. Section size is now stable instead of linear. **Read both specs
-> before proposing a third.**
+> **`tidy` is what keeps the Doc bounded.** Every writer here is insert-only and the scaffold
+> copies the newest section *verbatim*, so without `tidy` each section would inherit every
+> `〔自動彙整〕` block ever written, and every closed bullet. `tidy` deletes only copies whose
+> originals sit in the frozen previous section: this skill's stacked blocks and the closed
+> (`Done`/`Drop`) human bullets (4.6 step 7). Moving whole old sections is ruled out — it moves
+> human-written originals and risks the owner person chips (`SKB-029`, `SKB-030`).
 
 ---
 
@@ -230,12 +207,6 @@ for this ISO week:
   block there is nothing left to archive and `tidy_blocks.py` returns an empty `archive` list.
   A second run in the same week is a no-op, which is what makes it safe to retry.
 
-> **Until 2026-10-06, match the old week shape too.** The label changed from `W38` to
-> `WB 9/14` on 2026-09-15, so a section written before then is stamped `〔自動彙整 2026-W38`
-> and a footer posted before then reads `· W38`. Search for **either**. Matching only the new
-> shape makes `rollup` write a duplicate block and makes `decisions` conclude the loop never
-> ran and refuse to send the recap. `references/wording.md` → "The changeover".
-
 ## Step 2 — Read routing from the Doc (every run)
 
 Fetch the Doc **as markdown** — `get_doc_as_markdown`. This matters:
@@ -344,7 +315,7 @@ annotation payload the MCP tool does not currently expose.
 
 ### 4.4 `agenda` (Thu 09:00)
 
-It runs on the meeting day itself (SKB-070; until 2026-10-14 it ran Wednesday evening), after the
+It runs on the meeting day itself, after the
 owner's own week has closed at Wednesday 20:00. The runner passes `week=<ISO week>` and, when the
 owner's weekly insights are configured, `insights=<path>` (its copy of that week's `meeting.json`)
 or `insights=missing` (the recap had not arrived by 13:00). It waits for the recap without starting
@@ -401,7 +372,7 @@ recaps a section nobody has edited yet — and it does not merely write to the D
 owner-chip address, so a premature run is a wrong email to the whole team, not a stale line.
 
 **Precondition — refuse to recap a week the loop never ran.** Before anything else, look for this
-week's `〔自動彙整 W<week>` stamp in the target section. Missing → `rollup` never ran, so nothing in
+week's `〔自動彙整 <week>` stamp in the target section. Missing → `rollup` never ran, so nothing in
 that section has been through the loop and the meeting had nothing to work from. Post a one-line
 notice to the space, send **no mail**, and stop. This is what makes the five triggers safe to
 install on any day of the week: a mid-week install, a public holiday or a failed Tuesday can no
@@ -427,8 +398,7 @@ longer put a recap of a week that never happened in front of the whole team.
    instead of step 2's three lines, and skip steps 3 and 4: no mail goes out, because nothing was
    decided and Monday's recap carries the overdue items. Receipt `status=ok delivered=no-decisions;chat-verified` plus whatever step 1b added.
    Never hold the post, never report `failed` and never wait for the Doc to fill in later: this
-   beat already runs after the meeting. On 2026-10-01 a run held everything and gave up after three
-   attempts, so the team heard nothing that week.
+   beat already runs after the meeting, and a held post means the team hears nothing that week.
 2. `send_message` — three lines to the space. Short, because next Monday's `nudge` quotes it.
 3. `send_gmail_message` — the full recap to **the owner-chip emails read in Step 2**, not to a
    list maintained here. Contents: decisions · owner · date / overdue and carry-over / KPI
@@ -828,8 +798,7 @@ This line is not decoration and it is not for humans. `run_ops_weekly.sh` parses
 the week done **only** on `status=ok`; anything else retries on the next tick inside the window
 and gives up after three attempts. **Never write `status=ok` because the run finished — write it
 because you checked.** The scheduler has no other way to tell a delivered beat from a beat that
-politely explained why it could not run: `claude -p` exits 0 either way. It waved through a
-silent Monday and a half-failed Wednesday in W36 before this line existed.
+politely explained why it could not run: `claude -p` exits 0 either way.
 
 ---
 

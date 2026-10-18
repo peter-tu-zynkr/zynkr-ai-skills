@@ -21,8 +21,7 @@ import sys
 #
 # <week> is the WEEK-BEGINNING label, `WB 9/14` (the Monday that opens the week), NOT an ISO
 # week ordinal. Changed 2026-09-15. Sections written before then carry `2026-W38`-style keys,
-# so the idempotency search must accept BOTH shapes until every live section predates the
-# change -- see references/wording.md, "The changeover".
+# which the search no longer matches: the window for matching both shapes closed on 2026-10-06.
 STAMP = "〔自動彙整 {week} · {stamp}〕"
 
 # zh-TW throughout: the team writes Chinese, and a block that reads "事項 Not started" makes

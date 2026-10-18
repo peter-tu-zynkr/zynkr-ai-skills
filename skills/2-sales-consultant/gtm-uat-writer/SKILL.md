@@ -126,7 +126,7 @@ then its **staging（測試）** section: 入口 is the assistant URL, and 測�
 「尚未部署」 has no URL yet: stop and ask, as below.
 
 Only what the record lacks (or every fact, when there is no record) is gathered
-the old way — from the conversation, the PRD's Design sketch, or by asking
+from the conversation, the PRD's Design sketch, or by asking
 Peter, in one consolidated question, not a drip — and the report says which
 facts the record was missing:
 

@@ -83,7 +83,7 @@ Output format (Google Chat self-message):
 如無特定會議 → 發送「📅 本週無多人會議，保持待命。」
 ```
 
-Use `mcp__google_workspace__google_chat_send_self_message` (requires Peter to wire up the Google Chat API on his end).
+Post it with `mcp__google-workspace__send_message` to the user's own notification space (`space_id` from `mcp__google-workspace__list_spaces`; ask once if none is obvious).
 
 ---
 
@@ -104,7 +104,7 @@ If there are no meetings → send "✅ 明天沒有多人會議，無需準備�
 
 For each attendee of each meeting, search recent email exchanges.
 
-Use `mcp__google_workspace__search_gmail_messages`:
+Use `mcp__google-workspace__search_gmail_messages`:
 - query: `from:[attendee_email] OR to:[attendee_email]`
 - time range: the past 30 days
 
@@ -162,7 +162,7 @@ Send one independent message per meeting.
 
 ## Limitations
 
-- **Google Chat MCP not yet wired up**: currently the google-workspace MCP covers Gmail / Drive and calendar reads go through the claude.ai Google Calendar connector; Google Chat requires Peter to separately integrate the Chat API on his end
+- **Google Chat delivery** goes through the google-workspace MCP's `send_message`, which posts to a space: choose the user's notification space (its `space_id`) before the first run
 - Does not support LINE / Slack or other chat tools
 - If an attendee has no Gmail exchange history, the background field shows "無歷史記錄"
 - Scheduled triggering requires implementation via a cron job or the Claude Code schedule skill
