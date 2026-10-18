@@ -333,7 +333,7 @@ def li(text):
 
 
 def render_html(facts, tldr):
-    o = ['<div style="font-family:-apple-system,Segoe UI,Noto Sans TC,sans-serif;font-size:14px;line-height:1.6;color:#1d1d1f;max-width:680px">']
+    o = ['<div style="font-family:-apple-system,Segoe UI,Noto Sans TC,sans-serif;font-size:14px;line-height:1.6;color:#0F0F0E;max-width:680px">']
     o.append("<p>%s（%s）的週報，資料來自主追蹤表每週五的快照和週報帳本。</p>" % (esc(facts["label"]), esc(facts["range"])))
     if tldr:
         o.append("<h3>重點</h3><ul>%s</ul>" % "".join(li(esc(t)) for t in tldr))
@@ -398,7 +398,7 @@ def render_html(facts, tldr):
         if rep["missing"]:
             o.append("<p>上週沒交週報：%s</p>" % esc("、".join(rep["missing"])))
     links = facts["links"]
-    o.append('<p style="color:#6e6e73;font-size:12px">主追蹤表 <a href="%s">開啟</a>%s · 週報帳本 <a href="%s">開啟</a></p>'
+    o.append('<p style="color:#6F6B62;font-size:12px">主追蹤表 <a href="%s">開啟</a>%s · 週報帳本 <a href="%s">開啟</a></p>'
              % (esc(links["tracker"]), (' · 週報 Doc <a href="%s">開啟</a>' % esc(links["doc"])) if links["doc"] else "",
                 esc(links["ledger"])))
     o.append("</div>")

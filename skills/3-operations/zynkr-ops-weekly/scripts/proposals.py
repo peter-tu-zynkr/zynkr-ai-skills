@@ -416,7 +416,7 @@ def render_mail(run, rows):
         o.append("<tr><td>%s</td><td>#%s %s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
                  % (esc(n), esc(num), esc(clip(name, 30)), esc(field), change, esc(why), ev, esc(conf)))
     o.append("</table>")
-    o.append("<p style=\"color:#777\">%s 待核准 %s · 提案是機器依本週的會議決議和週報整理的，"
+    o.append("<p style=\"color:#6F6B62\">%s 待核准 %s · 提案是機器依本週的會議決議和週報整理的，"
              "寫進總表前一定會先等你回覆。</p>" % (esc(MARKER), esc(run["week"])))
     return "\n".join(o)
 

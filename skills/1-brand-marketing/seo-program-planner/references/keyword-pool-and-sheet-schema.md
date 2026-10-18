@@ -172,8 +172,8 @@ The planner assembles the workbook locally with **openpyxl**, then imports it in
 2. **Create one worksheet per tab, in the fixed order above.** `ws = wb.active; ws.title = "Keyword Pool"` for the first, then `wb.create_sheet(...)` for tabs 2–9. Use the exact tab names (rename Tabs 3/4 to the product-appropriate variant, e.g. "Skill↔Use-Case").
 3. **Write the header row per the column lists above.** Header text is English column keys (stable for the pipeline to parse); cell **values** are zh-TW and obey house style.
 4. **Style the header row** so the Sheet is scannable:
-   - Bold white font: `Font(bold=True, color="FFFFFF")`.
-   - Sage-deep fill to match brand: `PatternFill("solid", fgColor="3F5F5B")` (or the current sage-deep token from website-fe `styles.css`; don't invent a hex).
+   - Bold Ink font: `Font(bold=True, color="0F0F0E")`.
+   - Sage Soft fill: `PatternFill("solid", fgColor="DCEEE6")`. A header row is a highlight block, and Sage Deep fills only a button. Take brand values from `zynkr.ai/data/tokens.json`; don't invent a hex.
    - `freeze_panes = "A2"` so headers stay pinned while scrolling.
    - Sensible `column_dimensions[...].width` (wider for `keyword`, `demand 信號`, `our shipped angle`).
    - Wrap long cells: `Alignment(wrap_text=True, vertical="top")`.

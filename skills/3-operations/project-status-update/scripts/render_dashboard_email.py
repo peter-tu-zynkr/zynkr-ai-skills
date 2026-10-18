@@ -21,11 +21,15 @@ import argparse
 import html as _html
 
 # --- palette -----------------------------------------------------------------
-INK = "#1a1a1a"
-MUTED = "#6b7280"
-LINE = "#e5e7eb"
-CARD_BG = "#ffffff"
-PAGE_BG = "#f4f5f7"
+# Brand values (zynkr.ai/data/tokens.json, SDD §4): Ink, Mute, Paper-raised, Paper. Mail clients drop
+# CSS variables, so each hex is written out. LINE is the solid stand-in for --line on Paper (the same
+# one weekly-insights uses), and BAR is Sage: a bar is a fill, and Sage Deep fills only a button (§4.5).
+INK = "#0F0F0E"
+MUTED = "#6F6B62"
+LINE = "#E6E1D8"
+CARD_BG = "#FDFAF5"
+PAGE_BG = "#FBF7F0"
+BAR = "#86C4AC"
 
 # The source tab name, kept here so the provenance footer can never drift from
 # the SKILL.md constant. This is the TAB the data is read from.
@@ -93,7 +97,7 @@ HEALTH = {
     "ON_TRACK": ("#dcfce7", "#15803d", "🟢", "ON TRACK 進度正常"),
     # Failing "loud but neutral": an unmapped/typo'd status renders grey, not the
     # reassuring green — a status report must never look calmer than reality.
-    "UNKNOWN":  ("#f3f4f6", "#4b5563", "⚪", "UNKNOWN 狀態未判定"),
+    "UNKNOWN":  (LINE, "#2B2B28", "⚪", "UNKNOWN 狀態未判定"),
 }
 
 
@@ -149,7 +153,7 @@ def render_blockers(items):
     rows = ""
     for b in items:
         rows += f"""
-        <div style="padding:10px 12px;background:#fff7ed;border-left:3px solid #f97316;border-radius:6px;margin:0 0 8px 0;">
+        <div style="padding:10px 12px;background:#fef3c7;border-left:3px solid #b45309;border-radius:6px;margin:0 0 8px 0;">
           <div style="font-size:14px;font-weight:700;color:{INK};">⚠️ {esc(b.get('title'))}</div>
           <div style="font-size:13px;color:{MUTED};margin-top:2px;line-height:1.5;">{esc(b.get('detail'))}</div>
         </div>"""
@@ -245,7 +249,7 @@ def render_progress_bar(percent):
     return f"""
     <div style="margin:10px 0 4px 0;">
       <div style="background:{LINE};border-radius:999px;height:14px;width:100%;overflow:hidden;">
-        <div style="background:#3b82f6;height:14px;width:{pct}%;border-radius:999px;"></div>
+        <div style="background:{BAR};height:14px;width:{pct}%;border-radius:999px;"></div>
       </div>
       <div style="font-size:13px;font-weight:700;color:{INK};margin-top:6px;">整體進度 {pct}%</div>
     </div>"""
