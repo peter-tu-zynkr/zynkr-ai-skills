@@ -23,7 +23,7 @@ name: Export to the shelf
 #
 # ATL-113 Part D — only what Zynkr Atlas lists leaves the team (rulings D-138…D-142). The repository
 # variable SHELF_ATLAS chooses:
-#   off      the stage is published as above. Unset means off until the switch.
+#   off      the stage is published as above. Set on purpose: unset means enforce since the switch.
 #   report   every run asks Atlas, prints what enforce would publish, keep, hold and remove and the
 #            parity check of the listings, then publishes as off does. Red if Atlas can't be asked.
 #   enforce  a staged folder is published only at the git tree Atlas lists for it; every zynkr.ai
@@ -35,11 +35,9 @@ name: Export to the shelf
 # workflow, on main, in the export environment. Because the job holds that beside contents: write,
 # every action is pinned to a commit.
 #
-# Switching it on (spec §15.4): `gh variable set SHELF_ATLAS -R peter-tu-zynkr/zynkr-ai-skills -b report`;
-# after a clean report run and the spec's other preconditions, `-b enforce`. Then change
-# DEFAULT_ATLAS_MODE in tools/enforce.mjs to 'enforce' in a PR, so an unset variable enforces and off
-# must be set on purpose (each run logs which). Before enforcing, refresh the frozen listing text:
-# `node tools/freeze-text.mjs --shelf .` and merge the result (D-142).
+# Switched on 2026-10-19 (spec §15.4): report from 18 Oct, enforce at 09:53Z, and DEFAULT_ATLAS_MODE in
+# tools/enforce.mjs is 'enforce', so an unset variable enforces and off must be set on purpose (each run
+# logs which). The frozen listing text (D-142) is refreshed with `node tools/freeze-text.mjs --shelf .`.
 on:
   schedule:
     # Every 15 minutes, off the hour on purpose: GitHub drops scheduled runs under load and names the

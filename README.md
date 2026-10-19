@@ -12,7 +12,7 @@ Zynkr 公開的 AI 技能（Claude Code skills）· Zynkr's public AI skills for
 
 技能的修改都在上游完成，這裡只是匯出結果，請不要對 `skills/` 開 pull request，下一次匯出會把它覆蓋掉。
 
-開啟 Atlas 把關（`SHELF_ATLAS=enforce`）後，只有在 Zynkr Atlas 通過審核的版本會放上來，zynkr.ai 上每個技能的介紹也改由這裡收錄的檔案產生。
+自 2026-10-19 起由 Zynkr Atlas 把關（`SHELF_ATLAS=enforce`）：只有在 Zynkr Atlas 通過審核的版本會放上來，zynkr.ai 上每個技能的介紹也由這裡收錄的檔案產生。
 
 ### 安裝
 
@@ -42,7 +42,7 @@ This repo holds the AI skills Zynkr has marked public, exported automatically fr
 
 Skills are changed upstream; this repo is the exported result. Please do not open pull requests against `skills/`: the next export overwrites them.
 
-Once Atlas gating is on (`SHELF_ATLAS=enforce`), a skill folder lands here only at the version approved in Zynkr Atlas, and its zynkr.ai listing is built from the files here.
+Since 2026-10-19 Zynkr Atlas gates this repo (`SHELF_ATLAS=enforce`): a skill folder lands here only at the version approved in Zynkr Atlas, and its zynkr.ai listing is built from the files here.
 
 ### Install
 
@@ -68,8 +68,8 @@ Please tell us through the [zynkr.ai contact page](https://zynkr.ai/support#cont
 
 `.github/workflows/export.yml` publishes; `tools/publish.mjs` says how. The repository variable `SHELF_ATLAS` decides what may leave the team (ATL-113 Part D):
 
-- `off` (and unset, until the switch): the workbench's stage is published as it is.
+- `off`, set on purpose: the workbench's stage is published as it is.
 - `report`: every run also asks Zynkr Atlas, prints what `enforce` would publish, keep, hold and remove, and how the listings it would build differ from today's (the parity check); then publishes as `off` does. Red if Atlas can't be asked.
-- `enforce`: a staged folder is published only at the git tree Atlas lists for it; anything else stays as the shelf has it or waits; every zynkr.ai listing is built from the files here (`tools/listing.mjs`), with the frozen text in `listing/frozen-text.json`; `promote` is retired.
+- `enforce` (and unset, since the switch): a staged folder is published only at the git tree Atlas lists for it; anything else stays as the shelf has it or waits; every zynkr.ai listing is built from the files here (`tools/listing.mjs`), with the frozen text in `listing/frozen-text.json`; `promote` is retired.
 
-The switch: set `report` and read a clean run; refresh the frozen text (`node tools/freeze-text.mjs --shelf .`) and merge it; set `enforce`; then change `DEFAULT_ATLAS_MODE` in `tools/enforce.mjs` to `'enforce'`, so an unset variable enforces and `off` must be set on purpose. A dispatch with `seed_fail` or `seed_atlas` is a red proof.
+The switch, 2026-10-19: `report` from 18 Oct 20:40Z (18 clean runs), `enforce` at 09:53Z, and `DEFAULT_ATLAS_MODE` in `tools/enforce.mjs` became `'enforce'`, so an unset variable enforces and `off` must be set on purpose. To refresh the frozen text, run `node tools/freeze-text.mjs --shelf .` in a checkout and merge the result. A dispatch with `seed_fail` or `seed_atlas` is a red proof.

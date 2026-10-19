@@ -30,8 +30,8 @@
  *      API — never the stage's claimed commit time, which a rewritten stage job could set to
  *      anything (ATL-113 Part D).
  *   k. SHELF_ATLAS (ATL-113 Part D, rulings D-138…D-142), a repository variable:
- *        off      — (a)–(j) as above. Unset means off until the switch (enforce.mjs
- *                   DEFAULT_ATLAS_MODE); after it, unset means enforce and off is set on purpose.
+ *        off      — (a)–(j) as above, set on purpose. Unset means enforce, since the switch on
+ *                   2026-10-19 (enforce.mjs DEFAULT_ATLAS_MODE).
  *        report   — first rehearses: asks Atlas, plans what enforce would publish, keep, hold and
  *                   remove, builds every row from the staged files and prints how many differ from
  *                   today's (the parity check); then (a)–(j) exactly as off. Red if Atlas could not

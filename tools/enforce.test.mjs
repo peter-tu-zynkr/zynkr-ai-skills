@@ -62,9 +62,10 @@ async function red(promise, pattern) {
 }
 
 describe('the switch', () => {
-  test('unset means off until the switch; anything but off, report or enforce refuses', () => {
-    assert.equal(DEFAULT_ATLAS_MODE, 'off');
-    assert.deepEqual(atlasMode(undefined), { mode: 'off', explicit: false });
+  test('unset means enforce since the switch; anything but off, report or enforce refuses', () => {
+    assert.equal(DEFAULT_ATLAS_MODE, 'enforce');
+    assert.deepEqual(atlasMode(undefined), { mode: 'enforce', explicit: false });
+    assert.deepEqual(atlasMode(''), { mode: 'enforce', explicit: false });
     assert.deepEqual(atlasMode(' enforce '), { mode: 'enforce', explicit: true });
     assert.deepEqual(atlasMode('off'), { mode: 'off', explicit: true });
     assert.throws(() => atlasMode('ENFORCE'), Refusal);
@@ -79,7 +80,19 @@ describe('the switch', () => {
     await publish(opts(stage, shelf, { promote: 'all' }), d);
     assert.equal(net.atlasCalls().length, 0);
     assert.equal(net.calls.filter((c) => c.url.includes('/details')).length, 0);
-    assert.match(d.out[0], /^atlas: off \(SHELF_ATLAS is not set\)/);
+    assert.match(d.out[0], /^atlas: off \(SHELF_ATLAS=off, set on purpose\)/);
+  });
+
+  test('unset runs enforce, says it is the default, and asks Atlas', async () => {
+    const { shelf, remote } = makeShelf();
+    const stage = buildStage([F('alpha', '1.01')]);
+    const net = network({ atlas: atlasList(listed(stage, 'alpha')) });
+    const d = deps(net, { SHELF_ATLAS: '' });
+    const result = await publish(opts(stage, shelf), d);
+    assert.equal(result.outcome, 'published');
+    assert.equal(net.atlasCalls().length, 1);
+    assert.match(d.out[0], /^atlas: enforce \(SHELF_ATLAS is not set: the default\)/);
+    assert.match(filesOn(remote), /alpha\/SKILL\.md/);
   });
 
   test('a SHELF_ATLAS value outside the three refuses before anything happens', async () => {
