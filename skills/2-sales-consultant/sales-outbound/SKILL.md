@@ -2,36 +2,23 @@
 name: sales-outbound
 description: >-
   Turn ONE person's interest signal into a tracked CRM lead AND a ready-to-send
-  reply. The signal can be a copied DM / chat thread (Threads, IG, LINE, FB
-  Messenger, WhatsApp, email), a single row from an event feedback or
-  registration form, a website enquiry, or the text off a business card —
-  anything where one named person showed interest and left an email address.
-  Optionally hand it their profile link too. It does two things in one pass:
-  (1) collects who they are — parsing the signal and enriching from any
-  social/profile URL — and writes the client context into Zynkr CRM
-  (find-or-create company + contact, a new deal, a verbatim source note, and a
-  follow-up task for the next step); (2) drafts the outbound reply as a Gmail
-  DRAFT in Peter's inbox (never sends), in the signal's language and Peter's
-  voice, and — whenever the ask is a meeting — reads Peter's calendar FIRST and
-  offers three real slots in 台北時間. Trigger on /sales-outbound or when Peter
-  pastes a DM, a feedback-form row, or an enquiry and says "draft a reply",
-  "draft an outbound mail", "回這個", "幫我擬回覆", "把這個 lead 建進 CRM 並擬信",
-  "log this lead and draft the email", "turn this DM into a draft", "這個回饋幫我
-  建客戶並擬信", or otherwise hands over one person's interest signal and wants
-  both the CRM record and the reply prepared. Distinct from
-  sales-client-sourcing (BATCH-enriches a WHOLE survey Sheet into new columns —
-  no CRM records, no email), sales-inbound (a weekly BATCH sweep of inbound
-  website consult EMAILS) and sales-follow-up (ONE completed demo transcript on
-  an EXISTING deal → a follow-up draft): this
-  one takes ONE person's signal and produces a lead record + a drafted reply, no
-  Drive folder, no meeting parsing.
-  Mode B — a five-touch outbound SEQUENCE for someone who has NEVER replied:
-  trigger on "一週五封", "連續開發信", "跑一整套序列", "同一個人五次", "五封序列",
-  or when Peter points at the 陌開名單 roster and wants a batch worked end to end.
-  Mode B claims the lead in the roster, reads Peter's calendar for real slots, picks a
-  role angle, writes all five emails, saves them as Gmail drafts, logs the touch, and
-  files the batch as CRM contacts (lifecycle lead, owner = whoever made the contact;
-  no deal). See references/sequence-5touch.md.
+  reply. The signal is a copied DM / chat thread (Threads, IG, LINE, FB Messenger, WhatsApp,
+  email), one row from an event feedback or registration form, a website enquiry, or
+  business-card text — one named person who showed interest and left an email address,
+  optionally with a profile link. It writes the client context into Zynkr CRM (find-or-create
+  company + contact, a new deal, a verbatim source note, a follow-up task) and drafts the reply
+  as a Gmail DRAFT in Peter's inbox (never sent), in the signal's language and Peter's voice —
+  reading Peter's calendar FIRST and offering three real 台北時間 slots whenever the ask is a
+  meeting. Trigger on /sales-outbound or when Peter pastes a DM, a feedback-form row, or an
+  enquiry and says "draft a reply", "draft an outbound mail", "回這個", "幫我擬回覆",
+  "把這個 lead 建進 CRM 並擬信", "log this lead and draft the email", "turn this DM into a
+  draft", "這個回饋幫我建客戶並擬信". Mode B — a five-touch outbound SEQUENCE for someone who has
+  NEVER replied: trigger on "一週五封", "連續開發信", "跑一整套序列", "同一個人五次", "五封序列",
+  or when Peter points at the 陌開名單 roster; it drafts all five mails and files the batch as
+  CRM contacts, no deal (see references/sequence-5touch.md). Distinct from
+  sales-client-sourcing (BATCH-enriches a WHOLE survey Sheet), sales-inbound (the weekly
+  sweep of inbound website consult EMAILS) and sales-follow-up (ONE completed demo transcript
+  on an EXISTING deal).
 category: sales-consultant
 project: sales-outbound
 platform: claude
@@ -137,8 +124,9 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
 
 - **Supabase project_id**: `uomieoqlkazknjgmfdda` (the shared Zynkr project; CRM tables are `crm_*`)
 - **Google account** for all Gmail tools: `<your-google-workspace-account>`
-- **Writing style is NOT owned by this file.** The house voice lives in two Google Docs
-  under `[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime with
+- **Writing style is NOT owned by this file.** Besides the House style block at the end
+  (《[2.0]》 + 《[3.2]》), this surface's rules live under `[@] 寫作指南`
+  (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime with
   `get_doc_as_markdown` (no tab parameter — use only `# 最終產出`, ignore `# 指令工程`):
   《[2.2] 內文風格指南》 `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M` **Part 3 §八 業務信件**
   (positive rules) and 《[3.2] 禁用詞清單》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
@@ -298,7 +286,7 @@ Rules for the draft:
 - **Move the next step forward** — if a meeting is the ask, offer the three slots from
   step 5; if "send info", point to it.
 - **Concrete subject line**, naming their problem in their words.
-- **House style is owned by 《[2.2] 內文風格指南》 Part 3 §八 and 《[3.2] 禁用詞清單》 category X**
+- **The sales-mail rules are 《[2.2] 內文風格指南》 Part 3 §八 and 《[3.2] 禁用詞清單》 category X**
   (see *Fixed facts*) — read them; the Doc wins over this summary. The load-bearing few:
   - Greeting `Hi <名>，` / `哈囉 <名>，` / `<名> 你好，` / `<名> 您好，` (cold, HR, senior), full-width
     comma. 你／您 follows the counterpart and only ever steps **down**, never back up.
@@ -312,9 +300,8 @@ Rules for the draft:
   - Headings/taglines take **no 句號 (。)**; `·` for series separators; no Markdown in the body.
   - Sign off `Best regards,` + `Peter`. Type no signature block in the body: Gmail adds the
     signature card under the sign-off (see the draft call above).
-- **The slot block is fixed house wording.** Three slots, a fourth escape line, then
-  the invite promise — as Peter hand-edited it on 2026-09-27 (it replaced
-  「以下時間我都可以，再麻煩你挑一個（台北時間）：」 and 「4. 其他你方便的時間」):
+- **The slot block is fixed house wording** (Peter's own). Three slots, a fourth escape
+  line, then the invite promise:
 
   ```
   不曉得以下有沒有方便的時間（台北時間）？
@@ -427,7 +414,6 @@ unchecked. Never re-implement either list inside this file.
 3. **`[2.7] 政府補助 knowledge` 絕對不可外發**（它自己第 5 節標了「內部資訊，勿外流」）。
    顧問姓名、拆帳、加價機制、盤點數字、難度分級一律不得進信裡。
 4. **草稿建好 ≠ 已寄出。** 接觸紀錄的 Remark 要註明「尚未寄出」，寄出後才拿掉。
-   （2026-08-31 有三封被記成「已聯絡」卻躺在草稿匣，別再犯。）
 5. **五封就停。** 沒回的改 `暫時沒需求`。一天一批、一批不超過 5 人。
 6. **三天一封、第 1 封一律禮拜二**（二、五、一、四、日），時段只放第 1 封，三格落在 T+2 到 T+8。
 7. **最後把當輪名單寫進 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）。負責人＝接觸紀錄的 `接觸人員`

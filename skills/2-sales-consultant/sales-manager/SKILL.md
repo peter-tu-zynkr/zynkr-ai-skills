@@ -142,11 +142,20 @@ Read the pipeline and classify every open deal into exactly one bucket:
 
 | Bucket | Test |
 |---|---|
-| **卡住** | No activity for 21+ days and stage is not `won`/`lost` |
+| **卡住** | No real touch for 21+ days and stage is not `won`/`lost`. A real touch is an email, meeting, note, message or stage change on the deal or on its contact; a task or the `created` row is not one |
 | **沒有下一步** | Open deal with no open task attached |
 | **逾期追蹤** | Has an open task whose `due_at` is in the past |
 | **草稿未寄** | A Gmail draft exists for the contact but nothing was ever sent |
 | **健康** | None of the above — do not list these individually, just count them |
+
+**The 3-client rule.** Every member keeps at least 3 open clients cooking. A client is cooking
+when one of its open deals had a real touch fewer than 21 days ago, so it is the 卡住 line read
+the other way. Count clients, not deals: one company, or one contact without a company, counts
+once. Above the table, write one line per owner: `<owner> · N of 3 cooking`, adding `· short K`
+when N is below 3. It is a count, not a roll-up: no LOB, no revenue. For an owner who is short,
+the one thing to do on their 卡住 rows is to revive them first. If that still leaves them short,
+say how many leads to claim from the outbound list and run `/sales-outbound` Mode B. This file is
+where the rule is defined. The team's Monday sales pulse mail applies it to every member.
 
 Render the four live buckets as one table (deal · owner · days idle · the one thing to do).
 Keep it **deal-level**. Do not roll up by LOB, do not write a weekly narrative, do not
@@ -182,7 +191,7 @@ Rules:
 ### 6 · Report
 
 State the mode, what each child produced (with record URLs), and — for REVIEW — the
-bucket counts plus exactly what the confirmed batch changed. If the batch was declined,
+3-client lines, the bucket counts and exactly what the confirmed batch changed. If the batch was declined,
 say so plainly and leave the list.
 
 ---

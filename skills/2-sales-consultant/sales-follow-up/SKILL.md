@@ -78,8 +78,9 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
 
 - **Supabase project_id**: `uomieoqlkazknjgmfdda` (the shared Zynkr project; CRM tables are `crm_*`).
 - **Google account** for all Gmail / Docs tools: `<your-google-workspace-account>`.
-- **Writing style is NOT owned by this file.** The house voice lives in two Google Docs
-  under `[@] 寫作指南` (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`) and is read at runtime:
+- **Writing style is NOT owned by this file.** Besides the House style block at the end
+  (《[2.0]》 + 《[3.2]》), this surface's rules live under `[@] 寫作指南`
+  (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`) and are read at runtime:
   - 《[2.2] 內文風格指南 Style guide》 `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M`
     — positive rules. **Part 3｜業務信件專屬 §八** is the section that governs this skill.
   - 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
