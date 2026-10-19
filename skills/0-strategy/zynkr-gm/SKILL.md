@@ -64,6 +64,7 @@ it — do not guess IDs and do not proceed with placeholders.
 | `sources.main_tracker` | H2 project tracker sheet + tab — **the status source of record** |
 | `sources.ops_weekly` | the ops lead's weekly log doc (newest week on top) — read-only |
 | `sources.ledger` | the Weekly Ledger: zynkr-ops-weekly's machine-owned record of each week (tracker snapshots, posts, decisions, approvals) — read-only |
+| `sources.sales_pulse` | the weekly sales pulse mail (`subject_prefix`) and its page (`page_url`): evidence for block 04's sales lines, never status (§3.1c) |
 | `sources.okr_kpi_tracker` | OKR & KPI tracker (tabs `okrs`, `kpi_dashboard`) — the metrics SOR |
 | `sources.ops_heal_tracker` | ops gap-heal action sheet (tabs `fixes`, `decisions`) |
 | `sources.course_tracker` | flagship course project tracker (milestone dates only) |
@@ -207,6 +208,28 @@ need attention, decisions and blockers. It often lands after the brief starts, s
 by subject only. When it is there, block 03 links it once instead of restating its lines. When it
 is not, say nothing: its absence is not a failure. The Friday approval mail
 `【待核准】WB m/d 那週 · N 件（<ISO week>）` is likewise found by subject, and only to link it.
+
+### 3.1c The sales week — the weekly sales pulse mail (every run)
+
+A Monday cloud routine reads the CRM and mails the whole team a sales pulse from the GM's account,
+so it sits in Sent. Its subject starts with `sources.sales_pulse.subject_prefix` and ends with the
+week it reports. It lands at 09:30 Taipei, after the Monday brief starts, so the newest copy a
+Monday run finds is usually the previous Monday's. Take the newest one sent in the last 8 days and
+always name its week. Open it as plain text and read only two things:
+- the verdict line, `N of 7 KPIs met`;
+- the "Next step this week" lines, one per salesperson: `<name> - N of 3 cooking: …`. The rule is
+  defined in `sales-manager` (REVIEW, *The 3-client rule*).
+
+Use them this way:
+- block 04: a sales owner's line gets `pipeline: N of 3 cooking (pulse, week of …)`. Match a pulse
+  name to a tracker owner only when it is unmistakable, and list any other pulse line under the
+  block as it stands.
+- block 05: CRM-backed sales metrics still read `(not readable on a scheduled run)`, followed by
+  `pulse for <week>: N of 7 met`, linked to `sources.sales_pulse.page_url`.
+- block 08: which week's pulse was read, or `no sales pulse in the last 8 days`.
+
+The pulse is evidence, never status: it changes no tracker row. Deal-level work stays with
+`/sales-manager`. When no pulse is found, say so in block 08 only.
 
 ### 3.2 What actually happened — the ops weekly log (every run)
 
@@ -419,9 +442,9 @@ connectors, model). Differences from a local run, by design:
 - Route a tracker change the brief believes is due to the Friday approval cycle. While `apply`
   runs in shadow (until its Phase 3b) the owner still types the approved value; once it writes,
   never ask anyone to type what the cycle carries.
-- In the mailbox, read only the weekly-insights mail's GM block (§3.4b) and sent-mail subjects:
-  for idempotency, and to link the team recap and the 【待核准】 approval thread (§3.1b). Never
-  open those two mails' bodies.
+- In the mailbox, read only the weekly-insights mail's GM block (§3.4b), the sales pulse's verdict
+  and "Next step this week" lines (§3.1c), and sent-mail subjects: for idempotency, and to link
+  the team recap and the 【待核准】 approval thread (§3.1b). Never open those two mails' bodies.
 - Every number cites source + as-of; HUMAN metrics are asked, not invented.
 - Precedence is enforced, not debated: strategy alignment section > body; Refresh block >
   plan body; tracker > OKR sheet > plan docs. Deprecated paths in the knowledge directory

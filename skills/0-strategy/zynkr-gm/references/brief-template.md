@@ -217,7 +217,8 @@ to type what that cycle carries.
 One line per owner (named as the tracker names them): P0 held · P1 held · UNDATED · OVERDUE ·
 ENDS_SOON · what the brief needs from them · when they were last heard from — the newest
 `#週報` post in the Ledger's `Reports` tab, else the newest weekly-log mention — plus their `卡關`
-line if they wrote one. End with `GM holds <k>/<n> P0s (<pct>%)`.
+line if they wrote one. A sales owner's line also gets `pipeline: N of 3 cooking (pulse, week of …)`
+from the weekly sales pulse mail (SKILL.md §3.1c). End with `GM holds <k>/<n> P0s (<pct>%)`.
 
 ## 05 · KPI off-target + missing numbers
 
@@ -228,7 +229,9 @@ Two lists from the KPI dashboard:
    `kpi-map.md`) · how it would be filled. Batch by owner; do not repeat an ask sent last week
    unless it is P0-linked.
 
-Cloud runs: CRM/accounting-backed metrics are marked `(not readable on a scheduled run)`.
+Cloud runs: CRM/accounting-backed metrics are marked `(not readable on a scheduled run)`. For the
+CRM-backed sales metrics, follow it with `pulse for <week>: N of 7 met`, linked to the pulse page,
+when a sales pulse mail was found.
 
 ## 06 · Decisions register
 
