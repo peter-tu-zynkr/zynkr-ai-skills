@@ -40,12 +40,10 @@ import { claimsOf } from './promotion.mjs';
 export const ATLAS_MODES = ['off', 'report', 'enforce'];
 
 /**
- * What an unset SHELF_ATLAS means. Today, before the switch, it is `off`: the shelf publishes as it
- * did before Part D. At the switch (spec §15.4 「Switching it on」) this constant becomes 'enforce', in
- * the same PR that is merged on the owner's word, and `off` must then be set on purpose — it is logged
- * either way.
+ * What an unset SHELF_ATLAS means: `enforce`, since the switch on 2026-10-19 (spec §15.4 「Switching it
+ * on」). `off`, the shelf as it published before Part D, must be set on purpose; each run logs which.
  */
-export const DEFAULT_ATLAS_MODE = 'off';
+export const DEFAULT_ATLAS_MODE = 'enforce';
 
 /** { mode, explicit } from the SHELF_ATLAS variable; anything else refuses the run. */
 export function atlasMode(value) {

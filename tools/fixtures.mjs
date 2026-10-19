@@ -307,6 +307,8 @@ export function deps(net, extraEnv = {}) {
   return {
     fetchImpl: net.fetchImpl,
     env: {
+      // The path from before Part D, set on purpose: since the switch an unset SHELF_ATLAS means enforce.
+      SHELF_ATLAS: 'off',
       SKILLS_SYNC_HMAC_SECRET: SECRET,
       WORKBENCH_READ_TOKEN: TOKEN,
       SITE_SYNC_URL: SITE,
