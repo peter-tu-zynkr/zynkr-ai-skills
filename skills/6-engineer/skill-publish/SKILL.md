@@ -258,9 +258,9 @@ The workflow:
 
 Surface the run URL and (once the workflow finishes) the PR URL to the user.
 
-After the PR merges, `ingest-skills.yml` adds the skill to the workbench's full index within a minute or two. It reaches the marketplace only if its manifest says `visibility: public` (no key means team): `export-stage.yml` stages it, and the public shelf holds a newly public skill until the owner promotes it there.
+After the PR merges, `ingest-skills.yml` adds the skill to the workbench's full index within a minute or two. It can reach the marketplace only if its manifest says `visibility: public` (no key means team): `export-stage.yml` stages it, and the public shelf publishes it once Zynkr Atlas lists it — its version approved and published there (below) and, for a skill new to zynkr.ai, signed off by the owner (同意上架, Atlas `ATL-113` Part D). The shelf asks Atlas every hour, at :27.
 
-The same push rings Atlas: the merge lands there as a draft of every skill folder it changed, on Atlas's review page. Someone who wrote, opened and merged none of it approves it — a merge of yours goes to another approver — and an owner, admin or reviewer then publishes it as the current version. Teammates get a team skill with `/skill-sync` only after that; until then they keep the version before. If that run's `ring-atlas` job is red, Atlas did not get the merge: re-run the job.
+The same push rings Atlas: the merge lands there as a draft of every skill folder it changed, on Atlas's review page. Someone who wrote, opened and merged none of it approves it — a merge of yours goes to another approver, unless you are the owner, who may approve their own (labelled self-approved, `D-144`) — and an owner, admin or reviewer then publishes it as the current version. Only then do teammates get a team skill with `/skill-sync`, and zynkr.ai a public one; until then both keep the version before. If that run's `ring-atlas` job is red, Atlas did not get the merge: re-run the job.
 
 ---
 
@@ -304,8 +304,8 @@ git ls-tree -r --name-only origin/main -- "skills/<N-cat>/<slug>" | grep -v '/SK
 Report it as one line — `Knowledge: 5 files (2 Knowledge/<slug> required)` or
 `Knowledge: none (SKILL.md only — no knowledge folder)` — so the closer does not re-derive it.
 
-> ⚠️ Until `confirm-ship` runs, the skill is **in the full index (and, if public and promoted, on
-> the marketplace) but absent from the Sheet and Drive**. That is the normal window, not a bug — but it is also how rows end up with dead
+> ⚠️ Until `confirm-ship` runs, the skill is **in the full index (and, once public and listed by Atlas,
+> on the marketplace) but absent from the Sheet and Drive**. That is the normal window, not a bug — but it is also how rows end up with dead
 > plain-text link columns if the loop is never closed.
 
 ---
