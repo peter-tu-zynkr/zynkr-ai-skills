@@ -29,8 +29,9 @@ description: >-
   trigger on "一週五封", "連續開發信", "跑一整套序列", "同一個人五次", "五封序列",
   or when Peter points at the 陌開名單 roster and wants a batch worked end to end.
   Mode B claims the lead in the roster, reads Peter's calendar for real slots, picks a
-  role angle, writes all five emails, saves them as Gmail drafts, and logs the touch.
-  See references/sequence-5touch.md.
+  role angle, writes all five emails, saves them as Gmail drafts, logs the touch, and
+  files the batch as CRM contacts (lifecycle lead, owner = whoever made the contact;
+  no deal). See references/sequence-5touch.md.
 category: sales-consultant
 project: sales-outbound
 platform: claude
@@ -86,14 +87,16 @@ before sending) and the CRM write is one atomic statement.
 | | 前提 | 輸入 | 產出 |
 |---|---|---|---|
 | **Mode A** | 對方**已經回過話**，談到 demo／通話 | 一段貼上的 DM／對話 | 1 個 lead ＋ 1 封回覆草稿 |
-| **Mode B** | 對方**完全沒講過話** | 陌開名單裡的一個人 | 認領 ＋ 5 封序列草稿 ＋ 接觸紀錄 |
+| **Mode B** | 對方**完全沒講過話** | 陌開名單裡的一個人 | 認領 ＋ 5 封序列草稿 ＋ 接觸紀錄 ＋ CRM 聯絡人 |
 
 **Mode B 的完整做法在 `references/sequence-5touch.md`**，信的長相（節奏、主旨、第 2–5 封骨架、交付文件格式）在 `references/sequence-template.md`，頁尾在 `references/email-format.md`。走之前三份都讀。
 不要把 Mode A 的推論預設（`stage=qualified`、`lifecycle=sql`）套到 Mode B——
 那些是給「已經有回應」的人用的；Mode B 的人一律 `還沒接觸過 → 已聯絡，待回覆`。
 
-Mode B 的寫入端**不是平台 CRM**：認領寫在 `Outbound touches` 試算表的 `AI名單` 分頁（陌開名單），接觸紀錄寫同一份試算表的 `接觸紀錄` 分頁。
-這是設計，不是權宜——這批人還沒進 CRM，進了反而汙染 pipeline 數字。
+Mode B 的認領與接觸紀錄寫在 `Outbound touches` 試算表：認領寫 `AI名單` 分頁（陌開名單），接觸紀錄寫 `接觸紀錄` 分頁。
+**最後一步把當輪的人建成 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）：`lifecycle_stage=lead`、負責人＝實際去聯絡的人，
+**不建 deal**。pipeline 數字只看 deal，所以聯絡人進 CRM 不會灌水；
+好處是對方一回信，Gmail 同步就有聯絡人可掛、也看得到該找誰。
 
 > **下表的空白是公司事實——逐一從 Atlas 讀**（`zynkr-atlas` MCP 的 `get_knowledge`，key 見表，值在 `value:` 那一行）。Atlas 連不上、沒有這個 key、或沒有 `value:` 那一行，就停下來問；絕不帶著空白直接執行。
 
@@ -101,12 +104,14 @@ Mode B 的寫入端**不是平台 CRM**：認領寫在 `Outbound touches` 試算
 |---|---|---|
 | `<your-outbound-touches-sheet-id>` | 步驟 0 名單（`AI名單` 分頁）· 步驟 6 接觸紀錄（`接觸紀錄` 分頁） | `company.outbound-touches-sheet` |
 | `<your-company-contact-email>` | 步驟 1 取時段的日曆——公司聯絡人的，不是執行者自己的 | `company.contact-email` |
-| `<your-line-url>` | 第 1 封結尾的 LINE 官方帳號；`email-format.md` 完整版簽名檔的 `LINE：` 那行也是它 | `company.line-url` |
+| `<your-line-url>` | 第 1 封結尾的 LINE 官方帳號 | `company.line-url` |
 
 `<your-google-workspace-account>` 與 `<your-sales-account>` 是執行者自己的帳號，不在 Atlas，用你自己的。
 
 Gmail 草稿則**看環境**：有可用的 Gmail MCP 就用，沒有就走 Playwright 網頁版
 （reference 裡的選擇器與地雷是後者實測出來的）。走之前先確認這台機器有哪些工具。
+兩條路都要讓草稿**帶著寄件人自己的 Gmail 簽名**（2026-10-19 起，`SKB-085`）：MCP 照步驟 6 的參數建，
+Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋掉。
 
 ## How this differs from its neighbours
 
@@ -263,10 +268,22 @@ If the ask is not a meeting (send info, share a link), skip this step entirely.
 ### 6 · Draft the reply (Gmail draft — never send)
 
 Draft the outbound reply with
-`mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to="<their email>", subject="…", body="…")`.
-To revise a draft you already made this run, use
-`mcp__claude_ai_Gmail__update_draft(draftId=…)` — it edits in place, so Peter is not
-left with two near-identical drafts to choose between.
+`mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to="<their email>", subject="…", body="<the mail as HTML>", body_format="html", include_signature=true)`.
+
+**The draft must carry the sender's Gmail signature** — the card with logo, title, phone and
+links that Peter's sent mail always ends with. Two settings do it, and both are required:
+- `include_signature=true` appends the signature saved in Gmail settings.
+- `body_format="html"`, because that signature is HTML. On a plain-text draft it is flattened
+  into one run-on line with no logo, and a draft sent that way can go out with none at all
+  (seen 2026-10-19: the same signature came through whole only on the HTML draft).
+
+Write the mail as plain text first, then turn it into HTML mechanically: escape `&` `<` `>`,
+turn every line break into `<br>`, wrap the whole body in `<div dir="ltr">…</div>`, and nothing
+else (no bold, no lists, no styling). A URL may become `<a href="…">…</a>`.
+
+To revise a draft you already made this run, create it again with the same call and delete
+the old one (`mcp__claude_ai_Gmail__delete_draft`). Do not use `mcp__claude_ai_Gmail__update_draft`
+here: given a plain `body` it rewrites the draft as plain text and clears the HTML, signature included.
 
 Rules for the draft:
 - **Match the signal's language** (zh-TW reply to a zh-TW signal, EN to EN).
@@ -293,7 +310,8 @@ Rules for the draft:
     Everything else is prose — a bullet wall is the 項目符號牆 category X forbids.
   - The dash is the **half-width ` — ` with one space each side**. Never the full-width ——.
   - Headings/taglines take **no 句號 (。)**; `·` for series separators; no Markdown in the body.
-  - Sign off `Best regards,` + `Peter`. No signature block.
+  - Sign off `Best regards,` + `Peter`. Type no signature block in the body: Gmail adds the
+    signature card under the sign-off (see the draft call above).
 - **The slot block is fixed house wording.** Three slots, a fourth escape line, then
   the invite promise — as Peter hand-edited it on 2026-09-27 (it replaced
   「以下時間我都可以，再麻煩你挑一個（台北時間）：」 and 「4. 其他你方便的時間」):
@@ -412,6 +430,9 @@ unchecked. Never re-implement either list inside this file.
    （2026-08-31 有三封被記成「已聯絡」卻躺在草稿匣，別再犯。）
 5. **五封就停。** 沒回的改 `暫時沒需求`。一天一批、一批不超過 5 人。
 6. **三天一封、第 1 封一律禮拜二**（二、五、一、四、日），時段只放第 1 封，三格落在 T+2 到 T+8。
+7. **最後把當輪名單寫進 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）。負責人＝接觸紀錄的 `接觸人員`
+   （沒有就用 `認領人`），用 `list_workspace_members` 對成員 id，對不到就跳過那一位，不要猜。
+   先用 email 查重，只建新的；已經在 CRM 的人不寫入，回報「既有，略過」。`lifecycle_stage` 一定要帶 `lead`（工具預設是 `opportunity`）。**不建 deal。**
 
 > 這批人是付過錢、上過 9–17 場的學員，`zynkr.ai` 網域信譽與《彼得的外商隨筆》電子報共用。
 > 被檢舉成垃圾郵件是整個網域一起遭殃，不是這一封的事。
