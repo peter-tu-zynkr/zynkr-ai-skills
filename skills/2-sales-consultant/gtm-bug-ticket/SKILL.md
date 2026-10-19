@@ -76,7 +76,9 @@ company + defect in the issue, person + thread in the CRM task — by design.
    contact name/email/phone, no CRM or deal URLs, no quoted mail bodies with
    signatures. The person and the Gmail thread link live in the CRM task.
 3. **Client-facing email is ALWAYS a Gmail draft** — created with
-   `mcp__google-workspace__draft_gmail_message`, never sent.
+   `mcp__google-workspace__draft_gmail_message`, never sent. Pass `body_format="html"` and
+   `include_signature=true` (the body written as plain text, then `& < >` escaped and line breaks
+   turned into `<br>`), so the draft carries the sender's Gmail signature.
 4. **The client sees the issue number only** (問題編號 #12) — never the repo
    path, the issue URL, or any internal tooling detail.
 

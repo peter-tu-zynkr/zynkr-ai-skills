@@ -91,7 +91,8 @@ engagement, which phase, which folder, and the CRM breadcrumb.
    skipped; this skill files the output itself (step 5).
 4. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the
    transcript to the client, `mcp__google-workspace__draft_gmail_message` only.
-   Never send.
+   Never send. Pass `body_format="html"` and `include_signature=true` (the body written as plain
+   text, then `& < >` escaped and line breaks turned into `<br>`), so the draft carries the sender's Gmail signature.
 
 ---
 

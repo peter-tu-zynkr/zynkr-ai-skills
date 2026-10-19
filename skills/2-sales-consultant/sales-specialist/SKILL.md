@@ -313,8 +313,9 @@ For each approved email, use `mcp__google-workspace__draft_gmail_message`:
 - `user_google_email`: `<your-google-workspace-account>`
 - `to`: contact email from `CONTACTS[i]`
 - `subject`: subject line from agent output
-- `body`: the email body from agent output, with its sign-off
-- `include_signature`: `false` — the body already ends with the sign-off, and Gmail's own signature would add a second one
+- `body`: the email body from agent output, with its sign-off, converted to HTML mechanically: escape `&` `<` `>`, turn every line break into `<br>`, wrap it in `<div dir="ltr">…</div>`, add nothing else
+- `body_format`: `"html"`
+- `include_signature`: `true` — Gmail adds Peter's signature card (logo, title, phone) under the sign-off, the way his own sent mail ends. The body's sign-off stays the two lines `Best regards,` / `Peter`; the card is not a second sign-off. HTML is required because the signature is HTML: on a plain-text draft it is flattened into one line, or lost (`SKB-085`, 2026-10-19; this replaces the 17 Oct `include_signature=false`)
 
 Display confirmation per contact:
 ```

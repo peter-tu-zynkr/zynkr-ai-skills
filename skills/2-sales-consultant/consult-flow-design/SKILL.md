@@ -86,6 +86,8 @@ documents, the two-chart pairing discipline, the naming, and the CRM record.
 5. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the
    charts to the client, draft via
    `mcp__google-workspace__draft_gmail_message`. Never send.
+   Pass `body_format="html"` and `include_signature=true` (the body written as plain text, then
+   `& < >` escaped and line breaks turned into `<br>`), so the draft carries the sender's Gmail signature.
 
 ---
 

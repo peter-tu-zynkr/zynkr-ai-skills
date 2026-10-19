@@ -248,9 +248,16 @@ mcp__google-workspace__draft_gmail_message(
   user_google_email = "<your-google-workspace-account>",
   to      = "<contact email from the deal>",
   subject = "【Zynkr 顧問】{{COMPANY}} 現場跟拍（Shadowing）安排 — {{SESSION_DATE}}",
-  body    = "<filled template>"
+  body    = "<filled template, as HTML>",
+  body_format = "html",
+  include_signature = true
 )
 ```
+
+The draft carries the sender's Gmail signature card under the template's `Best regards,`.
+That signature is HTML, so the body must be too: fill the template as plain text, then escape
+`&` `<` `>`, turn every line break into `<br>` and wrap it in `<div dir="ltr">…</div>`. On a
+plain-text draft the signature is flattened into one line or lost (`SKB-085`, 2026-10-19).
 
 **Hard rule: this mail is a DRAFT, never a send.** Never call any send tool on
 it — the user reviews and sends it.

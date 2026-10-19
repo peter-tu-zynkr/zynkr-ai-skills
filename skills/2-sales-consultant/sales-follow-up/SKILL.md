@@ -151,14 +151,21 @@ then read it with `get_gmail_thread_content` to grab the **last message's**
 `Message-ID`, the `References` chain, the `thread_id`, and the recipient/Cc set.
 
 Draft the reply with
-`mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to=<their email>, cc=<same cc as the thread>, thread_id=<id>, in_reply_to=<last Message-ID>, references=<chain>, subject="Re: <original subject>", include_signature=false, body=…)`.
+`mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to=<their email>, cc=<same cc as the thread>, thread_id=<id>, in_reply_to=<last Message-ID>, references=<chain>, subject="Re: <original subject>", body=<the mail as HTML>, body_format="html", include_signature=true)`.
+
+The draft must carry Peter's Gmail signature (the card with logo, title and phone that his
+sent mail always ends with; `SKB-085`, 2026-10-19). That signature is HTML: on a plain-text
+draft it is flattened into one run-on line, or lost. So write the body as plain text, then
+convert it mechanically: escape `&` `<` `>`, turn every line break into `<br>`, wrap it in
+`<div dir="ltr">…</div>`, and add nothing else.
 
 ⚠️ **A threaded reply draft is immutable — get the body right the first time.**
 `mcp__claude_ai_Gmail__update_draft` DETACHES it: the call succeeds, but the returned
 `threadId` comes back equal to the new `messageId`, meaning the draft has been re-created
 as a standalone conversation with `In-Reply-To` / `References` stripped. (Observed
 2026-09-10 on a client follow-up.) To change the body, call `draft_gmail_message` again
-with the full corrected body plus `thread_id` + `in_reply_to` + `references`, then trash
+with the full corrected body plus `thread_id` + `in_reply_to` + `references` (and the same
+`body_format="html"`, `include_signature=true`), then trash
 the old one with `mcp__claude_ai_Gmail__trash_message(messageId=…)` — the `messageId`, not
 the `r-…` draft id. **Always verify afterwards** with `list_drafts`: `threadId` must still
 equal the ORIGINAL thread id. A `threadId` that equals the `messageId` means detached.
@@ -202,7 +209,8 @@ Condensed house style (fallback only — the Doc is authoritative):
   parenthetical Chinese gloss. Write AI, never 人工智慧.
 - **No Markdown in the body.** No `##`, no `**bold**`, no `-` bullets, no `---`. The only
   permitted heading form is `── 文字 · 文字 ──`, and only in a long post-meeting letter.
-- Sign off `Best regards,` + `Peter`. No title, phone, address, or signature block.
+- Sign off `Best regards,` + `Peter`. Type no title, phone, address, or signature block in the
+  body: Gmail adds the signature card under the sign-off (step 4's draft call).
 - **Draft only, never send.** Flag anything you were unsure about (e.g. whether the recording
   link belongs in this mail) so Peter can adjust before sending.
 

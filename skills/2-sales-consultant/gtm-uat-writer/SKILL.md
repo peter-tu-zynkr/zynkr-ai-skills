@@ -76,7 +76,9 @@ upstream in /ops-prd-writer, not in improvised acceptance criteria here.
    to the 顧問側驗證 appendix (step 3).
 3. **Never generate the full guide before the step-4 gate is approved.**
 4. **Client-facing email is ALWAYS a Gmail draft** — the optional UAT invite uses
-   `mcp__google-workspace__draft_gmail_message`. Never send.
+   `mcp__google-workspace__draft_gmail_message`. Never send. Pass `body_format="html"` and
+   `include_signature=true` (the body written as plain text, then `& < >` escaped and line breaks
+   turned into `<br>`), so the draft carries the sender's Gmail signature.
 
 ---
 

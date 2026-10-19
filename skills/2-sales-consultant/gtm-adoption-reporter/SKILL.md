@@ -79,7 +79,9 @@ operator**: reads telemetry, never touches it; 無法衡量 beats an estimate.
    `crm_ai_usage` every run; if the schema drifted, adapt and note it.
 4. **Client-facing email is ALWAYS a Gmail draft**
    (`mcp__google-workspace__draft_gmail_message`), only on Peter's yes in
-   step 8 — never send.
+   step 8 — never send. Pass `body_format="html"` and `include_signature=true` (the body written
+   as plain text, then `& < >` escaped and line breaks turned into `<br>`), so the draft carries
+   the sender's Gmail signature.
 
 ## Configuration — the deployment record, then the local `adoption-config.md`
 

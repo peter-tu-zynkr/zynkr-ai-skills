@@ -288,8 +288,14 @@ Peter
 - `body`: your draft
 - **Do NOT set `thread_id`** — fresh outbound email to the customer.
 
+**Both kinds:** also pass `body_format="html"` and `include_signature=true`, with the draft
+converted mechanically from plain text (escape `&` `<` `>`, every line break → `<br>`, wrap it in
+`<div dir="ltr">…</div>`, nothing else). That puts Peter's Gmail signature card under the
+sign-off, as on his own sent mail. The signature is HTML, so a plain-text draft flattens it into
+one line or loses it (`SKB-085`, 2026-10-19). The `[[NEEDS PETER]]` block converts the same way.
+
 If `draft_gmail_message` errors, fall back to `draft_email` (alternate Gmail MCP) only if
-`google-workspace` is unavailable.
+`google-workspace` is unavailable. That fallback carries no signature, so say so in the report.
 
 ---
 
@@ -368,7 +374,7 @@ curating the KB is /zynkr-kms's job.
 - **Don't reply on threads Peter already replied to** — Step 2 inspection is the real filter, not the
   search query (Gmail keeps the label after a reply).
 - **No signatures/footers Peter didn't ask for** (no "Sent from my iPhone", taglines, calendar links
-  unless they're in the KB).
+  unless they're in the KB). His own Gmail signature card is the one he asked for: step 7 attaches it.
 - **Spam / out-of-scope** (vendor pitch, recruiter) → skip, don't draft; mention it in the summary.
 - **One draft per thread.** If a draft already exists, don't create a second — list it as
   already-drafted.
