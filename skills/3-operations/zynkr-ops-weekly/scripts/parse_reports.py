@@ -37,7 +37,7 @@ LABELS = [
 #      interchangeably. Without re.I the capital-F spellings match nothing, so
 #      `legacy_hit` stays False and the whole post is discarded as non-report — which
 #      then makes `chase` publicly name people who did in fact post. Confirmed live
-#      2026-09-03 on W36: Peggy, Bicky and Jane were all silently dropped, and the
+#      2026-09-03 on W36: three reporters' posts were all silently dropped, and the
 #      run only looked correct because the model re-read the raw chat by hand.
 #   2. FOCUS ALTERNATIVES COME FIRST. Alternation is ordered, so a bare 這週 placed
 #      ahead of 這週focus would match first and leave the literal word "focus" to be

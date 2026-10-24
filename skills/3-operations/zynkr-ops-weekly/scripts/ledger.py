@@ -1215,7 +1215,7 @@ def selftest():
         shutil.rmtree(tmpb, ignore_errors=True)
 
     # decisions rows (Phase 2)
-    dr = decision_rows([{"content": "1.03 SEO 改雙週一篇", "owner": "Bicky", "due": "2026-10-15"},
+    dr = decision_rows([{"content": "1.03 SEO 改雙週一篇", "owner": "Ben", "due": "2026-10-15"},
                         {"content": "官網改版要不要外包", "owner": "", "due": ""},
                         {"content": "延到 4.10 一起做", "owner": "Ann", "due": "2026-10-20", "item": "4.10"}],
                        "2026-W41", "2026-10-08", "https://docs.example.com/x")
