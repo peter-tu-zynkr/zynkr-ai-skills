@@ -201,6 +201,12 @@ MODEL="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('rou
 GUARD="$HERE/tracker_guard.py"
 GUARD_SETTINGS="$STATE_DIR/tracker-guard.settings.json"
 
+# Keep the Mac awake while a run lasts. W41-W43 lost seven runs that died when the Mac slept
+# mid-response. It holds only for the run, and it cannot wake a Mac that is already asleep, which
+# is what most failed runs met (the cloud move, v4 D11, is the fix for that). -s holds on mains power.
+KEEP_AWAKE=""
+[ -x /usr/bin/caffeinate ] && KEEP_AWAKE="/usr/bin/caffeinate -i -s"
+
 if [ "$DRY" = 1 ]; then
   echo "WOULD RUN  mode=$MODE  week=$WEEK  model=$MODEL"
   echo "  why    : $WHY"
@@ -208,6 +214,7 @@ if [ "$DRY" = 1 ]; then
   echo "  tools  : $TOOLS"
   echo "  deny   : ${DENY:-(none)}"
   echo "  limit  : $([ "$LIMIT" -gt 0 ] && echo "${LIMIT}s" || echo none)"
+  echo "  awake  : ${KEEP_AWAKE:-(caffeinate missing: the Mac may sleep mid-run)}"
   echo "  guard  : $GUARD (only apply may write the Main Tracker${PRIVATE_DIR:+; nobody reads $PRIVATE_DIR})"
   [ "$MODE" = agenda ] && echo "  insights: $INSIGHTS_STATUS"
   echo "  state  : $STATE_DIR"
@@ -243,9 +250,9 @@ except subprocess.TimeoutExpired:
         except subprocess.TimeoutExpired:
             pass
     sys.exit(124)
-' "$LIMIT" "$@"
+' "$LIMIT" $KEEP_AWAKE "$@"
   else
-    "$@"
+    $KEEP_AWAKE "$@"
   fi
 }
 

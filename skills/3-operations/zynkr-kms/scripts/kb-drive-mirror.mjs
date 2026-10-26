@@ -58,11 +58,15 @@ const esc = (s) => (s ?? '').toString()
 
 // --- pull ------------------------------------------------------------------------------------
 const wsq = `workspace_id=eq.${workspaceId}`
-const sections = await rest(`crm_kb_sections?select=id,slug,nn,title,title_zh,description&${wsq}&order=nn.asc`)
+// ATL-114 — `aliases` and `unverify_note` too. The 知識庫's move into Zynkr Atlas is built from the
+// _KB-SNAPSHOT.json that a full run (no --sections) writes: a section's aliases go into its
+// collection's body and an article's unverify note into its card's footer, and Atlas's emitter
+// refuses a snapshot that lacks either.
+const sections = await rest(`crm_kb_sections?select=id,slug,nn,title,title_zh,description,aliases&${wsq}&order=nn.asc`)
 const articles = await rest(
   'crm_kb_articles?select=id,type,fact_id,title,body_md,section_id,cites,keywords,status,flags,' +
   'source_type,source_url,source_note,version,verification_state,last_verified_at,verify_interval_days,' +
-  `created_at,updated_at&${wsq}&order=type.desc,title.asc`
+  `unverify_note,created_at,updated_at&${wsq}&order=type.desc,title.asc`
 )
 if (!sections.length) { console.error(`no sections for workspace ${workspaceId} — wrong workspace id?`); process.exit(1) }
 

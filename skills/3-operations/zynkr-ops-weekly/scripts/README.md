@@ -104,6 +104,11 @@ weekly insights and every notice rule. When `beats.py` replaced the runner's inl
 states: 7,056 answers, and the only 306 that differ are the `agenda` move from Wednesday evening to
 Thursday morning.
 
+`python3 check_manifest.py` (SKB-091) holds `split-manifest.json` to this folder. The manifest says
+where every file, mode and split heading goes when the skill splits into four by the store each part
+writes. Add a file, a mode or a heading here, and it needs an entry there. `--mutate` breaks a copy of
+the folder eight ways, and each must fail. Both files leave once the split lands.
+
 `python3 test_tidy_blocks.py --mutate` runs the `tidy` suite and then breaks real lines of
 `tidy_blocks.py` one at a time; every mutation must turn the suite red. It runs an UNmutated
 control copy first and refuses to report anything if that fails — until 2026-09-30 the harness

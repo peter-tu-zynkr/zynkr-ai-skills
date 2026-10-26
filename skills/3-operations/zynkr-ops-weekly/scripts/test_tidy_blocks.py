@@ -939,6 +939,448 @@ check("the CLI --postcheck fails when nothing was deleted",
       True)
 
 
+# ── 18. carried items as bullets; Done/Drop chips the markdown cannot see (10-25) ─────
+# The owner's 10-25 screenshots: carried `·` lines marked Done stayed for weeks, and a re-carried
+# line came back open because re-typing it lost its chip. Only the Drive export shows chips.
+CARRY_MD = """\
+## Oct 29, 2026
+
+### #Tech [Sam Rivera](mailto:owner-a@example.com)
+
+〔自動彙整 WB 10/26 · 10-27 09:00〕
+
+· 本週 — 新功能
+
+〔自動彙整 WB 10/19 · 10-20 09:00〕
+
+· 本週 — 舊事 ／ 自己的待辦 ／ 已經是子彈的事
+
+· 還沒收掉的 —
+
+· 建立知識庫〔WB 8/31 起〕
+
+· 寫文件〔WB 9/7 起〕
+
+- 已經是子彈的事〔WB 8/24 起〕
+- 自己的待辦
+"""
+CARRY_EXPORT = """\
+Oct 29, 2026
+#Tech Sam Rivera
+〔自動彙整 WB 10/26 · 10-27 09:00〕
+· 本週 — 新功能
+〔自動彙整 WB 10/19 · 10-20 09:00〕
+· 本週 — 舊事 ／ 自己的待辦 ／ 已經是子彈的事
+· 還沒收掉的 —
+· 建立知識庫〔WB 8/31 起〕Done
+· 寫文件〔WB 9/7 起〕
+* 已經是子彈的事〔WB 8/24 起〕
+* 自己的待辦
+Oct 22, 2026
+"""
+TODAY = __import__("datetime").date(2026, 10, 30)
+g = T.analyse(CARRY_MD.split("\n"), today=TODAY, export_lines=export(CARRY_EXPORT))["groups"][0]
+check("a carried item with a Done chip in the export is not carried again",
+      sorted(c["text"] for c in g["carry"]), ["寫文件", "舊事"])
+g0 = T.analyse(CARRY_MD.split("\n"), today=TODAY)["groups"][0]
+check("without the export the chip is invisible (why tidy step 2 passes --export)",
+      "建立知識庫" in [c["text"] for c in g0["carry"]], True)
+check("an item already on the group's bullets (carried or the owner's own) is not carried twice",
+      [c["text"] for c in g["carry"] if c["text"] in ("自己的待辦", "已經是子彈的事")], [])
+check("new carried items need a 還沒收掉的 line in the kept block", g["carry_header_needed"], True)
+try:
+    T.closed_in_export(["Oct 1, 2026", "· x"], "Oct 29, 2026")
+    refused = False
+except SystemExit:
+    refused = True
+check("a missing section in the export is refused, not read as no chips", refused, True)
+
+HDR_MD = """\
+## Oct 29, 2026
+
+### #Ops [Sam Rivera](mailto:owner-a@example.com)
+
+〔自動彙整 WB 10/26 · 10-27 09:00〕
+
+· 本週 — 甲
+
+〔自動彙整 WB 10/19 · 10-20 09:00〕
+
+· 本週 — 甲
+
+- 舊的事〔WB 8/24 起〕
+"""
+g = T.analyse(HDR_MD.split("\n"), today=TODAY)["groups"][0]
+check("carried bullets below the group keep their 還沒收掉的 line, even with nothing new",
+      (g["carry"], g["carry_header_needed"]), ([], True))
+g = T.analyse(HDR_MD.replace("· 本週 — 甲\n\n〔", "· 本週 — 甲\n\n· 還沒收掉的 —\n\n〔", 1)
+              .split("\n"), today=TODAY)["groups"][0]
+check("a kept block that already has the line needs no second one", g["carry_header_needed"], False)
+g = T.analyse(HDR_MD.replace("- 舊的事〔WB 8/24 起〕\n", "- 舊的事\n").split("\n"), today=TODAY)["groups"][0]
+check("an owner's own bullet below is not a carried list", g["carry_header_needed"], False)
+
+DOT_EXPORT = """\
+Oct 29, 2026
+#Sales Sam Rivera
+〔自動彙整 WB 10/19 · 10-20 09:00〕
+· 上週 — 甲 完成
+· 這次要決定的事 — P2 外包 Drop
+· 還沒收掉的 —
+· 更新一篇seo〔WB 8/24 起〕Done
+· 寫文件〔WB 9/7 起〕Pause
+· P2 Update content matrix Drop
+· 新完成的事〔WB 9/14 起〕Done
+Oct 22, 2026
+#Sales Sam Rivera
+〔自動彙整 WB 10/19 · 10-20 09:00〕
+· 上週 — 甲 完成
+· 這次要決定的事 — P2 外包 Drop
+· 還沒收掉的 —
+· 更新一篇seo〔WB 8/24 起〕Done
+· 寫文件〔WB 9/7 起〕Pause
+· P2 Update content matrix Drop
+· 新完成的事〔WB 9/14 起〕
+"""
+r = T.closed_bullets(export(DOT_EXPORT), set(), set())
+check("a carried · line and a chipped · line marked Done/Drop a week ago are removed",
+      [e["line"] for e in r["closed"]],
+      ["更新一篇seo〔WB 8/24 起〕Done", "P2 Update content matrix Drop"])
+check("a · line closed only this week waits a week",
+      [e["line"] for e in r["skipped"]], ["新完成的事〔WB 9/14 起〕Done"])
+check("a · line is removed alone: it has no sub-items",
+      [len(e["lines"]) for e in r["closed"]], [1, 1])
+check("an auto summary line ending in 完成 or Drop is never a candidate",
+      [e["line"] for e in r["closed"] + r["skipped"] if "—" in e["line"]], [])
+check("a chip glued to 〕 is still read as the status",
+      [e["status"] for e in r["closed"]], ["Done", "Drop"])
+
+DOT_STRUCT = structure(
+    "Oct 29, 2026\n",                         # 0
+    "#Sales \n",                              # 10
+    "〔自動彙整 WB 10/19 · 10-20 09:00〕\n",      # 20
+    "· 上週 — 甲 完成\n",                        # 30
+    "· 這次要決定的事 — P2 外包 Drop\n",            # 40
+    "· 還沒收掉的 —\n",                          # 50
+    "· 更新一篇seo〔WB 8/24 起〕\n",               # 60  the Done chip is gone from the preview
+    "· 寫文件〔WB 9/7 起〕\n",                     # 70
+    "·  Update content matrix \n",           # 80  both chips gone
+    "· 新完成的事〔WB 9/14 起〕\n",                 # 90
+    "Oct 22, 2026\n",                         # 100
+)
+res = T.locate_closed(r, DOT_STRUCT, set())
+check("a closed · line is pinned to its own paragraph despite the chips the preview drops",
+      sorted((e["start_index"], e["end_index"]) for e in res["closed"]), [(60, 70), (80, 90)])
+
+
+# ── 19. last week's agenda, mid-line chips, finished blocks (the owner, 10-25) ──────────────
+# The Oct 29 section still held the Oct 22 agenda, and `Claude Code 課程` kept four `Done` rows
+# whose chip has typed progress after it. Shapes copied from that morning's export.
+NAMES19 = {"Sam Rivera"}
+MD19 = """\
+## Nov 5, 2026
+### #Team update
+### # Knowledge product [Sam Rivera](mailto:owner-a@example.com)
+## Claude Code 課程
+## Workshop 規劃
+## Finance [Sam Rivera](mailto:owner-a@example.com)
+"""
+HEADS19 = T.heading_keys(MD19, NAMES19)
+AGENDA = """\
+〔自動彙整 WB 10/26 · 10-29 09:00〕本週會議議程
+· 連續三週以上沒動 — Build financial model ↻23週
+· 這次要決定的事 — Bicky 交接 4 件事怎麼拍板 Drop 掉的那兩件不談
+· 這週先不談 — LMS ↻21週"""
+COURSE = """\
+Claude Code 課程
+Current progress
+* 專案重要時間軸：
+   * 9/1全影片平台送審、10/15正式開課
+* 課程剪輯   Done 進度：2-4
+* 課程第一階段 QC  Done 進度：1-2
+* 課程作業本   Done  進度：第一章（完）
+Metrics
+* Course signed up #"""
+OTHERS = """\
+Workshop 規劃
+* 講座大綱 Done 進度：草稿
+* 報名頁 In Progress Done 一半
+* 講師 完成 邀請信 還在談
+* 新開的 Done 進度：1/3
+Finance Sam Rivera
+* 月結 Done 進度：9 月
+* 年度預算 Done 進度：草案"""
+EXPORT19 = f"""\
+Nov 5, 2026
+{AGENDA}
+#Team update
+# Knowledge product Sam Rivera
+{COURSE}
+{OTHERS}
+Oct 29, 2026
+{AGENDA}
+#Team update
+# Knowledge product Sam Rivera
+{COURSE}
+{OTHERS.replace("* 新開的 Done 進度：1/3", "* 新開的 In Progress 進度：1/3")}
+"""
+r = T.closed_bullets(export(EXPORT19), NAMES19, HEADS19)
+got19 = {e["line"]: e for e in r["closed"]}
+skip19 = {e["line"]: e["reason"] for e in r["skipped"]}
+agenda_head = "〔自動彙整 WB 10/26 · 10-29 09:00〕本週會議議程"
+check("last week's agenda, copied forward verbatim, is removed", agenda_head in got19, True)
+check("…as one block: its stamp and every `·` line under it",
+      got19[agenda_head]["lines"], AGENDA.split("\n"))
+check("a Drop typed inside an agenda line does not make it a bullet candidate",
+      [l for l in got19 if l.startswith("·")], [])
+check("a Done chip with typed progress after it closes the bullet",
+      [l for l in got19 if l.startswith("課程")],
+      ["課程剪輯   Done 進度：2-4", "課程第一階段 QC  Done 進度：1-2", "課程作業本   Done  進度：第一章（完）"])
+check("the timeline and Metrics around them stay", any("時間軸" in l or "signed" in l for l in got19), False)
+check("a line that also says In Progress is not closed",
+      any("報名頁" in l for l in list(got19) + list(skip19)), False)
+check("a typed 完成 mid-line is a verb, not a chip", any("講師邀請" in l for l in list(got19) + list(skip19)), False)
+check("a mid-line Done closed only this week waits a week",
+      "新開的 Done 進度：1/3" in skip19 and "新開的 Done 進度：1/3" not in got19, True)
+check("a whole sub-heading whose chipped items are all Done is offered for closing, not deleted",
+      r["done_blocks"], [{"heading": "Claude Code 課程", "done": 3}])
+check("…never a department heading, and never a block with an open item",
+      [b["heading"] for b in r["done_blocks"] if b["heading"] != "Claude Code 課程"], [])
+
+FRESH19 = EXPORT19.replace("Oct 29, 2026\n" + AGENDA, "Oct 29, 2026\n"
+                           + AGENDA.replace("10-29 09:00", "10-22 09:00").replace("↻23週", "↻22週"))
+r2 = T.closed_bullets(export(FRESH19), NAMES19, HEADS19)
+check("an agenda that differs from last week's is this week's — it stays",
+      (agenda_head in [e["line"] for e in r2["closed"]], agenda_head in [e["line"] for e in r2["skipped"]]),
+      (False, True))
+
+STRUCT19 = structure(
+    "Nov 5, 2026\n",                                          # 0
+    "〔自動彙整 WB 10/26 · 10-29 09:00〕本週會議議程\n",            # 10
+    "· 連續三週以上沒動 — Build financial model ↻23週\n",          # 20
+    "· 這次要決定的事 — Bicky 交接 4 件事怎麼拍板 Drop 掉的那兩件不談\n",  # 30
+    "· 這週先不談 — LMS ↻21週\n",                               # 40
+    "#Team update\n",                                         # 50
+    "# Knowledge product \n",                                 # 60
+    "Claude Code 課程\n",                                       # 70
+    "Current progress\n",                                     # 80
+    "專案重要時間軸：\n",                                          # 90
+    "9/1全影片平台送審、10/15正式開課\n",                            # 100
+    "課程剪輯    進度：2-4\n",                                     # 110 the Done chip is gone
+    "課程第一階段 QC   進度：1-2\n",                               # 120
+    "課程作業本    進度：第一章（完）\n",                             # 130
+    "Metrics\n",                                              # 140
+    "Course signed up #\n",                                   # 150
+    "Workshop 規劃\n",                                          # 160
+    "講座大綱  進度：草稿\n",                                     # 170
+    "報名頁   一半\n",                                          # 180
+    "講師 完成 邀請信 還在談\n",                                     # 190
+    "新開的  進度：1/3\n",                                       # 200
+    "Finance \n",                                             # 210
+    "月結  進度：9 月\n",                                        # 220
+    "年度預算  進度：草案\n",                                     # 230
+    "Oct 29, 2026\n",                                         # 240
+)
+res19 = T.locate_closed(r, STRUCT19, NAMES19)
+check("the agenda pins to one range from its stamp to its last line, the mid-line chips to theirs",
+      sorted((e["start_index"], e["end_index"]) for e in res19["closed"]
+             if "講座" not in e["line"] and "月結" not in e["line"] and "年度" not in e["line"]),
+      [(10, 50), (110, 120), (120, 130), (130, 140)])
+
+
+# Carried items as ○ sub-bullets (10-25): the markdown indents them under the header, with a blank
+# line between. They must still count as visible (not carried twice), the header must not be
+# written again, and a Done one must still be found by step 7.
+NEST_MD = """\
+## Nov 5, 2026
+### #Sales
+〔自動彙整 WB 10/19 · 10-20 09:40〕
+· 本週 — 甲件事
+· 還沒收掉的 —
+
+  - 寫文件〔WB 9/7 起〕
+  - 乙件事〔WB 9/14 起〕
+〔自動彙整 WB 10/12 · 10-13 09:40〕
+· 本週 — 寫文件 ／ 乙件事
+"""
+r = analyse(NEST_MD)
+check("a sub-bullet under the header is visible: never carried again", r["groups"][0]["carry"], [])
+check("…and the header is not written a second time", r["groups"][0]["carry_header_needed"], False)
+check("…and it is not swept into the auto block that is kept",
+      any("寫文件" in l for l in r["groups"][0]["keep"]["lines"]), False)
+NEST_EX = export("Nov 5, 2026\n#Sales\n· 還沒收掉的 —\n   * 寫文件〔WB 9/7 起〕Done\n   * 乙件事〔WB 9/14 起〕\n"
+                 "Oct 29, 2026\n#Sales\n· 還沒收掉的 —\n   * 寫文件〔WB 9/7 起〕Done\n   * 乙件事〔WB 9/14 起〕\n")
+check("a sub-bullet marked Done a week ago is removed, alone",
+      [e["lines"] for e in T.closed_bullets(NEST_EX, set(), set())["closed"]], [["   * 寫文件〔WB 9/7 起〕Done"]])
+
+
+# ── 20. the kept block as bullets — tidy step 8 (the owner, 10-25) ──────────
+# `· 上週 — 甲 完成 ／ 乙 WIP` becomes a `上週` bullet with the items under it. The week after, rollup
+# writes a typed block above it, and tidy must still read the formatted one as ONE block: archive
+# all of it, carry from it, and never take its sub-bullets for the team's lines.
+FMT_MD = """\
+## Nov 5, 2026
+### #Sales [Sam Rivera](mailto:owner-a@example.com)
+〔自動彙整 WB 11/2 · 11-03 09:40〕
+· 上週 — 甲件事 完成 ／ 丙件事 WIP
+· 本週 — 丁件事
+〔自動彙整 WB 10/26 · 10-27 09:40〕
+
+- 上週
+  - 舊事 完成
+- 本週
+  - 甲件事
+  - 丙件事
+  - 戊件事（A ／ B）
+- 卡關
+  - 等報價
+- 還沒收掉的
+  - 寫文件〔WB 9/7 起〕
+- 我自己的一行
+"""
+g = analyse(FMT_MD, today=__import__("datetime").date(2026, 11, 6))["groups"][0]
+check("a formatted block is archived whole: through its last label, its sub-bullets included",
+      (g["archive"][0]["lines"][-1], "  - 等報價" in g["archive"][0]["lines"]), ("- 還沒收掉的", True))
+check("…but never the carried sub-bullets or the team's line below it",
+      [l for l in g["archive"][0]["lines"] if "寫文件" in l or "我自己" in l], [])
+check("a formatted 本週 is carried like a typed one, brackets kept whole",
+      g["carry"], [{"text": "戊件事（A ／ B）", "since": "WB 10/26"}])
+check("the carried sub-bullets lose their header with the archived block → a new one is needed",
+      g["carry_header_needed"], True)
+
+FMT_EX = ("#Sales Sam Rivera\n〔自動彙整 WB 10/26 · 10-27 09:40〕\n* 上週\n   * 舊事 完成\n   * 乙事 Done\n"
+          "* 還沒收掉的\n   * 寫文件〔WB 9/7 起〕Done\n")
+fr = T.closed_bullets(export("Nov 5, 2026\n" + FMT_EX + "Oct 29, 2026\n" + FMT_EX), NAMES, set())
+check("step 7 never deletes a summary sub-bullet (`* 上週` / `   * 乙事 Done`), only the carried one",
+      [e["lines"] for e in fr["closed"]], [["   * 寫文件〔WB 9/7 起〕Done"]])
+
+import carryover as C
+check("carryover counts the carried and the team's bullets, never the summary's",
+      [i["raw"] for i in C.sections(FMT_MD)[0]["items"]], ["寫文件〔WB 9/7 起〕", "我自己的一行"])
+
+check("an item splits on ／ only outside brackets",
+      T.split_items("· 上週 — 審核（Hahow ／ 學員） 完成 ／ 乙 / 丙 ／ https://a.b/c"),
+      ["審核（Hahow ／ 學員） 完成", "乙", "丙", "https://a.b/c"])
+
+PLAN_MD = """\
+## Nov 5, 2026
+### #Sales [Sam Rivera](mailto:owner-a@example.com)
+〔自動彙整 WB 11/2 · 11-03 09:40〕
+· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP
+· 還沒收掉的 —
+
+  - 寫文件〔WB 9/7 起〕
+- 我自己的一行
+## Oct 29, 2026
+"""
+PLAN_ST = structure("Nov 5, 2026\n", "#Sales \n", "〔自動彙整 WB 11/2 · 11-03 09:40〕\n",
+                    "· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP\n", "· 還沒收掉的 —\n", "寫文件〔WB 9/7 起〕\n",
+                    "我自己的一行\n", "Oct 29, 2026\n")
+fp = T.format_plan(PLAN_MD.split("\n"), PLAN_ST, "t.9")
+new = "上週\n\t甲件事 完成\n\t乙（A ／ B） WIP\n還沒收掉的"
+check("step 8 plans one block: un-bullet, re-tab the carried item, re-type, bullet — in that order",
+      [(o["type"], o.get("start_index", o.get("index")), o.get("end_index"), o.get("text"), o.get("list_type"))
+       for o in fp["ops"]],
+      [("create_bullet_list", 30, 59, None, "NONE"), ("update_paragraph_style", 30, 59, None, None),
+       ("insert_text", 50, None, "\t", None), ("delete_text", 30, 49, None, None),
+       ("insert_text", 30, None, new, None),
+       ("create_bullet_list", 30, 59 + T.utf16(new) - 19 + 1, None, "UNORDERED")])
+check("…every operation names the tab", {o["tab_id"] for o in fp["ops"]}, {"t.9"})
+check("…the stamp and the team's line are outside every range read before the re-type",
+      all(o.get("start_index", o.get("index")) >= 30 and (o.get("end_index") or 0) < 60 for o in fp["ops"][:-1]),
+      True)
+
+LINK_MD = PLAN_MD.replace("乙（A ／ B） WIP", "[乙](https://x.y) WIP")
+check("a line holding a link is skipped — re-typing would drop it",
+      [b["reason"][:28] for b in T.format_plan(LINK_MD.split("\n"), PLAN_ST, "t.9")["skipped"]],
+      ["a line in it holds a link — "])
+TWIN_MD = PLAN_MD.replace("- 我自己的一行\n", "- 我自己的一行\n### #Ops\n〔自動彙整 WB 11/2 · 11-03 09:40〕\n"
+                                            "· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP\n")
+TWIN_ST = structure("Nov 5, 2026\n", "#Sales \n", "〔自動彙整 WB 11/2 · 11-03 09:40〕\n",
+                    "· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP\n", "· 還沒收掉的 —\n", "寫文件〔WB 9/7 起〕\n",
+                    "我自己的一行\n", "#Ops \n", "〔自動彙整 WB 11/2 · 11-03 09:40〕\n",
+                    "· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP\n", "Oct 29, 2026\n")
+tw = T.format_plan(TWIN_MD.split("\n"), TWIN_ST, "t.9")
+check("two departments with the same stamp and summary: the heading above tells them apart",
+      sorted((b["owner"], b["start_index"]) for b in tw["blocks"]),
+      [("#Ops", 90), ("#Sales Sam Rivera", 30)])
+
+DONE_MD = PLAN_MD.replace("· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP\n· 還沒收掉的 —\n",
+                          "- 上週\n  - 甲件事 完成\n  - 乙（A ／ B） WIP\n- 還沒收掉的\n")
+check("the post-write check reads the bullets back as the same summary",
+      T.format_check({"section": "Nov 5, 2026", "blocks": [
+          {"owner": "#Sales Sam Rivera", "stamp": "〔自動彙整 WB 11/2 · 11-03 09:40〕",
+           "rows": ["· 上週 — 甲件事 完成 ／ 乙（A ／ B） WIP", "· 還沒收掉的 —"]}]}, DONE_MD.split("\n")),
+      {"ok": True, "problems": []})
+check("…and fails when a typed line is left behind",
+      T.format_check({"section": "Nov 5, 2026", "blocks": [
+          {"owner": "#Sales Sam Rivera", "stamp": "〔自動彙整 WB 11/2 · 11-03 09:40〕",
+           "rows": []}]}, PLAN_MD.split("\n"))["ok"], False)
+tw2 = T.format_plan(TWIN_MD.replace("### #Ops", "### #Sales").split("\n"),
+                    [dict(x, text_preview="#Sales \n") if x["text_preview"] == "#Ops \n" else x for x in TWIN_ST], "t.9")
+check("a block the heading cannot place (it matches both twins) is skipped; the unique one is not",
+      ([x["start_index"] for x in tw2["blocks"]], [x["reason"][:7] for x in tw2["skipped"]]), ([30], ["matches"]))
+check("a section heading twice in the structure: step 8 refuses outright",
+      refuses(lambda: T.format_plan(PLAN_MD.split("\n"), PLAN_ST + [PLAN_ST[0]], "t.9")), True)
+check("an already-formatted block is left alone", T.format_plan(DONE_MD.split("\n"), PLAN_ST, "t.9")["ops"], [])
+
+
+# ── 21. rollup writes bullets (10-26) — the writer and the readers must agree ─
+# render_block writes `上週` / `\t甲 完成`; Docs shows it as `- 上週` / `  - 甲 完成`. Whatever the
+# writer emits must read back through walk_block as the summary it meant, or Friday archives it
+# wrong — the writer and reader live in two files, so this is the test that ties them.
+import render_block as R
+REC = {"last_week": [{"text": "官網改版", "status": "DONE"}, {"text": "名單匯入（Kit ／ CSV）", "status": "WIP"}],
+       "this_week": [{"text": "LINE 名單清理"}, {"text": "SEO\n三篇上稿"}],
+       "numbers": {"parsed": {"報名": "72"}, "raw": "", "empty": False},
+       "blocker": "", "missing_lines": ["blocker"]}
+SECS = R.render(REC, {})
+BODY = R.body_text(SECS)
+check("rollup's body: labels alone, each item one tab in, an item's line break flattened",
+      BODY.split("\n"), ["上週", "\t官網改版 完成", "\t名單匯入（Kit ／ CSV） 進行中", "本週", "\tLINE 名單清理",
+                         "\tSEO 三篇上稿", "數字", "\t報名 72", "沒寫", "\t卡關"])
+AS_MD = ["## Nov 5, 2026", "### #Sales", "〔自動彙整 WB 11/2 · 11-03 09:40〕", ""] + \
+        [("  - " + l[1:]) if l.startswith("\t") else "- " + l for l in BODY.split("\n")] + ["- 我自己的一行"]
+_, rows, _ = T.walk_block(AS_MD, 2)
+check("…and reads back through walk_block as the summary it meant, the team's line outside",
+      rows, ["· 上週 — 官網改版 完成 ／ 名單匯入（Kit ／ CSV） 進行中", "· 本週 — LINE 名單清理 ／ SEO 三篇上稿",
+             "· 數字 — 報名 72", "· 沒寫 — 卡關"])
+check("…and carryover counts none of it as the team's items",
+      [i["raw"] for i in C.sections("\n".join(AS_MD))[0]["items"]], ["我自己的一行"])
+
+blk = {"heading": "#Sales", "stamp_line": "〔自動彙整 WB 11/2 · 11-03 09:40〕", "body": "上週\n\t甲 完成"}
+blk2 = {**blk, "heading": "#Ops"}
+w = R.ops([blk, blk2], {"#Sales": 100, "#Ops": 300}, "t.9")
+n = R.utf16(blk["stamp_line"] + "\n" + blk["body"] + "\n")
+check("rollup's write: highest block first; insert, clear bullet + indent, then bullet the body only",
+      [(o["type"], o.get("index", o.get("start_index")), o.get("end_index"), o.get("list_type")) for o in w],
+      [("insert_text", 300, None, None), ("create_bullet_list", 300, 300 + n - 1, "NONE"),
+       ("update_paragraph_style", 300, 300 + n - 1, None),
+       ("create_bullet_list", 300 + R.utf16(blk["stamp_line"]) + 1, 300 + n - 1, "UNORDERED"),
+       ("insert_text", 100, None, None), ("create_bullet_list", 100, 100 + n - 1, "NONE"),
+       ("update_paragraph_style", 100, 100 + n - 1, None),
+       ("create_bullet_list", 100 + R.utf16(blk["stamp_line"]) + 1, 100 + n - 1, "UNORDERED")])
+check("…every operation names the tab", {o["tab_id"] for o in w}, {"t.9"})
+
+# Friday: step 5 adds a typed `· 還沒收掉的 —` under rollup's bullets. Step 8 must re-type that
+# mixed block whole, or one typed line stays behind every week.
+MIX_MD = """\
+## Nov 5, 2026
+### #Sales [Sam Rivera](mailto:owner-a@example.com)
+〔自動彙整 WB 11/2 · 11-03 09:40〕
+- 上週
+  - 甲件事 完成
+· 還沒收掉的 —
+
+  - 寫文件〔WB 9/7 起〕
+## Oct 29, 2026
+"""
+MIX_ST = structure("Nov 5, 2026\n", "#Sales \n", "〔自動彙整 WB 11/2 · 11-03 09:40〕\n", "上週\n",
+                   "甲件事 完成\n", "· 還沒收掉的 —\n", "寫文件〔WB 9/7 起〕\n", "Oct 29, 2026\n")
+mx = T.format_plan(MIX_MD.split("\n"), MIX_ST, "t.9")
+check("a mixed block (rollup's bullets + step 5's typed header) is re-typed whole",
+      [o.get("text") for o in mx["ops"] if o["type"] == "insert_text"], ["\t", "上週\n\t甲件事 完成\n還沒收掉的"])
+
+
 # ── MUTATIONS: prove the tests above can actually go red ─────────────────────
 # Each mutation breaks one real line of tidy_blocks.py; if the suite still passes, the matching
 # test is decorative and must be rewritten. Every anchor must occur EXACTLY once.
@@ -964,8 +1406,7 @@ MUTATIONS = [
     ("done-words are compared literally",
      'return normalise(DONE_WORDS_RE.sub("", strip_status(item)))', 'return normalise(strip_status(item))'),
     ("a comment at the end of a carried line drops it",
-     '                s = FOOTNOTE_RE.sub("", sec[k]).strip()\n                if is_line(s, "本週"):',
-     '                s = sec[k].strip()\n                if is_line(s, "本週"):'),
+     'raw = FOOTNOTE_RE.sub("", sec[k])', 'raw = sec[k]'),
     ("an inline 完成 on a carried line is ignored",
      'if tail and DONE_RE.search(tail.group(0)):', 'if False:'),
     ("an open 上週 item that was not planned again is lost",
@@ -982,12 +1423,12 @@ MUTATIONS = [
     ("an open sub-item does not protect its parent", 'if open_child:', 'if False:'),
     ("the proof ignores the heading it sits under",
      ' and owner(prev, k) == entry["owner"]', ''),
-    ("the copy proof is skipped", 'if not proved:', 'if False:'),
+    ("the copy proof is skipped", 'if not copied(tree, entry):', 'if False:'),
     ("children of a closed parent are listed again",
      '            res["closed"].append(entry)\n        i = j', '            res["closed"].append(entry)\n        i += 1'),
     ("the closed chip matches any case",
-     r'CLOSED_TAIL_RE = re.compile(r"\s+(Done|Drop|Dropped|完成|已完成|放棄|取消)$")',
-     r'CLOSED_TAIL_RE = re.compile(r"\s+(Done|Drop|Dropped|完成|已完成|放棄|取消)$", re.I)'),
+     r'CLOSED_TAIL_RE = re.compile(r"(?:\s+|(?<=〕))(Done|Drop|Dropped|完成|已完成|放棄|取消)$")',
+     r'CLOSED_TAIL_RE = re.compile(r"(?:\s+|(?<=〕))(Done|Drop|Dropped|完成|已完成|放棄|取消)$", re.I)'),
     # SKB-039 — where they are
     ("status chips are not stripped from keys", 'for b in {a, STATUS_WORD_RE.sub("", a)}:', 'for b in {a}:'),
     ("person names are not stripped", 'b = b.replace(name, "")', 'pass'),
@@ -996,12 +1437,18 @@ MUTATIONS = [
      'if q is None or not preview_matches(paragraphs[q], line_keys(above, names)):', 'if False:'),
     ("the line below is not checked",
      'if r is None or not preview_matches(paragraphs[r], line_keys(below, names)):', 'if False:'),
-    ("an ambiguous bullet takes the first place", 'if len(spots) != 1:', 'if not spots:'),
+    ("an ambiguous bullet takes the first place",
+     'if len(spots) != 1:\n            skipped.append(', 'if not spots:\n            skipped.append('),
+    ("step 8 formats a block that matches two places",
+     'if len(spots) != 1:\n            res["skipped"]', 'if not spots:\n            res["skipped"]'),
     ("sub-items are not checked against the Doc",
      'if not all(preview_matches(paragraphs[p + d], line_keys(entry["lines"][d], names))\n'
      '                       for d in range(n)):',
      'if not preview_matches(paragraphs[p], line_keys(entry["lines"][0], names)):'),
-    ("a duplicated target heading is tolerated", 'if len(heads) != 1:', 'if not heads:'),
+    ("a duplicated target heading is tolerated",
+     'if len(heads) != 1:\n        raise SystemExit(f"tidy --closed:', 'if not heads:\n        raise SystemExit(f"tidy --closed:'),
+    ("step 8 tolerates a duplicated section heading",
+     'if len(heads) != 1:\n        raise SystemExit(f"tidy --format:', 'if not heads:\n        raise SystemExit(f"tidy --format:'),
     ("the structure's section boundary is not checked",
      'if end is None or nonspace(paragraphs[end]["text_preview"]) != nonspace(prev_label):',
      'if end is None:'),
@@ -1030,6 +1477,57 @@ MUTATIONS = [
     ("an open FIRST sub-item is not looked at", 'for l in tree[1:] if OPEN_ANY_RE.search(l)', 'for l in tree[2:] if OPEN_ANY_RE.search(l)'),
     ("the section's first line has no heading above it", 'if sec[k].strip()), label)', 'if sec[k].strip()), "")'),
     ("the section's last line has no heading below it", 'if sec[k].strip()), prev_label)', 'if sec[k].strip()), "")'),
+    # 10-25 — carried items as bullets, chips the markdown cannot see
+    ("the export's Done chip is ignored by the carry", 'if normalise(text) in chip_closed:', 'if False:'),
+    ("a missing export section reads as no chips",
+     'raise SystemExit(f"tidy: section {label!r} not in the export — wrong file?")', 'return set()'),
+    ("bullets under the heading are not checked for duplicates",
+     '                live.add(normalise(strip_status(text)))\n', ''),
+    ("carried bullets below do not need the 還沒收掉的 line",
+     'carried or CARRIED_BULLET_RE.match(FOOTNOTE_RE.sub("", nxt_line))),', 'carried),'),
+    ("an existing 還沒收掉的 line is not noticed", 'not has_header and bool(', 'bool('),
+    ("· lines are never considered for removal",
+     'm = BULLET_RE.match(sec[i]) or DOT_ITEM_RE.match(sec[i])', 'm = BULLET_RE.match(sec[i])'),
+    ("any · line may be removed, summaries included",
+     r'r"^()·\s*((?:P\d\s+.*|.*〔\s*(?:WB\s*\d{1,2}/\d{1,2}|\d{4}-W\d{1,2})\s*起\s*〕.*?))\s*$")',
+     r'r"^()·\s*(.*?)\s*$")'),
+    ("a chip glued to 〕 is not read",
+     r'CLOSED_TAIL_RE = re.compile(r"(?:\s+|(?<=〕))', r'CLOSED_TAIL_RE = re.compile(r"(?:\s+)'),
+    ("a · line's priority chip is never stripped from its key",
+     'dot, t = "·", t[1:].lstrip()', 'pass'),
+    ("a status chip glued to 〕 stays in the preview key",
+     r'r"(?:(?<=\s)|(?<=〕)|^)(Done', r'r"(?:(?<=\s)|^)(Done'),
+    # 10-25 — last week's agenda, mid-line chips, finished blocks
+    ("a mid-line Done chip is never read", 'return CLOSED_MID_RE.search(text)', 'return None'),
+    ("a typed 完成 mid-line counts as a chip",
+     r'r"(?<=\s)(Done|Drop|Dropped)(?=\s)"', r'r"(?<=\s)(Done|Drop|Dropped|完成)(?=\s)"'),
+    ("a mid-line chip ignores an open word on the same line",
+     'if not OPEN_ANY_RE.search(text):\n            return CLOSED_MID_RE', 'if True:\n            return CLOSED_MID_RE'),
+    ("last week's agenda is never removed", 'if AGENDA_RE.match(sec[i].strip()):', 'if False:'),
+    ("an agenda is removed without proof",
+     '            if copied(tree, entry):\n                res["closed"].append(entry)',
+     '            if True:\n                res["closed"].append(entry)'),
+    ("the agenda block stops at its stamp",
+     'while j < len(sec) and sec[j].strip().startswith("·"):', 'while False:'),
+    ("a department heading is offered for closing",
+     'or any(n in sec[a] for n in names):', 'or False:'),
+    ("a finished-looking block with an open item is offered anyway",
+     'if done >= 2 and not opened:', 'if done >= 2:'),
+    ("step 8 leaves a mixed block's typed line behind",
+     'if not any(sec[k].strip().startswith("·") for k in body):',
+     'if not all(sec[k].strip().startswith("·") for k in body):'),
+    ("a formatted label's sub-bullets are not read as its items",
+     'kids.append(c.group(2))', 'pass'),
+    ("the carried sub-bullets are swallowed into the block they outlive",
+     'if label != CARRY_LABEL and inline is None:', 'if inline is None:'),
+    ("step 7 takes a summary sub-bullet for a closed work item",
+     'if i in machine:', 'if False:'),
+    ("an item is split on a ／ inside brackets",
+     'elif k in cuts and depth == 0:', 'elif k in cuts:'),
+    ("the heading above does not break a tie between twin blocks",
+     'spots = [i for i in spots if i and above.startswith(', 'spots = [i for i in spots if i or above.startswith('),
+    ("an indented sub-bullet is not seen as visible",
+     r'MD_BULLET_RE = re.compile(r"^\s*[-*]\s+(.*?)\s*$")', r'MD_BULLET_RE = re.compile(r"^[-*]\s+(.*?)\s*$")'),
 ]
 
 

@@ -46,7 +46,9 @@ def carry_lookup(carryover):
 
 
 def render(record, carries):
-    lines = []
+    """[(label, [items])] in the block's order. The labels are frozen: tidy_blocks.walk_block and
+    carryover.LABEL_RE know a block only by them."""
+    out = []
 
     if record["last_week"]:
         parts = []
@@ -55,28 +57,81 @@ def render(record, carries):
             weeks = carries.get(norm_key(item["text"]))
             tag = f" ↻{weeks}週" if weeks and item["status"] != "DONE" else ""
             parts.append(f"{item['text']} {label}{tag}")
-        lines.append("· 上週 — " + " ／ ".join(parts))
+        out.append(("上週", parts))
 
     if record["this_week"]:
-        lines.append("· 本週 — " + " ／ ".join(i["text"] for i in record["this_week"]))
+        out.append(("本週", [i["text"] for i in record["this_week"]]))
 
     nums = record["numbers"]
     if nums["parsed"]:
-        lines.append("· 數字 — " + " ／ ".join(f"{k} {v}" for k, v in nums["parsed"].items()))
+        out.append(("數字", [f"{k} {v}" for k, v in nums["parsed"].items()]))
     elif nums["raw"] and not nums.get("empty"):
-        lines.append("· 數字 — " + nums["raw"])
+        out.append(("數字", [nums["raw"]]))
 
     if record["blocker"]:
-        lines.append("· 卡關 — " + record["blocker"])
+        out.append(("卡關", [record["blocker"]]))
 
     if record["missing_lines"]:
         zh = {"last_week": "上週", "this_week": "本週", "numbers": "數字", "blocker": "卡關"}
-        lines.append("· 沒寫 — " + "、".join(zh[k] for k in record["missing_lines"]))
+        out.append(("沒寫", ["、".join(zh[k] for k in record["missing_lines"])]))
 
-    return lines
+    return out
+
+
+def body_text(sections):
+    """The block under its stamp, as written since 2026-10-25 (the owner: one item per bullet, no
+    typed `·` lines): each label on its own line, each item one tab in. ops() makes it a list, and
+    the tab is what makes an item a sub-bullet."""
+    lines = []
+    for label, items in sections:
+        lines.append(label)
+        lines += ["\t" + re.sub(r"\s+", " ", i).strip() for i in items if i.strip()]
+    return "\n".join(lines)
+
+
+def utf16(text):
+    """Docs indices count UTF-16 code units: an emoji is two."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def ops(blocks, at, tab_id):
+    """batch_update_doc operations writing each block at `at[heading]` (the heading's end_index),
+    highest first. Per block: insert the stamp and body, clear any bullet and indent the text took
+    from the paragraph it landed on, then one bullet list over the body. Docs counts leftover indent
+    as an extra level, and will not nest the first line of a list: the first body line is a label,
+    so it never needs to."""
+    out = []
+    for b in sorted(blocks, key=lambda b: at[b["heading"]], reverse=True):
+        i = at[b["heading"]]
+        text = b["stamp_line"] + "\n" + b["body"] + "\n"
+        end = i + utf16(text) - 1
+        out += [{"type": "insert_text", "index": i, "text": text},
+                {"type": "create_bullet_list", "start_index": i, "end_index": end, "list_type": "NONE"},
+                {"type": "update_paragraph_style", "start_index": i, "end_index": end,
+                 "indent_start": 0, "indent_first_line": 0},
+                {"type": "create_bullet_list", "start_index": i + utf16(b["stamp_line"]) + 1,
+                 "end_index": end, "list_type": "UNORDERED"}]
+    return [{**o, "tab_id": tab_id} for o in out]
 
 
 def main():
+    if sys.argv[1:2] == ["ops"]:
+        op = argparse.ArgumentParser(description="the write operations for render_block's blocks")
+        op.add_argument("cmd")
+        op.add_argument("--blocks", required=True, help="render_block.py's output")
+        op.add_argument("--at", required=True,
+                        help='JSON {"<heading>": <that heading\'s end_index>} from inspect_doc_structure')
+        op.add_argument("--tab", required=True, help="the tab id every operation must carry")
+        a = op.parse_args()
+        blocks = json.load(open(a.blocks, encoding="utf-8"))["blocks"]
+        at = json.load(open(a.at, encoding="utf-8"))
+        missing = [b["heading"] for b in blocks if b["heading"] not in at]
+        if missing:
+            raise SystemExit(f"render_block ops: no index for {missing} — write nothing")
+        json.dump(ops(blocks, at, a.tab), sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+        return
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--reports", required=True)
     ap.add_argument("--routing", required=True)
@@ -114,8 +169,10 @@ def main():
             "heading": heading["heading"],
             "owner_email": email,
             "owner_name": heading.get("owner_name"),
-            "text": "\n".join([header] + body),
-            "lines": len(body) + 1,
+            "stamp_line": header,
+            "body": body_text(body),
+            "text": header + "\n" + body_text(body),
+            "lines": 1 + sum(1 + len(items) for _, items in body),
         })
 
     routed_emails = {h["owner_email"] for h in routing["headings"]}

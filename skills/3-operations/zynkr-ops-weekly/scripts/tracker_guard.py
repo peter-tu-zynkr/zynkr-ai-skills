@@ -287,6 +287,13 @@ def decide(event, tid, mode):
         return None
     if mode == "apply" and tool == APPLY_TOOL:
         return None
+    if tool == "Bash":
+        # W41 and W42: a read result saved through a heredoc carried the tracker id (the Weeks row holds
+        # it), and "do not retry" ended three apply runs that had a safe way on.
+        return ("zynkr-ops-weekly tracker guard: this Bash command contains the Main Tracker's id, so it "
+                "was refused (SKB-044 AC-3.5). A saved read result usually carries that id: save each "
+                "result with the Write tool instead, then run the script command on its own, with "
+                "nothing else in it. That retry is allowed. Never touch the Main Tracker from Bash.")
     return ("zynkr-ops-weekly tracker guard: the %s beat may not call %s on the Main Tracker. "
             "Only apply writes it (SKB-044 AC-3.5). Do not retry; report it in the receipt."
             % (mode or "(no mode)", tool))
@@ -495,6 +502,12 @@ def selftest():
             {"tool_name": GW + "read_sheet_values", "tool_input": {"spreadsheet_id": LEDGER}},
             "snapshot", tid=None, config=missing), 0),
         ("unreadable hook input", run_hook(None, "snapshot", raw="not json"), 2),
+        ("a Bash refusal offers the Write-tool retry",
+         "Write tool" in (decide({"tool_name": "Bash", "tool_input": {"command": "cat > wr.txt <<'X'\n" + TID + "\nX"}},
+                                 TID, "apply") or ""), True),
+        ("a tracker write refusal says do not retry",
+         "Do not retry" in (decide({"tool_name": GW + "modify_sheet_values", "tool_input": {"spreadsheet_id": TID}},
+                                   TID, "snapshot") or ""), True),
         ("private folder, without the setting", run_hook(
             {"tool_name": "Read", "tool_input": {"file_path": PRIVATE + "/2026-W42/report.md"}}, "agenda"), 0),
         ("private folder, config unreadable", run_hook(
@@ -521,6 +534,8 @@ MUTATIONS = [
         ('if mode == "apply" and tool == APPLY_TOOL:', 'if mode == "apply":')]),
     ("reads no longer exempt", [
         ("if not hit or is_read(tool):", "if not hit:")]),
+    ("a Bash refusal says do not retry", [
+        ('    if tool == "Bash":\n        # W41 and W42', '    if False:\n        # W41 and W42')]),
     ("Bash not checked", [
         ("hit = tid in json.dumps(args, ensure_ascii=False)", "hit = False")]),
     ("payload fields checked too", [

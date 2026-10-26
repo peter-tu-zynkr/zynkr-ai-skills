@@ -22,6 +22,9 @@ DATE_HEADING_RE = re.compile(
 )
 STATUS_RE = re.compile(r"\b(done|wip|blocked|not\s*started|in\s*progress)\b", re.I)
 STAMP_RE = re.compile(r"〔自動彙整")
+# A summary line tidy formatted (SKB-039, 10-25): `- 上週` with the items as sub-bullets. Ours, not a
+# human's item -- except the sub-bullets of `還沒收掉的`, the carried items, which count as before.
+LABEL_RE = re.compile(r"^(\s*)[-*]\s+(上週|本週|數字|卡關|沒寫|還沒收掉的)\s*(?:—.*)?$")
 # Deliberately strict. At 0.82 the walk-back CHAINS: each week it matches a slightly
 # different item, and the streak drifts across unrelated work. On the real Doc that
 # produced "CPM, CPC, Conversion rate, ROAS ↻35週" for an item present in 5% of sections.
@@ -54,6 +57,7 @@ def normalise(text):
 def sections(md):
     """Ordered list of dated sections, newest first as the Doc stores them."""
     out, current = [], None
+    in_block, label_depth = False, None   # inside our stamped block; depth of a summary label
     for line in md.splitlines():
         m = HEADING_RE.match(line)
         if m:
@@ -66,7 +70,19 @@ def sections(md):
         if current is None:
             continue
         if STAMP_RE.search(line):
+            in_block, label_depth = True, None
             continue  # our own block, not a human's item
+        if in_block and line.strip():
+            lm = LABEL_RE.match(line)
+            depth = len(line) - len(line.lstrip())
+            if line.strip().startswith("·"):
+                continue
+            if lm:
+                label_depth = None if lm.group(2) == "還沒收掉的" else depth
+                continue
+            if label_depth is not None and depth > label_depth and BULLET_RE.match(line):
+                continue  # an item of our summary
+            in_block = False
         bm = BULLET_RE.match(line)
         if bm:
             raw = bm.group(1)

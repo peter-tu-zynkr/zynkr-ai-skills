@@ -93,6 +93,21 @@ MIN_ITEM_LEN = 2
 # One line of a `· 還沒收掉的 —` list: `· 更新一篇seo〔WB 8/24 起〕`. Keyed on the week label + 起,
 # not on the absence of `—`, because an item can itself contain one (`客戶甲 — 導入諮詢`).
 CARRIED_RE = re.compile(r"^·\s*(.+?)\s*〔\s*(WB\s*\d{1,2}/\d{1,2}|\d{4}-W\d{1,2})\s*起\s*〕\s*$")
+# Since 2026-10-25 a carried item is written as a real list bullet (`- 更新一篇seo〔WB 8/24 起〕` in
+# markdown), so the team can mark it Done/Drop like any of their own bullets and step 7 clears it a
+# week later. A bullet ends the block (block_extent), so these sit below it, as human lines do.
+CARRIED_BULLET_RE = re.compile(r"^\s*[-*]\s+(.+?)\s*〔\s*(?:WB\s*\d{1,2}/\d{1,2}|\d{4}-W\d{1,2})\s*起\s*〕")
+# The same carried item in the export, its chips rendered: `· P2 更新一篇seo〔WB 8/24 起〕` or `* …`.
+CARRIED_EXPORT_RE = re.compile(r"^(?:·|\*)\s*(.+?)\s*〔\s*(?:WB\s*\d{1,2}/\d{1,2}|\d{4}-W\d{1,2})\s*起\s*〕$")
+MD_BULLET_RE = re.compile(r"^\s*[-*]\s+(.*?)\s*$")
+# Since 2026-10-25 tidy formats the block it keeps as bullets (the owner: no typed `·` lines after
+# tidying, one item per bullet). `· 上週 — 甲 完成 ／ 乙 WIP` becomes a label bullet with its items
+# under it — markdown `- 上週` / `  - 甲 完成`, export `* 上週` / `    * 甲 完成`. These are still
+# the machine's lines, never the team's: the label and its sub-bullets belong to the block. The
+# one exception is `還沒收掉的`, whose sub-bullets are the carried items the team closes.
+LABEL_BULLET_RE = re.compile(r"^(\s*)[-*]\s+(上週|本週|數字|卡關|沒寫|還沒收掉的)\s*(?:—\s*(.*?))?\s*$")
+CHILD_RE = re.compile(r"^(\s*)[-*]\s+(.*?)\s*$")
+CARRY_LABEL = "還沒收掉的"
 
 # `get_doc_as_markdown` inlines comment anchors as footnote refs (`某件事[^c5]`), and puts them
 # at the END of a line too (`…〔WB 8/24 起〕[^c6]`). Strip before matching anything.
@@ -146,7 +161,23 @@ def split_items(line):
     """`· 本週 — a ／ b ／ c` → ['a', 'b', 'c']."""
     if "—" not in line:
         return []
-    return [x.strip() for x in ITEM_SPLIT_RE.split(line.split("—", 1)[1]) if x.strip()]
+    # A separator inside brackets is part of one item: `入營審核（Hahow ／ 銷售講座學員） 完成`
+    # was split in two, and as bullets it showed as two broken items (10-25).
+    text = line.split("—", 1)[1]
+    cuts = {m.start(): m.end() for m in ITEM_SPLIT_RE.finditer(text)}
+    parts, depth, start, k = [], 0, 0, 0
+    while k < len(text):
+        if text[k] in "（(〔【[":
+            depth += 1
+        elif text[k] in "）)〕】]":
+            depth = max(0, depth - 1)
+        elif k in cuts and depth == 0:
+            parts.append(text[start:k])
+            start = k = cuts[k]
+            continue
+        k += 1
+    parts.append(text[start:])
+    return [x.strip() for x in parts if x.strip()]
 
 
 def is_line(s, word):
@@ -175,24 +206,54 @@ def find_groups(sec):
     return groups
 
 
-def block_extent(sec, start):
-    """A block runs from its stamp to the last `·` line before the next block, heading or human line.
+def walk_block(sec, start):
+    """Read the block stamped at `start`, typed or formatted.
 
-    The `·` test is what keeps human content out of range: in the live Doc the auto lines all
-    begin `·` and a human's bullets begin `-`, so the first `-` ends the block.
+    Returns (last, rows, machine): the index of its last line; each summary line in the typed
+    form, `· 上週 — 甲 完成 ／ 乙 WIP`, whichever shape the Doc holds it in; and the indices of the
+    label bullets and their sub-bullets (never a work item of the team's).
+
+    The shape is what keeps human content out of range: the auto lines begin `·` or are a label
+    bullet with its sub-bullets, and the team's bullets are neither, so the first of them ends the
+    block. The carried sub-bullets under `還沒收掉的` end it too: they outlive the block.
     """
-    end = start
+    end, rows, machine = start, [], set()
     k = start + 1
     while k < len(sec):
-        s = sec[k].strip()
+        raw = FOOTNOTE_RE.sub("", sec[k])
+        s = raw.strip()
         if "〔自動彙整" in s or HEADING_RE.match(s):
             break
+        lb = LABEL_BULLET_RE.match(raw)
         if s.startswith("·"):
+            rows.append(s)
             end = k
+        elif lb:
+            label, inline = lb.group(2), lb.group(3)
+            end = k
+            machine.add(k)
+            kids, j = [], k + 1
+            if label != CARRY_LABEL and inline is None:
+                while True:
+                    n = next((q for q in range(j, len(sec)) if sec[q].strip()), len(sec))
+                    c = CHILD_RE.match(FOOTNOTE_RE.sub("", sec[n])) if n < len(sec) else None
+                    if not c or len(c.group(1)) <= len(lb.group(1)):
+                        break
+                    kids.append(c.group(2))
+                    machine.add(n)
+                    end, j = n, n + 1
+                k = end
+            text = inline if inline is not None else " ／ ".join(kids)
+            rows.append(f"· {label} — {text}".rstrip())
         elif s:
             break
         k += 1
-    return end
+    return end, rows, machine
+
+
+def block_extent(sec, start):
+    """A block runs from its stamp to its last summary line — see walk_block."""
+    return walk_block(sec, start)[0]
 
 
 def owner_of(sec, index):
@@ -204,7 +265,32 @@ def owner_of(sec, index):
     return "(section top)"
 
 
-def analyse(lines, target=None, today=None):
+def closed_in_export(export_lines, label):
+    """Keys of the carried items a chip marks Done/Drop in section `label` of the Drive export.
+
+    The markdown read drops every dropdown chip, so `· 更新一篇seo〔WB 8/24 起〕` with a `Done` chip
+    reads as open there. Re-carrying it re-types the text and loses the chip, so the item came
+    back open every week (the owner's 10-25 screenshot). Only the export shows the chip."""
+    if export_lines is None:
+        return set()
+    marks = export_sections(export_lines)
+    hit = [k for k, (_, lab) in enumerate(marks) if lab == label]
+    if not hit:
+        raise SystemExit(f"tidy: section {label!r} not in the export — wrong file?")
+    a = marks[hit[0]][0] + 1
+    b = marks[hit[0] + 1][0] if hit[0] + 1 < len(marks) else len(export_lines)
+    keys = set()
+    for line in export_lines[a:b]:
+        t = clean(line).strip()
+        if not CLOSED_TAIL_RE.search(t):
+            continue
+        t = CLOSED_TAIL_RE.sub("", t)
+        if m := CARRIED_EXPORT_RE.match(t):
+            keys.add(normalise(PRIORITY_RE.sub("", m.group(1))))
+    return keys
+
+
+def analyse(lines, target=None, today=None, export_lines=None):
     marks = sections(lines)
     if not marks:
         raise SystemExit("tidy: no dated week section found — is this the right tab?")
@@ -217,6 +303,7 @@ def analyse(lines, target=None, today=None):
         start, label = marks[0]
     nxt = next((i for i, _ in marks if i > start), len(lines))
     sec = lines[start:nxt]
+    chip_closed = closed_in_export(export_lines, label)
 
     out = []
     for group in find_groups(sec):
@@ -224,11 +311,14 @@ def analyse(lines, target=None, today=None):
         for s in group:
             stamp = STAMP_RE.search(sec[s])
             wk = stamp.group(1) if stamp else "?"
+            last, rows, machine = walk_block(sec, s)
             blocks.append({
                 "week": wk,
                 "stamp": stamp.group(2) if stamp else "",
                 "first": s,
-                "last": block_extent(sec, s),
+                "last": last,
+                "rows": rows,
+                "machine": machine,
                 "key": (week_key(wk, stamp.group(2) if stamp else "", today),
                         stamp.group(2) if stamp else ""),
             })
@@ -240,19 +330,31 @@ def analyse(lines, target=None, today=None):
 
         closed, live = set(), set()
         for b in blocks:
-            for k in range(b["first"], b["last"] + 1):
-                s = sec[k].strip()
+            for s in b["rows"]:
                 if is_line(s, "上週"):
                     for item in split_items(s):
                         if DONE_RE.search(item):
                             closed.add(close_key(item))
-        for k in range(keep["first"], keep["last"] + 1):
-            s = FOOTNOTE_RE.sub("", sec[k]).strip()
+        for s in keep["rows"]:
             for item in split_items(s):
                 live.add(normalise(strip_status(item)))
             # An item the kept block already carries is still visible too.
             if m := CARRIED_RE.match(s):
                 live.add(normalise(m.group(1)))
+        # Bullets under the same heading are visible too: an item already carried as a bullet, or
+        # already on someone's own list, must not be carried again.
+        top = next((k for k in range(group[0], -1, -1) if HEADING_RE.match(sec[k].strip())), 0)
+        bottom = next((k for k in range(group[-1] + 1, len(sec))
+                       if HEADING_RE.match(sec[k].strip())), len(sec))
+        inside = set().union(*(range(b["first"], b["last"] + 1) for b in blocks))
+        for k in range(top + 1, bottom):
+            if k in inside:
+                continue            # a formatted block's sub-bullets are its summary, read above
+            if m := MD_BULLET_RE.match(FOOTNOTE_RE.sub("", sec[k])):
+                text = m.group(1)
+                if c := CARRIED_BULLET_RE.match(sec[k]):
+                    text = c.group(1)
+                live.add(normalise(strip_status(text)))
 
         # Candidates in document order; each one keeps the OLDEST week it was ever seen in, so an
         # item that sat on a carried list since WB 8/24 does not look new because it also appears
@@ -260,12 +362,10 @@ def analyse(lines, target=None, today=None):
         found = {}
         for b in archive:
             planned = set()
-            for k in range(b["first"], b["last"] + 1):
-                s = sec[k].strip()
+            for s in b["rows"]:
                 if is_line(s, "本週"):
                     planned |= {normalise(strip_status(x)) for x in split_items(s)}
-            for k in range(b["first"], b["last"] + 1):
-                s = FOOTNOTE_RE.sub("", sec[k]).strip()
+            for s in b["rows"]:
                 if is_line(s, "本週"):
                     items = [(strip_status(x), b["week"]) for x in split_items(s)]
                 elif is_line(s, "上週"):
@@ -280,6 +380,8 @@ def analyse(lines, target=None, today=None):
                     tail = STATUS_RE.search(text)
                     if tail and DONE_RE.search(tail.group(0)):
                         continue            # `· 甲件事 完成〔WB 8/24 起〕` — marked done inline
+                    if normalise(text) in chip_closed:
+                        continue            # a Done/Drop chip after it, seen only in the export
                     items = [(strip_status(text), m.group(2))]
                 else:
                     continue
@@ -298,6 +400,12 @@ def analyse(lines, target=None, today=None):
                         found[key].update(since=since, _wk=wk)
         carried = [{"text": c["text"], "since": c["since"]} for c in found.values()]
 
+        # Where step 5 writes: after the kept block's last line. It needs a `· 還沒收掉的 —` line
+        # there when it has items to write or when carried bullets already sit below the group
+        # (the archived block above them took the old one with it).
+        last = max(block_extent(sec, s) for s in group)
+        nxt_line = next((sec[k] for k in range(last + 1, len(sec)) if sec[k].strip()), "")
+        has_header = any(is_line(s, CARRY_LABEL) for s in keep["rows"])
         out.append({
             "owner": owner_of(sec, group[0]),
             "keep": {"week": keep["week"], "stamp": keep["stamp"],
@@ -305,6 +413,8 @@ def analyse(lines, target=None, today=None):
             "archive": [{"week": b["week"], "stamp": b["stamp"],
                          "lines": sec[b["first"]:b["last"] + 1]} for b in archive],
             "carry": carried,
+            "carry_header_needed": not has_header and bool(
+                carried or CARRIED_BULLET_RE.match(FOOTNOTE_RE.sub("", nxt_line))),
         })
     return {"section": label, "groups": out,
             "totals": {
@@ -359,14 +469,28 @@ EXPORT_MARK_RE = re.compile(r"\[[a-z]{1,3}\]")      # the export's comment ancho
 BULLET_RE = re.compile(r"^( *)\*\s+(.*?)\s*$")
 PRIORITY_RE = re.compile(r"^P\d\s+")
 # English is case-SENSITIVE on purpose: the chip says `Done`; "get the migration done" is a task.
-CLOSED_TAIL_RE = re.compile(r"\s+(Done|Drop|Dropped|完成|已完成|放棄|取消)$")
+# A chip a person adds after a carried item sits straight against its `〕`: `…〔WB 9/7 起〕Done`.
+CLOSED_TAIL_RE = re.compile(r"(?:\s+|(?<=〕))(Done|Drop|Dropped|完成|已完成|放棄|取消)$")
+# A chip with typed progress after it: `* 課程剪輯   Done 進度：2-4` (the owner, 10-25). Only the
+# English chip words, and only between spaces: a typed 完成 mid-line is a verb as often as a
+# status (`完成 CRM EDM drip handoff 並上線`).
+CLOSED_MID_RE = re.compile(r"(?<=\s)(Done|Drop|Dropped)(?=\s)")
+# Thursday's agenda. The scaffold copies it into the new week, where it is last week's agenda
+# until Thursday's `agenda` beat writes the new one (the owner, 10-25).
+AGENDA_RE = re.compile(r"^〔自動彙整[^〕]*〕\s*本週會議議程$")
 OPEN_ANY_RE = re.compile(
-    r"(?:^|\s)(In Progress|Not Started|Pause|Paused|Blocked|WIP|進行中|卡住|還沒開始|暫停)(?=\s|$)",
+    r"(?:^|\s|(?<=〕))(In Progress|Not Started|Pause|Paused|Blocked|WIP|進行中|卡住|還沒開始|暫停)(?=\s|$)",
     re.IGNORECASE)
 # A status chip can sit mid-line (`… In Progress 90%` — the 90% is typed text).
 STATUS_WORD_RE = re.compile(
-    r"(?:(?<=\s)|^)(Done|Drop|Dropped|In Progress|Not Started|Pause|Paused|Blocked|WIP|"
+    r"(?:(?<=\s)|(?<=〕)|^)(Done|Drop|Dropped|In Progress|Not Started|Pause|Paused|Blocked|WIP|"
     r"完成|已完成|放棄|取消|進行中|卡住|還沒開始|暫停)(?=\s|$)")
+# A typed `·` line that is one work item, not an auto summary line: a carried item
+# (`· 更新一篇seo〔WB 8/24 起〕Done`) or one that starts with a priority chip (`· P2 Update content
+# matrix Drop`). `· 上週 — 甲 完成` is a summary and never matches: no 起 marker, no chip in front.
+# It has no sub-items, so it is removed alone; rules 3 and 4 apply exactly as to a bullet.
+DOT_ITEM_RE = re.compile(
+    r"^()·\s*((?:P\d\s+.*|.*〔\s*(?:WB\s*\d{1,2}/\d{1,2}|\d{4}-W\d{1,2})\s*起\s*〕.*?))\s*$")
 MAILTO_NAME_RE = re.compile(r"\[([^\]]+)\]\(mailto:")
 MD_HEADING_RE = re.compile(r"^#{1,6}\s+(.*)$")
 
@@ -400,8 +524,12 @@ def line_keys(line, names):
     is what makes the final pick safe.
     """
     t = EXPORT_MARK_RE.sub("", line.strip().lstrip("﻿"))
+    dot = ""
     if m := BULLET_RE.match(t):
         t = m.group(2)
+    elif t.startswith("·"):
+        # A typed `·` line keeps its dot in the preview; the chips after it are what go.
+        dot, t = "·", t[1:].lstrip()
     variants = set()
     for a in {t, PRIORITY_RE.sub("", t)}:
         for b in {a, STATUS_WORD_RE.sub("", a)}:
@@ -409,7 +537,7 @@ def line_keys(line, names):
             for name in sorted(names, key=len, reverse=True):
                 b = b.replace(name, "")
             variants.add(b)
-    return {nonspace(v) for v in variants} - {""}
+    return {nonspace(dot + v) for v in variants} - {"", dot}
 
 
 def heading_keys(markdown, names):
@@ -431,7 +559,7 @@ def closed_bullets(lines, names, headings):
     names, headings = set(names), set(headings)
     marks = export_sections(lines)
     res = {"section": marks[0][1] if marks else None, "previous": None, "refused": None,
-           "closed": [], "skipped": [], "section_lines": []}
+           "closed": [], "skipped": [], "section_lines": [], "done_blocks": []}
     if len(marks) < 2:
         res["refused"] = "fewer than two dated sections — there is nothing to prove a copy against"
         return res
@@ -460,16 +588,52 @@ def closed_bullets(lines, names, headings):
         return next((block[k].strip() for k in range(i - 1, -1, -1)
                      if block[k].strip() and heading(block[k])), "(section top)")
 
+    def copied(tree, entry):
+        return any(prev[k:k + len(tree)] == tree and owner(prev, k) == entry["owner"]
+                   for k in range(len(prev) - len(tree) + 1))
+
+    def status_of(text):
+        """The closing chip of one bullet's text, or None. A line that also says it is open is not closed."""
+        if tail := CLOSED_TAIL_RE.search(text):
+            return tail
+        if not OPEN_ANY_RE.search(text):
+            return CLOSED_MID_RE.search(text)
+        return None
+
+    # A formatted block's label bullets and their sub-bullets are the machine's summary
+    # (`* 上週` / `    * 甲 完成`): a 完成 there is a report, never a bullet to delete.
+    machine = set().union(*(walk_block(sec, k)[2] for k, l in enumerate(sec) if "〔自動彙整" in l))
+
     i = 0
     while i < len(sec):
-        m = BULLET_RE.match(sec[i])
-        tail = CLOSED_TAIL_RE.search(m.group(2)) if m else None
+        if i in machine:
+            i += 1
+            continue
+        if AGENDA_RE.match(sec[i].strip()):
+            j = i + 1
+            while j < len(sec) and sec[j].strip().startswith("·"):
+                j += 1
+            tree = sec[i:j]
+            entry = {"at": i, "line": sec[i].strip(), "status": "上週的議程",
+                     "owner": owner(sec, i), "lines": tree}
+            if copied(tree, entry):
+                res["closed"].append(entry)
+            else:
+                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is — this"
+                                                          f" week's agenda, not a copy"})
+            i = j
+            continue
+        m = BULLET_RE.match(sec[i]) or DOT_ITEM_RE.match(sec[i])
+        tail = None
+        if m:
+            tail = status_of(m.group(2)) if m.re is BULLET_RE else CLOSED_TAIL_RE.search(m.group(2))
         if not tail:
             i += 1
             continue
         depth, j = len(m.group(1)), i + 1
-        while j < len(sec) and (c := BULLET_RE.match(sec[j])) and len(c.group(1)) > depth:
-            j += 1
+        if m.re is BULLET_RE:
+            while j < len(sec) and (c := BULLET_RE.match(sec[j])) and len(c.group(1)) > depth:
+                j += 1
         tree = sec[i:j]
         entry = {"at": i, "line": m.group(2), "status": tail.group(1),
                  "owner": owner(sec, i), "lines": tree}
@@ -483,14 +647,32 @@ def closed_bullets(lines, names, headings):
             res["skipped"].append({**entry, "reason": f"an item under it is still open: {open_child}"})
             i += 1          # its own closed sub-items still get their turn
             continue
-        proved = any(prev[k:k + len(tree)] == tree and owner(prev, k) == entry["owner"]
-                     for k in range(len(prev) - len(tree) + 1))
-        if not proved:
+        if not copied(tree, entry):
             res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is under the same"
                                                       f" heading — not a scaffold copy, left alone"})
         else:
             res["closed"].append(entry)
         i = j
+
+    # A heading whose chipped items are ALL Done/Drop, none open, looks finished as a whole
+    # (`Claude Code 課程` after the course launched — the owner closed it by hand, 10-25). Only a
+    # person knows the project is over, so it is asked about, never deleted.
+    # A department heading (`#Sales` with its owner's chip) routes the week and is never offered.
+    heads = [k for k, line in enumerate(sec) if line.strip() and heading(line)] + [len(sec)]
+    for a, b in zip(heads, heads[1:]):
+        if sec[a].lstrip("﻿").startswith("#") or any(n in sec[a] for n in names):
+            continue
+        done = opened = 0
+        for k in range(a + 1, b):
+            m = BULLET_RE.match(sec[k]) or DOT_ITEM_RE.match(sec[k])
+            if not m or k in machine:
+                continue
+            if OPEN_ANY_RE.search(m.group(2)):
+                opened += 1
+            elif status_of(m.group(2)):
+                done += 1
+        if done >= 2 and not opened:
+            res["done_blocks"].append({"heading": sec[a].strip(), "done": done})
     return res
 
 
@@ -561,6 +743,165 @@ def locate_closed(res, paragraphs, names):
     located.sort(key=lambda e: e["start_index"], reverse=True)
     assert_disjoint(located)
     return {**res, "closed": located, "skipped": skipped}
+
+
+# ── step 8: the kept block as bullets (the owner, 10-25) ─────────────────────
+# `· 上週 — 甲 完成 ／ 乙 WIP` → a `上週` bullet with `甲 完成` and `乙 WIP` as sub-bullets, and the
+# carried items re-nested under a `還沒收掉的` bullet. The stamp stays a plain line: it is the key.
+TYPED_ROW_RE = re.compile(r"^·\s*(上週|本週|數字|卡關|沒寫|還沒收掉的)\s*—\s*(.*?)\s*$")
+
+
+def unmd(text):
+    """Markdown text as the Doc holds it: no person links, link targets or escapes."""
+    s = re.sub(r"\[([^\]]*)\]\(mailto:[^)]*\)", "", FOOTNOTE_RE.sub("", text))
+    s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
+    return re.sub(r"\\(.)", r"\1", s)
+
+
+def md_text(line):
+    """A markdown line as the Doc holds its text: no bullet or heading marks either."""
+    s = unmd(line)
+    if c := CHILD_RE.match(s):
+        s = c.group(2)
+    return s.strip().lstrip("#").strip()
+
+
+def utf16(text):
+    """Docs indices count UTF-16 code units: an emoji is two."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def format_plan(lines, paragraphs, tab_id, target=None):
+    """The batch_update_doc operations that turn each typed kept block into bullets, highest first.
+
+    A block is pinned the way step 7 pins a bullet: its stamp and every summary line must match
+    the structure's previews at exactly one place in the section, and the carried items under it
+    must be the very next paragraphs. Anything else is skipped with a reason, never guessed."""
+    marks = sections(lines)
+    if not marks:
+        raise SystemExit("tidy --format: no dated week section found — is this the right tab?")
+    hit = [(i, lab) for i, lab in marks if lab == target] if target else marks[:1]
+    if not hit:
+        raise SystemExit(f"tidy --format: section {target!r} not in the Doc")
+    start, label = hit[0]
+    sec = lines[start:next((i for i, _ in marks if i > start), len(lines))]
+
+    heads = [k for k, p in enumerate(paragraphs)
+             if nonspace(p.get("text_preview", "")) == nonspace(label)]
+    if len(heads) != 1:
+        raise SystemExit(f"tidy --format: expected one {label!r} heading in the structure,"
+                         f" found {len(heads)} — wrong tab?")
+    stop = next((k for k in range(heads[0] + 1, len(paragraphs))
+                 if EXPORT_SECTION_RE.match(paragraphs[k].get("text_preview", "").strip())),
+                len(paragraphs))
+    filled = [k for k in range(heads[0] + 1, stop) if nonspace(paragraphs[k].get("text_preview", ""))]
+
+    res = {"section": label, "blocks": [], "skipped": [], "ops": []}
+    for s in (k for k, line in enumerate(sec) if "〔自動彙整" in line):
+        if AGENDA_RE.match(sec[s].strip()):
+            continue                    # last week's agenda goes whole in step 7, this week's stays
+        last, rows, _ = walk_block(sec, s)
+        body = [k for k in range(s + 1, last + 1) if sec[k].strip()]
+        if not any(sec[k].strip().startswith("·") for k in body):
+            continue                    # already bullets (or empty): nothing to do
+        # Any typed line re-types the whole block. Since 10-26 rollup writes bullets, and the one
+        # typed line is usually step 5's `· 還沒收掉的 —` under them.
+        entry = {"owner": owner_of(sec, s), "stamp": sec[s].strip(), "rows": rows}
+        why = None
+        if any(not TYPED_ROW_RE.match(r) for r in rows):
+            why = "a line in it is not a summary line (上週 · 本週 · 數字 · 卡關 · 沒寫 · 還沒收掉的)"
+        elif any(FOOTNOTE_RE.search(sec[k]) for k in body):
+            why = "a comment is anchored in it — re-typing the line would drop the comment"
+        elif any(re.search(r"\]\([^)]*\)", sec[k]) for k in body):
+            why = "a line in it holds a link — re-typing would drop the link"
+        kids = []
+        if not why and is_line(rows[-1], CARRY_LABEL):
+            j = last + 1
+            while j < len(sec) and (not sec[j].strip() or CARRIED_BULLET_RE.match(sec[j])):
+                if sec[j].strip():
+                    kids.append(j)
+                j += 1
+        if why:
+            res["skipped"].append({**entry, "reason": why})
+            continue
+
+        want = [nonspace(md_text(sec[k])) for k in [s] + body]
+        spots = [i for i in range(len(filled) - len(want) + 1)
+                 if all(preview_matches(paragraphs[filled[i + d]], {want[d]}) for d in range(len(want)))]
+        if len(spots) > 1:
+            # Rollup stamps every department alike, and two short blocks can read the same: the
+            # heading above breaks the tie.
+            above = next((nonspace(md_text(sec[k])) for k in range(s - 1, -1, -1) if sec[k].strip()), "")
+            spots = [i for i in spots if i and above.startswith(
+                nonspace(paragraphs[filled[i - 1]].get("text_preview", "")))]
+        if len(spots) != 1:
+            res["skipped"].append({**entry, "reason": f"matches {len(spots)} places in the Doc —"
+                                                      f" needs exactly one"})
+            continue
+        i = spots[0]
+        rowps = [paragraphs[filled[i + d]] for d in range(1, len(want))]
+        q = i + len(want)
+        kidps = [paragraphs[filled[q + d]] for d in range(len(kids)) if q + d < len(filled)]
+        after = paragraphs[filled[q + len(kids)]].get("text_preview", "") if q + len(kids) < len(filled) else ""
+        if len(kidps) != len(kids) or not all("起〕" in p.get("text_preview", "") or
+                                              not p.get("text_preview", "").endswith("\n")
+                                              for p in kidps) or (kids and "起〕" in after):
+            res["skipped"].append({**entry, "reason": "the carried items under it do not line up"
+                                                      " with the Doc — count or text differs"})
+            continue
+
+        out = []
+        for r in rows:
+            m = TYPED_ROW_RE.match(r)
+            out.append(m.group(1))
+            if m.group(1) != CARRY_LABEL:
+                out += ["\t" + unmd(x) for x in split_items(r)]
+        new = "\n".join(out)
+        r0 = rowps[0]["start_index"]
+        r1 = (kidps[0]["start_index"] if kidps else rowps[-1]["end_index"]) - 1
+        tail = (kidps[-1] if kidps else rowps[-1])["end_index"] - 1
+        grow = utf16(new) - (r1 - r0) + len(kidps)
+        ops = [{"type": "create_bullet_list", "start_index": r0, "end_index": tail, "list_type": "NONE"},
+               {"type": "update_paragraph_style", "start_index": r0, "end_index": tail,
+                "indent_start": 0, "indent_first_line": 0}]
+        ops += [{"type": "insert_text", "index": p["start_index"], "text": "\t"} for p in reversed(kidps)]
+        ops += [{"type": "delete_text", "start_index": r0, "end_index": r1},
+                {"type": "insert_text", "index": r0, "text": new},
+                {"type": "create_bullet_list", "start_index": r0, "end_index": tail + grow,
+                 "list_type": "UNORDERED"}]
+        res["blocks"].append({**entry, "start_index": r0, "items": len(out) - len(rows),
+                              "carried": len(kidps), "ops": ops})
+    res["blocks"].sort(key=lambda b: b["start_index"], reverse=True)
+    for a, b in zip(res["blocks"], res["blocks"][1:]):
+        if b["ops"][0]["end_index"] >= a["start_index"]:
+            raise SystemExit("tidy --format: overlapping blocks — refusing to write anything")
+    res["ops"] = [{**op, "tab_id": tab_id} for b in res["blocks"] for op in b.pop("ops")]
+    return res
+
+
+def format_check(plan, lines):
+    """After the write: each formatted block reads back as the same summary, as bullets."""
+    marks = sections(lines)
+    hit = [i for i, lab in marks if lab == plan["section"]]
+    if not hit:
+        return {"ok": False, "problems": [f"section {plan['section']!r} not in the Doc"]}
+    start = hit[0]
+    sec = lines[start:next((i for i, _ in marks if i > start), len(lines))]
+    got = {}
+    for s in (k for k, line in enumerate(sec) if "〔自動彙整" in line and not AGENDA_RE.match(line.strip())):
+        last, rows, machine = walk_block(sec, s)
+        typed = any(sec[k].strip().startswith("·") for k in range(s + 1, last + 1))
+        got.setdefault((owner_of(sec, s), sec[s].strip()), []).append((rows, typed))
+    problems = []
+    for b in plan["blocks"]:
+        seen = got.get((b["owner"], b["stamp"]), [])
+        if len(seen) != 1:
+            problems.append(f"{b['owner']}: {len(seen)} blocks stamped {b['stamp']} after the write")
+        elif seen[0][1]:
+            problems.append(f"{b['owner']}: still has typed · lines")
+        elif [split_items(r) or r for r in seen[0][0]] != [split_items(r) or r for r in b["rows"]]:
+            problems.append(f"{b['owner']}: the summary reads differently after the write")
+    return {"ok": not problems, "problems": problems}
 
 
 def plan_signature(res):
@@ -636,6 +977,9 @@ def report_closed(res):
               + (f"  +{subs} sub-items" if subs else ""))
     for e in res["skipped"]:
         print(f"  keep   {e['line'][:60]}  — {e['reason']}")
+    for b in res.get("done_blocks", []):
+        print(f"  ask    {b['heading'][:60]}  — all {b['done']} chipped items Done/Drop, none open:"
+              f" close the whole block? (a person's call)")
     print(f"\nclosed bullets to remove: {len(res['closed'])} | left alone: {len(res['skipped'])}")
 
 
@@ -647,12 +991,30 @@ def main():
     ap.add_argument("--report", action="store_true", help="human-readable instead of JSON")
     ap.add_argument("--closed", action="store_true",
                     help="SKB-039: find Done/Drop bullets to remove")
-    ap.add_argument("--export", help="get_drive_file_content output (plain text, chips rendered)")
+    ap.add_argument("--export", help="get_drive_file_content output (plain text, chips rendered);"
+                                      " without --closed it keeps Done/Drop items off the carry")
     ap.add_argument("--structure", help="inspect_doc_structure(detailed=true) output for the tab")
     ap.add_argument("--markdown", help="get_doc_as_markdown output — headings and person names")
     ap.add_argument("--expect", help="plan.json from the first --closed run: refuse unless identical")
     ap.add_argument("--postcheck", help="plan.json: after the delete, verify the section")
+    ap.add_argument("--format", action="store_true",
+                    help="step 8: the batch_update_doc operations that make each typed kept block"
+                         " bullets (needs --input, --structure, --tab)")
+    ap.add_argument("--tab", help="--format: the tab id every operation must carry")
+    ap.add_argument("--format-check", help="plan.json from --format: after the write, verify it")
     args = ap.parse_args()
+
+    if args.format or args.format_check:
+        lines = (read_tool_file(args.input) if args.input else sys.stdin.read()).split("\n")
+        if args.format_check:
+            out = format_check(json.load(open(args.format_check, encoding="utf-8")), lines)
+        else:
+            if not (args.structure and args.tab):
+                ap.error("--format needs --structure and --tab")
+            out = format_plan(lines, load_structure(args.structure), args.tab, args.section)
+        json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
+        print()
+        return
 
     if args.closed:
         if not args.export:
@@ -683,7 +1045,9 @@ def main():
         return
 
     raw = read_tool_file(args.input) if args.input else sys.stdin.read()
-    res = analyse(raw.split("\n"), args.section)
+    # --export (the Drive plain-text export) lets the carry see Done/Drop chips the markdown drops.
+    res = analyse(raw.split("\n"), args.section,
+                  export_lines=load_export(args.export) if args.export else None)
     if args.report:
         report(res)
     else:

@@ -115,13 +115,27 @@ earlier send by its exact subject, and `decisions` must never mistake it for its
 `↻N週` is also fixed: `norm_key()` in `render_block.py` strips it with the regex
 `↻\s*\d+\s*週`, so appending words to it silently breaks carry-over matching.
 
-`tidy` adds one line of its own, inside the kept block, above the items it carried forward:
+`tidy` adds one line of its own, as the kept block's last line, above the items it carried
+forward. The items are real bullets, not typed `·` lines (the owner, 10-25), so an owner can
+mark one `Done` or `Drop` like any of their own bullets and the chip survives. Rollup writes the
+block as bullets (since 10-26) and `tidy` step 8 folds its header in, so a block reads, one item
+per bullet, the labels as words alone:
 
 ```
-· 還沒收掉的 —
-  · 陌開三名客戶〔WB 9/7 起〕
-  · 建立 Zynkr 知識庫〔WB 9/7 起〕
+〔自動彙整 WB 10/19 · 10-20 09:40〕
+● 上週
+    ○ 官網改版 完成
+    ○ 名單匯入 WIP ↻2週
+● 本週
+    ○ LINE 名單清理
+● 還沒收掉的
+    ○ 陌開三名客戶〔WB 9/7 起〕
+    ○ 建立 Zynkr 知識庫〔WB 9/7 起〕
 ```
+
+The labels are frozen like the ones above: `walk_block` in `tidy_blocks.py` and `LABEL_RE` in
+`carryover.py` know a formatted block only by `上週` · `本週` · `數字` · `卡關` · `沒寫` ·
+`還沒收掉的` alone on a bullet.
 
 Plain, and deliberately not a status report: **不要解釋自己的機制**. It does not say how many
 blocks were archived, which weeks they came from, or that a tidy ran at all — the reader wants

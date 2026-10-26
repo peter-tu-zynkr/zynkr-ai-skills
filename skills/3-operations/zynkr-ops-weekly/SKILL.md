@@ -279,6 +279,14 @@ here, because rebuilding it loses the owner person chips, which no API can recre
    invents long streaks. Digits are stripped before comparison, so `90%` → `92%` is correctly
    one item rather than two.
 5. Write one marked block per department under its heading — `references/doc-write-rules.md`.
+   Since 2026-10-26 the block is **bullets**, one item per bullet (the owner: no typed `·` lines):
+   the stamp a plain line, then `● 上週` with `○ 甲 完成` under it, and so on. You never compute an
+   index: from one `inspect_doc_structure(tab_id, detailed=true)`, write
+   `{"<block heading>": <that heading paragraph's end_index>}` for every block to `at.json`, run
+   `python3 scripts/render_block.py ops --blocks <render_block output> --at at.json --tab <tab_id>`
+   and apply what it prints in **one** `batch_update_doc`, exactly as listed (highest first; per
+   block: insert, clear the bullet and indent the text took from where it landed, bullet the
+   body). Then re-read and confirm one stamp per heading.
 6. **Record the posts in the Weekly Ledger** (`SKB-044`), after the Doc blocks are verified, so
    Monday's recap reads a sheet instead of this Doc. `ledger.py` works out every range and value;
    make its printed calls exactly and save each result unchanged, as in 4.7.
@@ -441,9 +449,13 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    **≥ today**. On a Friday that is only true if Thursday's scaffold fired. If it did not, stop
    and report — and say so loudly, because this is the earliest the loop can detect a failed
    scaffold, three days before `rollup` needs the section.
-2. Fetch the Doc as markdown and run `scripts/tidy_blocks.py`. It returns, per department
-   group: the block to `keep`, the blocks to `archive`, and the still-open items to `carry`.
-   It writes nothing and makes every judgement call — do not re-derive its decisions by hand.
+2. Fetch the Doc as markdown, and the Drive plain-text export with `get_drive_file_content` — the
+   only read that shows a `Done`/`Drop` chip. Save the export as `e0` and run
+   `python3 scripts/tidy_blocks.py --input <markdown> --export e0`. It returns, per department
+   group: the block to `keep`, the blocks to `archive`, the still-open items to `carry` and
+   `carry_header_needed`. Without `--export` an item someone marked `Done` is carried again,
+   reopened, because the markdown hides the chip. It writes nothing and makes every judgement
+   call — do not re-derive its decisions by hand.
 3. **Copy the archived blocks to the 封存 tab first, and verify they landed.** Append under a
    `<section label>` heading so the trail stays readable. Only then delete. Copy → assert →
    delete, never the other order.
@@ -451,18 +463,33 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    `inspect_doc_structure(tab_id, detailed=true)` to map each block line to its range, sort
    descending, and `batch_update_doc` with `tab_id` on **every** operation. The index rules and
    the tab trap are in `references/doc-write-rules.md`; they are not optional here.
-5. **Write the carried items into the kept block**, one item per line, under a `· 還沒收掉的 —`
-   line, each as `· <item>〔<since> 起〕`. They go *inside* the kept block because auto-content may
-   only live inside a stamped block — that is what keeps the guardrail true. `carry` includes the
-   items already on an archived block's own `還沒收掉的` list, with their **original** `since` week
-   — before `SKB-039` those were dropped one Friday after being rescued — and items an archived
-   block's `上週` reported still open (`進行中`/`卡住`/…) that its `本週` did not plan again. If the
-   kept block already has a `· 還沒收掉的 —` line, append under it; never write a second one.
+5. **Write the carried items as bullets, after the kept block's last line** (the owner, 10-25).
+   If `carry_header_needed`, first add a `· 還沒收掉的 —` line as the kept block's new last line;
+   never write a second one. Then insert each item as its own paragraph, `\t<item>〔<since> 起〕` —
+   one leading tab, no `·` — and make them **sub-bullets of that line** (the owner, 10-25). Docs
+   nests a line only under a level-0 line of the same list, so in ONE `batch_update_doc`
+   (`tab_id` on every operation): `create_bullet_list` `UNORDERED` from the `· 還沒收掉的 —`
+   paragraph through the last item (the tabs become level 1), then `create_bullet_list`
+   `list_type: "NONE"` over the header paragraph alone, then `update_paragraph_style`
+   `indent_start: 0, indent_first_line: 0` over it, so the header is a plain typed line again and
+   the items read as ○ sub-bullets under it. Items already under the header extend that list:
+   include them in the range. Recipe and the traps: `references/doc-write-rules.md`. A bullet
+   ends the block, so the next `tidy` reads these as the team's lines: they are never archived and
+   never re-typed, so a chip someone adds stays. When an owner marks one `Done` or `Drop`, step 7
+   removes it the week after. `carry` includes the items on an archived block's own `還沒收掉的`
+   list, with their **original** `since` week, and items an archived block's `上週` reported still
+   open (`進行中`/`卡住`/…) that its `本週` did not plan again. It leaves out anything a bullet under
+   the same heading already names, and anything a chip in `e0` marks `Done`/`Drop`.
 6. Re-read the section and confirm: one stamp per group, the human lines below each block
-   untouched, and the archived text present in the 封存 tab.
+   untouched, the carried items present as bullets, and the archived text present in the 封存 tab.
 7. **Remove closed human bullets** (`SKB-039`). A bullet whose status chip reads `Done` or `Drop`
-   is deleted from this new section — the week it was closed in keeps it. **You never choose a
-   line or an index yourself; `tidy_blocks.py` does, and every step below is a gate.**
+   is deleted from this new section — the week it was closed in keeps it. So is a typed `·` line
+   that is one work item: a carried item from before 10-25 (`· 更新一篇seo〔WB 8/24 起〕Done`) or one
+   that starts with a priority chip (`· P2 Update content matrix Drop`). A summary line such as
+   `· 上週 — 甲 完成` never is. A chip with typed progress after it closes a bullet too
+   (`* 課程剪輯   Done 進度：2-4`). So does last week's agenda: the `〔自動彙整 …〕本週會議議程`
+   block the scaffold copied in goes whole; the week it was written keeps it (the owner, 10-25).
+   **You never choose a line or an index yourself; `tidy_blocks.py` does, and every step below is a gate.**
    Run it only after step 6 confirmed the block writes — the Drive export can lag a write by
    about a minute, and a stale export makes the script skip or refuse rather than delete.
    1. **Plan.** Fetch the Drive plain-text export with `get_drive_file_content` (the only read path
@@ -495,6 +522,12 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    5. `skipped[]` is reported, never deleted. Each entry says why: an open sub-item, a heading
       inside it, not a verbatim copy under the same heading in last week's section, or no single
       place in the Doc that matches it together with the lines above and below.
+   6. `done_blocks[]` is **asked about, never deleted**: a sub-heading whose chipped items are all
+      `Done`/`Drop`, none open — `Claude Code 課程` after the course launched, which the owner
+      closed by hand on 10-25. Only a person knows a project is over. Put each one in the run's
+      report as 「整塊看起來做完了：<heading>（<done> 項都 Done／Drop）— 要整塊收掉嗎？」; the
+      owner deletes it, or says so and a session removes it. Department headings are never
+      offered.
 
    The script only returns a bullet that sits, with its whole subtree, verbatim in the previous
    week's section under the same heading — the same safety argument as the block delete, enforced
@@ -504,11 +537,45 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    seen before the delete. The post-check then catches any damage to lines that REMAIN, but not a
    change to a line that was deleted (say `Done` flipped back to `In Progress` in that window);
    that line survives only in the previous section.
+8. **Make the kept blocks bullets** (the owner, 10-25: no typed `·` lines after tidying, one
+   item per bullet). Rollup writes `· 上週 — 甲 完成 ／ 乙 WIP`; after this step the block reads
+   ```
+   〔自動彙整 WB 10/19 · 10-20 09:40〕
+   ● 上週
+       ○ 甲 完成
+       ○ 乙 WIP
+   ● 本週 …
+   ● 還沒收掉的
+       ○ 更新一篇seo〔WB 8/24 起〕
+   ```
+   The stamp stays a plain line: it is the idempotency key. Items split on `／` only outside
+   brackets. **You never compute an index; the script does.**
+   1. Fresh reads: the markdown as `m4` and `inspect_doc_structure(tab_id, detailed=true)` as `s4`.
+      `python3 scripts/tidy_blocks.py --format --input m4 --structure s4 --tab <tab_id>
+      --section "<target Thursday>" > fmt.json`
+   2. Apply `fmt.json`'s `ops` in **one** `batch_update_doc`, exactly as listed. They already
+      carry `tab_id` and run highest block first; per block: un-bullet and zero the indent, a tab
+      before each carried item, re-type the summary as `label` + `\t`-item lines, one bullet list
+      over all of it (the trap this avoids: `references/doc-write-rules.md`).
+   3. Re-read the markdown as `m5` and run
+      `python3 scripts/tidy_blocks.py --format-check fmt.json --input m5`. Not `ok` → report
+      `partial` with its `problems`; the summary text is still in the previous section.
+   4. `skipped[]` is reported, never forced: a line in the block that is not a summary line, a
+      comment or link in it (re-typing would drop it), no single place in the Doc that matches it,
+      or carried items that do not line up.
+
+   Since 10-26 rollup writes the block as bullets already, so this step mostly meets a mixed
+   block, rollup's bullets plus step 5's typed `· 還沒收掉的 —`, and re-types it whole; a block
+   from before 10-26 is typed throughout. A block already in bullets is left alone, so a re-run
+   writes nothing. Every reader takes both
+   shapes: `walk_block` turns a formatted block back into its typed lines, so next Friday archives
+   it whole and carries from it, step 7 never takes its sub-bullets for the team's, and
+   `carryover.py` skips them. Receipt: add `;<n>-formatted` to `delivered`.
 
 The archive tab is belt-and-braces, not load-bearing — the originals are already in the prior
 section. If the copy fails, **stop before deleting** and report; a failed archive is a delayed
-tidy, a failed delete after a successful archive is a duplicated section. Step 7 runs last and
-on its own: if it fails, the block tidy has still landed, so report `partial`, not `failed`.
+tidy, a failed delete after a successful archive is a duplicated section. Steps 7 and 8 run last,
+each on its own: if one fails, the block tidy has still landed, so report `partial`, not `failed`.
 
 ### 4.7 `snapshot` (Fri 18:00, catching up through Sun 23:00)
 
@@ -669,8 +736,10 @@ stamp from `propose`: it reads this week's `Weeks` row itself.
 
 1. **The week**, as in 4.10.
 2. `python3 scripts/proposals.py apply-start --week <W>` → make the printed calls exactly (the
-   thread fetch carries `include_analysis`, which is how drafts are seen), save each result, keep
-   the `dir`. When it printed a Gmail search instead of a thread fetch (no thread was recorded),
+   thread fetch carries `include_analysis`, which is how drafts are seen), save each result with
+   the Write tool as in 4.7, and keep the `dir`. Never save a result through Bash: the `Weeks` row
+   holds the Main Tracker's id, so the guard refuses any Bash command that carries it. Run each
+   script command on its own. When it printed a Gmail search instead of a thread fetch (no thread was recorded),
    run `python3 scripts/proposals.py apply-thread --dir <dir>` and make the fetch it prints;
    `"found": false` → go on to step 3, which reports the missing mail.
 3. `python3 scripts/proposals.py apply-decide --dir <dir>`, then by its `status`:
