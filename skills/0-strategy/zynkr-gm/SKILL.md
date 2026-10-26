@@ -217,11 +217,11 @@ week it reports. It lands at 09:30 Taipei, after the Monday brief starts, so the
 Monday run finds is usually the previous Monday's. Take the newest one sent in the last 8 days and
 always name its week. Open it as plain text and read only two things:
 - the verdict line, `N of 7 KPIs met`;
-- the "Next step this week" lines, one per salesperson: `<name> - N of 3 cooking: …`. The rule is
-  defined in `sales-manager` (REVIEW, *The 3-client rule*).
+- the "Next step this week" lines, one per salesperson: `<name> - N of F cooking: …`, F being the floor the pulse printed. The rule is
+  defined in `sales-manager` (REVIEW, *The pipeline band*; its numbers are the Atlas policy `sales.pipeline-rules`).
 
 Use them this way:
-- block 04: a sales owner's line gets `pipeline: N of 3 cooking (pulse, week of …)`. Match a pulse
+- block 04: a sales owner's line gets `pipeline: N of F cooking (pulse, week of …)`, N and F copied from the pulse line. Match a pulse
   name to a tracker owner only when it is unmistakable, and list any other pulse line under the
   block as it stands.
 - block 05: CRM-backed sales metrics still read `(not readable on a scheduled run)`, followed by

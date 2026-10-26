@@ -193,6 +193,18 @@ Every write previews first — call it once without `confirm`, then again with
    lead_source="content", close_date="<today + 30 days>", notes="<NOTES>",
    confirm=true)`. The pipeline, the 交易 number, the owner and the `created`
    activity are all handled for you.
+4. **Follow-up task** — `mcp__zynkr__create_task(subject="回覆 <Name> 的諮詢並約時間",
+   deal_id=<deal id>, due_at=<today + followup-fast-days, ISO 8601 with +08:00>, confirm=true)`.
+   They just wrote to us, so they have no reply history and the policy's rhythm is the fast one.
+   Without this task the deal lands in `/sales-manager`'s 沒有下一步 bucket the day it is made.
+   When the inquiry names a deadline ("十一月底前要辦內訓"), add the line
+   `客戶時限：YYYY-MM-DD（原話）` under `{{NOTES}}` and make the task due on the earlier of the
+   two dates.
+5. **Owner's open-deal count** — count the owner's open deals (stage not `won`/`lost`). At or
+   over `max-open-deals`, the lead is still logged; the report says
+   `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
+
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `sales.pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
 **`lead_status` / `deal_status` stay empty** — the MCP cannot set them on the
 contact. The attribution lives on the deal as `lead_source="content"` — look there, not on the
@@ -261,14 +273,14 @@ inquiry, including the skipped ones so nothing is silently dropped:
 ```
 本週進件：官網 N 封 · Inbound Sales K 封，建立 M 筆
 
-| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 回覆草稿 |
-|---|------|------|------|------|------|----------|
-| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | ✅ 已擬 |
-| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — |
-| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | ⏭️ 已回過 |
+| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 跟進任務 | 回覆草稿 |
+|---|------|------|------|------|------|----------|----------|
+| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | 10/28 到期 | ✅ 已擬 |
+| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — |
+| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | — | ⏭️ 已回過 |
 ```
 
-Then list the proposals found under the Inbound Sales label (sender · subject · one line),
+Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
 any `[[NEEDS PETER]]` drafts, and state the headline in prose (e.g. "Created 2 deals +
 2 reply drafts; skipped 1 test and 1 already-processed; 1 proposal waiting for you").
 

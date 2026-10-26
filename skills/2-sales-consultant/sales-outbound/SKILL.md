@@ -365,7 +365,18 @@ Pick the closest enum from the conversation; use the fallback when there's no si
 - **deal_type** — **`new_business`** (this is a fresh lead).
 - **value** — **`NULL`** unless a concrete figure was discussed (beta / early chats have none).
 - **close_date** — `NULL` unless a date was stated.
-- **task_due_days** — default **3** (chase the demo/call within a few days).
+- **task_due_days** — from the follow-up rhythm in `sales.pipeline-rules` (read it with the
+  line below). A lead who just wrote to us has no reply history, so it is `followup-fast-days`.
+  A contact who already existed gets the rhythm their reply lag earns (median days between our
+  mail and their reply, last 90 days, from Gmail). When the signal names a deadline ("下週五前要",
+  "this month"), add the line `客戶時限：YYYY-MM-DD（原話）` to `{{DEAL_NOTES}}` and make the task
+  due on the earlier of the rhythm's date and that deadline. An interval Peter promised in the
+  thread ("我三天後回你") wins over both.
+- **owner's open-deal count** — after the insert, count the owner's open deals (stage not
+  `won`/`lost`). At or over `max-open-deals`, the lead is still logged — say so in the report:
+  `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
+
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `sales.pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
 ## Why it's built this way
 

@@ -92,6 +92,11 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
 - **Record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}`.
 - **Google account** for anything Gmail/Calendar: `<your-google-workspace-account>`.
 - Peter's calendar is `Europe/Amsterdam`; prospects are almost always `Asia/Taipei`.
+- **Pipeline rules** — the cap, the floor, the outreach target, the follow-up rhythm and when a
+  deal is dropped are one company policy, and so are the words *client touch*, *cooking* and
+  *stale*. This file names each threshold and never holds its number.
+
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `sales.pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
 ---
 
@@ -138,26 +143,41 @@ what landed and what didn't; do not silently retry a CRM write.
 
 ### 4 · REVIEW — the deal-level attention list
 
-Read the pipeline and classify every open deal into exactly one bucket:
+Read `sales.pipeline-rules` first (see *Fixed facts*), then the pipeline. For each open deal,
+find its **last client touch** — the newest inbound email from its contact, meeting, or stage
+change. `get_deal` shows the timeline; Gmail `from:<contact email>` fills a gap. Our own sent
+mail is not a client touch, so a deal chased every few days with no answer still goes stale.
+Classify every open deal into exactly one bucket, top row first:
 
 | Bucket | Test |
 |---|---|
-| **卡住** | No real touch for 21+ days and stage is not `won`/`lost`. A real touch is an email, meeting, note, message or stage change on the deal or on its contact; a task or the `created` row is not one |
+| **放掉 · stale** | Stale, as the policy defines it: `stale-days` or more since the last client touch and since the deal was created |
 | **沒有下一步** | Open deal with no open task attached |
 | **逾期追蹤** | Has an open task whose `due_at` is in the past |
 | **草稿未寄** | A Gmail draft exists for the contact but nothing was ever sent |
 | **健康** | None of the above — do not list these individually, just count them |
 
-**The 3-client rule.** Every member keeps at least 3 open clients cooking. A client is cooking
-when one of its open deals had a real touch fewer than 21 days ago, so it is the 卡住 line read
-the other way. Count clients, not deals: one company, or one contact without a company, counts
-once. Above the table, write one line per owner: `<owner> · N of 3 cooking`, adding `· short K`
-when N is below 3. It is a count, not a roll-up: no LOB, no revenue. For an owner who is short,
-the one thing to do on their 卡住 rows is to revive them first. If that still leaves them short,
-say how many leads to claim from the outbound list and run `/sales-outbound` Mode B. This file is
-where the rule is defined. The team's Monday sales pulse mail applies it to every member.
+**The pipeline band.** Each owner sits between a floor and a cap: at least `min-cooking-clients`
+clients cooking, at most `max-open-deals` open deals. Cooking is the stale line read the other
+way. Count clients, not deals, for the floor: one company, or one contact without a company,
+counts once. Count deals for the cap. Above the table, write one line per owner:
+`<owner> · N of <min-cooking-clients> cooking · M of <max-open-deals> open`, adding `· short K`
+when N is below the floor and `· over by K` when M is above the cap. It is a count, not a
+roll-up: no LOB, no revenue. Keep the `N of <floor> cooking` words exactly: the Monday sales
+pulse and `/zynkr-gm` read that phrase.
 
-Render the four live buckets as one table (deal · owner · days idle · the one thing to do).
+- **Below the floor** — say how many leads to claim from the 陌開名單 roster and run
+  `/sales-outbound` Mode B. Stale deals are not revived to make up the count: they go in the batch.
+- **Over the cap** — the owner's stale deals go first. If they are still over, name their oldest
+  `new` / `contacted` deals to hand off or close, and put them in the batch for the owner's call.
+- **沒有下一步 and 逾期追蹤 rows** — the one thing to do is a follow-up task due by the policy's
+  rhythm: read the client's reply lag from the timeline, pick the fast, normal or slow days, and
+  never later than a `客戶時限：` line in the deal's notes.
+
+This file is where the buckets and the band are defined from the policy's words. The team's
+Monday sales pulse mail applies the same policy to every member.
+
+Render the four live buckets as one table (deal · owner · days since last client touch · the one thing to do).
 Keep it **deal-level**. Do not roll up by LOB, do not write a weekly narrative, do not
 compute revenue forecasts — that is `/zynkr-gm`'s job and duplicating it is the one
 outcome this skill was explicitly scoped to avoid.
@@ -172,12 +192,17 @@ only after a single explicit confirmation:
 ```
 我打算做這些（一次確認全部）：
 
-移到 lost      · 3 個 deal   — 90 天無任何往來
+移到 lost      · 3 個 deal   — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
 關掉過期 task  · 8 個        — 早已完成或已無意義
-建立追蹤任務   · 2 個 deal   — 開著但沒有下一步
+建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度）
 
-要我執行嗎？
+要我執行嗎？想留下哪一筆，說一聲原因就好
 ```
+
+Fill `<stale-days>` with the policy's number when you write the batch.
+A stale deal moved to `lost` gets one note on the deal — `放掉 · stale（sales.pipeline-rules <value date>）：最後一次客戶往來 <date>` —
+so whoever reopens it sees why. A stale deal the owner keeps gets their reason as a note instead,
+and stays out of the batch.
 
 Rules:
 - **One confirmation for the whole batch**, not one per row — the point is to clear a
@@ -191,7 +216,8 @@ Rules:
 ### 6 · Report
 
 State the mode, what each child produced (with record URLs), and — for REVIEW — the
-3-client lines, the bucket counts and exactly what the confirmed batch changed. If the batch was declined,
+`sales.pipeline-rules` version used (its `value:` date), the band lines, the bucket counts and
+exactly what the confirmed batch changed. If the batch was declined,
 say so plainly and leave the list.
 
 ---

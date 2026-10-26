@@ -217,7 +217,7 @@ to type what that cycle carries.
 One line per owner (named as the tracker names them): P0 held · P1 held · UNDATED · OVERDUE ·
 ENDS_SOON · what the brief needs from them · when they were last heard from — the newest
 `#週報` post in the Ledger's `Reports` tab, else the newest weekly-log mention — plus their `卡關`
-line if they wrote one. A sales owner's line also gets `pipeline: N of 3 cooking (pulse, week of …)`
+line if they wrote one. A sales owner's line also gets `pipeline: N of F cooking (pulse, week of …)` (N and F copied from the pulse line)
 from the weekly sales pulse mail (SKILL.md §3.1c). End with `GM holds <k>/<n> P0s (<pct>%)`.
 
 ## 05 · KPI off-target + missing numbers
