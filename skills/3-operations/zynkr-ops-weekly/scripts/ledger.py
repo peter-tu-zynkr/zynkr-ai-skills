@@ -45,6 +45,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 
 LAYOUT = "layout v1"
+API = 2               # what ops-weekly-tracker and ops-weekly-doc check before importing this file (SKB-091)
 SLOT = 100            # rows per week in Snapshot; changing it moves every later week's block
 PAGE = 50             # read_sheet_values shows at most 50 rows
 TPE = timezone(timedelta(hours=8))   # Asia/Taipei has no DST; a fixed offset needs no tz database
@@ -60,7 +61,7 @@ UPDATES_HEADER = ["週", "時間", "cycle", "#", "項目", "欄位", "舊值", "
 REPORTS_HEADER = ["week", "posted_at", "owner", "部門", "上週", "本週", "數字", "卡關", "format"]  # A–I
 # What `decisions` extracts from the meeting section: a resolution is decision · owner · date; one
 # missing an owner or a date stays 待決 (open), never promoted.
-DECISIONS_HEADER = ["week", "會議日期", "類型", "內容", "負責人", "期限", "關聯 #", "來源"]   # A–H
+DECISIONS_HEADER = ["week", "會議日期", "類型", "內容", "負責人", "期限", "關聯 #", "來源", "狀態"]   # A–I (I since SKB-091)
 # Phase 2 widens Weeks: each beat that writes a weekly block owns a status cell and a time cell
 # in the week's row. Empty = never recorded; "ok" over an empty block = recorded, and none.
 WEEKS_BEAT_HEADER = ["reports", "reports_at", "decisions", "decisions_at"]           # K–N
@@ -70,16 +71,23 @@ WEEKS_BEAT_HEADER = ["reports", "reports_at", "decisions", "decisions_at"]      
 PROPOSALS_HEADER = ["week", "proposed_at", "n", "#", "項目", "欄位", "現值", "建議值", "原因", "證據",
                     "來源", "信心", "決定", "決定_at", "結果"]                                 # A–O
 WEEKS_P3_HEADER = ["proposals", "proposals_at", "applied", "applied_at"]              # O–R
-WEEKS_FULL = WEEKS_HEADER + WEEKS_BEAT_HEADER + WEEKS_P3_HEADER                       # A–R
+# SKB-091: Thursday's collect reads each person's harvest file into Harvest, which replaces Reports
+# (the Chat #週報 posts) from 2026-W45. One row per line of a harvest: its workstream, its kind
+# (shipped · moving · waiting, or quiet for a 本週無資料 week) and the line as written.
+HARVEST_HEADER = ["week", "harvested_at", "slug", "name", "workstream", "kind", "text", "file"]  # A–H
+WEEKS_HARVEST_HEADER = ["harvest", "harvest_at"]                                       # S–T
+WEEKS_FULL = WEEKS_HEADER + WEEKS_BEAT_HEADER + WEEKS_P3_HEADER + WEEKS_HARVEST_HEADER  # A–T
 TABS = [("Weeks", WEEKS_FULL), ("Updates", UPDATES_HEADER),
         ("Snapshot", SNAPSHOT_HEADER), ("Reports", REPORTS_HEADER), ("Decisions", DECISIONS_HEADER),
-        ("Proposals", PROPOSALS_HEADER)]
-COLS = {"Weeks": "R", "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "H", "Proposals": "O"}
+        ("Proposals", PROPOSALS_HEADER), ("Harvest", HARVEST_HEADER)]
+COLS = {"Weeks": "T", "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "I", "Proposals": "O",
+        "Harvest": "H"}
 # tab -> (rows per week, header, its Weeks status column, its Weeks time column)
 BLOCKS = {"Reports": (20, REPORTS_HEADER, "K", "L"),
-          "Decisions": (20, DECISIONS_HEADER, "M", "N"),
+          "Decisions": (40, DECISIONS_HEADER, "M", "N"),
           "Proposals": (40, PROPOSALS_HEADER, "O", "P"),
-          "Updates": (40, UPDATES_HEADER, "Q", "R")}
+          "Updates": (40, UPDATES_HEADER, "Q", "R"),
+          "Harvest": (80, HARVEST_HEADER, "S", "T")}
 
 CATEGORY_RE = re.compile(r"^\d+\.0$")
 WEEK_RE = re.compile(r"^(\d{4})-W(\d{2})$")
@@ -545,8 +553,8 @@ def blk_start(tab, week, rows_path, config=None, now=None, base=None):
     r = weeks_row(k)
     calls = [info_call(run, cfg["ledger"], "li"),
              read_call(run, cfg["ledger"], "%s!A1:%s1" % (tab, COLS[tab]), "bh"),
-             read_call(run, cfg["ledger"], "Weeks!A1:R1", "wh"),
-             read_call(run, cfg["ledger"], "Weeks!A%d:R%d" % (r, r), "wr")]
+             read_call(run, cfg["ledger"], "Weeks!A1:T1", "wh"),
+             read_call(run, cfg["ledger"], "Weeks!A%d:T%d" % (r, r), "wr")]
     return {"dir": d, "week": week, "tab": tab, "rows": len(rows), "calls": calls}
 
 
@@ -562,14 +570,14 @@ def blk_plan(d):
     bh = parse_values(load_result(os.path.join(d, "bh.txt")), run["ledger"], "%s!A1:%s1" % (tab, COLS[tab]))
     if not bh or pad(bh[0], len(header)) != header:
         raise Refuse(4, "%s header changed" % tab)
-    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:R1")
+    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:T1")
     need = ord(BLOCKS[tab][3]) - 64                 # the Weeks header must reach this block's own cells
     if not wh or pad(wh[0], need) != WEEKS_FULL[:need]:
         raise Refuse(4, "Weeks header does not reach %s (needs A–%s); run the %s setup"
-                     % (tab, BLOCKS[tab][3], "Phase 3" if need > 14 else "Phase 2"))
+                     % (tab, BLOCKS[tab][3], "SKB-091" if need > 18 else "Phase 3" if need > 14 else "Phase 2"))
     r = run["weeks_row"]
-    wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], "Weeks!A%d:R%d" % (r, r))
-    if wr and pad(wr[0], 18)[0] not in ("", run["week"]):
+    wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], "Weeks!A%d:T%d" % (r, r))
+    if wr and pad(wr[0], 20)[0] not in ("", run["week"]):
         raise Refuse(4, "Weeks row %d belongs to %s, not %s — was the epoch changed?" % (r, wr[0][0], run["week"]))
     first, last, rows, end = run["first"], run["last"], run["rows"], col_letter(len(header))
     ops = []
@@ -664,7 +672,7 @@ def decision_rows(decisions, week, meeting, source):
         if not item:
             m = ITEM_REF.search(content)
             item = m.group(1) if m else ""
-        rows.append([week, meeting, "決議" if owner and due else "待決", content, owner, due, item, source])
+        rows.append([week, meeting, "決議" if owner and due else "待決", content, owner, due, item, source, ""])
     return rows
 
 
@@ -1159,10 +1167,10 @@ def selftest():
             return blk_confirm(d)
 
         def fresh_b(hdr=None):
-            return {"__tabs__": {"Weeks": (100, 26), "Reports": (500, 9), "Decisions": (500, 8),
-                                 "Proposals": (2100, 15), "Updates": (2100, 14)},
+            return {"__tabs__": {"Weeks": (100, 26), "Reports": (500, 9), "Decisions": (500, 9),
+                                 "Proposals": (2100, 15), "Updates": (2100, 14), "Harvest": (4100, 8)},
                     "Weeks": [hdr or weeks_hdr], "Reports": [REPORTS_HEADER], "Decisions": [DECISIONS_HEADER],
-                    "Proposals": [PROPOSALS_HEADER], "Updates": [UPDATES_HEADER]}
+                    "Proposals": [PROPOSALS_HEADER], "Updates": [UPDATES_HEADER], "Harvest": [HARVEST_HEADER]}
 
         sb = fresh_b()
         res = run_block(sb, rows_p)
@@ -1207,6 +1215,19 @@ def selftest():
         check("Reports still works under the Phase 3 header", run_block(fresh_b(WEEKS_FULL), rows_p)["delivered"],
               "2-rows;Reports!A22:I23;Weeks!K3")
         check("Proposals block slot W41", block_slot("Proposals", 1), (42, 81))
+        # SKB-091: Harvest (S–T) needs the A–T header; the A–R one is refused, not written past
+        hrow = [["2026-W41", "2026-10-08T09:05:00+08:00", "ann", "Ann", "SEO", "shipped", "上線 3 篇 (abc1234)",
+                 "harvest-ann.md"]]
+        harv_p = os.path.join(tmpb, "harv.json")
+        json.dump(hrow, open(harv_p, "w"), ensure_ascii=False)
+        refuses("Harvest refuses the A–R Weeks header", 4, run_block, fresh_b(WEEKS_FULL[:18]), harv_p, None, "Harvest")
+        sh = fresh_b(WEEKS_FULL)
+        rh = run_block(sh, harv_p, tab_name="Harvest")
+        check("Harvest block delivered", rh["delivered"], "1-rows;Harvest!A82:H82;Weeks!S3")
+        check("Harvest Weeks cells", sh["Weeks"][2][18:20], ["ok", "2026-10-06T09:45:00+08:00"])
+        check("Harvest leaves the other beats' cells alone", sh["Weeks"][2][:18], [""] * 18)
+        check("Proposals still works under the A–T header", run_block(fresh_b(WEEKS_FULL), prop_p, tab_name="Proposals")["delivered"],
+              "1-rows;Proposals!A42:O42;Weeks!O3")
         wrong_p = os.path.join(tmpb, "wrong.json")
         json.dump([["2026-W40"] + [""] * 8], open(wrong_p, "w"))
         refuses("block row from another week", 3, blk_start, "Reports", "2026-W41", wrong_p, cfgb,

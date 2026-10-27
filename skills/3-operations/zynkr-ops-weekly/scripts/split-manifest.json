@@ -1,91 +1,66 @@
 {
-  "_about": "SKB-091 Phase 0: where every file, mode and split heading of zynkr-ops-weekly goes when the skill splits by the store each part writes (D13, D14). check_manifest.py holds it to the folder. A value is a home; {home, readers} when other skills keep using the file where it is; \"each\" when every skill writes its own version; {split: {heading: home or each}} for a file divided by heading.",
-  "homes": ["zynkr-ops-weekly", "ops-weekly-doc", "ops-weekly-tracker", "project-manager"],
-  "modes": {
-    "nudge": "zynkr-ops-weekly",
-    "rollup": "ops-weekly-doc",
-    "chase": "zynkr-ops-weekly",
-    "agenda": "ops-weekly-doc",
-    "decisions": "ops-weekly-doc",
-    "tidy": "ops-weekly-doc",
-    "snapshot": "ops-weekly-tracker",
-    "status": "project-manager",
-    "recap": "zynkr-ops-weekly",
-    "propose": "ops-weekly-tracker",
-    "apply": "ops-weekly-tracker",
-    "notice": "project-manager"
-  },
-  "files": {
-    "SKILL.md": {"split": {
-      "The cadence": "each",
-      "Configuration (private — never in this repo)": "each",
-      "Why `chat_ids` has to exist": "zynkr-ops-weekly",
-      "Required reading (before acting)": "each",
-      "Step 0 — Anchor on today, and get the off-by-one right": "each",
-      "Step 1 — Load config and check idempotency": "each",
-      "Step 2 — Read routing from the Doc (every run)": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc"]},
-      "Step 3 — Read the week's posts (`rollup`, `chase`, `agenda`)": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc"]},
-      "Step 4 — Mode bodies": "each",
-      "4.1 `nudge` (Mon 09:00)": "zynkr-ops-weekly",
-      "4.2 `rollup` (Tue 09:00)": "ops-weekly-doc",
-      "4.3 `chase` (Tue 09:30)": "zynkr-ops-weekly",
-      "4.4 `agenda` (Thu 09:00)": "ops-weekly-doc",
-      "4.5 `decisions` (Thu 22:00)": "ops-weekly-doc",
-      "4.6 `tidy` (Fri 09:00)": "ops-weekly-doc",
-      "4.7 `snapshot` (Fri 18:00, catching up through Sun 23:00)": "ops-weekly-tracker",
-      "4.8 `status` (on demand)": "project-manager",
-      "4.9 `recap` (Mon 09:00, before `nudge`)": "zynkr-ops-weekly",
-      "4.10 `propose` (Fri 10:00, after `tidy`)": "ops-weekly-tracker",
-      "4.11 `apply` (Fri 18:00 → Sun 23:00, after `snapshot`)": "ops-weekly-tracker",
-      "4.12 `notice` (when a beat did not run, SKB-070)": "project-manager",
-      "Step 5 — Report, and receipt the run": "each",
-      "Guardrails": "each",
-      "Limitations": "each",
-      "House style": "each"
-    }},
-    "references/README.md": "each",
-    "references/config.README.md": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc", "ops-weekly-tracker", "project-manager"]},
-    "references/config.example.json": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc", "ops-weekly-tracker", "project-manager"]},
-    "references/doc-write-rules.md": "ops-weekly-doc",
-    "references/ledger.md": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc", "ops-weekly-tracker"]},
-    "references/message-templates.md": {"split": {
-      "`nudge` — Mon 09:00": "zynkr-ops-weekly",
-      "`chase` — Tue 09:30": "zynkr-ops-weekly",
-      "`agenda` — Thu 09:00 (pointer only)": "ops-weekly-doc",
-      "`decisions` — Thu 22:00 (Chat, three lines)": "ops-weekly-doc",
-      "`propose` — Fri 10:00 (the 【待核准】 mail, to the owner only)": "ops-weekly-tracker",
-      "`decisions` — Thu 22:00 (recap mail)": "ops-weekly-doc",
-      "`recap` — Mon 09:00 (mail, SKB-044)": "zynkr-ops-weekly",
-      "Failure notice — any mode": "each",
-      "`notice` — mail to the owner only (SKB-070)": "project-manager"
-    }},
-    "references/post-format.md": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc"]},
-    "references/proposal-rules.md": "ops-weekly-tracker",
-    "references/routing.md": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc"]},
-    "references/scaffold.md": "ops-weekly-doc",
-    "references/scheduling.md": "project-manager",
-    "references/wording.md": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc", "ops-weekly-tracker", "project-manager"]},
-    "scripts/README.md": {"split": {
-      "The usual pipeline (`rollup`)": "ops-weekly-doc",
-      "The Friday pipeline (`tidy`)": "ops-weekly-doc",
-      "The Friday-evening pipeline (`snapshot`)": "ops-weekly-tracker",
-      "Exit codes": "each",
-      "Testing": "each"
-    }},
-    "scripts/beats.py": "project-manager",
-    "scripts/carryover.py": "ops-weekly-doc",
-    "scripts/check_manifest.py": "zynkr-ops-weekly",
-    "scripts/ledger.py": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc", "ops-weekly-tracker"]},
-    "scripts/parse_reports.py": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc"]},
-    "scripts/parse_routing.py": {"home": "zynkr-ops-weekly", "readers": ["ops-weekly-doc"]},
-    "scripts/proposals.py": "ops-weekly-tracker",
-    "scripts/recap.py": "zynkr-ops-weekly",
-    "scripts/render_block.py": "ops-weekly-doc",
-    "scripts/run_ops_weekly.sh": "project-manager",
-    "scripts/scaffold.gs": "ops-weekly-doc",
-    "scripts/split-manifest.json": "zynkr-ops-weekly",
-    "scripts/test_tidy_blocks.py": "ops-weekly-doc",
-    "scripts/tidy_blocks.py": "ops-weekly-doc",
-    "scripts/tracker_guard.py": {"home": "ops-weekly-tracker", "readers": ["project-manager"]}
+  "$note": "SKB-091 v4: the weekly loop split by the store each part writes. Each home lists every file it holds and the modes its SKILL.md runs; check_manifest.py holds the four folders to it. Add a file here in the commit that adds it.",
+  "version": 4,
+  "retired": ["nudge", "rollup", "chase", "agenda", "decisions"],
+  "homes": {
+    "zynkr-ops-weekly": {
+      "modes": ["collect", "recap", "status"],
+      "files": [
+        "SKILL.md",
+        "references/README.md",
+        "references/config.README.md",
+        "references/config.example.json",
+        "references/ledger.md",
+        "references/message-templates.md",
+        "references/routing.md",
+        "references/wording.md",
+        "scripts/README.md",
+        "scripts/check_manifest.py",
+        "scripts/harvest.py",
+        "scripts/ledger.py",
+        "scripts/parse_routing.py",
+        "scripts/recap.py",
+        "scripts/split-manifest.json"
+      ]
+    },
+    "ops-weekly-doc": {
+      "modes": ["sections", "minutes", "tidy"],
+      "files": [
+        "SKILL.md",
+        "references/doc-write-rules.md",
+        "references/scaffold.md",
+        "scripts/README.md",
+        "scripts/carryover.py",
+        "scripts/minutes.py",
+        "scripts/render_block.py",
+        "scripts/scaffold.gs",
+        "scripts/sections.py",
+        "scripts/test_tidy_blocks.py",
+        "scripts/tidy_blocks.py"
+      ]
+    },
+    "ops-weekly-tracker": {
+      "modes": ["propose", "apply", "snapshot"],
+      "files": [
+        "SKILL.md",
+        "references/proposal-rules.md",
+        "scripts/README.md",
+        "scripts/notes_append.py",
+        "scripts/proposals.py",
+        "scripts/tracker_guard.py"
+      ]
+    },
+    "project-manager": {
+      "modes": ["notice"],
+      "files": [
+        "SKILL.md",
+        "references/known-failures.md",
+        "references/notice-mail.md",
+        "references/scheduling.md",
+        "scripts/beats.py",
+        "scripts/checkin.py",
+        "scripts/run_week.sh"
+      ]
+    }
   }
 }

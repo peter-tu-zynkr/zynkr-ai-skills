@@ -1,7 +1,7 @@
 # The Weekly Ledger
 
-The Ledger is the weekly project cycle's memory (`SKB-044`). It is a Google Sheet that only this
-skill writes, and only through the calls `scripts/ledger.py` prints. People read it; nobody edits
+The Ledger is the weekly project cycle's memory (`SKB-044`). It is a Google Sheet that only the
+weekly loop's skills write (the core, `ops-weekly-doc` and `ops-weekly-tracker`, SKB-091), and only through the calls `scripts/ledger.py` prints. People read it; nobody edits
 it. Its id is `sources.ledger.id` in the private config.
 
 The Main Tracker stays the source of truth for status. The Ledger holds what the tracker has no
@@ -15,20 +15,22 @@ can never corrupt the history.
 
 | Tab | Columns | Written by |
 |---|---|---|
-| `Weeks` | A–J: week · status · snapshot_at · cycle · tracker_id · items · first_row · last_row · digest · note. K–N (Phase 2): reports · reports_at · decisions · decisions_at. O–R (Phase 3): proposals · proposals_at · applied · applied_at | `snapshot` writes A–J last; `rollup` writes K–L, `decisions` M–N, `propose` O–P, `apply` Q–R, each as its own commit |
+| `Weeks` | A–J: week · status · snapshot_at · cycle · tracker_id · items · first_row · last_row · digest · note. K–N (Phase 2): reports · reports_at · decisions · decisions_at. O–R (Phase 3): proposals · proposals_at · applied · applied_at. S–T (SKB-091): harvest · harvest_at | `snapshot` writes A–J last; `minutes` writes M–N, `propose` O–P, `apply` Q–R, `collect` S–T (K–L until 2026-W44), each as its own commit |
 | `Updates` | 週 · 時間 · cycle · # · 項目 · 欄位 · 舊值 · 新值 · 原因 · 證據 · 來源 · 提議 · 核准 · proposal | `apply`, 40 rows a week, written last and only once the owner's decision is confirmed in the thread; empty in shadow mode. Its `Weeks` Q cell is what "applied" means |
 | `Proposals` (Phase 3) | week · proposed_at · n · # · 項目 · 欄位 · 現值 · 建議值 · 原因 · 證據 · 來源 · 信心 · 決定 · 決定_at · 結果 | `propose` writes the rows, 40 a week; `apply` rewrites them with the owner's 決定 and the 結果 (would-apply in shadow mode · applied · skipped · 退回 · 未回覆). That rewrite is a block write too, so it re-stamps `Weeks` O–P: after `apply`, `proposals_at` is when the decisions were recorded, and each row's `proposed_at` keeps when it was proposed. A 決定 is provisional until `Weeks` Q reads `ok`: `apply` writes the `Updates` block (and with it Q) only after its confirmation is in the approval thread |
 | `Snapshot` | week · snapshot_at · cycle, then the tracker's 13 columns exactly as named | `snapshot` |
-| `Reports` (Phase 2) | week · posted_at · owner · 部門 · 上週 · 本週 · 數字 · 卡關 · format | `rollup`, one row per poster |
-| `Decisions` (Phase 2) | week · 會議日期 · 類型 · 內容 · 負責人 · 期限 · 關聯 # · 來源 | `decisions`; 類型 is 決議, or 待決 when the owner or the date is missing |
+| `Reports` (Phase 2) | week · posted_at · owner · 部門 · 上週 · 本週 · 數字 · 卡關 · format | `collect`, one row per person (until v4's `Harvest` tab replaces it, `SKB-091.9`; the Tuesday `rollup` wrote it until 2026-10-27) |
+| `Harvest` (SKB-091) | week · harvested_at · slug · name · workstream · kind · text · file | `collect`, 80 rows a week: one row per line of a person's harvest (kind `shipped` · `moving` · `waiting`, at most 15 per person, waiting first), or one `quiet` row for a 「本週無資料」 week. Replaces `Reports` from 2026-W45; `sections` reads it |
+| `Decisions` (Phase 2) | week · 會議日期 · 類型 · 內容 · 負責人 · 期限 · 關聯 # · 來源 | `minutes` (until 2026-10-27 the Thursday `decisions`); 類型 is 決議, or 待決 when the owner or the date is missing |
 
 A beat's cell pair in the `Weeks` row is how a reader tells "none" from "never recorded": an empty
 status cell means the beat never recorded the week, while `ok` over an empty block means it
 recorded it and there was nothing. Phase 4 adds its own tab (evidence) when it is built.
 
-**Weekly blocks.** `Reports` and `Decisions` hold 20 rows a week, `Proposals` and `Updates` 40;
+**Weekly blocks.** `Reports` holds 20 rows a week, `Harvest` 80, `Decisions`, `Proposals` and `Updates` 40 (`Decisions` grew from 20 in SKB-091, before any week had stored a row);
 week k owns rows 2 + size·k … 1 + size·(k + 1). `ledger.py block` writes any of them, checks the
-`Weeks` header reaches its own cells (A–N for the Phase 2 blocks, A–R for the Phase 3 ones), reads
+`Weeks` header reaches its own cells (A–N for the Phase 2 blocks, A–R for the Phase 3 ones, A–T for
+`Harvest`), reads
 the block back, and commits the beat's cell pair last.
 
 ## Layout v1: every week has fixed rows
@@ -107,7 +109,7 @@ reads A–N, so a half-done setup cannot be written into.
 row RAW exactly as `schema` prints it and freeze row 1; grow `Proposals` and `Updates` to 2,100 rows
 (a year of 40-row weeks); write `Weeks!O1:R1` (proposals · proposals_at · applied · applied_at).
 `ledger.py block` refuses the Phase 3 blocks until the `Weeks` header reads A–R; the Phase 2 blocks
-need only A–N, so `rollup` and `decisions` keep working while the setup is half done.
+need only A–N, so `collect` and `minutes` keep working while the setup is half done.
 
 **Growing the grid.** `ledger.py` warns when fewer than eight weeks of rows remain, and refuses a
 week whose block would not fit (exit 5). Add rows to the end of `Snapshot` with

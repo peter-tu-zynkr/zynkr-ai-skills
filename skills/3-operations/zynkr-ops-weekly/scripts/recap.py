@@ -7,7 +7,9 @@ calls, each with a path to save the tool's result to, word for word.
 
     recap.py start  --runner-week W [--config PATH]  -> the Weeks reads that decide what can be said
     recap.py blocks --dir D                           -> {"notice": true, ...} when last week never
-                                                         closed out, else the block reads
+                                                         closed out, else the block reads and the
+                                                         Sales Pulse search
+    recap.py pulse  --dir D                           -> the Pulse thread to fetch, or none (SKB-091)
     recap.py build  --dir D --today YYYY-MM-DD        -> facts.json + a short summary for the TL;DR
     recap.py render --dir D --tldr tldr.json          -> subject, recipients, recap.html; TL;DR lines
                                                          that cite no real item # are dropped
@@ -17,6 +19,11 @@ calls, each with a path to save the tool's result to, word for word.
 The recap covers the ISO week BEFORE the runner's week. Its subject uses the team's `WB m/d` label;
 the ISO key never reaches a reader (references/wording.md). The state rules are zynkr-gm's
 derive_state.py, the one copy every brief and recap shares.
+
+SKB-091 adds this week's plan, per person, at most five lines in this order: the meeting's open
+actions, items overdue or due within 14 days, P0/P1 items with no dates, then that person's next
+steps from the Monday Sales Pulse mail. A line that cites no item # (or, from the Pulse, a deal) is
+dropped. The Pulse is the one mail this script reads.
 
 Exit codes are ledger.py's: 2 config or arguments · 3 input refused · 4 structure changed ·
 6 a block does not match its Weeks row.
@@ -29,6 +36,7 @@ import re
 import subprocess
 import sys
 from datetime import date, timedelta
+from email.utils import parseaddr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ledger  # noqa: E402
@@ -36,6 +44,16 @@ from ledger import Refuse, pad, parse_values, load_result, read_call, save_run, 
 
 DEFAULT_RULES = "~/.claude/skills/zynkr-gm/scripts/derive_state.py"
 ITEM_NUM = re.compile(r"(?<![\d.])(\d{1,2}\.\d{2})(?![\d.])")
+# The Monday Sales Pulse (09:30): its subject prefix and its "Next step this week" lines, whose shape
+# /zynkr-gm parses too: `<name> - N of FLOOR cooking: <step 1>; <step 2>`.
+PULSE_SUBJECT = "Zynkr Sales Pulse - week of"
+# The routine sends it from the owner's own account: only Sent is searched, and only the thread's first
+# message, from that account, is read, so a look-alike mail from anyone else never reaches the team.
+PULSE_QUERY = 'in:sent subject:"%s" newer_than:1d' % PULSE_SUBJECT
+PULSE_LINE = re.compile(r"^[\s>*•\-]*([A-Za-z][A-Za-z .'/-]{0,40}?) - (\d+) of (\d+) cooking:\s*(.+?)\s*$", re.M)
+PLAN_MAX = 5
+DECIDED = ("決議", "放棄")                   # what the meeting settled; 行動 is a plan, 進度 a state
+OPEN = ("卡關", "風險", "待討論", "待決")      # 待決: weeks before SKB-091
 
 
 # ── weeks ────────────────────────────────────────────────────────────────────
@@ -75,6 +93,12 @@ def load_all(path=None):
     audience = raw.get("routine", {}).get("recap_audience") or "owner"
     team_from = str(raw.get("routine", {}).get("recap_team_from") or "").strip()
     cfg.update(team_from=(ledger.norm_date(team_from) or "9999-12-31") if team_from else "")
+    # SKB-091: one team address (zynkr-all) replaces the audience switch once it is set
+    recap_to = str(raw.get("routine", {}).get("recap_to") or "").strip()
+    roster = [k for k in raw.get("chat_ids", {}) if not k.startswith("$") and not k.startswith("users/")]
+    aliases = {k: v for k, v in (raw.get("routine", {}).get("name_aliases") or {}).items()
+               if not k.startswith("$") and isinstance(v, str)}
+    cfg.update(recap_to=recap_to if "@" in recap_to and "<" not in recap_to else "", roster=roster, aliases=aliases)
     cfg.update(reporters=reporters, names=names, rules=rules, audience=audience if audience in ("owner", "team") else "owner",
                doc_url=("https://docs.google.com/document/d/%s/edit" % doc_id) if doc_id and "<" not in doc_id else "",
                tracker_url="https://docs.google.com/spreadsheets/d/%s/edit" % cfg["tracker"],
@@ -155,7 +179,7 @@ def r_blocks(d):
     wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:R1")
     if not wh or pad(wh[0], 14) != ledger.WEEKS_FULL[:14]:
         raise Refuse(4, "Weeks header is not the Phase 2 header (A–N)")
-    phase3 = pad(wh[0], 18) == ledger.WEEKS_FULL
+    phase3 = pad(wh[0], 18) == ledger.WEEKS_FULL[:18]
     wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], run["weeks_range"])
     k = run["k"]
     if k >= 1:
@@ -185,18 +209,138 @@ def r_blocks(d):
         pages["p"] = block_pages("p", prev_row)
     for name, rng in pages["s"] + pages.get("p", []):
         calls.append(read_call(run, run["ledger"], rng, name))
-    for tab, col, cell in (("Reports", "I", 10), ("Decisions", "H", 12), ("Proposals", "O", 14)):
+    for tab, col, cell in (("Reports", "I", 10), ("Decisions", "I", 12), ("Proposals", "O", 14)):
         if row[cell] == "ok" and (phase3 or cell < 14):
             first, last = ledger.block_slot(tab, k)
             rng = "%s!A%d:%s%d" % (tab, first, col, last)
             pages[tab] = rng
             calls.append(read_call(run, run["ledger"], rng, tab.lower()))
+    calls.append(ledger.call("search_gmail_messages", {"user_google_email": run["account"], "page_size": 5,
+                                                       "query": PULSE_QUERY}, os.path.join(d, "pulse-search.txt")))
     run.update(notice=False, row=row, prev_row=prev_row if prev_ok else None, pages=pages,
-               applied=phase3 and row[16] == "ok")
+               applied=phase3 and row[16] == "ok", pulse="not-read")
     save_run(run)
     return {"notice": False, "week": run["week"], "calls": calls,
             "first_snapshot": not prev_ok, "reports": row[10] == "ok", "decisions": row[12] == "ok",
             "proposals": "Proposals" in pages}
+
+
+def r_pulse(d):
+    """The Pulse search result -> the thread to fetch. No Pulse is no failure: the recap goes out
+    without the sales lines and says so."""
+    run = load_run(d)
+    if run.get("notice") is not False:
+        raise Refuse(2, "run `recap.py blocks` first")
+    path = os.path.join(d, "pulse-search.txt")
+    if not os.path.exists(path):
+        raise Refuse(2, "save the Sales Pulse search `blocks` printed first")
+    text = load_result(path).strip()
+    first = text.split("\n", 1)[0]
+    if first == "No messages found for query: '%s'" % PULSE_QUERY:
+        ids = []
+    elif first.startswith("Found ") and first.endswith("'%s':" % PULSE_QUERY):
+        ids = re.findall(r"Thread ID: ([0-9a-f]+)", text)
+    else:
+        run["pulse"] = "unreadable"
+        save_run(run)
+        return {"pulse": False, "why": "the Pulse search result could not be read"}
+    if not ids:
+        run["pulse"] = "missing"
+        save_run(run)
+        return {"pulse": False, "why": "no Sales Pulse since yesterday"}
+    run["pulse"] = "fetched"
+    save_run(run)
+    return {"pulse": True, "calls": [ledger.call("get_gmail_thread_content",
+                                                 {"user_google_email": run["account"], "thread_id": ids[0]},
+                                                 os.path.join(d, "pulse.txt"))]}
+
+
+def parse_pulse(text, account):
+    """{name: (cooking, floor, [steps])} from the Pulse thread's first message, which the owner's account
+    sent; None when the thread is not a Pulse or the first message came from anyone else."""
+    m = re.search(r"^Subject: (.*)$", text, re.M)
+    if not m or not m.group(1).strip().startswith(PULSE_SUBJECT):
+        return None
+    parts = re.split(r"^=== Message \d+ ===$", text, flags=re.M)
+    if len(parts) < 2:
+        return None
+    first = parts[1]
+    head, _, body = first.lstrip("\n").partition("\n\n")
+    frm = re.search(r"^From: (.*)$", head, re.M)
+    # the address itself, exactly: a display name or a look-alike domain that merely contains it is not it
+    sender = parseaddr(frm.group(1))[1].strip().lower() if frm else ""
+    if not account.strip() or sender != account.strip().lower():
+        return None
+    out = {}
+    for name, n, floor, rest in PULSE_LINE.findall(body):
+        name = " ".join(name.split())
+        if name not in out:
+            out[name] = (int(n), int(floor), [s.strip() for s in rest.split(";") if s.strip()][:2])
+    return out
+
+
+def person_of(run, name):
+    """A name as the roster spells it: exact, then an alias from the config, then the one roster
+    name with the same first word (the Pulse writes `Peter`, the roster `Peter Tu`)."""
+    name = " ".join(str(name or "").split())
+    if not name:
+        return ""
+    if name.lower() in ("all", "全體", "全員"):
+        return "全體"
+    roster = run.get("roster", [])
+    if name in roster:
+        return name
+    if name in run.get("aliases", {}):
+        return run["aliases"][name]
+    first = name.split()[0].lower()
+    hit = [r for r in roster if r.split()[0].lower() == first]
+    return hit[0] if len(hit) == 1 else name
+
+
+def owners_of(run, field):
+    return [p for p in (person_of(run, x) for x in re.split(r"[、,，/]", str(field or ""))) if p] or ["負責人未定"]
+
+
+def build_plan(run, items, actions, flagged, pulse):
+    """[{"who", "lines"}] and how many lines were dropped for citing nothing. Order per person:
+    the meeting's actions, overdue or due within 14 days, P0/P1 undated, the Pulse; an item already
+    listed for that person is not listed again; at most PLAN_MAX lines."""
+    plan, seen, dropped = {}, {}, 0
+
+    def add(who, text, cite):
+        nonlocal dropped
+        if not cite:
+            dropped += 1
+            return
+        lines = plan.setdefault(who, [])
+        if cite != "deal" and cite in seen.setdefault(who, set()):
+            return
+        if len(lines) >= PLAN_MAX:
+            return
+        seen[who].add(cite)
+        lines.append(text)
+
+    for a in actions:
+        num = a["#"] if a["#"] in items else ""
+        due = as_date(ledger.norm_date(a["期限"]) or a["期限"])
+        text = "#%s %s%s" % (num, clip(a["內容"], 50), "（%s 前）" % md(due) if due else "")
+        for who in owners_of(run, a["負責人"]):
+            add(who, text, num)
+    for key in ("overdue", "ends_soon", "undated"):
+        for x in flagged.get(key, []):
+            for who in owners_of(run, x["負責人"]):
+                add(who, "#%s %s — %s" % (x["#"], clip(x["項目"], 30), x["why"]), x["#"])
+    for name, (_, _, steps) in (pulse or {}).items():
+        for s in steps:
+            add(person_of(run, name), "業務：%s" % clip(s, 80), "deal")
+    roster = run.get("roster", [])
+    order = sorted(plan, key=lambda w: (w in ("全體", "負責人未定"), roster.index(w) if w in roster else len(roster), w))
+    return [{"who": w, "lines": plan[w]} for w in order if plan[w]], dropped
+
+
+def clip(s, n):
+    s = " ".join(str(s or "").split())
+    return s if len(s) <= n else s[:n - 1] + "…"
 
 
 def read_block(run, key, wrow):
@@ -248,14 +392,19 @@ def r_build(d, today):
                  "evidence": r.get("evidence", [])}
                 for r in st["rows"] if state in r["states"]]
 
-    decisions = {"recorded": "Decisions" in run["pages"], "decided": [], "open": []}
+    decisions = {"recorded": "Decisions" in run["pages"], "decided": [], "open": [], "actions": []}
     if decisions["recorded"]:
         drows = parse_values(load_result(os.path.join(d, "decisions.txt")), run["ledger"], run["pages"]["Decisions"])
-        for r in (pad(x, 8) for x in drows):
+        for r in (pad(x, 9) for x in drows):
             if r[0] != run["week"]:
                 continue
-            entry = {"內容": r[3], "負責人": r[4], "期限": r[5], "#": r[6]}
-            (decisions["decided"] if r[2] == "決議" else decisions["open"]).append(entry)
+            entry = {"類型": r[2], "內容": r[3], "負責人": r[4], "期限": r[5], "#": r[6], "狀態": r[8]}
+            if r[2] in DECIDED:
+                decisions["decided"].append(entry)
+            elif r[2] == "行動":
+                decisions["actions"].append(entry)
+            elif r[2] in OPEN or r[2] != "進度":
+                decisions["open"].append(entry)
     reports = {"recorded": "Reports" in run["pages"], "posted": [], "missing": [], "blockers": []}
     if reports["recorded"]:
         rrows = parse_values(load_result(os.path.join(d, "reports.txt")), run["ledger"], run["pages"]["Reports"])
@@ -279,6 +428,10 @@ def r_build(d, today):
     changes = []
     if diff:
         changes = [c for c in diff["changed"] if not c["cosmetic"]]
+    pulse_state, pulse = run.get("pulse", "not-read"), None
+    if pulse_state == "fetched":
+        pulse = parse_pulse(load_result(os.path.join(d, "pulse.txt")), run["account"])
+        pulse_state = "found" if pulse else "unreadable"
     facts = {"week": run["week"], "label": wb_label(run["week"]), "range": week_range(run["week"]),
              "today": today, "first_snapshot": prev is None, "items": names,
              "changes": changes, "added": diff["added"] if diff else [], "removed": diff["removed"] if diff else [],
@@ -286,8 +439,9 @@ def r_build(d, today):
              "undated": [x for x in flagged("UNDATED") if by_id[x["#"]]["priority"] in ("P0", "P1")],
              "propose_done": flagged("PROPOSE_DONE"), "paused": flagged("PAUSED"),
              "unknown_status": flagged("UNKNOWN_STATUS"),
-             "decisions": decisions, "reports": reports, "proposals": proposals,
+             "decisions": decisions, "reports": reports, "proposals": proposals, "pulse": pulse_state,
              "links": {"tracker": run["tracker_url"], "doc": run["doc_url"], "ledger": run["ledger_url"]}}
+    facts["plan"], facts["plan_dropped"] = build_plan(run, names, decisions["actions"], facts, pulse)
     json.dump(facts, open(os.path.join(d, "facts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     run.update(built=True)
     save_run(run)
@@ -297,6 +451,8 @@ def r_build(d, today):
             "undated": [x["#"] for x in facts["undated"]], "propose_done": [x["#"] for x in facts["propose_done"]],
             "decided": len(decisions["decided"]), "open_decisions": len(decisions["open"]),
             "blockers": len(reports["blockers"]), "proposals": len(proposals["rows"]) if proposals["recorded"] else None,
+            "plan": {p["who"]: len(p["lines"]) for p in facts["plan"]}, "plan_dropped": facts["plan_dropped"],
+            "pulse": pulse_state,
             "facts": os.path.join(d, "facts.json"),
             "tldr": "write at most 3 lines to tldr.json (a JSON list); each must cite an item # from facts.items"}
 
@@ -337,6 +493,14 @@ def render_html(facts, tldr):
     o.append("<p>%s（%s）的週報，資料來自主追蹤表每週五的快照和週報帳本。</p>" % (esc(facts["label"]), esc(facts["range"])))
     if tldr:
         o.append("<h3>重點</h3><ul>%s</ul>" % "".join(li(esc(t)) for t in tldr))
+    o.append("<h3>這週的計畫</h3>")
+    for p in facts.get("plan", []):
+        o.append("<p><b>%s</b></p><ul>%s</ul>" % (esc(p["who"]), "".join(li(esc(x)) for x in p["lines"])))
+    if not facts.get("plan"):
+        o.append("<p>這週沒有排定的行動、到期或缺日期的項目</p>")
+    if facts.get("pulse") != "found":
+        o.append("<p>業務的下一步沒有列：%s</p>" % ("今天 10 點前沒有收到 Sales Pulse" if facts.get("pulse") == "missing"
+                                                   else "Sales Pulse 這次讀不到"))
     o.append("<h3>上週改了什麼</h3>")
     if facts["first_snapshot"]:
         o.append("<p>這是第一張快照，下週起才有前後可以比</p>")
@@ -366,8 +530,11 @@ def render_html(facts, tldr):
         o.append("<p>上週會議沒有記下決議</p>")
     else:
         if dec["decided"]:
-            o.append("<ul>%s</ul>" % "".join(li("%s — %s，%s" % (esc(x["內容"]), esc(x["負責人"]), esc(x["期限"])))
-                                              for x in dec["decided"]))
+            o.append("<ul>%s</ul>" % "".join(
+                li("%s%s%s" % ("放棄：" if x.get("類型") == "放棄" else "", esc(x["內容"]),
+                               (" — " + esc("，".join(v for v in (x["負責人"], x["期限"]) if v)))
+                               if (x["負責人"] or x["期限"]) else ""))
+                for x in dec["decided"]))
         if dec["open"]:
             o.append("<p>還沒定案</p><ul>%s</ul>" % "".join(li(esc(x["內容"])) for x in dec["open"]))
     pr = facts.get("proposals") or {}
@@ -384,6 +551,7 @@ def render_html(facts, tldr):
             o.append("<p>提案記下了，但週末沒有記到核准結果（可能沒有回覆，或套用那一步沒有跑完），%d 件都沒有套用</p>" % len(prs))
         else:
             for key, title in (("would-apply", "試行中：核准了，但試行期間不寫進總表。如果套用，會改這些"),
+                               ("to-apply", "核准了，已寫進總表（有人手改過的格子會跳過）"),
                                ("applied", "已套用到總表"), ("退回", "退回"), ("未回覆", "回覆裡沒寫到，這次不套用")):
                 xs = [x for x in prs if x["結果"] == key]
                 if xs:
@@ -408,6 +576,8 @@ def render_html(facts, tldr):
 def audience_for(run):
     """Who gets this recap: every reporter when the audience is `team` and the recap's Monday is on or
     after `recap_team_from` (when set); the owner alone otherwise."""
+    if run.get("recap_to"):
+        return "team"
     if run["audience"] != "team":
         return "owner"
     if run.get("team_from") and ledger.monday(run["runner_week"]).isoformat() < run["team_from"]:
@@ -434,7 +604,7 @@ def r_render(d, tldr_path):
     run.update(rendered=True, subject=subject)
     save_run(run)
     audience = audience_for(run)
-    to = ",".join(run["reporters"]) if audience == "team" else run["account"]
+    to = run.get("recap_to") or (",".join(run["reporters"]) if audience == "team" else run["account"])
     return {"subject": subject, "to": to, "audience": audience, "body_path": path, "body_format": "html",
             "tldr_kept": len(kept), "tldr_dropped": dropped,
             "sent_check": "search in:sent newer_than:3d for this exact subject before sending; send only if absent"}
@@ -463,7 +633,7 @@ def main(argv=None):
     s = sub.add_parser("start")
     s.add_argument("--runner-week", required=True)
     s.add_argument("--config")
-    for name in ("blocks", "notice"):
+    for name in ("blocks", "notice", "pulse"):
         p = sub.add_parser(name)
         p.add_argument("--dir", required=True)
     b = sub.add_parser("build")
@@ -486,6 +656,8 @@ def main(argv=None):
             emit(r_render(a.dir, a.tldr))
         elif a.cmd == "notice":
             emit(r_notice(a.dir))
+        elif a.cmd == "pulse":
+            emit(r_pulse(a.dir))
         else:
             ap.print_help()
             return 2
@@ -509,6 +681,42 @@ def selftest():
     check("previous week across a year", previous_week("2027-W01"), "2026-W53")
     check("WB label", wb_label("2026-W41"), "WB 10/5")
     check("range", week_range("2026-W41"), "10/5–10/11")
+    # the plan (SKB-091): order, the five-line cap, an item listed once, uncited lines dropped, names
+    prun = {"roster": ["Ann Lee", "Bob Wu"], "aliases": {"Fish": "Bob Wu"}}
+    check("a first name finds the roster name", person_of(prun, "Ann"), "Ann Lee")
+    check("an alias finds the roster name", person_of(prun, "Fish"), "Bob Wu")
+    check("an unknown name stays", person_of(prun, "Zed"), "Zed")
+    check("All is everyone", person_of(prun, "All"), "全體")
+    pitems = {n: "x" for n in ("1.01", "1.02", "1.03", "1.04", "1.05", "1.06")}
+    pacts = [{"內容": "交付", "負責人": "Ann Lee", "期限": "2026-10-20", "#": "1.01"},
+             {"內容": "找講師", "負責人": "Ann Lee", "期限": "", "#": "新"},
+             {"內容": "全員看", "負責人": "All", "期限": "", "#": "1.02"},
+             {"內容": "一起做", "負責人": "Ann Lee、Bob Wu", "期限": "", "#": "1.03"}]
+    pflag = {"overdue": [{"#": "1.01", "項目": "x", "負責人": "Ann Lee", "why": "過期"}],
+             "ends_soon": [{"#": "1.04", "項目": "x", "負責人": "Ann Lee", "why": "快到"}],
+             "undated": [{"#": "1.05", "項目": "x", "負責人": "Ann Lee", "why": "沒日期"},
+                         {"#": "1.06", "項目": "x", "負責人": "Ann Lee", "why": "沒日期"}]}
+    plan, pdrop = build_plan(prun, pitems, pacts, pflag, {"Ann": (1, 5, ["s1", "s2"]), "Fish": (0, 5, ["claim 5 leads"])})
+    check("plan: people in roster order, everyone last", [p["who"] for p in plan], ["Ann Lee", "Bob Wu", "全體"])
+    check("plan: actions, then due, then undated; an item once; five at most, so the Pulse waits",
+          plan[0]["lines"], ["#1.01 交付（10/20 前）", "#1.03 一起做", "#1.04 x — 快到", "#1.05 x — 沒日期", "#1.06 x — 沒日期"])
+    check("plan: the Pulse's steps come last, under the roster name", plan[1]["lines"], ["#1.03 一起做", "業務：claim 5 leads"])
+    check("plan: an action for a new item cites nothing and is dropped", pdrop, 1)
+    pulse_text = ("Thread ID: t1\nSubject: Zynkr Sales Pulse - week of Oct 12 to Oct 18\nMessages: 2\n\n"
+                  "=== Message 1 ===\nFrom: Owner <owner@example.com>\n\n3 of 7 KPIs met\nNext step this week\n"
+                  "Ann - 2 of 5 cooking: follow up the Acme quote; drop the Beta deal; a third\n"
+                  "- Zed Q - 0 of 5 cooking: claim 5 leads\n\n=== Message 2 ===\nFrom: y\n\n"
+                  "> Ann - 9 of 5 cooking: quoted, not read\n")
+    check("the Pulse: first message only, two steps at most", parse_pulse(pulse_text, "owner@example.com"),
+          {"Ann": (2, 5, ["follow up the Acme quote", "drop the Beta deal"]), "Zed Q": (0, 5, ["claim 5 leads"])})
+    check("a thread that is not the Pulse is not read",
+          parse_pulse(pulse_text.replace("Zynkr Sales Pulse", "Re: Pulse"), "owner@example.com"), None)
+    check("the Pulse is looked for in Sent only", PULSE_QUERY.split()[0], "in:sent")
+    for spoof in ('"owner@example.com" <eve@example.net>', "owner@example.com.evil.net"):
+        check("a sender that only contains the address is not the owner (%s)" % spoof,
+              parse_pulse(pulse_text.replace("Owner <owner@example.com>", spoof), "owner@example.com"), None)
+    check("a look-alike Pulse from anyone else is not read",
+          parse_pulse(pulse_text.replace("Owner <owner@example.com>", "Eve <eve@example.net>"), "owner@example.com"), None)
     kept, dropped = gate_tldr(["#1.03 SEO 改雙週一篇", "大家辛苦了", "1.99 不存在", "4.10 延期", "第四行"],
                               {"1.03": "SEO", "4.10": "x"})
     check("tldr keeps cited lines", kept, ["#1.03 SEO 改雙週一篇"])
@@ -561,8 +769,17 @@ def selftest():
             return "\n".join(["Successfully read %d rows from range '%s' in spreadsheet LED for x@example.com:" % (len(rows), rng)]
                              + ["Row %2d: %s" % (i, list(r) + [""] * max(0, width - len(r))) for i, r in enumerate(rows, 1)])
 
-        def serve(calls, sheet):
+        def serve(calls, sheet, pulse=None):
             for c in calls:
+                if c["tool"].endswith("search_gmail_messages"):
+                    q = c["args"]["query"]
+                    open(c["save"], "w", encoding="utf-8").write(
+                        "Found 1 messages matching '%s':\n\n  1. Message ID: m1\n     Thread ID: 1a2b\n" % q if pulse
+                        else "No messages found for query: '%s'" % q)
+                    continue
+                if c["tool"].endswith("get_gmail_thread_content"):
+                    open(c["save"], "w", encoding="utf-8").write(pulse)
+                    continue
                 rng = c["args"]["range_name"]
                 tab, r0, r1 = re.match(r"^(\w+)!A(\d+):[A-Z](\d+)$", rng).groups()
                 g = sheet[tab]
@@ -580,9 +797,9 @@ def selftest():
             reports = [ledger.REPORTS_HEADER] + [[""] * 9] * 40
             for i, r in enumerate(rep or []):
                 reports[21 + i] = r
-            decisions = [ledger.DECISIONS_HEADER] + [[""] * 8] * 40
+            decisions = [ledger.DECISIONS_HEADER] + [[""] * 9] * 90
             for i, r in enumerate(dec or []):
-                decisions[21 + i] = r
+                decisions[ledger.block_slot("Decisions", 1)[0] - 1 + i] = r
             proposals = [ledger.PROPOSALS_HEADER] + [[""] * 15] * 90
             for i, r in enumerate(props or []):
                 proposals[41 + i] = r
@@ -591,7 +808,11 @@ def selftest():
 
         rep = [["2026-W41", "2026-10-05T01:00:00Z", "a@example.com", "#Sales", "做完 A", "做 B", "", "等報價", "tagged"]]
         dec = [["2026-W41", "2026-10-08", "決議", "1.02 改月底交", "Ann", "2026-10-30", "1.02", "x"],
-               ["2026-W41", "2026-10-08", "待決", "要不要外包", "", "", "", "x"]]
+               ["2026-W41", "2026-10-08", "待決", "要不要外包", "", "", "", "x"],
+               ["2026-W41", "2026-10-08", "行動", "跟客戶確認", "Ann", "2026-10-20", "1.02", "x", "已排定"],
+               ["2026-W41", "2026-10-08", "放棄", "1.01 舊版不做了", "", "", "1.01", "x", ""],
+               ["2026-W41", "2026-10-08", "卡關", "等報價", "Ann", "", "", "x", ""],
+               ["2026-W41", "2026-10-08", "進度", "1.10 做一半", "Ann", "", "1.10", "x", "進行中"]]
         sheet = ledger_sheet([wrow("2026-W40", w40), wrow("2026-W41", w41, "ok", "ok")], w40, w41, rep, dec)
         st = r_start("2026-W42", cfgp, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
         check("recap targets the previous week", st["week"], "2026-W41")
@@ -599,15 +820,18 @@ def selftest():
         bl = r_blocks(st["dir"])
         check("recap not a notice", bl["notice"], False)
         serve(bl["calls"], sheet)
+        check("no Pulse yet: nothing to fetch", r_pulse(st["dir"])["pulse"], False)
         built = r_build(st["dir"], "2026-10-12")
         check("recap changes", built["changes"], 1)
         check("recap overdue from the state rules", built["overdue"], ["1.10"])
-        check("recap decisions", (built["decided"], built["open_decisions"]), (1, 1))
+        check("recap decisions: 決議 and 放棄 settle, 待決 and 卡關 stay open, 行動 and 進度 are neither",
+              (built["decided"], built["open_decisions"]), (2, 2))
+        check("recap plan: the action, then the overdue item", (built["plan"], built["pulse"]), ({"Ann": 2}, "missing"))
         check("recap blockers", built["blockers"], 1)
         tl = os.path.join(tmp, "tldr.json")
         json.dump(["#1.01 開始進行", "沒有編號的一句"], open(tl, "w"), ensure_ascii=False)
         out = r_render(st["dir"], tl)
-        check("recap subject", out["subject"], "【週報】WB 10/5 那週 — 變更 1 件 · 決議 1 件 · 逾期 1 件")
+        check("recap subject", out["subject"], "【週報】WB 10/5 那週 — 變更 1 件 · 決議 2 件 · 逾期 1 件")
         check("recap recipients", out["to"], "a@example.com,b@example.com")
         check("recap drops an uncited line", out["tldr_dropped"], ["沒有編號的一句"])
         body = open(out["body_path"], encoding="utf-8").read()
@@ -615,6 +839,22 @@ def selftest():
         check("recap names the blocker by display name", "Ann：等報價" in body, True)
         check("recap lists who did not post", "上週沒交週報：b" in body, True)
         check("recap escapes html", "<script>" not in body, True)
+        check("recap plan in the mail", "<b>Ann</b></p><ul><li>#1.02 跟客戶確認（10/20 前）</li>" in body, True)
+        check("recap says the Pulse was missing", "業務的下一步沒有列：今天 10 點前沒有收到 Sales Pulse" in body, True)
+        check("recap shows a drop as one", "放棄：1.01 舊版不做了</li>" in body, True)
+
+        # the Pulse found: its steps join the plan under the roster name
+        stp = r_start("2026-W42", cfgp, "2026-10-12T10:05:00+08:00", base=os.path.join(tmp, "runs"))
+        pulse_ann = ("Thread ID: 1a2b\nSubject: Zynkr Sales Pulse - week of Oct 12 to Oct 18\nMessages: 1\n\n"
+                     "=== Message 1 ===\nFrom: owner@example.com\n\nAnn - 1 of 5 cooking: call Acme back\n")
+        serve(stp["calls"], sheet)
+        serve(r_blocks(stp["dir"])["calls"], sheet, pulse_ann)
+        serve(r_pulse(stp["dir"])["calls"], sheet, pulse_ann)
+        bp = r_build(stp["dir"], "2026-10-12")
+        check("recap with the Pulse", (bp["plan"], bp["pulse"]), ({"Ann": 3}, "found"))
+        bodyp = open(r_render(stp["dir"], None)["body_path"], encoding="utf-8").read()
+        check("the Pulse step in the mail, and no missing-Pulse line", ("業務：call Acme back" in bodyp, "沒有列" in bodyp),
+              (True, False))
         check("recap call-out in the team's words", "#1.10 item 1.10（Ann）— 結束日 9/30 已過 12 天" in body, True)
         check("recap call-outs grouped with a count", "逾期（1 件）" in body, True)
         check("no machine evidence in the mail", "overdue" in body, False)
@@ -651,6 +891,21 @@ def selftest():
         check("a slash date is read too", to_with("2026/10/12"), "a@example.com,b@example.com")
         check("a date that cannot be read keeps the owner alone", to_with("next Monday"), "owner@example.com")
 
+        # recap_to (SKB-091): the one team address, whatever the audience says
+        def to_recap(value):
+            p = os.path.join(tmp, "cfg-recap-to.json")
+            raw_t = json.load(open(cfgp, encoding="utf-8"))
+            raw_t["routine"] = {"recap_to": value}
+            json.dump(raw_t, open(p, "w"), ensure_ascii=False)
+            s = r_start("2026-W42", p, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
+            serve(s["calls"], sheet)
+            serve(r_blocks(s["dir"])["calls"], sheet)
+            r_build(s["dir"], "2026-10-12")
+            return r_render(s["dir"], None)["to"]
+
+        check("recap_to sends to the team address alone", to_recap("all@example.com"), "all@example.com")
+        check("a placeholder recap_to falls back to the audience", to_recap("<team address>"), "owner@example.com")
+
         # no Reports / Decisions recorded: says so, never "0"
         sheet2 = ledger_sheet([wrow("2026-W40", w40), wrow("2026-W41", w41)], w40, w41)
         st2 = r_start("2026-W42", cfgp, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
@@ -686,7 +941,8 @@ def selftest():
 
         props = [prow("1", "1.02", "狀態", "進行中", "完成", "核准", "would-apply"),
                  prow("2", "1.10", "結束", "2026-09-30", "2026-10-31", "退回", "退回"),
-                 prow("3", "1.01", "狀態", "進行中", "暫停", "未回覆", "未回覆")]
+                 prow("3", "1.01", "狀態", "進行中", "暫停", "未回覆", "未回覆"),
+                 prow("4", "1.01", "備註", "", "10/8 會議：x", "核准", "to-apply")]
         w41p = wrow("2026-W41", w41, "ok", "ok") + ["ok", "2026-10-09T10:21:00+08:00", "ok", "2026-10-10T09:05:00+08:00"]
         sheet6 = ledger_sheet([wrow("2026-W40", w40), w41p], w40, w41, rep, dec, props, ledger.WEEKS_FULL)
         st6 = r_start("2026-W42", cfgp, "2026-10-12T09:10:00+08:00", base=os.path.join(tmp, "runs"))
@@ -694,12 +950,13 @@ def selftest():
         b6 = r_blocks(st6["dir"])
         check("recap reads the proposals", b6["proposals"], True)
         serve(b6["calls"], sheet6)
-        check("recap counts the proposals", r_build(st6["dir"], "2026-10-12")["proposals"], 3)
+        check("recap counts the proposals", r_build(st6["dir"], "2026-10-12")["proposals"], 4)
         body6 = open(r_render(st6["dir"], None)["body_path"], encoding="utf-8").read()
         check("recap lists what would have been applied", "如果套用，會改這些（1 件）" in body6, True)
         check("recap shows the would-apply row", "#1.02 item 1.02 — 狀態：進行中 → 完成" in body6, True)
         check("recap lists the rejected row", "退回（1 件）" in body6, True)
         check("recap lists the unmentioned row", "回覆裡沒寫到，這次不套用（1 件）" in body6, True)
+        check("recap lists a live-written row", "已寫進總表（有人手改過的格子會跳過）（1 件）" in body6, True)
         w41q = list(w41p)
         w41q[16:18] = ["", ""]
         sheet7 = ledger_sheet([wrow("2026-W40", w40), w41q], w40, w41, rep, dec, props, ledger.WEEKS_FULL)
@@ -709,7 +966,7 @@ def selftest():
         r_build(st7["dir"], "2026-10-12")
         body7 = open(r_render(st7["dir"], None)["body_path"], encoding="utf-8").read()
         check("no apply record: says nothing was applied, and does not guess why",
-              "沒有記到核准結果（可能沒有回覆，或套用那一步沒有跑完），3 件都沒有套用" in body7, True)
+              "沒有記到核准結果（可能沒有回覆，或套用那一步沒有跑完），4 件都沒有套用" in body7, True)
         check("Phase 2 Ledger: no proposals section", "上週的變更提案" in body, False)
 
         # a block that does not match its Weeks digest is refused
@@ -753,6 +1010,20 @@ MUTATIONS = [
     ("machine evidence in the mail", [('esc(x["why"])))', 'esc("；".join(x["evidence"]))))')]),
     ("proposals section dropped", [('if row[cell] == "ok" and (phase3 or cell < 14):', 'if row[cell] == "ok" and cell < 14:')]),
     ("no apply run shown as decided", [('elif not pr["applied_ran"]:', 'elif False:')]),
+    ("the plan has no cap", [("        if len(lines) >= PLAN_MAX:\n            return\n", "")]),
+    ("an uncited plan line is kept", [("        if not cite:\n            dropped += 1\n            return\n", "")]),
+    ("an item is listed twice", [('if cite != "deal" and cite in seen.setdefault(who, set()):', "if False:")]),
+    ("the Pulse comes first", [('    for a in actions:\n        num', '    for a in actions[:0]:\n        num')]),
+    ("any thread is read as the Pulse", [('    if not m or not m.group(1).strip().startswith(PULSE_SUBJECT):\n        return None\n', "")]),
+    ("a Pulse from anyone is read", [("    if not account.strip() or sender != account.strip().lower():\n        return None\n", "")]),
+    ("the sender matched as a substring", [("    if not account.strip() or sender != account.strip().lower():",
+                                            "    if account.lower() not in (frm.group(1).lower() if frm else \"\"):")]),
+    ("the Pulse is searched beyond Sent", [("""PULSE_QUERY = 'in:sent subject:""", """PULSE_QUERY = 'subject:""")]),
+    ("first names never matched", [("    return hit[0] if len(hit) == 1 else name", "    return name")]),
+    ("recap_to ignored", [('    to = run.get("recap_to") or (', '    to = (')]),
+    ("a drop is not a decision", [('DECIDED = ("決議", "放棄")', 'DECIDED = ("決議",)')]),
+    ("an action counts as a decision", [('            elif r[2] == "行動":\n', '            elif False:\n')]),
+    ("a live-written row goes unlisted", [('                               ("to-apply", "核准了，已寫進總表（有人手改過的格子會跳過）"),\n', "")]),
     ("notice mailed to the team", [('return {"subject": subject, "to": run["account"],', 'return {"subject": subject, "to": ",".join(run["reporters"]),')]),
 ]
 

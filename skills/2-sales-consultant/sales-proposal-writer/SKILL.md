@@ -29,8 +29,8 @@ visibility: public
 author: Peter Tu
 sheetId: "2.47"
 input: "A CRM deal id or name, plus the client's own material — a requirement sheet, discovery/meeting notes, a transcript, or a prior proposal version to revise."
-process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into a recurring lane and a build lane → price each line at the NT$10,000/hr anchor → publish as 交付文件 → CRM note. Revisions: comment → apply → resolve → checksum → sync."
-output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note with the pricing rationale, and a handoff line for the outbound owner, who writes the covering email."
+process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into recurring and build lanes → price each line at NT$10,000/hr → publish as 交付文件 → CRM note + chase task. Revisions: comment → apply → resolve → checksum → sync."
+output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note with the pricing rationale, a chase task on the deal, and a handoff line for the outbound owner's covering email."
 synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "project-init"]
 house-style: bound
 type: agent
@@ -162,6 +162,16 @@ If the client **already holds a link** to an earlier version, do not overwrite i
 new version separately and say which is current. Otherwise update in place so the URL they were
 given keeps working.
 
+**Book the chase.** A proposal nobody chases is where deals go stale. Create one task on the deal
+— `mcp__zynkr__create_task(subject="追提案回覆：<deal name>", deal_id=…, due_at=…, confirm:true)` —
+due by the follow-up rhythm in `company.sales-pipeline-rules`: this client's reply lag from Gmail picks
+`followup-fast-days`, `followup-normal-days` or `followup-slow-days`, counted from today, and never
+later than a `客戶時限：` line in the deal's notes. The handoff line says the task's date, and that
+it moves if the covering email goes out later. Skip the task on a revision round when an open
+chase task is already on the deal.
+
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
+
 ## Client-facing language
 
 Beyond House style, three rules this surface gets wrong most:
@@ -204,7 +214,9 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
 - A CRM note: ranking criterion · lane split · per-line pricing with hours · internal→external
   module mapping · anything deliberately unquoted and why
 - A handoff line for whoever picks up the outbound with this client: the share URL and
-  password, the current version, and the points the covering email should land
+  password, the current version, the points the covering email should land, and the chase
+  task's due date
+- A chase task on the deal, due by the policy's follow-up rhythm
 - On revisions: the comment→change table, the checksum verification, and what was synced
 
 ## House style

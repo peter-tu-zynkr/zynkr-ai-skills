@@ -207,7 +207,7 @@ from the same Ledger: last week's changes, the items that
 need attention, decisions and blockers. It often lands after the brief starts, so check Sent for it
 by subject only. When it is there, block 03 links it once instead of restating its lines. When it
 is not, say nothing: its absence is not a failure. The Friday approval mail
-`【待核准】WB m/d 那週 · N 件（<ISO week>）` is likewise found by subject, and only to link it.
+`【週結】WB m/d 那週 · N 件變更提案（<ISO week>）` (before 2026-W45, `【待核准】WB m/d 那週 · N 件（<ISO week>）`) is likewise found by subject, and only to link it.
 
 ### 3.1c The sales week — the weekly sales pulse mail (every run)
 

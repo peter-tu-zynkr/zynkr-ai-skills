@@ -1,6 +1,6 @@
 # Wording
 
-Everything this skill publishes is read by six colleagues, in zh-TW, in a chat room and a Doc
+Everything the weekly loop publishes (all four of its skills, SKB-091) is read by six colleagues, in zh-TW, in a chat room and a Doc
 they use all day. It should read like a competent teammate wrote it, not like a report
 generator emitted it.
 
@@ -10,8 +10,8 @@ assembled from field names, status enums and internal mode names has exactly the
 machine-shaped smell. Apply its Step 2 rules and its Step 3 self-check to anything this skill
 writes.
 
-**This matters most for the lines that are *not* in `message-templates.md`.** The agenda
-bullets, the recap mail body and every failure notice are composed fresh each run, so they are
+**This matters most for the lines that are *not* in `message-templates.md`.** Each team's
+section, the minutes, the recap mail body and every failure notice are composed fresh each run, so they are
 where the register actually drifts.
 
 ---
@@ -44,13 +44,13 @@ code identifiers and acronyms with no Chinese standard (`API`, `KPI`, `Doc`, `SE
 
 ### 3. Internal names leaking out
 
-`nudge`, `rollup`, `agenda`, `骨架`, `unrouted_heading`, `↻` thresholds and cell references are
+`collect`, `sections`, `tidy`, `骨架`, `unrouted_heading`, `↻` thresholds and cell references are
 this skill's vocabulary, not the team's. Translate them at the boundary — the mapping table is
 in `message-templates.md`.
 
 | Don't | Do |
 |---|---|
-| ⚠ **rollup** 這週沒有完成 | ⚠ 這週的**週報彙整**沒跑完 |
+| ⚠ **sections** 這週沒有完成 | ⚠ 這週的**各組進度**沒寫進 Doc |
 | 下週**骨架**已開 | **下週的區塊也開好了** |
 | 共 57 項候選中已濾除**範本／連結標籤** | （just show the items; the filtering is not news） |
 
@@ -92,33 +92,30 @@ cannot be checked — not that it is on target.
 Two strings are machine-readable idempotency keys, not prose. Changing either one makes the
 loop write duplicates:
 
-- `〔自動彙整 <week> · <stamp>〕` — `rollup` searches the section for `〔自動彙整 <week>`
+- `〔自動彙整 <week> · <stamp>〕` — `sections` and `tidy` search the section for `〔自動彙整 <week>`
 - `— zynkr-ops-weekly · <week>` — the Chat footer every delivering beat looks for
 
-Since SKB-070 the footer alone is not enough: `agenda` and `decisions` both post on a Thursday, so
-Step 1 matches the footer **together with** each mode's opening words. These are frozen too; the rest
-of each line may change:
+Since v4 (SKB-091) one beat posts to the space: `collect`, once a week, and only when someone's
+harvest is missing. Step 1 matches the footer **together with** its opening words, which are frozen
+too; the rest of the line may change:
 
 | mode | the post opens with |
 |---|---|
-| `nudge` | 這週的週報開始收囉 |
-| `chase` | 還缺這幾位的週報 |
-| `agenda` | 週四的議程整理好了 |
-| `decisions` | 今天談定的事 · or, with nothing decided, 今天的會沒有談定的決議 |
+| `collect` | 還沒收到這幾位的週報 |
 
 A ⚠ failure notice opens with ⚠ and so never counts as a mode's post. That is the point: a retry
 after its own failure notice must still run.
 
 The `notice` mail's subject prefix `【排程沒跑完】` is frozen for the same reason: the run finds an
-earlier send by its exact subject, and `decisions` must never mistake it for its 【營運週報】 recap.
+earlier send by its exact subject, and no other beat's mail may start with it.
 
 `↻N週` is also fixed: `norm_key()` in `render_block.py` strips it with the regex
 `↻\s*\d+\s*週`, so appending words to it silently breaks carry-over matching.
 
 `tidy` adds one line of its own, as the kept block's last line, above the items it carried
 forward. The items are real bullets, not typed `·` lines (the owner, 10-25), so an owner can
-mark one `Done` or `Drop` like any of their own bullets and the chip survives. Rollup writes the
-block as bullets (since 10-26) and `tidy` step 8 folds its header in, so a block reads, one item
+mark one `Done` or `Drop` like any of their own bullets and the chip survives. `sections` writes the
+block as bullets and `tidy` folds its header in, so a block reads, one item
 per bullet, the labels as words alone:
 
 ```
@@ -148,11 +145,10 @@ the list, not the bookkeeping. `〔WB 9/7 起〕` is the one piece of provenance
 That is what the team reads, in the Doc and in the space.
 
 The **ISO key**, `2026-W38`, stays in two machine-only places: the launchd state files
-(`<week>.<mode>.done`, which is how `run_ops_weekly.sh` knows a beat is settled) and the
+(`<week>.<mode>.done`, which is how `project-manager`'s `run_week.sh` knows a beat is settled) and the
 `week=` field of the receipt line. Neither is ever read by a person, both need to be
 year-qualified and sortable, and the scheduler derives its own key independently — it greps
-the receipt for `status=ok` and nothing else. `parse_reports.py` emits both, as `week` and
-`week_iso`.
+the receipt for `status=ok`, the mode and the week.
 
 This is a deliberate split, not drift. Do not "fix" it by unifying them: a label without a
 year is wrong for a state file, and an ordinal nobody can place is wrong for a chat message.
