@@ -96,7 +96,7 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
   deal is dropped are one company policy, and so are the words *client touch*, *cooking* and
   *stale*. This file names each threshold and never holds its number.
 
-> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `sales.pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
 ---
 
@@ -143,7 +143,7 @@ what landed and what didn't; do not silently retry a CRM write.
 
 ### 4 · REVIEW — the deal-level attention list
 
-Read `sales.pipeline-rules` first (see *Fixed facts*), then the pipeline. For each open deal,
+Read `company.sales-pipeline-rules` first (see *Fixed facts*), then the pipeline. For each open deal,
 find its **last client touch** — the newest inbound email from its contact, meeting, or stage
 change. `get_deal` shows the timeline; Gmail `from:<contact email>` fills a gap. Our own sent
 mail is not a client touch, so a deal chased every few days with no answer still goes stale.
@@ -200,7 +200,7 @@ only after a single explicit confirmation:
 ```
 
 Fill `<stale-days>` with the policy's number when you write the batch.
-A stale deal moved to `lost` gets one note on the deal — `放掉 · stale（sales.pipeline-rules <value date>）：最後一次客戶往來 <date>` —
+A stale deal moved to `lost` gets one note on the deal — `放掉 · stale（company.sales-pipeline-rules <value date>）：最後一次客戶往來 <date>` —
 so whoever reopens it sees why. A stale deal the owner keeps gets their reason as a note instead,
 and stays out of the batch.
 
@@ -216,7 +216,7 @@ Rules:
 ### 6 · Report
 
 State the mode, what each child produced (with record URLs), and — for REVIEW — the
-`sales.pipeline-rules` version used (its `value:` date), the band lines, the bucket counts and
+`company.sales-pipeline-rules` version used (its `value:` date), the band lines, the bucket counts and
 exactly what the confirmed batch changed. If the batch was declined,
 say so plainly and leave the list.
 

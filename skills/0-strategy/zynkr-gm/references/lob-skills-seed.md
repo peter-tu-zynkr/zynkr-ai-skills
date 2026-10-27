@@ -55,7 +55,7 @@ Category 0 now has two weeklies, and they are not the same artifact. Do not answ
 | 「tracker 同步 / Team Weekly 的 tracker 區塊 / 誰該被 nudge / snapshot the tracker」 | `planning-tracker-sync` (0.09) |
 | 「週報」 bare, "weekly report", the Monday cron on the course project | `project-status-update` (3.09) |
 | The team's weekly loop: Monday `#週報` posts, the Thursday meeting's decisions, the Monday `【週報】WB m/d` team recap, the Friday 【待核准】 tracker approvals, and the Weekly Ledger behind them | `zynkr-ops-weekly` (3.19, SKB-044). zynkr-gm only **reads** its Ledger (§3.1b) |
-| 「什麼 deal 該追」, pipeline review, a stalled deal | `sales-manager` (REVIEW mode). The brief names the pipeline's state at LOB level and routes deal-level work there. The team-wide weekly read is the Monday sales pulse mail (a cloud routine, not a skill; §3.1c), which applies sales-manager's pipeline band (Atlas policy `sales.pipeline-rules`) to every member |
+| 「什麼 deal 該追」, pipeline review, a stalled deal | `sales-manager` (REVIEW mode). The brief names the pipeline's state at LOB level and routes deal-level work there. The team-wide weekly read is the Monday sales pulse mail (a cloud routine, not a skill; §3.1c), which applies sales-manager's pipeline band (Atlas policy `company.sales-pipeline-rules`) to every member |
 
 `planning-tracker-sync` derives per-item state with **this skill's rules** — it holds a verbatim copy
 of `derived-state-rules.md` and calls `scripts/derive_state.py` when zynkr-gm is installed. So does

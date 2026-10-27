@@ -204,7 +204,7 @@ Every write previews first — call it once without `confirm`, then again with
    over `max-open-deals`, the lead is still logged; the report says
    `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
 
-> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `sales.pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
 **`lead_status` / `deal_status` stay empty** — the MCP cannot set them on the
 contact. The attribution lives on the deal as `lead_source="content"` — look there, not on the

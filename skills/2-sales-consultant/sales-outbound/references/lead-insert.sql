@@ -39,7 +39,7 @@
 --   {{NOTE_BODY}}        e.g. '來源：Threads…\n\n對話重點：…'  (verbatim thread + who they are)
 --   {{TASK_SUBJECT}}     e.g. '安排 30 分鐘 Demo + 開通 Beta'
 --   {{TASK_BODY}}        e.g. '已擬好邀約草稿，待回覆時段後寄出'  (or NULL)
---   {{TASK_DUE_DAYS}}    from the follow-up rhythm in Atlas sales.pipeline-rules (SKILL.md, Inference defaults)
+--   {{TASK_DUE_DAYS}}    from the follow-up rhythm in Atlas company.sales-pipeline-rules (SKILL.md, Inference defaults)
 --   {{SOURCE_META}}      e.g. '{"source":"threads","handle":"@example.marketing"}'  (jsonb literal, or '{}')
 
 -- OWNER: replace <your-company-contact-email> with the CRM owner's email before running —

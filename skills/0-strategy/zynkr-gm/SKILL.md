@@ -218,7 +218,7 @@ Monday run finds is usually the previous Monday's. Take the newest one sent in t
 always name its week. Open it as plain text and read only two things:
 - the verdict line, `N of 7 KPIs met`;
 - the "Next step this week" lines, one per salesperson: `<name> - N of F cooking: …`, F being the floor the pulse printed. The rule is
-  defined in `sales-manager` (REVIEW, *The pipeline band*; its numbers are the Atlas policy `sales.pipeline-rules`).
+  defined in `sales-manager` (REVIEW, *The pipeline band*; its numbers are the Atlas policy `company.sales-pipeline-rules`).
 
 Use them this way:
 - block 04: a sales owner's line gets `pipeline: N of F cooking (pulse, week of …)`, N and F copied from the pulse line. Match a pulse
