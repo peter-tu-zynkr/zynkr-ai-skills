@@ -9,7 +9,8 @@ calls, each with a path to save the tool's result to, word for word.
     recap.py blocks --dir D                           -> {"notice": true, ...} when last week never
                                                          closed out, else the block reads and the
                                                          Sales Pulse search
-    recap.py pulse  --dir D                           -> the Pulse thread to fetch, or none (SKB-091)
+    recap.py pulse  --dir D                           -> the threads to fetch, newest first, or none
+                                                         (SKB-091, SKB-096)
     recap.py build  --dir D --today YYYY-MM-DD        -> facts.json + a short summary for the TL;DR
     recap.py render --dir D --tldr tldr.json          -> subject, recipients, recap.html; TL;DR lines
                                                          that cite no real item # are dropped
@@ -47,9 +48,30 @@ ITEM_NUM = re.compile(r"(?<![\d.])(\d{1,2}\.\d{2})(?![\d.])")
 # The Monday Sales Pulse (09:30): its subject prefix and its "Next step this week" lines, whose shape
 # /zynkr-gm parses too: `<name> - N of FLOOR cooking: <step 1>; <step 2>`.
 PULSE_SUBJECT = "Zynkr Sales Pulse - week of"
-# The routine sends it from the owner's own account: only Sent is searched, and only the thread's first
-# message, from that account, is read, so a look-alike mail from anyone else never reaches the team.
-PULSE_QUERY = 'in:sent subject:"%s" newer_than:1d' % PULSE_SUBJECT
+# The search's page size, and so the most threads `pulse` fetches: newest first, the first real Pulse
+# wins, because Gmail's `from:<domain>` also matches look-alike domains and display names, and one
+# newer look-alike must not hide the Pulse (SKB-096).
+PULSE_THREADS = 5
+# What the CRM writes for a member with nothing to do this week; it is not a step.
+PULSE_NO_STEP = "no step this week"
+
+
+# Zynkr CRM mails it to the team list from its own sender (PLAT-076, from Mon 2026-11-02), so it lands
+# in the Inbox, not in Sent; the claude.ai routine that sent it from the owner's account is off. The
+# search names the owner's own domain, and only the thread's first message is read, only when its
+# sender's address is on that domain exactly: parsed, never a substring, never a subdomain. The
+# domain's mail authentication (zynkr.ai: DMARC p=reject) stops an outsider forging that sender, so a
+# look-alike mail from anyone else never reaches the team (SKB-096).
+def pulse_domain(account):
+    """The owner's own domain, from the account address; "" when it has none."""
+    local, at, dom = (account or "").strip().lower().rpartition("@")
+    return dom if local and at and dom else ""
+
+
+def pulse_query(account):
+    return 'from:%s subject:"%s" newer_than:1d' % (pulse_domain(account), PULSE_SUBJECT)
+
+
 PULSE_LINE = re.compile(r"^[\s>*•\-]*([A-Za-z][A-Za-z .'/-]{0,40}?) - (\d+) of (\d+) cooking:\s*(.+?)\s*$", re.M)
 PLAN_MAX = 5
 DECIDED = ("決議", "放棄")                   # what the meeting settled; 行動 is a plan, 進度 a state
@@ -215,8 +237,9 @@ def r_blocks(d):
             rng = "%s!A%d:%s%d" % (tab, first, col, last)
             pages[tab] = rng
             calls.append(read_call(run, run["ledger"], rng, tab.lower()))
-    calls.append(ledger.call("search_gmail_messages", {"user_google_email": run["account"], "page_size": 5,
-                                                       "query": PULSE_QUERY}, os.path.join(d, "pulse-search.txt")))
+    calls.append(ledger.call("search_gmail_messages", {"user_google_email": run["account"], "page_size": PULSE_THREADS,
+                                                       "query": pulse_query(run["account"])},
+                             os.path.join(d, "pulse-search.txt")))
     run.update(notice=False, row=row, prev_row=prev_row if prev_ok else None, pages=pages,
                applied=phase3 and row[16] == "ok", pulse="not-read")
     save_run(run)
@@ -226,8 +249,9 @@ def r_blocks(d):
 
 
 def r_pulse(d):
-    """The Pulse search result -> the thread to fetch. No Pulse is no failure: the recap goes out
-    without the sales lines and says so."""
+    """The Pulse search result -> the threads to fetch, newest first, each once. `build` reads them in
+    turn and the first that passes `parse_pulse` wins, so a newer look-alike cannot hide the Pulse.
+    No Pulse is no failure: the recap goes out without the sales lines and says so."""
     run = load_run(d)
     if run.get("notice") is not False:
         raise Refuse(2, "run `recap.py blocks` first")
@@ -236,9 +260,10 @@ def r_pulse(d):
         raise Refuse(2, "save the Sales Pulse search `blocks` printed first")
     text = load_result(path).strip()
     first = text.split("\n", 1)[0]
-    if first == "No messages found for query: '%s'" % PULSE_QUERY:
+    query = pulse_query(run["account"])
+    if first == "No messages found for query: '%s'" % query:
         ids = []
-    elif first.startswith("Found ") and first.endswith("'%s':" % PULSE_QUERY):
+    elif first.startswith("Found ") and first.endswith("'%s':" % query):
         ids = re.findall(r"Thread ID: ([0-9a-f]+)", text)
     else:
         run["pulse"] = "unreadable"
@@ -248,16 +273,19 @@ def r_pulse(d):
         run["pulse"] = "missing"
         save_run(run)
         return {"pulse": False, "why": "no Sales Pulse since yesterday"}
+    ids = list(dict.fromkeys(ids))[:PULSE_THREADS]
     run["pulse"] = "fetched"
+    run["pulse_files"] = ["pulse-%d.txt" % i for i in range(1, len(ids) + 1)]
     save_run(run)
     return {"pulse": True, "calls": [ledger.call("get_gmail_thread_content",
-                                                 {"user_google_email": run["account"], "thread_id": ids[0]},
-                                                 os.path.join(d, "pulse.txt"))]}
+                                                 {"user_google_email": run["account"], "thread_id": t},
+                                                 os.path.join(d, f)) for t, f in zip(ids, run["pulse_files"])]}
 
 
 def parse_pulse(text, account):
-    """{name: (cooking, floor, [steps])} from the Pulse thread's first message, which the owner's account
-    sent; None when the thread is not a Pulse or the first message came from anyone else."""
+    """{name: (cooking, floor, [steps])} from the Pulse thread's first message, sent from an address on
+    the owner's own domain; None when the thread is not a Pulse or the first message came from anywhere
+    else."""
     m = re.search(r"^Subject: (.*)$", text, re.M)
     if not m or not m.group(1).strip().startswith(PULSE_SUBJECT):
         return None
@@ -267,15 +295,19 @@ def parse_pulse(text, account):
     first = parts[1]
     head, _, body = first.lstrip("\n").partition("\n\n")
     frm = re.search(r"^From: (.*)$", head, re.M)
-    # the address itself, exactly: a display name or a look-alike domain that merely contains it is not it
+    # the address itself, parsed: a display name, a look-alike domain that merely contains the owner's,
+    # a subdomain or a second "@" is not it
     sender = parseaddr(frm.group(1))[1].strip().lower() if frm else ""
-    if not account.strip() or sender != account.strip().lower():
+    local, _, dom = sender.rpartition("@")
+    domain = pulse_domain(account)
+    if not domain or not local or "@" in local or dom != domain:
         return None
     out = {}
     for name, n, floor, rest in PULSE_LINE.findall(body):
         name = " ".join(name.split())
         if name not in out:
-            out[name] = (int(n), int(floor), [s.strip() for s in rest.split(";") if s.strip()][:2])
+            out[name] = (int(n), int(floor),
+                         [s.strip() for s in rest.split(";") if s.strip() and s.strip().lower() != PULSE_NO_STEP][:2])
     return out
 
 
@@ -430,7 +462,13 @@ def r_build(d, today):
         changes = [c for c in diff["changed"] if not c["cosmetic"]]
     pulse_state, pulse = run.get("pulse", "not-read"), None
     if pulse_state == "fetched":
-        pulse = parse_pulse(load_result(os.path.join(d, "pulse.txt")), run["account"])
+        # newest first; the first thread that is a real Pulse wins, so a newer look-alike cannot hide it
+        found = None
+        for name in run.get("pulse_files") or ["pulse.txt"]:
+            found = parse_pulse(load_result(os.path.join(d, name)), run["account"])
+            if found:
+                break
+        pulse = found or None
         pulse_state = "found" if pulse else "unreadable"
     facts = {"week": run["week"], "label": wb_label(run["week"]), "range": week_range(run["week"]),
              "today": today, "first_snapshot": prev is None, "items": names,
@@ -711,12 +749,22 @@ def selftest():
           {"Ann": (2, 5, ["follow up the Acme quote", "drop the Beta deal"]), "Zed Q": (0, 5, ["claim 5 leads"])})
     check("a thread that is not the Pulse is not read",
           parse_pulse(pulse_text.replace("Zynkr Sales Pulse", "Re: Pulse"), "owner@example.com"), None)
-    check("the Pulse is looked for in Sent only", PULSE_QUERY.split()[0], "in:sent")
-    for spoof in ('"owner@example.com" <eve@example.net>', "owner@example.com.evil.net"):
-        check("a sender that only contains the address is not the owner (%s)" % spoof,
+    check("the Pulse is looked for from the owner's own domain, in all mail, not only Sent",
+          pulse_query("Owner@Example.com"), 'from:example.com subject:"Zynkr Sales Pulse - week of" newer_than:1d')
+    check("the CRM's own sender on the owner's domain is read",
+          parse_pulse(pulse_text.replace("Owner <owner@example.com>", "Zynkr CRM <support@example.com>"),
+                      "owner@example.com"),
+          {"Ann": (2, 5, ["follow up the Acme quote", "drop the Beta deal"]), "Zed Q": (0, 5, ["claim 5 leads"])})
+    for spoof in ('"owner@example.com" <eve@example.net>', "owner@example.com.evil.net",
+                  "crm@mail.example.com", "eve@example.net@example.com"):
+        check("a sender that only contains the domain is not on it (%s)" % spoof,
               parse_pulse(pulse_text.replace("Owner <owner@example.com>", spoof), "owner@example.com"), None)
     check("a look-alike Pulse from anyone else is not read",
           parse_pulse(pulse_text.replace("Owner <owner@example.com>", "Eve <eve@example.net>"), "owner@example.com"), None)
+    check("no account, no Pulse", parse_pulse(pulse_text, ""), None)
+    check("the CRM's 'no step this week' is not a step",
+          parse_pulse(pulse_text.replace("- Zed Q - 0 of 5 cooking: claim 5 leads", "Zed Q - 5 of 5 cooking: no step this week"),
+                      "owner@example.com")["Zed Q"], (5, 5, []))
     kept, dropped = gate_tldr(["#1.03 SEO 改雙週一篇", "大家辛苦了", "1.99 不存在", "4.10 延期", "第四行"],
                               {"1.03": "SEO", "4.10": "x"})
     check("tldr keeps cited lines", kept, ["#1.03 SEO 改雙週一篇"])
@@ -770,15 +818,19 @@ def selftest():
                              + ["Row %2d: %s" % (i, list(r) + [""] * max(0, width - len(r))) for i, r in enumerate(rows, 1)])
 
         def serve(calls, sheet, pulse=None):
+            # pulse: one thread's text, or a list of them, newest first, as threads 1a2b, 1a2c, ...
+            pulses = pulse if isinstance(pulse, list) else [pulse] if pulse else []
             for c in calls:
                 if c["tool"].endswith("search_gmail_messages"):
                     q = c["args"]["query"]
                     open(c["save"], "w", encoding="utf-8").write(
-                        "Found 1 messages matching '%s':\n\n  1. Message ID: m1\n     Thread ID: 1a2b\n" % q if pulse
+                        "Found %d messages matching '%s':\n\n" % (len(pulses), q)
+                        + "".join("  %d. Message ID: m%d\n     Thread ID: %x\n" % (i + 1, i + 1, 0x1a2b + i)
+                                  for i in range(len(pulses))) if pulses
                         else "No messages found for query: '%s'" % q)
                     continue
                 if c["tool"].endswith("get_gmail_thread_content"):
-                    open(c["save"], "w", encoding="utf-8").write(pulse)
+                    open(c["save"], "w", encoding="utf-8").write(pulses[int(c["args"]["thread_id"], 16) - 0x1a2b])
                     continue
                 rng = c["args"]["range_name"]
                 tab, r0, r1 = re.match(r"^(\w+)!A(\d+):[A-Z](\d+)$", rng).groups()
@@ -854,6 +906,22 @@ def selftest():
         check("recap with the Pulse", (bp["plan"], bp["pulse"]), ({"Ann": 3}, "found"))
         bodyp = open(r_render(stp["dir"], None)["body_path"], encoding="utf-8").read()
         check("the Pulse step in the mail, and no missing-Pulse line", ("業務：call Acme back" in bodyp, "沒有列" in bodyp),
+              (True, False))
+
+        # a newer look-alike first: fetched, refused, and the real Pulse behind it still counts (SKB-096)
+        stl = r_start("2026-W42", cfgp, "2026-10-12T10:05:00+08:00", base=os.path.join(tmp, "runs-lookalike"))
+        lookalike = (pulse_ann.replace("From: owner@example.com", 'From: "owner@example.com" <eve@example.com.evil.net>')
+                     .replace("call Acme back", "wire the deposit to Eve"))
+        serve(stl["calls"], sheet)
+        serve(r_blocks(stl["dir"])["calls"], sheet, [lookalike, pulse_ann])
+        pl = r_pulse(stl["dir"])
+        check("every thread the search found is fetched, newest first", [c["args"]["thread_id"] for c in pl["calls"]],
+              ["1a2b", "1a2c"])
+        serve(pl["calls"], sheet, [lookalike, pulse_ann])
+        bl2 = r_build(stl["dir"], "2026-10-12")
+        check("a newer look-alike does not hide the Pulse", (bl2["plan"], bl2["pulse"]), ({"Ann": 3}, "found"))
+        bodyl = open(r_render(stl["dir"], None)["body_path"], encoding="utf-8").read()
+        check("the look-alike's step never reaches the mail", ("業務：call Acme back" in bodyl, "deposit" in bodyl),
               (True, False))
         check("recap call-out in the team's words", "#1.10 item 1.10（Ann）— 結束日 9/30 已過 12 天" in body, True)
         check("recap call-outs grouped with a count", "逾期（1 件）" in body, True)
@@ -1015,10 +1083,15 @@ MUTATIONS = [
     ("an item is listed twice", [('if cite != "deal" and cite in seen.setdefault(who, set()):', "if False:")]),
     ("the Pulse comes first", [('    for a in actions:\n        num', '    for a in actions[:0]:\n        num')]),
     ("any thread is read as the Pulse", [('    if not m or not m.group(1).strip().startswith(PULSE_SUBJECT):\n        return None\n', "")]),
-    ("a Pulse from anyone is read", [("    if not account.strip() or sender != account.strip().lower():\n        return None\n", "")]),
-    ("the sender matched as a substring", [("    if not account.strip() or sender != account.strip().lower():",
-                                            "    if account.lower() not in (frm.group(1).lower() if frm else \"\"):")]),
-    ("the Pulse is searched beyond Sent", [("""PULSE_QUERY = 'in:sent subject:""", """PULSE_QUERY = 'subject:""")]),
+    ("a Pulse from anyone is read", [('    if not domain or not local or "@" in local or dom != domain:\n        return None\n', "")]),
+    ("the sender matched as a substring", [('    if not domain or not local or "@" in local or dom != domain:',
+                                            '    if domain not in (frm.group(1).lower() if frm else ""):')]),
+    ("a subdomain counts as the domain", [('or dom != domain:', 'or not (dom == domain or dom.endswith("." + domain)):')]),
+    ("the Pulse searched beyond the domain", [("""    return 'from:%s subject:"%s" newer_than:1d' % (pulse_domain(account), PULSE_SUBJECT)""",
+                                               """    return 'subject:"%s" newer_than:1d' % PULSE_SUBJECT""")]),
+    ("only the newest thread is tried", [("            if found:\n                break\n", "            break\n")]),
+    ("one fetch for many threads", [("    ids = list(dict.fromkeys(ids))[:PULSE_THREADS]", "    ids = ids[:1]")]),
+    ("the CRM's no-step line kept as a step", [(" and s.strip().lower() != PULSE_NO_STEP", "")]),
     ("first names never matched", [("    return hit[0] if len(hit) == 1 else name", "    return name")]),
     ("recap_to ignored", [('    to = run.get("recap_to") or (', '    to = (')]),
     ("a drop is not a decision", [('DECIDED = ("決議", "放棄")', 'DECIDED = ("決議",)')]),
