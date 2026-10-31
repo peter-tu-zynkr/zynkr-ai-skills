@@ -73,6 +73,13 @@ def pulse_query(account):
 
 
 PULSE_LINE = re.compile(r"^[\s>*•\-]*([A-Za-z][A-Za-z .'/-]{0,40}?) - (\d+) of (\d+) cooking:\s*(.+?)\s*$", re.M)
+# The Pulse is fetched as HTML and read one list item at a time: as text, Gmail's HTML-to-text gave the
+# routine's whole mail back as one line, so no `<name> - N of F cooking:` line ever matched (the 26 Oct
+# Pulse, SKB-091 review). A body with no list items is read line by line, as before.
+LIST_ITEM = re.compile(r"<li\b[^>]*>(.*?)</li>", re.S | re.I)
+# The first week whose 卡關 come from the Harvest (SKB-091: `collect` writes it from 2026-W45, and
+# nothing writes Reports after 2026-W44).
+HARVEST_FROM = "2026-W45"
 PLAN_MAX = 5
 DECIDED = ("決議", "放棄")                   # what the meeting settled; 行動 is a plan, 進度 a state
 OPEN = ("卡關", "風險", "待討論", "待決")      # 待決: weeks before SKB-091
@@ -179,10 +186,10 @@ def r_start(runner_week, config=None, now=None, base=None):
         n += 1
     d = d + ("" if n == 1 else "-%d" % n)
     os.makedirs(d)
-    rng = "Weeks!A%d:R%d" % (1 + k, 2 + k) if k >= 1 else "Weeks!A2:R2"
+    rng = "Weeks!A%d:T%d" % (1 + k, 2 + k) if k >= 1 else "Weeks!A2:T2"
     run = dict(cfg, dir=d, runner_week=runner_week, week=target, k=k, weeks_range=rng)
     save_run(run)
-    calls = [read_call(run, cfg["ledger"], "Weeks!A1:R1", "wh"), read_call(run, cfg["ledger"], rng, "wr")]
+    calls = [read_call(run, cfg["ledger"], "Weeks!A1:T1", "wh"), read_call(run, cfg["ledger"], rng, "wr")]
     return {"dir": d, "week": target, "label": wb_label(target), "calls": calls}
 
 
@@ -198,17 +205,18 @@ def snapshot_ok(row, week, cycle):
 
 def r_blocks(d):
     run = load_run(d)
-    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:R1")
+    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:T1")
     if not wh or pad(wh[0], 14) != ledger.WEEKS_FULL[:14]:
         raise Refuse(4, "Weeks header is not the Phase 2 header (A–N)")
     phase3 = pad(wh[0], 18) == ledger.WEEKS_FULL[:18]
+    harvest_cols = pad(wh[0], 20) == ledger.WEEKS_FULL[:20]
     wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], run["weeks_range"])
     k = run["k"]
     if k >= 1:
-        prev_row = pad(wr[0], 18) if len(wr) > 0 else [""] * 18
-        row = pad(wr[1], 18) if len(wr) > 1 else [""] * 18
+        prev_row = pad(wr[0], 20) if len(wr) > 0 else [""] * 20
+        row = pad(wr[1], 20) if len(wr) > 1 else [""] * 20
     else:
-        prev_row, row = None, pad(wr[0], 18) if wr else [""] * 18
+        prev_row, row = None, pad(wr[0], 20) if wr else [""] * 20
     if not snapshot_ok(row, run["week"], run["cycle"]):
         run.update(notice=True, reason="no committed snapshot for %s" % run["week"])
         save_run(run)
@@ -237,6 +245,13 @@ def r_blocks(d):
             rng = "%s!A%d:%s%d" % (tab, first, col, last)
             pages[tab] = rng
             calls.append(read_call(run, run["ledger"], rng, tab.lower()))
+    if harvest_cols and row[18] == "ok":
+        first, last = ledger.block_slot("Harvest", k)
+        pages["Harvest"] = []
+        for a in range(first, last + 1, ledger.PAGE):      # 80 rows: a read shows at most 50
+            name, rng = "harvest%d" % (len(pages["Harvest"]) + 1), "Harvest!A%d:H%d" % (a, min(a + ledger.PAGE - 1, last))
+            pages["Harvest"].append([name, rng])
+            calls.append(read_call(run, run["ledger"], rng, name))
     calls.append(ledger.call("search_gmail_messages", {"user_google_email": run["account"], "page_size": PULSE_THREADS,
                                                        "query": pulse_query(run["account"])},
                              os.path.join(d, "pulse-search.txt")))
@@ -245,7 +260,7 @@ def r_blocks(d):
     save_run(run)
     return {"notice": False, "week": run["week"], "calls": calls,
             "first_snapshot": not prev_ok, "reports": row[10] == "ok", "decisions": row[12] == "ok",
-            "proposals": "Proposals" in pages}
+            "proposals": "Proposals" in pages, "harvest": "Harvest" in pages}
 
 
 def r_pulse(d):
@@ -278,7 +293,8 @@ def r_pulse(d):
     run["pulse_files"] = ["pulse-%d.txt" % i for i in range(1, len(ids) + 1)]
     save_run(run)
     return {"pulse": True, "calls": [ledger.call("get_gmail_thread_content",
-                                                 {"user_google_email": run["account"], "thread_id": t},
+                                                 {"user_google_email": run["account"], "thread_id": t,
+                                                  "body_format": "html"},
                                                  os.path.join(d, f)) for t, f in zip(ids, run["pulse_files"])]}
 
 
@@ -302,8 +318,14 @@ def parse_pulse(text, account):
     domain = pulse_domain(account)
     if not domain or not local or "@" in local or dom != domain:
         return None
+    items = LIST_ITEM.findall(body)
+    lines = [html.unescape(re.sub(r"<[^>]+>", "", x)) for x in items] if items else body.splitlines()
     out = {}
-    for name, n, floor, rest in PULSE_LINE.findall(body):
+    for line in lines:
+        m = PULSE_LINE.match(" ".join(line.split()))
+        if not m:
+            continue
+        name, n, floor, rest = m.groups()
         name = " ".join(name.split())
         if name not in out:
             out[name] = (int(n), int(floor),
@@ -450,6 +472,17 @@ def r_build(d, today):
                                             "部門": r[3], "卡關": r[7]})
         reports["posted"] = sorted(posters)
         reports["missing"] = [run["names"].get(e) or e.split("@")[0] for e in run["reporters"] if e not in posters]
+    harvest = {"recorded": "Harvest" in run["pages"], "blockers": [], "quiet": []}
+    for name, rng in run["pages"].get("Harvest", []):
+        for r in (pad(x, 8) for x in parse_values(load_result(os.path.join(d, name + ".txt")), run["ledger"], rng)):
+            if r[0] != run["week"]:
+                continue
+            who = person_of(run, r[3]) or r[2]
+            if r[5] == "waiting":
+                harvest["blockers"].append({"who": who, "卡關": r[6]})
+            elif r[5] == "quiet" and who not in harvest["quiet"]:
+                harvest["quiet"].append(who)
+    v4 = ledger.monday(run["week"]) >= ledger.monday(HARVEST_FROM)
     proposals = {"recorded": "Proposals" in run["pages"], "applied_ran": bool(run.get("applied")), "rows": []}
     if proposals["recorded"]:
         prows = parse_values(load_result(os.path.join(d, "proposals.txt")), run["ledger"], run["pages"]["Proposals"])
@@ -477,7 +510,8 @@ def r_build(d, today):
              "undated": [x for x in flagged("UNDATED") if by_id[x["#"]]["priority"] in ("P0", "P1")],
              "propose_done": flagged("PROPOSE_DONE"), "paused": flagged("PAUSED"),
              "unknown_status": flagged("UNKNOWN_STATUS"),
-             "decisions": decisions, "reports": reports, "proposals": proposals, "pulse": pulse_state,
+             "decisions": decisions, "reports": reports, "harvest": harvest, "v4": v4,
+             "proposals": proposals, "pulse": pulse_state,
              "links": {"tracker": run["tracker_url"], "doc": run["doc_url"], "ledger": run["ledger_url"]}}
     facts["plan"], facts["plan_dropped"] = build_plan(run, names, decisions["actions"], facts, pulse)
     json.dump(facts, open(os.path.join(d, "facts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
@@ -488,7 +522,7 @@ def r_build(d, today):
             "overdue": [x["#"] for x in facts["overdue"]], "ends_soon": [x["#"] for x in facts["ends_soon"]],
             "undated": [x["#"] for x in facts["undated"]], "propose_done": [x["#"] for x in facts["propose_done"]],
             "decided": len(decisions["decided"]), "open_decisions": len(decisions["open"]),
-            "blockers": len(reports["blockers"]), "proposals": len(proposals["rows"]) if proposals["recorded"] else None,
+            "blockers": len((harvest if v4 else reports)["blockers"]), "proposals": len(proposals["rows"]) if proposals["recorded"] else None,
             "plan": {p["who"]: len(p["lines"]) for p in facts["plan"]}, "plan_dropped": facts["plan_dropped"],
             "pulse": pulse_state,
             "facts": os.path.join(d, "facts.json"),
@@ -595,8 +629,16 @@ def render_html(facts, tldr):
                 if xs:
                     o.append("<p><b>%s（%d 件）</b></p><ul>%s</ul>" % (title, len(xs), "".join(pline(x) for x in xs)))
     o.append("<h3>卡關</h3>")
-    rep = facts["reports"]
-    if not rep["recorded"]:
+    rep, hv = facts["reports"], facts.get("harvest")
+    if facts.get("v4"):
+        if not hv["recorded"]:
+            o.append("<p>上週的 harvest 沒有記到帳本</p>")
+        else:
+            o.append("<ul>%s</ul>" % "".join(li("%s：%s" % (esc(b["who"]), esc(b["卡關"]))) for b in hv["blockers"])
+                     if hv["blockers"] else "<p>沒有人回報卡關</p>")
+            if hv["quiet"]:
+                o.append("<p>上週 harvest 沒有資料：%s</p>" % esc("、".join(hv["quiet"])))
+    elif not rep["recorded"]:
         o.append("<p>上週的週報沒有記到帳本</p>")
     else:
         o.append("<ul>%s</ul>" % "".join(li("%s：%s" % (esc(b["who"]), esc(b["卡關"]))) for b in rep["blockers"])
@@ -623,6 +665,13 @@ def audience_for(run):
     return "team"
 
 
+def sent_check(to, prefix):
+    """How the run tells this mail already went. Sent to its first address in the last three days,
+    25 a page, and a subject that starts with `prefix`: the recap's subject ends in counts (逾期 N 件
+    moves with the day), so an exact match missed a send made the day before (SKB-091 review)."""
+    return {"query": "in:sent newer_than:3d to:%s" % to.split(",")[0].strip(), "page_size": 25, "prefix": prefix}
+
+
 def r_render(d, tldr_path):
     run = load_run(d)
     if not run.get("built"):
@@ -645,7 +694,7 @@ def r_render(d, tldr_path):
     to = run.get("recap_to") or (",".join(run["reporters"]) if audience == "team" else run["account"])
     return {"subject": subject, "to": to, "audience": audience, "body_path": path, "body_format": "html",
             "tldr_kept": len(kept), "tldr_dropped": dropped,
-            "sent_check": "search in:sent newer_than:3d for this exact subject before sending; send only if absent"}
+            "sent_check": sent_check(to, "【週報】%s 那週 —" % facts["label"])}
 
 
 def r_notice(d):
@@ -660,7 +709,8 @@ def r_notice(d):
             % (esc(label), esc(week_range(run["week"])), esc(run["reason"]), esc(run["tracker_url"]), esc(run["ledger_url"])))
     path = os.path.join(d, "notice.html")
     open(path, "w", encoding="utf-8").write(body)
-    return {"subject": subject, "to": run["account"], "body_path": path, "body_format": "html"}
+    return {"subject": subject, "to": run["account"], "body_path": path, "body_format": "html",
+            "sent_check": sent_check(run["account"], subject)}
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -885,6 +935,10 @@ def selftest():
         out = r_render(st["dir"], tl)
         check("recap subject", out["subject"], "【週報】WB 10/5 那週 — 變更 1 件 · 決議 2 件 · 逾期 1 件")
         check("recap recipients", out["to"], "a@example.com,b@example.com")
+        check("the sent check: to the first address, 25 a page, the subject without its counts", out["sent_check"],
+              {"query": "in:sent newer_than:3d to:a@example.com", "page_size": 25, "prefix": "【週報】WB 10/5 那週 —"})
+        check("the prefix holds whatever the counts", out["subject"].startswith(out["sent_check"]["prefix"]), True)
+        check("a v3 week's 卡關 still come from Reports", (built["blockers"], "harvest" in open(out["body_path"], encoding="utf-8").read()), (1, False))
         check("recap drops an uncited line", out["tldr_dropped"], ["沒有編號的一句"])
         body = open(out["body_path"], encoding="utf-8").read()
         check("recap shows the change", "#1.01 item 1.01 — 狀態：未開始 → 進行中" in body, True)
@@ -907,6 +961,60 @@ def selftest():
         bodyp = open(r_render(stp["dir"], None)["body_path"], encoding="utf-8").read()
         check("the Pulse step in the mail, and no missing-Pulse line", ("業務：call Acme back" in bodyp, "沒有列" in bodyp),
               (True, False))
+        check("the Pulse threads are fetched as HTML",
+              {c["args"].get("body_format") for c in r_pulse(stp["dir"])["calls"]}, {"html"})
+        # the 26 Oct Pulse as the html fetch returns it: one person per list item
+        pulse_html = ("Thread ID: 1a2b\nSubject: Zynkr Sales Pulse - week of Oct 19 to Oct 25\nMessages: 1\n\n"
+                      "=== Message 1 ===\nFrom: Zynkr CRM <pulse@example.com>\n\n"
+                      "<p><b>By member</b></p>\r\n<ul>\r\n<li>Ann - 26 / 18 / 3 / 9 open</li>\r\n</ul>\r\n"
+                      "<p><b>Next step this week</b></p>\r\n<ul>\r\n"
+                      "<li>Mia Lin - 0 of 5 cooking: drop Ben Q in /sales-manager REVIEW; claim 5 leads</li>\r\n"
+                      "<li>kaywu - 1 of 5 cooking: task 「追王小明」 is 7 days overdue, do it</li>\r\n"
+                      "<li><b>Ann</b> - 5 of 5 cooking: follow up the client&#39;s offer</li>\r\n</ul>\r\n")
+        check("an HTML Pulse: one person per list item, entities read",
+              parse_pulse(pulse_html, "owner@example.com"),
+              {"Mia Lin": (0, 5, ["drop Ben Q in /sales-manager REVIEW", "claim 5 leads"]),
+               "kaywu": (1, 5, ["task 「追王小明」 is 7 days overdue, do it"]),
+               "Ann": (5, 5, ["follow up the client's offer"])})
+
+        # from 2026-W45 the 卡關 come from the Harvest's waiting lines; a quiet row names who had none
+        global HARVEST_FROM
+        saved_from, HARVEST_FROM = HARVEST_FROM, "2026-W41"
+        try:
+            hv = [["2026-W41", "t", "ann", "Ann", "SEO", "waiting", "needs the keyword list", "harvest-ann.md"],
+                  ["2026-W41", "t", "ann", "Ann", "SEO", "shipped", "three articles", "harvest-ann.md"],
+                  ["2026-W41", "t", "b", "b", "", "quiet", "本週無資料", "harvest-b.md"]]
+            w41h = wrow("2026-W41", w41, "", "ok") + ["", "", "", "", "ok", "2026-10-08T09:05:00+08:00"]
+            sheet8 = ledger_sheet([wrow("2026-W40", w40), w41h], w40, w41, None, dec, None, ledger.WEEKS_FULL)
+            sheet8["Harvest"] = [ledger.HARVEST_HEADER] + [[""] * 8] * 170
+            for i, r in enumerate(hv):
+                sheet8["Harvest"][ledger.block_slot("Harvest", 1)[0] - 1 + i] = r
+            sheet8["Harvest"][140] = ["2026-W41", "t", "cat", "Cat", "", "waiting", "on the second page", "harvest-cat.md"]
+            st8 = r_start("2026-W42", cfgp, "2026-10-12T10:15:00+08:00", base=os.path.join(tmp, "runs"))
+            serve(st8["calls"], sheet8)
+            b8 = r_blocks(st8["dir"])
+            check("v4: the Harvest block in two pages",
+                  [c["args"]["range_name"] for c in b8["calls"] if c["args"].get("range_name", "").startswith("Harvest!")],
+                  ["Harvest!A82:H131", "Harvest!A132:H161"])
+            serve(b8["calls"], sheet8)
+            r_pulse(st8["dir"])
+            built8 = r_build(st8["dir"], "2026-10-12")
+            body8 = open(r_render(st8["dir"], None)["body_path"], encoding="utf-8").read()
+            check("v4: 卡關 are the harvest's waiting lines, from both pages",
+                  (built8["blockers"], "Ann：needs the keyword list" in body8, "Cat：on the second page" in body8), (2, True, True))
+            check("v4: a quiet week is named, and Reports is never asked for",
+                  ("上週 harvest 沒有資料：b" in body8, "週報沒有記到" in body8, "上週沒交週報" in body8), (True, False, False))
+            sheet9 = ledger_sheet([wrow("2026-W40", w40), wrow("2026-W41", w41, "", "ok")], w40, w41, None, dec, None,
+                                  ledger.WEEKS_FULL)
+            st9 = r_start("2026-W42", cfgp, "2026-10-12T10:25:00+08:00", base=os.path.join(tmp, "runs"))
+            serve(st9["calls"], sheet9)
+            serve(r_blocks(st9["dir"])["calls"], sheet9)
+            r_pulse(st9["dir"])
+            r_build(st9["dir"], "2026-10-12")
+            check("v4: no harvest recorded says so",
+                  "上週的 harvest 沒有記到帳本" in open(r_render(st9["dir"], None)["body_path"], encoding="utf-8").read(), True)
+        finally:
+            HARVEST_FROM = saved_from
 
         # a newer look-alike first: fetched, refused, and the real Pulse behind it still counts (SKB-096)
         stl = r_start("2026-W42", cfgp, "2026-10-12T10:05:00+08:00", base=os.path.join(tmp, "runs-lookalike"))
@@ -1063,6 +1171,18 @@ def selftest():
 
 # ── mutation check: each breakage must turn the selftest red ────────────────
 MUTATIONS = [
+    ("v4 weeks read 卡關 from Reports", [('    if facts.get("v4"):\n        if not hv["recorded"]:', '    if False:\n        if not hv["recorded"]:')]),
+    ("the Harvest read stops at its first page", [("for a in range(first, last + 1, ledger.PAGE):      # 80 rows",
+                                                   "for a in range(first, first + 1, ledger.PAGE):      # 80 rows")]),
+    ("the sent check wants the exact subject", [('"sent_check": sent_check(to, "【週報】%s 那週 —" % facts["label"])}',
+                                                '"sent_check": sent_check(to, subject)}')]),
+    ("the Pulse is fetched as text", [('"thread_id": t,\n                                                  "body_format": "html"},',
+                                       '"thread_id": t},')]),
+    ("an HTML Pulse is read as lines", [("lines = [html.unescape(re.sub(r\"<[^>]+>\", \"\", x)) for x in items] if items else body.splitlines()",
+                                         "lines = body.splitlines()")]),
+    # the CRM's Pulse (from Mon 2026-11-02) is text/plain only: html mode hands back its text body
+    ("a plain-text Pulse is not read", [("for x in items] if items else body.splitlines()",
+                                         "for x in items] if items else []")]),
     ("uncited TL;DR line kept", [("(kept if line and cited else dropped)", "(kept if line else dropped)")]),
     ("unrecorded decisions shown as zero", [
         ('if facts["decisions"]["recorded"] else "決議沒記到"', 'if True else "決議沒記到"')]),

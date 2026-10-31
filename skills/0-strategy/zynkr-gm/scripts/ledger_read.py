@@ -4,8 +4,8 @@
 The Ledger is the weekly project cycle's machine-owned Sheet (SKB-044, written only by
 zynkr-ops-weekly). It keeps a fixed-row layout, so every range here is computed, never searched:
 week k (counted from `sources.ledger.epoch_week`) owns `Weeks` row 2+k, `Snapshot` rows
-2+100k..101+100k, `Reports` and `Decisions` rows 2+20k..21+20k, `Proposals` and `Updates` rows
-2+40k..41+40k. The layout is defined by zynkr-ops-weekly's `ledger.py`; this script mirrors it and
+2+100k..101+100k, `Reports` rows 2+20k..21+20k, `Decisions`, `Proposals` and `Updates` rows
+2+40k..41+40k (`Decisions` grew from 20 in SKB-091), `Harvest` rows 2+80k..81+80k. The layout is defined by zynkr-ops-weekly's `ledger.py`; this script mirrors it and
 `--selftest` pins the table in that skill's `references/ledger.md`.
 
     ledger_read.py plan  --epoch 2026-W40 --today 2026-10-12
@@ -15,8 +15,8 @@ week k (counted from `sources.ledger.epoch_week`) owns `Weeks` row 2+k, `Snapsho
            STALLED, and every block range to read next (each <= 50 rows)
     ledger_read.py rows  --week W --items N --ledger ID <saved Snapshot page>...
         -> that week's snapshot as derive_state.py rows (JSON array on stdout)
-    ledger_read.py block --kind decisions|proposals|reports|updates --week W --epoch E --ledger ID <saved result>
-        -> the week's rows as dicts, plus counts (JSON)
+    ledger_read.py block --kind decisions|harvest|proposals|reports|updates --week W --epoch E --ledger ID <saved page>...
+        -> the week's rows as dicts, plus counts (JSON); pass every page `weeks` listed for the block
     ledger_read.py --selftest
 
 Every <saved ...> file is a read_sheet_values result saved verbatim. A result for another
@@ -34,10 +34,11 @@ TRACKER_HEADER = ["#", "主類別", "子類別", "項目（正規化）", "重�
                   "負責人", "協助者", "開始", "結束", "狀態", "備註"]
 WEEKS_HEADER = ["week", "status", "snapshot_at", "cycle", "tracker_id", "items", "first_row",
                 "last_row", "digest", "note", "reports", "reports_at", "decisions", "decisions_at",
-                "proposals", "proposals_at", "applied", "applied_at"]                       # A–R
+                "proposals", "proposals_at", "applied", "applied_at", "harvest", "harvest_at"]  # A–T
 BLOCKS = {  # kind: (tab, rows per week, last column, header)
     "reports": ("Reports", 20, "I", ["week", "posted_at", "owner", "部門", "上週", "本週", "數字", "卡關", "format"]),
-    "decisions": ("Decisions", 20, "H", ["week", "會議日期", "類型", "內容", "負責人", "期限", "關聯 #", "來源"]),
+    "decisions": ("Decisions", 40, "I", ["week", "會議日期", "類型", "內容", "負責人", "期限", "關聯 #", "來源", "狀態"]),
+    "harvest": ("Harvest", 80, "H", ["week", "harvested_at", "slug", "name", "workstream", "kind", "text", "file"]),
     "proposals": ("Proposals", 40, "O", ["week", "proposed_at", "n", "#", "項目", "欄位", "現值", "建議值", "原因",
                                          "證據", "來源", "信心", "決定", "決定_at", "結果"]),
     "updates": ("Updates", 40, "N", ["週", "時間", "cycle", "#", "項目", "欄位", "舊值", "新值", "原因", "證據",
@@ -47,6 +48,12 @@ SNAPSHOT_SLOT = 100
 PAGE = 50                                     # read_sheet_values shows at most 50 rows
 STALLED_MIN_AGE_DAYS = 14                     # derived-state-rules.md
 BEATS = [("snapshot", 1, 2), ("rollup", 10, 11), ("decisions", 12, 13), ("propose", 14, 15), ("apply", 16, 17)]
+# SKB-091 (v4) from 2026-W45: `collect` records the harvest in S–T and `minutes` the decisions in M–N;
+# nothing writes K–L any more, so the v3 list would call every v4 week's rollup "never recorded".
+V4_FROM = "2026-W45"
+BEATS_V4 = [("snapshot", 1, 2), ("collect", 18, 19), ("minutes", 12, 13), ("propose", 14, 15), ("apply", 16, 17)]
+# open decisions: 待決 before v4; v4's minutes write 卡關 · 風險 · 待討論 instead
+OPEN_TYPES = ("待決", "卡關", "風險", "待討論")
 
 WEEK_RE = re.compile(r"^(\d{4})-W(\d{2})$")
 HEAD_RE = re.compile(r"^Successfully read (\d+) rows from range '(.*)' in spreadsheet (\S+) for \S+:$")
@@ -168,7 +175,7 @@ def range_of(text):
 def weeks_range(last_week, epoch):
     hi = weeks_row(last_week, epoch)
     lo = max(2, hi - PAGE + 1)
-    return lo, hi, "Weeks!A%d:R%d" % (lo, hi)
+    return lo, hi, "Weeks!A%d:T%d" % (lo, hi)
 
 
 def plan(epoch, today):
@@ -206,7 +213,7 @@ def weeks(epoch, today, sid, text):
         row_no, row = by_week[last_week]
 
     health = []
-    for beat, sc, ac in BEATS:
+    for beat, sc, ac in (BEATS_V4 if monday(last_week) >= monday(V4_FROM) else BEATS):
         st = row[sc]
         health.append({"beat": beat, "status": st or "never recorded", "at": row[ac],
                        "cell": "Weeks!%s%d" % (chr(ord("A") + sc), row_no)})
@@ -270,15 +277,27 @@ def rows(week, items, sid, texts):
 
 
 # ── block: one week's rows of Reports / Decisions / Proposals / Updates ──────
-def block(kind, week, sid, text, epoch):
+def block(kind, week, sid, texts, epoch):
+    """One week's block from its saved pages: every page `weeks` listed, each once (Harvest's 80 rows
+    are two); a missing page would drop its rows without a word, so it is refused."""
+    if isinstance(texts, str):
+        texts = [texts]
     tab, _size, col, header = BLOCKS[kind]
-    rng = range_of(text)
-    if not rng.startswith(tab + "!"):
-        raise Refuse(3, "this is a read of %s, not %s" % (rng, tab))
     a, b = block_rows(kind, week, epoch)
-    if rng not in pages(tab, a, b, col):
-        raise Refuse(3, "%s is not %s's %s block (%s)" % (rng, week, tab, ", ".join(pages(tab, a, b, col))))
-    got = [dict(zip(header, pad(r, len(header)))) for r in parse_values(text, sid, rng)]
+    want = pages(tab, a, b, col)
+    seen, got = [], []
+    for text in texts:
+        rng = range_of(text)
+        if not rng.startswith(tab + "!"):
+            raise Refuse(3, "this is a read of %s, not %s" % (rng, tab))
+        if rng not in want:
+            raise Refuse(3, "%s is not %s's %s block (%s)" % (rng, week, tab, ", ".join(want)))
+        if rng in seen:
+            raise Refuse(3, "%s was given twice" % rng)
+        seen.append(rng)
+        got += [dict(zip(header, pad(r, len(header)))) for r in parse_values(text, sid, rng)]
+    if len(seen) != len(want):
+        raise Refuse(3, "%s's %s block also needs %s" % (week, tab, ", ".join(x for x in want if x not in seen)))
     key = header[0]
     mine = [r for r in got if r[key] == week]
     stray = [r[key] for r in got if r[key] and r[key] != week]
@@ -291,9 +310,13 @@ def block(kind, week, sid, text, epoch):
             d = r["決定"] or "未決定"
             res["by_decision"][d] = res["by_decision"].get(d, 0) + 1
     if kind == "decisions":
-        res["open"] = [r for r in mine if r["類型"] == "待決"]
+        res["open"] = [r for r in mine if r["類型"] in OPEN_TYPES]
     if kind == "reports":
         res["blocked"] = [{"owner": r["owner"], "卡關": r["卡關"]} for r in mine if r["卡關"].strip()]
+    if kind == "harvest":       # from 2026-W45 the harvest replaces Reports: same `blocked` shape
+        res["blocked"] = [{"owner": r["name"], "卡關": r["text"]} for r in mine if r["kind"] == "waiting"]
+        res["heard"] = sorted({r["name"] for r in mine if r["kind"] != "quiet"})
+        res["quiet"] = sorted({r["name"] for r in mine if r["kind"] == "quiet"})
     return res
 
 
@@ -335,7 +358,7 @@ def main(argv=None):
         elif a.cmd == "rows":
             out = rows(a.week, a.items, a.ledger, [read(f) for f in a.files])
         elif a.cmd == "block":
-            out = block(a.kind, a.week, a.ledger, read(a.files[0]), a.epoch)
+            out = block(a.kind, a.week, a.ledger, [read(f) for f in a.files], a.epoch)
         else:
             ap.print_help()
             return 2
@@ -387,21 +410,24 @@ def selftest():
     p = plan(E, date(2026, 10, 12))
     check("plan brief week", p["brief_week"], "2026-W42")
     check("plan last week", p["last_week"], "2026-W41")
-    check("plan Weeks range", p["weeks_range"], "Weeks!A2:R3")
+    check("plan Weeks range", p["weeks_range"], "Weeks!A2:T3")
+    check("Decisions W42 (40 rows a week since SKB-091)", block_rows("decisions", "2026-W42", E), (82, 121))
+    check("Harvest W45", block_rows("harvest", "2026-W45", E), (402, 481))
     refuses("a brief in the epoch week has no last week", 2, plan, E, date(2026, 9, 30))
 
     SID = "LED"
 
-    def wrow(week, snap_at, items, first, rep="", dec="", prop="", app=""):
+    def wrow(week, snap_at, items, first, rep="", dec="", prop="", app="", harv=""):
         return [week, "ok" if snap_at else "", snap_at, "2026H2", "T", str(items) if snap_at else "",
                 str(first) if snap_at else "", str(first + items - 1) if snap_at else "", "d", "layout v1",
-                rep, "x" if rep else "", dec, "x" if dec else "", prop, "x" if prop else "", app, "x" if app else ""]
+                rep, "x" if rep else "", dec, "x" if dec else "", prop, "x" if prop else "", app, "x" if app else "",
+                harv, "x" if harv else ""]
 
     # Monday 2026-10-19 (W43): W40, W41 snapshotted; W42 fully run but apply never confirmed
     rows_w = [wrow("2026-W40", "2026-10-02T18:31:01+08:00", 55, 2),
               wrow("2026-W41", "2026-10-09T18:20:00+08:00", 55, 102, "ok", "ok", "ok", "ok"),
               wrow("2026-W42", "2026-10-16T18:20:00+08:00", 56, 202, "ok", "ok", "ok", "")]
-    t = _result(SID, "Weeks!A2:R4", rows_w)
+    t = _result(SID, "Weeks!A2:T4", rows_w)
     w = weeks(E, date(2026, 10, 19), SID, t)
     check("weeks last week", w["last_week"], "2026-W42")
     check("approval unconfirmed", w["approval"], "unconfirmed")
@@ -410,12 +436,14 @@ def selftest():
     check("prev = week before last", w["reads"]["prev"]["week"], "2026-W41")
     check("prev ranges", w["reads"]["prev"]["ranges"], ["Snapshot!A102:P151", "Snapshot!A152:P156"])
     check("stall = newest >= 14 days old", w["reads"]["stall"]["week"], "2026-W40")
-    check("decisions range", w["reads"]["decisions"]["ranges"], ["Decisions!A42:H61"])
+    check("decisions range", w["reads"]["decisions"]["ranges"], ["Decisions!A82:I121"])
+    check("a v3 week keeps the v3 beat names", [h["beat"] for h in w["health"]],
+          ["snapshot", "rollup", "decisions", "propose", "apply"])
     check("proposals ranges", w["reads"]["proposals"]["ranges"], ["Proposals!A82:O121"])
     check("prev note empty", w["prev_note"], None)
 
     # the first brief after the Ledger began: only W40 exists → CHANGED from W40, no STALLED yet
-    t2 = _result(SID, "Weeks!A2:R3", [wrow("2026-W40", "2026-10-02T18:31:01+08:00", 55, 2),
+    t2 = _result(SID, "Weeks!A2:T3", [wrow("2026-W40", "2026-10-02T18:31:01+08:00", 55, 2),
                                       ["", "", "", "", "", "", "", "", "", "", "ok", "x"]])
     w2 = weeks(E, date(2026, 10, 12), SID, t2)
     check("first brief: prev is the week before last", w2["reads"]["prev"]["week"], "2026-W40")
@@ -425,13 +453,25 @@ def selftest():
     check("first brief: no proposals", w2["approval"], "no proposals recorded")
 
     refuses("another spreadsheet", 3, weeks, E, date(2026, 10, 19), "OTHER", t)
-    refuses("another range", 3, weeks, E, date(2026, 10, 19), SID, _result(SID, "Weeks!A1:R4", rows_w))
+    refuses("another range", 3, weeks, E, date(2026, 10, 19), SID, _result(SID, "Weeks!A1:T4", rows_w))
+    refuses("the old A–R read", 3, weeks, E, date(2026, 10, 19), SID, _result(SID, "Weeks!A2:R4", rows_w))
     refuses("epoch drift", 4, weeks, E, date(2026, 10, 19), SID,
-            _result(SID, "Weeks!A2:R4", [wrow("2026-W39", "x", 1, 2)] + rows_w[1:]))
-    refuses("truncated", 3, parse_values, _result(SID, "Weeks!A2:R4", rows_w) + "\n... and 9 more rows", SID, "Weeks!A2:R4")
+            _result(SID, "Weeks!A2:T4", [wrow("2026-W39", "x", 1, 2)] + rows_w[1:]))
+    refuses("truncated", 3, parse_values, _result(SID, "Weeks!A2:T4", rows_w) + "\n... and 9 more rows", SID, "Weeks!A2:T4")
     bad = list(rows_w)
     bad[1] = wrow("2026-W41", "2026-10-09T18:20:00+08:00", 55, 2)
-    refuses("snapshot rows outside the block", 4, weeks, E, date(2026, 10, 19), SID, _result(SID, "Weeks!A2:R4", bad))
+    refuses("snapshot rows outside the block", 4, weeks, E, date(2026, 10, 19), SID, _result(SID, "Weeks!A2:T4", bad))
+
+    # Monday 2026-11-09 (W46) looks back on W45, the first v4 week: collect in S–T, nothing in K–L
+    rows_v4 = [wrow("2026-W%02d" % (40 + i), "2026-10-02T18:31:01+08:00", 55, 2 + 100 * i) for i in range(5)]
+    rows_v4.append(wrow("2026-W45", "2026-11-06T18:20:00+08:00", 56, 502, "", "ok", "ok", "ok", "ok"))
+    w4 = weeks(E, date(2026, 11, 9), SID, _result(SID, "Weeks!A2:T7", rows_v4))
+    check("a v4 week: its beats by their v4 names, all recorded",
+          [(h["beat"], h["status"]) for h in w4["health"]],
+          [("snapshot", "ok"), ("collect", "ok"), ("minutes", "ok"), ("propose", "ok"), ("apply", "ok")])
+    check("collect's cell is S", w4["health"][1]["cell"], "Weeks!S7")
+    check("the harvest block is read in two pages", w4["reads"]["harvest"]["ranges"],
+          ["Harvest!A402:H451", "Harvest!A452:H481"])
 
     # rows
     def snap(week, n, status="進行中"):
@@ -447,7 +487,7 @@ def selftest():
     refuses("rows of another week", 4, rows, "2026-W42", 55, SID, pages_)
 
     # block
-    dec = _result(SID, "Decisions!A42:H61", [["2026-W42", "10/15", "決議", "A", "Mark", "10/20", "1.08", "doc"],
+    dec = _result(SID, "Decisions!A82:I121", [["2026-W42", "10/15", "決議", "A", "Mark", "10/20", "1.08", "doc"],
                                             ["2026-W42", "10/15", "待決", "B", "", "", "", "doc"]])
     b = block("decisions", "2026-W42", SID, dec, E)
     check("decisions count", b["count"], 2)
@@ -461,9 +501,22 @@ def selftest():
     refuses("block of another tab", 3, block, "reports", "2026-W42", SID, dec, E)
     refuses("another week's block range", 3, block, "decisions", "2026-W43", SID, dec, E)
     refuses("stray week in block", 4, block, "decisions", "2026-W43", SID,
-            _result(SID, "Decisions!A62:H81", [["2026-W42", "", "決議", "x", "", "", "", ""]]), E)
+            _result(SID, "Decisions!A122:I161", [["2026-W42", "", "決議", "x", "", "", "", ""]]), E)
     refuses("a partial block range", 3, block, "decisions", "2026-W42", SID,
-            _result(SID, "Decisions!A42:H42", []), E)
+            _result(SID, "Decisions!A82:I82", []), E)
+    v4 = _result(SID, "Decisions!A202:I241", [["2026-W45", "11/5", t_, "item " + t_, "Ann", "", "", "doc", ""]
+                                              for t_ in ("決議", "行動", "卡關", "風險", "待討論", "放棄")])
+    check("v4 open decisions: 卡關 · 風險 · 待討論", [r["類型"] for r in block("decisions", "2026-W45", SID, v4, E)["open"]],
+          ["卡關", "風險", "待討論"])
+    hv = [["2026-W45", "t", "ann", "Ann Lee", "SEO", "shipped", "line %d" % i, "f"] for i in range(49)]
+    hv.append(["2026-W45", "t", "ann", "Ann Lee", "SEO", "waiting", "needs the keyword list", "f"])
+    h1 = _result(SID, "Harvest!A402:H451", hv)
+    h2 = _result(SID, "Harvest!A452:H481", [["2026-W45", "t", "bob", "Bob Wu", "", "quiet", "本週無資料", "f"]])
+    bh = block("harvest", "2026-W45", SID, [h1, h2], E)
+    check("harvest: both pages", (bh["count"], bh["blocked"], bh["heard"], bh["quiet"]),
+          (51, [{"owner": "Ann Lee", "卡關": "needs the keyword list"}], ["Ann Lee"], ["Bob Wu"]))
+    refuses("harvest with its second page missing", 3, block, "harvest", "2026-W45", SID, [h1], E)
+    refuses("a page given twice", 3, block, "harvest", "2026-W45", SID, [h1, h1], E)
     check("empty block", block("updates", "2026-W42", SID, _result(SID, "Updates!A82:N121", []), E)["count"], 0)
 
     # read(): a result saved inside its {"result": ...} wrapper, with surrounding whitespace
@@ -474,7 +527,7 @@ def selftest():
         f.write("\n" + json.dumps({"result": t}) + "\n")
     check("wrapped result unwraps", weeks(E, date(2026, 10, 19), SID, read(tmp))["last_week"], "2026-W42")
     os.unlink(tmp)
-    t3 = _result(SID, "Weeks!A2:R3", [["", "", "", "", "", "", "", "", "", "", "ok", "x"]])
+    t3 = _result(SID, "Weeks!A2:T3", [["", "", "", "", "", "", "", "", "", "", "ok", "x"]])
     w3 = weeks(E, date(2026, 10, 12), SID, t3)
     check("no snapshot at all: prev note", w3["prev_note"], "no snapshot for 2026-W40 or 2026-W41; CHANGED is not measured")
 

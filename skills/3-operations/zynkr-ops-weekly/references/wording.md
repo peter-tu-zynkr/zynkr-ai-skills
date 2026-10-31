@@ -93,13 +93,16 @@ Two strings are machine-readable idempotency keys, not prose. Changing either on
 loop write duplicates:
 
 - `〔自動彙整 <week> · <stamp>〕` — `sections` and `tidy` search the section for `〔自動彙整 <week>`
-- `— zynkr-ops-weekly · <week>` — the Chat footer every delivering beat looks for
+- `— zynkr-ops-weekly · <week>` — the Chat footer the v3 beats searched the space for before posting
 
 Since v4 (SKB-091) one beat posts to the space: `collect`, once a week, and only when someone's
-harvest is missing. Step 1 matches the footer **together with** its opening words, which are frozen
-too; the rest of the line may change:
+harvest is missing. The line is the one `harvest.py chase` prints, never retyped: the quiet people's
+@-mentions, then 「這週的 harvest 沒有資料，是比較安靜的一週嗎？有做的事在今天下午一點前回在這裡就好」.
+It carries no footer, and nothing searches the space for it: once it went, `harvest.py chased`
+stamps the week, and a rerun reads that stamp (with `Weeks!S`) instead. Before v4 each beat's post
+opened with frozen words and ended with the footer, and the next run searched for both:
 
-| mode | the post opens with |
+| mode (v3) | the post opened with |
 |---|---|
 | `collect` | 還沒收到這幾位的週報 |
 

@@ -4,8 +4,10 @@ All output is zh-TW. **Read `wording.md` before composing anything** — these t
 voice, and every free-text line the model writes at run time (the recap mail body, the run report) has to
 match it.
 
-Every Chat post ends with the footer line — it is the idempotency marker the next run looks
-for, so it is not decoration and its exact shape is frozen:
+Since v4 (SKB-091) the only Chat post is `collect`'s chase line, which `harvest.py chase` writes
+whole; it has no footer, because its idempotency is the stamp `harvest.py chased` leaves
+(`wording.md` → *Frozen strings*). Before v4, every Chat post ended with the footer line — the
+idempotency marker the next run looked for, so not decoration, and its exact shape was frozen:
 
 ```
 — zynkr-ops-weekly · WB 8/24

@@ -590,8 +590,11 @@ def blk_plan(d):
         ops.append(call("modify_sheet_values",
                         {"user_google_email": run["account"], "spreadsheet_id": run["ledger"],
                          "range_name": "%s!A%d:%s%d" % (tab, first + len(rows), end, last), "clear_values": True}))
-    readback = [read_call(run, run["ledger"], "%s!A%d:%s%d" % (tab, first, end, last), "rb")]
-    run.update(planned=True)
+    # one read per PAGE rows: a longer read comes back truncated and is refused (Harvest's 80-row block)
+    pages = [[a, min(a + PAGE - 1, last)] for a in range(first, last + 1, PAGE)]
+    readback = [read_call(run, run["ledger"], "%s!A%d:%s%d" % (tab, a, end, b), "rb" if i == 0 else "rb%d" % (i + 1))
+                for i, (a, b) in enumerate(pages)]
+    run.update(planned=True, pages=pages)
     save_run(run)
     return {"week": run["week"], "tab": tab, "rows": len(rows), "ops": ops, "readback": readback}
 
@@ -602,9 +605,12 @@ def blk_check(d, now=None):
         raise Refuse(2, "run `block plan` first")
     tab, header, scol, tcol = run["tab"], BLOCKS[run["tab"]][1], BLOCKS[run["tab"]][2], BLOCKS[run["tab"]][3]
     width, end = len(header), col_letter(len(header))
-    got = parse_values(load_result(os.path.join(d, "rb.txt")), run["ledger"],
-                       "%s!A%d:%s%d" % (tab, run["first"], end, run["last"]))
-    got = [pad(x, width) for x in got]
+    got = []
+    for i, (a, b) in enumerate(run.get("pages") or [[run["first"], run["last"]]]):
+        part = parse_values(load_result(os.path.join(d, "rb.txt" if i == 0 else "rb%d.txt" % (i + 1))), run["ledger"],
+                            "%s!A%d:%s%d" % (tab, a, end, b))
+        # a read drops its trailing empty rows: pad each page to its length, so the next page's rows keep their place
+        got += [pad(x, width) for x in part] + [[""] * width] * (b - a + 1 - len(part))
     for i, want in enumerate(run["rows"]):
         have = got[i] if i < len(got) else [""] * width
         if have != want:
@@ -1121,7 +1127,7 @@ def selftest():
         def fmt_b(sid, rng, rows):
             return fmt(sid, rng, rows)
 
-        def run_block(sheet, rows_path, mangle=None, tab_name="Reports"):
+        def run_block(sheet, rows_path, mangle=None, tab_name="Reports", after=None):
             st = blk_start(tab_name, "2026-W41", rows_path, cfgb, "2026-10-06T09:40:00+08:00",
                            base=os.path.join(tmpb, "runs"))
             d = st["dir"]
@@ -1146,13 +1152,15 @@ def selftest():
                 for i, r in enumerate(range(int(r0), int(r1) + 1)):
                     v = [""] * 11 if a.get("clear_values") else list(a["values"][i])
                     grid[r - 1] = mangle(v) if (mangle and not a.get("clear_values")) else v
-            rb = pl["readback"][0]
-            tab, r0, r1 = re.match(r"^(\w+)!A(\d+):[A-Z](\d+)$", rb["args"]["range_name"]).groups()
-            grid = sheet[tab]
-            got = [grid[i - 1] if i - 1 < len(grid) else [] for i in range(int(r0), int(r1) + 1)]
-            while got and not any(x.strip() for x in got[-1]):
-                got.pop()
-            open(rb["save"], "w", encoding="utf-8").write(fmt_b("LED", rb["args"]["range_name"], got))
+            if after:
+                after(sheet)                        # a change the writes did not make (a clear that failed)
+            for rb in pl["readback"]:
+                tab, r0, r1 = re.match(r"^(\w+)!A(\d+):[A-Z](\d+)$", rb["args"]["range_name"]).groups()
+                grid = sheet[tab]
+                got = [grid[i - 1] if i - 1 < len(grid) else [] for i in range(int(r0), int(r1) + 1)]
+                while got and not any(x.strip() for x in got[-1]):
+                    got.pop()
+                open(rb["save"], "w", encoding="utf-8").write(fmt_b("LED", rb["args"]["range_name"], got))
             ck = blk_check(d, "2026-10-06T09:45:00+08:00")
             a = ck["commit"]["args"]
             m = re.match(r"^Weeks!([A-Z])(\d+):([A-Z])(\d+)$", a["range_name"])
@@ -1228,6 +1236,26 @@ def selftest():
         check("Harvest leaves the other beats' cells alone", sh["Weeks"][2][:18], [""] * 18)
         check("Proposals still works under the A–T header", run_block(fresh_b(WEEKS_FULL), prop_p, tab_name="Proposals")["delivered"],
               "1-rows;Proposals!A42:O42;Weeks!O3")
+        # Harvest's 80-row block is longer than one read: the read-back comes in pages of 50
+        many = [["2026-W41", "2026-10-08T09:05:00+08:00", "p%02d" % i, "P%d" % i, "SEO", "shipped", "line %d" % i,
+                 "harvest-p.md"] for i in range(60)]
+        many_p = os.path.join(tmpb, "many.json")
+        json.dump(many, open(many_p, "w"), ensure_ascii=False)
+        check("a 60-row Harvest block reads back in two pages and commits",
+              run_block(fresh_b(WEEKS_FULL), many_p, tab_name="Harvest")["delivered"], "60-rows;Harvest!A82:H141;Weeks!S3")
+        refuses("a changed cell on the second page is caught", 6, run_block, fresh_b(WEEKS_FULL), many_p,
+                lambda v: v[:6] + ["changed"] + v[7:] if v[2] == "p55" else v, "Harvest")
+
+        def stray(sheet):
+            while len(sheet["Harvest"]) < 151:
+                sheet["Harvest"].append([""] * 8)
+            sheet["Harvest"][150] = ["2026-W41", "", "x", "X", "", "", "left over", ""]
+
+        try:
+            run_block(fresh_b(WEEKS_FULL), harv_p, tab_name="Harvest", after=stray)
+            fails.append("a row left on the second page was committed")
+        except Refuse as e:
+            check("a row left on the second page is named by its own row", (e.code, "Harvest row 151 " in str(e)), (6, True))
         wrong_p = os.path.join(tmpb, "wrong.json")
         json.dump([["2026-W40"] + [""] * 8], open(wrong_p, "w"))
         refuses("block row from another week", 3, blk_start, "Reports", "2026-W41", wrong_p, cfgb,
@@ -1332,6 +1360,10 @@ MUTATIONS = [
         ("if t is not None and t_from < t <= t_to:", "if t is not None:")]),
     ("block read-back compare skipped", [
         ("        if have != want:\n            col = next(j for j in range(width)", "        if False:\n            col = next(j for j in range(width)")]),
+    ("block read-back reads one page", [
+        ("for a in range(first, last + 1, PAGE)]", "for a in range(first, first + 1, PAGE)]")]),
+    ("block page padding dropped", [
+        (' + [[""] * width] * (b - a + 1 - len(part))', "")]),
     ("an open decision promoted", [
         ('"決議" if owner and due else "待決"', '"決議"')]),
     ("block accepts another week's rows", [

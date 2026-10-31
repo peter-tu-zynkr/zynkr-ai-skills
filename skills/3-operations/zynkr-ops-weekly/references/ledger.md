@@ -21,17 +21,21 @@ can never corrupt the history.
 | `Snapshot` | week · snapshot_at · cycle, then the tracker's 13 columns exactly as named | `snapshot` |
 | `Reports` (Phase 2) | week · posted_at · owner · 部門 · 上週 · 本週 · 數字 · 卡關 · format | `collect`, one row per person (until v4's `Harvest` tab replaces it, `SKB-091.9`; the Tuesday `rollup` wrote it until 2026-10-27) |
 | `Harvest` (SKB-091) | week · harvested_at · slug · name · workstream · kind · text · file | `collect`, 80 rows a week: one row per line of a person's harvest (kind `shipped` · `moving` · `waiting`, at most 15 per person, waiting first), or one `quiet` row for a 「本週無資料」 week. Replaces `Reports` from 2026-W45; `sections` reads it |
-| `Decisions` (Phase 2) | week · 會議日期 · 類型 · 內容 · 負責人 · 期限 · 關聯 # · 來源 | `minutes` (until 2026-10-27 the Thursday `decisions`); 類型 is 決議, or 待決 when the owner or the date is missing |
+| `Decisions` (Phase 2) | week · 會議日期 · 類型 · 內容 · 負責人 · 期限 · 關聯 # · 來源 · 狀態 (I, SKB-091) | `minutes`, 40 rows a week (until 2026-10-27 the Thursday `decisions`, 20 a week); 類型 is 決議, or 待決 when the owner or the date is missing |
 
 A beat's cell pair in the `Weeks` row is how a reader tells "none" from "never recorded": an empty
 status cell means the beat never recorded the week, while `ok` over an empty block means it
 recorded it and there was nothing. Phase 4 adds its own tab (evidence) when it is built.
 
-**Weekly blocks.** `Reports` holds 20 rows a week, `Harvest` 80, `Decisions`, `Proposals` and `Updates` 40 (`Decisions` grew from 20 in SKB-091, before any week had stored a row);
-week k owns rows 2 + size·k … 1 + size·(k + 1). `ledger.py block` writes any of them, checks the
+**Weekly blocks.** `Reports` holds 20 rows a week, `Harvest` 80, `Decisions`, `Proposals` and `Updates` 40.
+Week k owns rows 2 + size·k … 1 + size·(k + 1). `ledger.py block` writes any of them, checks the
 `Weeks` header reaches its own cells (A–N for the Phase 2 blocks, A–R for the Phase 3 ones, A–T for
-`Harvest`), reads
-the block back, and commits the beat's cell pair last.
+`Harvest`), reads the block back in pages of 50 rows (so `Harvest` takes two reads), and commits
+the beat's cell pair last.
+
+`Decisions` grew from 20 rows a week to 40 in SKB-091. One week had been stored under the old
+size: 2026-W43's three rows sat at 62–64, which the new size gives to 2026-W41. The switch-over
+setup moved them to 122–124, the start of W43's 40-row block, and cleared 62–64.
 
 ## Layout v1: every week has fixed rows
 
@@ -52,7 +56,8 @@ Week *k* counts from `sources.ledger.epoch_week` (`2026-W40` is *k* = 0):
 mistake that writes over history. Fixed blocks mean no step ever needs to know where a tab ends,
 and a half-finished run is simply overwritten in place by the next one.
 
-`Reports` and `Decisions` use the same rule with 20 rows per week: rows **2 + 20k … 21 + 20k**.
+The weekly blocks use the same rule at their own size: `Reports` rows **2 + 20k … 21 + 20k**;
+`Decisions`, `Proposals` and `Updates` **2 + 40k … 41 + 40k**; `Harvest` **2 + 80k … 81 + 80k**.
 `ledger.py block` writes them (start → plan → check → confirm, the same read-back before the
 commit), and the commit is the beat's own cell pair in the week's `Weeks` row.
 
@@ -110,6 +115,12 @@ row RAW exactly as `schema` prints it and freeze row 1; grow `Proposals` and `Up
 (a year of 40-row weeks); write `Weeks!O1:R1` (proposals · proposals_at · applied · applied_at).
 `ledger.py block` refuses the Phase 3 blocks until the `Weeks` header reads A–R; the Phase 2 blocks
 need only A–N, so `collect` and `minutes` keep working while the setup is half done.
+
+**SKB-091 setup (once, before installing v4).** `create_sheet` → `Harvest`; write its header row
+RAW exactly as `schema` prints it, freeze row 1 and grow it to 4,200 rows (a year of 80-row weeks);
+write `Weeks!S1:T1` (harvest · harvest_at) and `Decisions!I1` (狀態); grow `Decisions` to 2,100
+rows; move 2026-W43's `Decisions` rows as above. `ledger.py block` refuses the `Harvest` block until
+the `Weeks` header reads A–T, and every block until its own tab's header matches `schema`.
 
 **Growing the grid.** `ledger.py` warns when fewer than eight weeks of rows remain, and refuses a
 week whose block would not fit (exit 5). Add rows to the end of `Snapshot` with

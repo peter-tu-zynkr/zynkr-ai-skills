@@ -162,8 +162,10 @@ its owner but carries no schedule. 延遲 still does not exist and stays **deriv
 ### 3.1b What the week recorded — the Weekly Ledger (every run)
 
 Since 2026-10-02 the team's weekly project cycle (zynkr-ops-weekly, SKB-044) keeps a machine-owned
-Sheet, `sources.ledger`. On Fridays it copies the whole tracker into `Snapshot`. Tuesday's rollup
-records each `#週報` post in `Reports` and Thursday's meeting records its decisions in `Decisions`.
+Sheet, `sources.ledger`. On Fridays it copies the whole tracker into `Snapshot`. From 2026-W45 (v4,
+SKB-091) Thursday's `collect` records each person's Wednesday harvest in `Harvest` and Friday's
+`minutes` records the meeting's decisions in `Decisions`; before that, Tuesday's rollup recorded
+each `#週報` post in `Reports` and Thursday's `decisions` beat wrote `Decisions`.
 Friday's `propose` mails the GM the suggested tracker changes, a list kept in `Proposals`, and
 `apply` records the GM's answers (and, once live, the changes it wrote in `Updates`). Each beat
 stamps its cell pair in the week's `Weeks` row. The brief reads **last week**, the ISO week before
@@ -175,20 +177,25 @@ not search for a week's rows, and do not compute the ranges by hand:
 1. `ledger_read.py plan --epoch <sources.ledger.epoch_week> --today <date>` → one `Weeks` range.
    Read it with `read_sheet_values` and save the result verbatim.
 2. `ledger_read.py weeks --epoch … --today … --ledger <id> <saved file>` → last week's beat health
-   (`snapshot` · `rollup` · `decisions` · `propose` · `apply`: `ok`, or `never recorded`), the
+   (`snapshot` · `collect` · `minutes` · `propose` · `apply` from 2026-W45; `snapshot` · `rollup` ·
+   `decisions` · `propose` · `apply` before: `ok`, or `never recorded`), the
    approval state (`confirmed` · `unconfirmed` · `no proposals recorded`), and every range to
    read next, each ≤50 rows. It refuses a read of another file or range, a truncated read, and a
    `Weeks` row that holds a different week. `unconfirmed` is an ask only when the week's
    `Proposals` block holds at least one row (an empty week stamps it too).
 3. `ledger_read.py rows --week W --items N …` on the `prev` snapshot pages → `prev_rows.json` for
    Step 4 (`--prev`). The same on the `stall` pages when `stalled_available` is true.
-4. `ledger_read.py block --kind decisions|proposals|reports|updates --epoch … …` on each block → that week's
-   rows plus counts (`open` 待決 decisions, `by_decision` for proposals, `blocked` reporters).
+4. `ledger_read.py block --kind decisions|harvest|proposals|reports|updates --epoch … …` with every
+   page `weeks` listed for that block (`Harvest` is two) → that week's rows plus counts (`open`
+   decisions: 卡關 · 風險 · 待討論, or 待決 before 2026-W45; `by_decision` for proposals;
+   `blocked`: Harvest's waiting lines, or Reports' 卡關 before 2026-W45; `heard` and `quiet` for
+   the harvest).
 
-Where it lands: beat health → block 08; `Decisions` → block 06, with a `待決` row that blocks a P0
+Where it lands: beat health → block 08; `Decisions` → block 06, with an open row that blocks a P0
 also a block-01 candidate; `Proposals` → block 03's Next for `PROPOSE_DONE` rows; an
-`unconfirmed` approval touching a P0 → a block-01 card closed by replying to the 【待核准】 thread;
-`Reports` → block 04's "last heard from" and `卡關` lines.
+`unconfirmed` approval touching a P0 → a block-01 card closed by replying to the 【週結】 thread
+(【待核准】 before 2026-W45); `Harvest` (`Reports` before 2026-W45) → block 04's "last heard from"
+and `卡關` lines.
 
 The Ledger is **evidence and history, never status**: the brief still reads the tracker live
 (§3.1), and a snapshot is only what CHANGED and STALLED compare against.

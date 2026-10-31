@@ -115,7 +115,7 @@ decide-by at all and blocking a P0); P0s owned by the GM with 結束 ≤14 days;
 >2 weeks (any owner — the GM's job is to make the absence visible). Two more come from the
 weekly project cycle's Ledger: a `待決` row from last Thursday's meeting that blocks a P0, and a
 Friday approval the GM never confirmed when a proposal in it touches a P0. For the approval, the
-card's close-it action is "reply to the 【待核准】 thread", linked. Approvals are the GM's alone,
+card's close-it action is "reply to the 【週結】 thread" (【待核准】 before 2026-W45), linked. Approvals are the GM's alone,
 so an unanswered one is never somebody else's ask.
 
 ### The decision card
@@ -207,7 +207,7 @@ change list). Block 03 stays coarse: when the recap has arrived,
 link it once above the tables instead of restating its lines.
 
 A `PROPOSE_DONE` row's Next says where the change stands in the Friday approval cycle, read from
-the Ledger's `Proposals` tab: `in Friday's 【待核准】 mail — <決定> (<結果>)`, or, when it was never
+the Ledger's `Proposals` tab: `in Friday's 【週結】 mail — <決定> (<結果>)` (【待核准】 before 2026-W45), or, when it was never
 proposed, `goes to Friday's propose`. `would-apply` means shadow mode, so the owner still sets the
 value by hand. Once `apply` writes the tracker (SKB-044 Phase 3b), the brief stops asking anyone
 to type what that cycle carries.
@@ -215,9 +215,10 @@ to type what that cycle carries.
 ## 04 · Per-owner summary
 
 One line per owner (named as the tracker names them): P0 held · P1 held · UNDATED · OVERDUE ·
-ENDS_SOON · what the brief needs from them · when they were last heard from — the newest
-`#週報` post in the Ledger's `Reports` tab, else the newest weekly-log mention — plus their `卡關`
-line if they wrote one. A sales owner's line also gets `pipeline: N of F cooking (pulse, week of …)` (N and F copied from the pulse line)
+ENDS_SOON · what the brief needs from them · when they were last heard from — from 2026-W45
+their rows in the Ledger's `Harvest` tab (any row not `quiet`), before that the newest `#週報` post
+in its `Reports` tab, else the newest weekly-log mention — plus their `卡關` line if they have one
+(a harvest `waiting` line, or Reports' 卡關). A sales owner's line also gets `pipeline: N of F cooking (pulse, week of …)` (N and F copied from the pulse line)
 from the weekly sales pulse mail (SKILL.md §3.1c). End with `GM holds <k>/<n> P0s (<pct>%)`.
 
 ## 05 · KPI off-target + missing numbers
@@ -253,7 +254,8 @@ The three promoted into block 01 appear here too, marked `→ see 01`, so the re
 - Routines: newest weekly livestream note date (flag if >8 days); this brief's own idempotency
   result.
 - The weekly project cycle, from last week's `Weeks` row in the Ledger: one line naming each beat
-  that recorded (`snapshot` · `rollup` · `decisions` · `propose` · `apply`) and each that did not.
+  that recorded (`snapshot` · `collect` · `minutes` · `propose` · `apply`; before 2026-W45 `snapshot` ·
+  `rollup` · `decisions` · `propose` · `apply`) and each that did not.
   An empty cell means the beat never recorded the week, which is not the same as "nothing to
   record" (`ok` over an empty block).
 - STALLED: computed, or why not (no Ledger snapshot 14+ days old yet; snapshot not readable).

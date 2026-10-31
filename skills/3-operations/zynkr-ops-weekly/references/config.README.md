@@ -40,8 +40,10 @@ One file, read by all four skills of the loop: `zynkr-ops-weekly`, `ops-weekly-d
   replies in that same thread. @-mentions render as names even when the sender does not.
 - Adding a person: add their `chat_ids` row **and** put their chip on a Doc heading. Only the
   first is a code change; the second is what actually routes them.
-- Removing a person: drop them from `reporters` so `collect` stops asking for their harvest. Old Doc sections
-  keep their chips — that is history, leave it.
+- Removing a person: take them off the harvest routine's roster (`~/.config/zynkr/harvest.json`,
+  `SKB-094`). `collect` reads and chases the people in that routine's run file, never `reporters`.
+  Drop them from `reporters` too, the addresses a `team` recap goes to when `routine.recap_to` is
+  not set. Old Doc sections keep their chips — that is history, leave it.
 - Rotate: when the Doc is renamed or moved, or a trigger is recreated, edit only this file. No
   skill file changes.
 - `sources.ledger.id` is the machine-owned Weekly Ledger (`SKB-044`, `ledger.md`). It must never

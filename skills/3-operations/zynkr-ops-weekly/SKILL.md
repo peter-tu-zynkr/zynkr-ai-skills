@@ -91,7 +91,7 @@ this one file; each skill names the keys it uses.
 | `space.id` · `space.name` | the Chat space, in `spaces/<id>` form — **the `spaces/` prefix is required** — and its label |
 | `doc.id` · `doc.tab_id` · `doc.tab_name` · `doc.archive_tab_id` · `doc.archive_tab_name` | the weekly operations Doc, the tab of week sections, and the sibling tab `tidy` archives into (`ops-weekly-doc`) |
 | `chat_ids` | **the only hardcoded map** — Chat `users/<id>` → email, so `collect` can @-mention. See below |
-| `reporters` | the emails expected to report each week |
+| `reporters` | the team's addresses: who a `team` recap goes to when `routine.recap_to` is not set, and (before 2026-W45) who was expected to post `#週報`. Keep it non-empty: `recap.py` refuses an empty list |
 | `sources.main_tracker` | the Main Tracker: `id`, `tab` (the tab `snapshot` copies) and `cycle` (`2026H2`), which keeps one half-year's item numbers apart from the next |
 | `sources.ledger.id` · `sources.ledger.epoch_week` | the Weekly Ledger, and the ISO week its row layout counts from. **Never change `epoch_week` after the first snapshot**: every week's rows are computed from it |
 | `harvest.output_folder_id` | the Drive folder the Wednesday harvest routine writes `<WEEK>/harvest-<person>.md` into (`SKB-094`); `collect` reads it |
@@ -160,7 +160,8 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
    waiting lines first) and names who had a 「本週無資料」 week.
 5. Record the block (`references/ledger.md`): `python3 scripts/ledger.py block start --tab Harvest
    --week <ISO week> --rows <rows_path>`, then `block plan`, `block check` and `block confirm`. Make
-   each step's calls in turn, exactly as in `recap`'s Ledger reads.
+   each step's calls in turn, exactly as in `recap`'s Ledger reads; `block plan` reads the 80-row
+   block back in two pages, and `block check` needs both.
 6. **The chase.** Run `python3 scripts/harvest.py chase --dir <dir>`.
    - `send`: make its one `send_message` call exactly as printed, check the result names the message
      it posted, then run `harvest.py chased --dir <dir>`. The line @-mentions each quiet person once
@@ -178,8 +179,10 @@ state rules and one mail, the Monday Sales Pulse (09:30), never the Doc, so it d
 the Doc's multi-hour reads. It writes nothing: no Ledger cell, no tracker cell, no Chat post.
 Since `SKB-091` it also carries **this week's plan**, per person: at most five lines, in order,
 from the meeting's open actions, items overdue or due within 14 days, P0/P1 items with no dates,
-and that person's next steps from the Pulse. `recap.py` builds it; a line that cites no item #
-(or, from the Pulse, a deal) never reaches the mail.
+and that person's next steps from the Pulse. `recap.py` builds it; a line that cites no item # never
+reaches the mail, and a line from the Pulse is the Pulse's own step, so the Pulse is its source.
+From 2026-W45 the mail's 卡關 are the waiting lines of last week's harvest (`Harvest`, which `collect`
+records); before that they came from the `#週報` posts in `Reports`.
 
 `scripts/recap.py` works out every range, fact and the subject; you make its printed calls exactly,
 save each result unchanged, and write the TL;DR.
@@ -195,8 +198,9 @@ save each result unchanged, and write the TL;DR.
    - Otherwise make the printed calls (the block reads and one Gmail search for the Sales Pulse)
      and save each one.
    - Then `python3 scripts/recap.py pulse --dir <dir>`: with `"pulse": true`, make its calls (every
-     thread the search found, newest first, at most five) and save each; with `false`, go on — the
-     mail says the sales lines are missing.
+     thread the search found, newest first, at most five, each fetched as HTML so the Pulse keeps one
+     person per list item) and save each; with `false`, go on — the mail says the sales lines are
+     missing.
 4. `python3 scripts/recap.py build --dir <dir> --today <today, YYYY-MM-DD>` → it prints the counts,
    the plan's line count per person, whether the Pulse was read, and the path of `facts.json`. A non-zero exit means stop with `status=failed` and the reason;
    nothing has been sent.
@@ -206,13 +210,16 @@ save each result unchanged, and write the TL;DR.
    about what the facts show, never about how they were gathered.
 6. `python3 scripts/recap.py render --dir <dir> --tldr <dir>/tldr.json` → `subject`, `to` and
    `body_path`. Lines that cite no real item number are dropped, and it says which.
-7. **Never send twice.** `search_gmail_messages` with `in:sent newer_than:3d`, then read the
-   subjects of what comes back. One equals `subject` exactly → do not send; receipt `status=ok`,
-   `delivered=already-sent`. (Gmail's `subject:` search misses 【】 and CJK text, so compare the
-   subjects yourself.)
+7. **Never send twice.** `search_gmail_messages` with `sent_check.query` and `sent_check.page_size`
+   exactly as `render` (or `notice`) printed them, then read the subject of each message it finds.
+   One that starts with `sent_check.prefix` → this week's mail already went: do not send; receipt
+   `status=ok`, `delivered=already-sent`. The recap's prefix leaves out its counts, which change with
+   the day (逾期 N 件), so a send made yesterday still counts. (Gmail's `subject:` search misses 【】
+   and CJK text, so compare the subjects yourself.)
 8. `send_gmail_message` to exactly `to`, with exactly `subject`, the contents of `body_path` as the
    body, and `body_format="html"`. No cc, no bcc, no other recipients.
-9. **Assert it fired.** Search `in:sent newer_than:1d` again and find the subject. Found → receipt
+9. **Assert it fired.** Make the `sent_check` search again and find a message whose subject equals
+   `subject`. Found → receipt
    `status=ok`, `delivered=recap-sent-to-<count of addresses in to>`. Not found → `status=failed`,
    `delivered=send-not-found`.
 

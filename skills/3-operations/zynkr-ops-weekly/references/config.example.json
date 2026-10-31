@@ -17,7 +17,6 @@
     "archive_tab_id": "<tab id of the archive tab, e.g. t.abc123>",
     "archive_tab_name": "<archive tab name>",
     "section_heading_level": "HEADING_2",
-    "section_date_format": "%b %d, %Y",
     "$note": "Sections are named by MEETING day (Thursday), not by report day (Monday). The archive tab MUST be a sibling tab in THIS Doc: carryover.py reads all tabs as one stream, so a separate file resets every ↻N週 streak."
   },
 
