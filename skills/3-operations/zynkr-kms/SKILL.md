@@ -9,8 +9,8 @@ description: >-
   each draft is filed in its section and linked to the facts it cites, and serves no one until
   Peter publishes it in Atlas. Canonical numbers and policies become `fact` cards; answers become
   reference cards that CITE those facts instead of restating numbers; a change to a published card
-  goes to Peter as a correction packet. Every run it first catches the Google Drive backup
-  (`[3.2] 客服知識庫 (KMS)`, one Doc per section plus a JSON snapshot) up with Atlas, one way.
+  goes to Peter as a correction packet. Every run it first catches the members-only Google Drive
+  backup (one Doc per section plus a JSON snapshot) up with Atlas, one way.
   Trigger whenever Peter says "/zynkr-kms", "learn from resolved tickets", "update the support KB",
   "curate the KB", "把已回覆的 support 信變成知識庫", "更新知識庫", "整理 KB", "let the KB learn", or
   hands over a resolved support/sales thread and wants the answer captured — and also on
@@ -63,10 +63,11 @@ without Peter twice**: he approves the proposal here (Step 4), and he publishes 
 >   truth: the published collection `kb`, one collection per section under it (`kb.<slug>`), the
 >   cards filed in those. This skill writes **drafts only**; a person publishes them in Atlas's
 >   審核. `/zynkr-support` and `/sales-inbound` read the published cards, never the mirror.
-> - **Google Drive** `[3.2] 客服知識庫 (KMS)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) — the **backup
->   mirror**: one Doc per section plus a restore copy, `_KB-SNAPSHOT.json`. Rewritten from Atlas at
->   the start of every run (Step 0). Never authoritative, never read back into Atlas; a human edit
->   made there is destroyed on the next mirror. If the two disagree, Atlas is right.
+> - **Google Drive** `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`) —
+>   the **backup mirror**, readable by the workspace's members only: one Doc per section plus a
+>   restore copy, `_KB-SNAPSHOT.json`. Rewritten from Atlas at the start of every run (Step 0).
+>   Never authoritative, never read back into Atlas; a human edit made there is destroyed on the
+>   next mirror. If the two disagree, Atlas is right.
 
 ## Configuration
 
@@ -83,8 +84,9 @@ This skill drafts into a **知識庫** it does not ship.
    per section (`kb.<slug>`); in the sections, `fact` notes for the canonical numbers and policies
    and `reference` notes (one per resolved question) that cite the facts they rest on; and two
    style cards keyed `tone-voice-rules` and `term-mapping-table`.
-4. **The Zynkr default:** the `kb` collection of Zynkr's own Atlas workspace and the `[3.2]
-   客服知識庫 (KMS)` folder. There is nothing to fill in beyond the two tokens.
+4. **The Zynkr default:** the `kb` collection of Zynkr's own Atlas workspace and the members-only
+   Drive folder `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊`. There is nothing to fill in beyond the two
+   tokens.
 5. **Not found:** if Atlas cannot be reached, the token reads no `kb` collection, or the walk in
    Step 3 cannot finish, draft nothing: go straight to Step 7, label only what Step 0's
    `pending_published` names, and report why. Never write to another knowledge base, the Drive
@@ -119,7 +121,8 @@ This skill drafts into a **知識庫** it does not ship.
 - **Ingest-ledger label**: `KMS-ingested` — applied once a thread's answer is **published** in the
   知識庫. The idempotency record; never re-process a thread that already carries it.
 - **Drive mirror** (the backup half — full mechanics in `references/drive-mirror.md`):
-  - Folder `[3.2] 客服知識庫 (KMS)` — `1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`
+  - Folder `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, members only
+    (`references/drive-mirror.md` → *Who may read it*)
   - `scripts/kb-drive-mirror.mjs` (v2) — reads the `kb` collection through Atlas with the export
     token and renders it locally; never uploads. Card bodies stay on disk, out of context.
   - The working folder `~/.workspace-mcp/attachments/kb-mirror/` — the `google-workspace` MCP only
@@ -162,7 +165,7 @@ How a run goes, the Doc registry and the checks: `references/drive-mirror.md`.
    drafts that are published and still in `pending[]`, each with its Gmail `thread` (Step 7 labels
    those, then drops them); `removed`, `removed_sections` and `orphans` go to the report.
 4. **Check who can read** — `mcp__google-workspace__get_drive_file_permissions` on the folder
-   (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) and on each file before you write it: no `anyone` link, no
+   (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`) and on each file before you write it: no `anyone` link, no
    domain grant, and every named reader a member of the Atlas workspace (ask when you cannot tell).
    The mirror copies team-only text; whatever reads wider gets nothing written — say so.
 5. **Upload** every file in `upload[]`, in its order, in place, each Doc found in the registry **by
@@ -466,7 +469,7 @@ Then give Peter a single summary:
 
 Review: https://atlas.zynkr.ai/w/<workspace-slug>/review
 知識庫: https://atlas.zynkr.ai/w/<workspace-slug>/knowledge
-Backup: https://drive.google.com/drive/folders/1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6
+Backup: https://drive.google.com/drive/folders/1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK
 ```
 
 If a new section was drafted, add its row to `references/intent-taxonomy.md` (a workbench change)

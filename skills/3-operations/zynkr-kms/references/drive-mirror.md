@@ -26,7 +26,7 @@ Atlas 知識庫 (collection kb)  ──(mirror)──▶  Google Drive Docs
 
 | What | Where |
 |---|---|
-| Mirror folder | `[3.2] 客服知識庫 (KMS)` — `1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6` |
+| Mirror folder | `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, at the top of the owner's My Drive |
 | Section Docs | one per section, `Zynkr Support KB — NN <title>` (see registry below) |
 | Restore copy | `_KB-SNAPSHOT.json` — `1UbDlalP9rP3s0LxitM5q9GMplw3qvLm7` |
 | Run manifest | `_MANIFEST.json` — `1I0fE1bId4s5pXmQFWbwioSz0WQBUMBoM` |
@@ -50,6 +50,16 @@ readable by **the workspace's members only** (`D-126`; ATL-114 F-2 and AC-23): n
 no domain grant (it reaches every account in the domain, members or not), no outside reader. The
 skill checks this with `get_drive_file_permissions` before every write (Step 0); a folder or file
 that reads wider gets nothing written, and Peter fixes its sharing.
+
+**Why the folder stands on its own (since 2026-10-31).** Drive's sharing flows down: whoever can
+read a folder can read everything inside it. The company's shared folder, which holds `[3.2]
+客服知識庫 (KMS)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`), is readable by more than the workspace
+and stays that way, so no folder inside it can be members-only. The mirror lived in `[3.2]` until
+then; it now has a folder of its own at the top of the owner's My Drive, outside the company
+folder, shared by name with each member. Its files kept their IDs, so the Doc registry below
+stands, and `[3.2]` keeps only the KMS building plan. When someone joins the Atlas workspace,
+share the folder with them as a reader; when someone leaves, remove them from it, because a reader
+who is no longer a member makes the next run write nothing.
 
 ## The token
 

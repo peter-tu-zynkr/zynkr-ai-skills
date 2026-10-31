@@ -50,4 +50,6 @@ publishes the section in 審核; the next run drafts the held cards into it.
 
 > **History note:** before 2026-07-15 the 知識庫 was a folder of Google Docs; from then until
 > ATL-114 it lived in the CRM. Both are retired. The old folder
-> (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) now holds the Drive mirror, rewritten from Atlas.
+> (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) held the Drive mirror, rewritten from Atlas, until
+> 2026-10-31; the mirror now has a members-only folder of its own (`drive-mirror.md` → *Who may
+> read it*).

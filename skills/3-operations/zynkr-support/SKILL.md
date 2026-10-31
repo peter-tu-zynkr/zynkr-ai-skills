@@ -32,8 +32,8 @@ So the loop is self-healing: every gap this skill flags becomes a KB card via /z
 next identical question gets a confident auto-draft. The two skills share **one** knowledge base:
 the **知識庫 in Zynkr Atlas** — the published collection `kb`, one collection per section under
 it, read here through the `zynkr-atlas` MCP server. The Google Drive copy
-(`[3.2] 客服知識庫 (KMS)`) is a one-way backup mirror that /zynkr-kms writes from Atlas — never
-read it for answers.
+(`客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊`) is a one-way backup mirror that /zynkr-kms writes from
+Atlas — never read it for answers.
 
 The drafts must be **safe to send** — never invent product behavior, pricing, dates, or
 commitments. When the KB doesn't cover something, say so and surface it rather than guessing.
