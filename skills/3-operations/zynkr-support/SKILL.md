@@ -1,22 +1,23 @@
 ---
 name: zynkr-support
 sheetId: "3.01"
-description: "The READ half of Peter's support loop (formerly support-reply-drafter). Parses Peter's Gmail support queue and the website-form notifications that are not AI-consulting inquiries, detects unreplied inquiries, identifies each inquirer's intent, and matches it against the **Zynkr platform 知識庫** (platform.zynkr.ai/kb — the single source of truth since 2026-07-15, accessed via the `zynkr` MCP server's search_kb / get_kb_article) to draft a safe reply on the thread. Drafts match the inbound language (zh-TW or EN). When the KB has no confident answer it does NOT guess — it leaves a holding reply with an inline `[[NEEDS PETER: ...]]` block flagging exactly what's missing and notifies Peter. Once Peter supplies the real answer, this skill hands the resolved thread off to /zynkr-kms, which writes it into the platform KB so the next identical question resolves automatically. Trigger whenever Peter says '/zynkr-support', 'draft support replies', 'process support inbox', '回覆 support 信箱', '清 support queue', '幫我回 support 信', or otherwise asks to handle the support inbox. The [2.1] Inbound Sales label and the website's AI 顧問服務 inquiries belong to /sales-inbound, which logs the lead and drafts the first reply; this skill lists them and drafts nothing on them."
+description: "The READ half of Peter's support loop (formerly support-reply-drafter). Parses Peter's Gmail support queue and the website-form notifications that are not AI-consulting inquiries, detects unreplied inquiries, identifies each inquirer's intent, and matches it against the **知識庫 in Zynkr Atlas** (the published `kb` collection — the single source of truth — read through the `zynkr-atlas` MCP server's search_knowledge / get_knowledge) to draft a safe reply on the thread. Drafts match the inbound language (zh-TW or EN). When the KB has no confident answer, or Atlas cannot be reached, it does NOT guess — it leaves a holding reply with an inline `[[NEEDS PETER: ...]]` block flagging exactly what's missing and notifies Peter. Once Peter supplies the real answer, this skill hands the resolved thread off to /zynkr-kms, which drafts it into the 知識庫 for Peter to publish, so the next identical question resolves automatically. Trigger whenever Peter says '/zynkr-support', 'draft support replies', 'process support inbox', '回覆 support 信箱', '清 support queue', '幫我回 support 信', or otherwise asks to handle the support inbox. The [2.1] Inbound Sales label and the website's AI 顧問服務 inquiries belong to /sales-inbound, which logs the lead and drafts the first reply; this skill lists them and drafts nothing on them."
 category: operations
 project: zynkr-support
 platform: claude
 status: WIP
 visibility: public
 author: Peter Tu
-input: "Unreplied Support threads and website-form notifications in Gmail (the Inbound-Sales label is /sales-inbound's); the KB is the Zynkr platform 知識庫, via the zynkr MCP"
-process: "Pull the unreplied queue → read the full thread + detect unreplied + determine language → identify intent → search_kb + get_kb_article (qa cards resolve their cited facts inline) + the tone-style cards to find the answer → if an answer exists draft a proper reply / if none, write a holding reply + [[NEEDS PETER]] and notify Peter → after Peter supplies the answer, hand the thread off to /zynkr-kms to write it back into the KB"
+input: "Unreplied Support threads and website-form notifications in Gmail (the Inbound-Sales label is /sales-inbound's); answers come from the Atlas 知識庫 (kb), via the zynkr-atlas MCP"
+process: "Pull the unreplied queue → read each thread: language, intent → list the 知識庫's keys once → search + get the cards, their cited facts, the tone-style cards → a proper reply, or a holding reply + [[NEEDS PETER]] → once Peter answers, hand off to /zynkr-kms"
 output: "One Gmail draft per thread; a summary (drafted / needs Peter / skipped); for threads Peter has since answered, trigger the /zynkr-kms hand-off"
 synergy: ["zynkr-kms"]
+reads: ["kb", "tone-voice-rules", "term-mapping-table", "company.contact-email"]
 house-style: bound
 
 ---
 
-# Zynkr Support — Support Reply Drafter (READ side, platform-KB backed)
+# Zynkr Support — Support Reply Drafter (READ side, Atlas 知識庫 backed)
 
 Peter runs a small support inbox. The job here is to clear it: read each
 unreplied thread, **work out what the inquirer actually wants, find the answer in the knowledge
@@ -29,9 +30,10 @@ This skill is the **READ** half of a two-skill loop:
 
 So the loop is self-healing: every gap this skill flags becomes a KB card via /zynkr-kms, and the
 next identical question gets a confident auto-draft. The two skills share **one** knowledge base:
-the **Zynkr platform 知識庫** (browsable at `https://platform.zynkr.ai/kb`, Supabase-backed,
-accessed here through the `zynkr` MCP server). The Google Drive copy (`[3.2] 客服知識庫 (KMS)`)
-is a one-way backup mirror that /zynkr-kms writes — never read it for answers.
+the **知識庫 in Zynkr Atlas** — the published collection `kb`, one collection per section under
+it, read here through the `zynkr-atlas` MCP server. The Google Drive copy
+(`[3.2] 客服知識庫 (KMS)`) is a one-way backup mirror that /zynkr-kms writes from Atlas — never
+read it for answers.
 
 The drafts must be **safe to send** — never invent product behavior, pricing, dates, or
 commitments. When the KB doesn't cover something, say so and surface it rather than guessing.
@@ -41,17 +43,41 @@ write a holding reply with a `[[NEEDS PETER]]` block.
 
 ---
 
+## Configuration
+
+This skill answers from a **知識庫** it does not ship.
+
+1. **Why it is withheld:** the cards are the company's own — its prices, policies and past
+   answers — and they change every week, so a copy in this file would be out of date the day it
+   shipped.
+2. **The configure slot:** the `zynkr-atlas` MCP server, connected with an Atlas token of your
+   workspace, and that workspace's published collection `kb`.
+3. **What the 知識庫 must contain:** a published collection keyed `kb`; under it, one collection
+   per section (`kb.<slug>`); in the sections, `fact` notes for the canonical numbers and policies
+   and `reference` notes (one per resolved question) that cite the facts they rest on; and two
+   style cards keyed `tone-voice-rules` and `term-mapping-table`.
+4. **The Zynkr default:** the `kb` collection of Zynkr's own Atlas workspace. There is nothing to
+   fill in: a token of that workspace is the whole setup.
+5. **Not found:** if Atlas cannot be reached, the token reads no `kb` collection, or the walk in
+   Step 4 cannot finish, every reply is a holding reply with a `[[NEEDS PETER]]` block and the
+   report says why. A missing style card is named in the report, and drafts follow the house
+   voice alone. Never fall back to another knowledge base, the Drive copy or memory.
+6. **Loaded at run time:** the skill reads it on every run; nothing from it is copied into this
+   file.
+
+---
+
 ## The 9-step scope (what this skill is, end to end)
 
 1. **Parse mail** — pull the unreplied Support / website-form queue (the Inbound-Sales label and AI 顧問服務 inquiries are /sales-inbound's).
 2. **Detect the unanswered inquiry** — the thread's last message is from the inquirer, not Peter.
-3. **Identify the inquirer's intent** — classify it against the KB section taxonomy.
-4. **Match intent → find the answer** — `search_kb` + `get_kb_article` (cited facts resolve inline).
+3. **Identify the inquirer's intent** — walk the 知識庫 once, then classify against its sections.
+4. **Match intent → find the answer** — `search_knowledge` + `get_knowledge`, then the facts each card cites.
 5. **Write the reply** as a Gmail draft *if* a confident answer exists.
 6. **Notify Peter** when no answer is found — holding reply + inline `[[NEEDS PETER]]` block.
 7. **Peter supplies the missing context + answer** (replies to the customer / tells the skill).
 8. **Hand the resolved thread off to /zynkr-kms.**
-9. **/zynkr-kms writes the new answer into the KB** so next time /zynkr-support finds it itself.
+9. **/zynkr-kms drafts the new answer into the KB**, Peter publishes it, and next time /zynkr-support finds it itself.
 
 Steps 1–6 are this run. Steps 7–9 are the learning loop (see **Step 9** below).
 
@@ -64,32 +90,39 @@ Steps 1–6 are this run. Steps 7–9 are the learning loop (see **Step 9** belo
   - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` (ID `Label_1203655627141795093`) — /sales-inbound's queue; listed, never drafted on here
 - **Website form sender**: `website@zynkr.ai` — discovery-call / contact-form inquiries arrive as
   notifications *from* this address. Fallback queue source (see Step 1).
-- **KB access** — the **`zynkr` MCP server** (the platform's own MCP, authenticated as Peter's
-  workspace). Read-side tools:
-  - `mcp__zynkr__search_kb` — scored search over published cards (title/keyword/body, zh or EN)
-  - `mcp__zynkr__get_kb_article` — one card by uuid **or `fact_id`**; qa cards come back with
-    their cited fact cards resolved inline
-  - `mcp__zynkr__list_kb_sections` — the live section/intent taxonomy (+ aliases)
-  - `mcp__zynkr__list_kb_articles` — browse a section's card titles (filter by `section_id`)
-- **KB UI** (for links in your summary): `https://platform.zynkr.ai/kb`
+- **KB access** — the **`zynkr-atlas` MCP server** (Zynkr Atlas, read with a token of your
+  workspace). It serves published notes only; a draft is never served. Read-side tools:
+  - `mcp__zynkr-atlas__list_knowledge` — the published notes filed under a collection, by key,
+    without their text; one page per call (`next_after`, `truncated`)
+  - `mcp__zynkr-atlas__search_knowledge` — keyword search over the workspace's published notes:
+    every word of the query must appear, matched literally
+  - `mcp__zynkr-atlas__get_knowledge` — one note by key: its text, its dates, and the 「Part of」
+    (its section) and 「Cites」 (the notes it rests on) lines
+  - `mcp__zynkr-atlas__whoami` — the workspace's slug, for links
+- **KB links** (for your summary): `https://atlas.zynkr.ai/w/<workspace>/knowledge/<key>`, where
+  `<workspace>` is the slug `whoami` names (Zynkr's is `zynkr`); the 知識庫 itself is
+  `…/knowledge/kb`.
 - **Google account**: `<your-google-workspace-account>` — **MCP server `google-workspace`** for all Gmail tools.
 
 ### KB structure (what you're retrieving from)
 
-Two card types, and the sections `list_kb_sections` returns:
+The walk in Step 4 lists all of it:
 
-- **`fact` cards** — canonical numbers/policies (pricing table, refund policy, durations), each
-  with a stable `fact_id` (e.g. `pricing-rates`). The numbers live here, once.
-- **`qa` cards** — one per past resolved inquiry; the body carries the *logic* and the `cites`
-  array names the fact(s) it rests on. `get_kb_article` on a qa card resolves those cited facts
-  inline, so **one fetch gives you the full answer including current numbers.**
-- **Sections** = the intent taxonomy (`pricing-quoting`, `course-content`, `scheduling-logistics`,
-  `team-training-enterprise`, `technical-howto`, `access-account`, `refund-policy`, `other`,
-  `instructor-profile`, `brand-product-vision`, `ai-workflow-architecture`, `gov-subsidy`), plus two special ones:
-  - **`core-facts`** — the canonical fact cards qa cards cite.
-  - **`tone-style`** — ALWAYS-READ style rules: fetch `get_kb_article("tone-voice-rules")` and
-    `get_kb_article("term-mapping-table")` (the anti-Chinglish 晶晶體 用語對照表) once per run;
-    every draft must follow them.
+- **`kb`** is the 知識庫 itself, and each **section** is a collection under it, keyed `kb.<slug>`
+  (`kb.pricing-quoting`, `kb.core-facts`, `kb.tone-style`, …). Every card is filed in one
+  section. A section's own note (`get_knowledge(key: "kb.<slug>")`) holds its description and an
+  `Aliases:` line.
+- **`fact` cards** (kind `fact`) — canonical numbers/policies (pricing table, refund policy,
+  durations), each keyed by a stable id (e.g. `pricing-rates`). The numbers live here, once.
+- **qa cards** (kind `reference`, keys `qa.…`) — one per past resolved inquiry; the body carries
+  the *logic*, and its 「Cites」 line names the fact(s) it rests on. **The numbers are in the
+  cited facts, not in the qa card**: read each cited key with `get_knowledge`.
+- **A card's footer**, under its text after a `---` line: `Keywords:` (its search words),
+  `source_type:` (where it came from), and sometimes `Flags:` or `Unverify note:`. The footer is
+  never reply material.
+- **`kb.tone-style`** holds the two ALWAYS-READ style cards, `tone-voice-rules` and
+  `term-mapping-table` (the anti-Chinglish 晶晶體 用語對照表): read both by key once per run
+  (Step 5); every draft must follow them.
 
 > **Label gotcha (learned the hard way):** the Gmail labels are *nested*, so the leaf name alone
 > (`label:"[3.8] Support"`) matches **nothing** — use the full path
@@ -180,17 +213,29 @@ and match the language of the inquirer's **most recent** message.
 
 ---
 
-## Step 4 — Identify the intent
+## Step 4 — Walk the 知識庫, then identify the intent
 
-For each question the inquirer asked, classify it into **exactly one section** of the KB taxonomy
-(call `mcp__zynkr__list_kb_sections` once per run for the live list + aliases). Pick the **most
-specific** fit, and judge by what the *answer* would be:
+**Once per run, before the first thread, walk the 知識庫's keys:**
+`mcp__zynkr-atlas__list_knowledge(collection: "kb", max_chars: 60000)`. While `truncated` is
+true, call it again with `after` set to `next_after` (same collection and budget). Every key the
+pages list is **the set**: the 知識庫's sections (kind `collection`) and its cards. Only a note in
+the set, or a company fact that a card in it cites, may be quoted in a reply.
 
-- "How much for in-house team training?" → `pricing-quoting` if the answer is a rate;
-  `team-training-enterprise` if the answer is program scope.
+If a page fails, Atlas cannot be reached, or an answer arrives cut off (no `truncated` at its
+end), the set is unknown: **quote nothing this run**. Every thread gets a holding reply (Step 6),
+and the report says the walk failed. Never fall back to the CRM, the Drive copy or memory. If a
+page says `depth_limited`, the cards it could not list are outside the set; name that in the
+report.
+
+Then, for each question the inquirer asked, classify it into **exactly one section**: one of the
+set's `collection` rows, by key and title. Pick the **most specific** fit, and judge by what the
+*answer* would be (when the fit is unclear, read the section's note for its aliases):
+
+- "How much for in-house team training?" → `kb.pricing-quoting` if the answer is a rate;
+  `kb.team-training-enterprise` if the answer is program scope.
 - One thread can yield **multiple** intents (e.g. a pricing Q + a scheduling Q) — split them; each
   gets its own retrieval pass.
-- If nothing fits, tag `other` — but flag it in the summary so /zynkr-kms can consider a new section.
+- If nothing fits, tag `kb.other` — but flag it in the summary so /zynkr-kms can consider a new section.
 
 ---
 
@@ -198,19 +243,23 @@ specific** fit, and judge by what the *answer* would be:
 
 Retrieval is **search-first**, cheap, and repeatable — run it per question:
 
-1. **Once per run**: fetch the two ALWAYS-READ style cards —
-   `mcp__zynkr__get_kb_article("tone-voice-rules")` and
-   `mcp__zynkr__get_kb_article("term-mapping-table")`. Every draft follows their voice rules and
-   the 用語對照表 term mappings (they kill 晶晶體 Chinglish).
-2. **Search**: `mcp__zynkr__search_kb` with 2–4 key terms from the question — nouns and
-   product-specific words, **bilingual** (pricing→報價 費用 price cost; skip filler: "how", "請問",
-   "可以"). Broaden by dropping a term or trying synonyms if the first pass is thin.
-3. **Fetch**: `mcp__zynkr__get_kb_article` on the best 1–3 hits. A qa card arrives with its cited
-   fact cards resolved inline — that's the full answer, current numbers included. A fact card hit
+1. **Once per run**: read the two ALWAYS-READ style cards by key —
+   `mcp__zynkr-atlas__get_knowledge(key: "tone-voice-rules")` and
+   `mcp__zynkr-atlas__get_knowledge(key: "term-mapping-table", max_chars: 60000)` (the table is
+   long). Every draft follows their voice rules and the 用語對照表 term mappings (they kill
+   晶晶體 Chinglish).
+2. **Search**: `mcp__zynkr-atlas__search_knowledge` with **one or two words** from the question —
+   nouns and product-specific words. Every word of a query must appear in a card, so keep zh and
+   EN in separate queries (`報價`, then `price`) and skip filler ("how", "請問", "可以"). Broaden
+   by dropping a word or trying a synonym if the first pass is thin. **Drop every hit whose key is
+   not in the set:** Atlas holds more than the 知識庫.
+3. **Fetch**: `mcp__zynkr-atlas__get_knowledge` on the best 1–3 hits, then follow each card's
+   「Cites」 line: read every cited key with `get_knowledge`. For a qa card, that is where the
+   numbers are. A cited `company.…` fact gives its value on its `value:` line. A fact card hit
    gives you the canonical numbers directly.
-4. **Weak or ambiguous results → browse the section**: `mcp__zynkr__list_kb_articles` with the
-   intent's `section_id` (from `list_kb_sections`) and scan titles for the closest question, then
-   fetch it. If the intent was ambiguous, re-classify and try the other section the same way.
+4. **Weak or ambiguous results → browse the section**: scan the set's rows filed in the intent's
+   section (`part_of` = its key) by title for the closest question, then fetch it. If the intent
+   was ambiguous, re-classify and try the other section the same way.
 
 **The KB is the only source of truth.** Don't pad answers with generic "best practice" advice that
 isn't in the KB — Peter wants drafts that sound like *him*, not a generic support bot.
@@ -240,7 +289,10 @@ row (e.g. never "discovery call" in zh-TW — 「線上會議」). Contractions 
 first-time inquirers, 你 only if already on first-name terms. Avoid corporate jargon ("we strive
 to", "as per our policy").
 
-### Low confidence (KB missing / only partial) → holding reply + notify Peter
+### Low confidence (KB missing / only partial / walk failed) → holding reply + notify Peter
+
+This is also every thread's reply when the walk in Step 4 failed or Atlas cannot be reached: the
+`[[NEEDS PETER]]` block then says so instead of listing searches.
 
 The reply must be sendable as-is if Peter approves, but Peter must see what's missing. Structure:
 
@@ -255,8 +307,9 @@ one · "Delete this block before sending."
 
 ```
 [[NEEDS PETER:
-- Inquirer asked about enterprise SSO pricing — searched "SSO", "enterprise", "SAML", "企業";
-  checked pricing-quoting + core-facts, no enterprise-tier fact card
+- Inquirer asked whether the course platform supports SSO login for their team — searched
+  「SSO」, 「單一登入」, then "SAML"; checked kb.access-account + kb.technical-howto, no card
+  covers it
 - Guess: route to a sales conversation, not self-serve
 - Delete this block before sending
 ]]
@@ -317,6 +370,9 @@ Processed N threads (Support + website forms):
   - [Subject] — [sender] — [Inbound Sales label | AI 顧問服務 inquiry]
 ```
 
+Link each card used as `https://atlas.zynkr.ai/w/<workspace>/knowledge/<key>` (Resources). If
+the walk failed or Atlas could not be reached, say so on the first line, before the counts.
+
 If everything was confident with no NEEDS PETER items, just say so plainly. Also surface when
 relevant: **labels not applied** (label searches empty, fallback found threads → suggest a Gmail
 filter); **sales leads** (a website form under another interest that reads like a consulting lead → mention /sales-inbound).
@@ -343,9 +399,12 @@ half is making sure the same question never goes unanswered again.
    and on his go-ahead, invoke **/zynkr-kms** with that thread (the `Skill` tool, or surface it for
    Peter to run). Pass along: the thread link, the inquirer's question, and Peter's answer.
 3. **/zynkr-kms does the write side** — it reasons about intent → which section → whether a new
-   fact card is needed, proposes the card, and on Peter's approval writes it via
-   `create_kb_article` / `update_kb_article` (creating a new section first if the intent has
-   none). It then marks the thread `KMS-ingested` so it isn't re-learned.
+   fact card is needed, proposes the card, and on Peter's approval drafts it into the 知識庫,
+   filed in its section and linked to the facts it cites. A correction to an existing card goes
+   to Peter as a packet he applies in Atlas. It then marks the thread `KMS-ingested` so it isn't
+   re-learned.
+4. **Peter publishes the draft in Atlas.** A draft is never served: until he publishes it, this
+   skill cannot find it.
 
 Result: the gap this skill flagged becomes a KB card, and the next time that question arrives,
 Step 5 finds it and Step 6 drafts a confident reply. **You (read) and /zynkr-kms (write) share one
@@ -365,10 +424,16 @@ curating the KB is /zynkr-kms's job.
 - **Cite, don't restate-and-drift:** the canonical numbers live in fact cards. Resolve a cited
   fact into the reply, but if a qa card's body and its cited fact ever disagree, **trust the fact
   card** and flag the mismatch for /zynkr-kms.
-- **Check card freshness:** cards carry a last-verified date and may carry flags like `HELD` or
-  `NEEDS_PETER` — a flagged card is NOT a confident source; treat it as a gap.
+- **Check card freshness:** `get_knowledge` shows each card's last-verified date. A card whose
+  footer has a `Flags:` line naming `HELD`, `NEEDS_PETER` or `VOLATILE`, or an `Unverify note:`
+  line, is NOT a confident source; treat it as a gap. That holds for a published card too: a flag
+  stays until Peter takes it out. (`always-read` marks the two style cards and is no warning.)
+- **Only the set counts:** a search hit whose key the walk did not list — another collection's
+  note, a skill's note, a company fact found by search alone — is never quoted.
+- **No fallback:** when Atlas cannot be reached, never read the CRM's old 知識庫, the Drive copy or
+  memory instead. Holding replies only.
 - **The Google Drive KB copy is a backup mirror, not a source** — never pull answers from it; the
-  platform KB is the source of truth and the mirror can lag it.
+  Atlas 知識庫 is the source of truth and the mirror can lag it.
 - **Website-form notifications:** reply goes to the customer email in the body, as a fresh email (no
   `thread_id`). In-thread replies silently email `website@zynkr.ai`.
 - **Don't reply on threads Peter already replied to** — Step 2 inspection is the real filter, not the
@@ -378,9 +443,10 @@ curating the KB is /zynkr-kms's job.
 - **Spam / out-of-scope** (vendor pitch, recruiter) → skip, don't draft; mention it in the summary.
 - **One draft per thread.** If a draft already exists, don't create a second — list it as
   already-drafted.
-- **Search-first, don't bulk-read.** `search_kb` + a few `get_kb_article` fetches is the standard
-  read. If you find yourself paging through whole sections for every thread, re-classify the
-  intent or improve your search terms instead.
+- **Search-first, don't bulk-read.** `search_knowledge` + a few `get_knowledge` reads is the
+  standard read; the walk lists keys only, once per run. If you find yourself reading whole
+  sections card by card for every thread, re-classify the intent or improve your search words
+  instead.
 
 ---
 
@@ -388,7 +454,9 @@ curating the KB is /zynkr-kms's job.
 
 If retrieval comes up empty for every thread, draft holding replies for everything with
 `[[NEEDS PETER]]` blocks (this is still useful triage) and tell Peter in the summary — that's a
-signal the KB has a coverage gap that /zynkr-kms should fill once he answers.
+signal the KB has a coverage gap that /zynkr-kms should fill once he answers. If it came up empty
+because Atlas could not be reached or the walk failed, say that instead: the gap is the
+connection, not the 知識庫.
 
 ## House style
 

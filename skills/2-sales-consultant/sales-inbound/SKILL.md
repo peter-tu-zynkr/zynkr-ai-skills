@@ -29,6 +29,9 @@ output: "Per real lead: a CRM deal and a first-reply Gmail draft; proposals list
 synergy:
   - "sales-outbound"
   - "zynkr-support"
+reads:
+  - "kb"
+  - "company.sales-pipeline-rules"
 house-style: bound
 
 ---
@@ -51,6 +54,27 @@ back to a finished pipeline. Because it writes real CRM records and Gmail drafts
 the safety comes from being *idempotent* — it skips tests and skips any lead that
 already has a deal, so re-running the same week never creates duplicates. A reply
 is only ever a draft: Peter reads it and sends it himself.
+
+## Configuration
+
+A first reply may state a price or scope only from a **知識庫** this skill does not ship.
+
+1. **Why it is withheld:** the cards are the company's own — its prices, policies and past
+   answers — and they change every week, so a copy in this file would be out of date the day it
+   shipped.
+2. **The configure slot:** the `zynkr-atlas` MCP server, connected with an Atlas token of your
+   workspace, and that workspace's published collection `kb`.
+3. **What the 知識庫 must contain:** a published collection keyed `kb`; under it, one collection
+   per section (`kb.<slug>`); in the sections, `fact` notes for the canonical prices and policies
+   and `reference` notes (one per resolved question) that cite the facts they rest on.
+4. **The Zynkr default:** the `kb` collection of Zynkr's own Atlas workspace. There is nothing to
+   fill in: a token of that workspace is the whole setup.
+5. **Not found:** if Atlas cannot be reached, the token reads no `kb` collection, or the walk in
+   step 5 cannot finish, the run still logs every lead and drafts every reply, but each price or
+   scope answer becomes a holding line with a `[[NEEDS PETER]]` block, and the report says why.
+   Never fall back to another knowledge base, the Drive copy or memory.
+6. **Loaded at run time:** the skill reads it on every run; nothing from it is copied into this
+   file.
 
 ## One owner per inbox
 
@@ -258,10 +282,26 @@ and say so in the report.
   call (the fixed slot block, house wording), mirror their own words, add one short
   paragraph of substance before the ask, match their language, and sign off as Peter.
   Run only those two steps: its step 4 inserts a new deal, and this lead already has one.
-- **What it may say about price or scope.** Only what the Zynkr 知識庫 states
-  (`mcp__zynkr__search_kb`, then `mcp__zynkr__get_kb_article`). When the answer isn't
-  there, write a holding line with a `[[NEEDS PETER: what is missing]]` block on top
-  instead of a guessed number — the same rule /zynkr-support follows.
+- **What it may say about price or scope.** Only what the 知識庫 in Zynkr Atlas states,
+  read on the `zynkr-atlas` MCP server the way /zynkr-support reads it:
+  1. **Once per run, walk its keys:** `mcp__zynkr-atlas__list_knowledge(collection: "kb",
+     max_chars: 60000)`, called again with `after` set to `next_after` while `truncated`
+     is true. Every key the pages list is **the set**. A failed page, or an answer cut off
+     with no `truncated` at its end, is a failed walk.
+  2. **Search, then read:** `mcp__zynkr-atlas__search_knowledge` with one or two words,
+     zh and EN in separate queries (`報價`, then `price`), dropping every hit whose key is
+     not in the set; then `mcp__zynkr-atlas__get_knowledge` on the best hits and on every
+     key a card's 「Cites」 line names. A qa card's numbers are in the facts it cites, and a
+     cited `company.…` fact gives its value on its `value:` line.
+  3. **Only the text, only a sure card.** Quote only what sits above a card's `---` line:
+     its footer (`Keywords:`, `source_type:`, `Flags:`, `Unverify note:`) is never reply
+     material, and `source_type:` can hold a Gmail thread link. A card whose footer has a
+     `Flags:` line naming `HELD`, `NEEDS_PETER` or `VOLATILE`, or an `Unverify note:` line,
+     is not a sure source: treat it as no card (`always-read` is no warning).
+  4. **No card, no number.** When the answer isn't there, or the walk failed or Atlas
+     cannot be reached (no fallback to the CRM or the Drive copy), write a holding line with
+     a `[[NEEDS PETER: what is missing]]` block on top instead of a guessed number — the
+     same rule /zynkr-support follows.
 - **Create a draft, never send.** Confirm the draft exists and that `in:sent` holds
   nothing new to that address before you report.
 
@@ -281,7 +321,8 @@ inquiry, including the skipped ones so nothing is silently dropped:
 ```
 
 Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
-any `[[NEEDS PETER]]` drafts, and state the headline in prose (e.g. "Created 2 deals +
+any `[[NEEDS PETER]]` drafts (and, when the 知識庫 walk failed, that it did, so every price
+answer waited), and state the headline in prose (e.g. "Created 2 deals +
 2 reply drafts; skipped 1 test and 1 already-processed; 1 proposal waiting for you").
 
 ---

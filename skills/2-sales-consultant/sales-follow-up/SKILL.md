@@ -91,6 +91,7 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
   to the condensed copy in step 4 and say so in the report. **If the two disagree, the Doc
   wins** — and flag that the condensed copy needs re-syncing.
 - **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 知識庫, 工作指南, 名單拓展, 情境工程 engine, pricing). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it.
+- **Pricing page**: `https://zynkr.ai/crm-pricing` — the source of truth for plan prices (Plus, team). Fetch it before a mail names a price; never quote one from memory or from an older copy of this file.
 - **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
 - Never hardcode a user id (`auth.uid()` is NULL over MCP/SQL). The Zynkr MCP resolves the author itself — an activity written through it is authored by **the token's own user**, which for Peter's token is Peter.
 - **Do NOT log the follow-up email as a CRM activity.** Peter's Gmail is synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row. The **demo** is different — it isn't in Gmail, so the demo `note` is legitimately yours to write.
@@ -189,7 +190,8 @@ Follow-up-specific beats, in order:
 - **Say one thing we cannot do**, with the reason, before they ask — §八 requires this in every
   long mail. Pair it with one pressure-release line (「不用急著決定」).
 - **Convert** — one prose line naming Zynkr CRM and carrying `https://zynkr.ai/crm` + 免費開始 · 免綁信用卡.
-  Name Plus (NT$300/月) or team pricing only as the level-up, never as the ask. Never paste a
+  Name Plus or team pricing only as the level-up, never as the ask, and only at the price
+  `https://zynkr.ai/crm-pricing` shows that day — never one from memory. Never paste a
   feature table into the mail — link it instead.
 - **Sales-kit line** — end with 「先附上 Zynkr 的介紹資料給你參考」 so Peter's manually-attached kit
   reads naturally.

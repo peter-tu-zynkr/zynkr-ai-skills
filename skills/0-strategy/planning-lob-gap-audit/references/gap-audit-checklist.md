@@ -86,7 +86,7 @@ names a human 負責人 who accepts the result.
 | Tracker cells stale (dates `YYYY-MM-DD`, 掛 All, slipped 狀態) — nudge the owner | `planning-tracker-sync` (nudges); the owner edits the cell |
 | Local `_INDEX.md` line for a new / renamed / retired Doc | `admin-governance` |
 | GM Knowledge Directory entry + ⤴ backlink for a new core doc | 手動 (this skill prints the suggested entry; nobody automates the hub) |
-| Support / customer-facing facts and Q&A that belong in the platform 知識庫 | `zynkr-kms` |
+| Support / customer-facing facts and Q&A that belong in the 知識庫 (Atlas, collection `kb`) | `zynkr-kms` |
 | Consulting engagement artefacts (BRD / UAT / session notes) | `consult-brd-writer` · `gtm-uat-writer` · `consult-session-notes` |
 | A process the SOP should carry as a diagram | `ops-workflow-design` |
 | `[SUPERSEDED]` renames + banners · new SOP / doctrine bodies · role-doc rewrites | 手動 or 可交 Claude one-off pass (no owning skill — say so) |

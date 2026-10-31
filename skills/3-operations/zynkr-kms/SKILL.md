@@ -4,109 +4,180 @@ sheetId: "3.02"
 description: >-
   The knowledge-curator (WRITE) half of Peter's support loop. After a support /
   inbound-sales ticket is resolved it reads the thread, learns Peter's actual answer and — only
-  after Peter approves — writes it as a clean, LLM-friendly card into the **Zynkr platform 知識庫**
-  (platform.zynkr.ai/kb, via the `zynkr` MCP server; the single source of truth): canonical
-  numbers and policies become `fact` cards with a stable `fact_id`, answers become `qa` cards that
-  CITE those facts instead of restating numbers. After every approved write it mirrors the change
-  one way to the Google Drive backup (`[3.2] 客服知識庫 (KMS)`, one Doc per section plus a JSON
-  snapshot), which is never authoritative. Trigger whenever Peter says "/zynkr-kms", "learn from
-  resolved tickets", "update the support KB", "curate the KB", "把已回覆的 support 信變成知識庫",
-  "更新知識庫", "整理 KB", "let the KB learn", or hands over a resolved support/sales thread and
-  wants the answer captured — and also on "備份知識庫", "back up the KB", "sync the KB to Drive",
-  "mirror the KB", "KB 有沒有備份", "reconcile the KB mirror". This is the WRITE side;
-  /zynkr-support is the READ side.
+  after Peter approves — drafts it as a clean, LLM-friendly card in the **知識庫** in Zynkr Atlas
+  (the published collection `kb`, via the `zynkr-atlas` MCP server; the single source of truth):
+  each draft is filed in its section and linked to the facts it cites, and serves no one until
+  Peter publishes it in Atlas. Canonical numbers and policies become `fact` cards; answers become
+  reference cards that CITE those facts instead of restating numbers; a change to a published card
+  goes to Peter as a correction packet. Every run it first catches the Google Drive backup
+  (`[3.2] 客服知識庫 (KMS)`, one Doc per section plus a JSON snapshot) up with Atlas, one way.
+  Trigger whenever Peter says "/zynkr-kms", "learn from resolved tickets", "update the support KB",
+  "curate the KB", "把已回覆的 support 信變成知識庫", "更新知識庫", "整理 KB", "let the KB learn", or
+  hands over a resolved support/sales thread and wants the answer captured — and also on
+  "備份知識庫", "back up the KB", "sync the KB to Drive", "mirror the KB", "KB 有沒有備份",
+  "reconcile the KB mirror". This is the WRITE side; /zynkr-support is the READ side.
 category: operations
 project: zynkr-kms
 platform: claude
 status: WIP
 visibility: public
 author: Peter Tu
-input: "Resolved Support／Inbound-Sales Gmail threads (or one Peter specifies); the KB is the Zynkr platform 知識庫 (SOT), mirrored one-way to a Google Drive backup"
-process: "Pull resolved, not-yet-ingested threads → extract Peter's answer (PII-stripped) → classify intent / target section / fact-vs-qa → propose for approval → write facts before citing qa cards → mirror touched sections + snapshot to Drive → mark KMS-ingested"
-output: "Approved cards land in the matching platform 知識庫 section (SOT); touched sections + _KB-SNAPSHOT.json are re-mirrored to the Google Drive backup; source thread marked KMS-ingested"
+input: "Resolved Support／Inbound-Sales Gmail threads (or one Peter specifies); the 知識庫 is the `kb` collection in Zynkr Atlas (SOT), mirrored one-way to a Google Drive backup"
+process: "Mirror catch-up → pull resolved, un-ingested threads → extract Peter's answer (PII-stripped) → classify section and fact vs reference → propose for approval → draft filed, linked cards (facts first) → correction packets → label threads once published"
+output: "Filed, linked drafts in Atlas 審核; correction packets for Peter; the Drive backup caught up (changed Docs + snapshot); threads labelled KMS-ingested once published"
 synergy: ["zynkr-support"]
+reads: ["kb", "tone-voice-rules", "term-mapping-table", "company.contact-email"]
 house-style: bound
 
 ---
 
-# Zynkr KMS — Support Knowledge Curator (platform KB + Drive mirror)
+# Zynkr KMS — Support Knowledge Curator (Atlas 知識庫 + Drive mirror)
 
 ```bash
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill zynkr-kms
 ```
 
-`/zynkr-support` *reads* the platform 知識庫 to draft replies. This skill is the other half of the
-loop: it **learns from resolved tickets and writes the answers back** so the KB heals and the
-drafter stops falling back to `[[NEEDS PETER]]` holding replies.
+`/zynkr-support` *reads* the 知識庫 to draft replies. This skill is the other half of the loop: it
+**learns from resolved tickets and drafts the answers back** so the 知識庫 heals and the drafter
+stops falling back to `[[NEEDS PETER]]` holding replies.
 
 You think like a **KMS specialist**, not a transcriber. For every resolved thread you reason
-through three lenses before anything is written:
+through three lenses before anything is drafted:
 
 1. **Intent taxonomy** — what *kind* of question is this?
-2. **Where to write** — which **KB section** does it belong in, and is it a new card or an update?
-3. **Structure for the LLM** — a canonical `fact` card, or a `qa` card that cites facts?
+2. **Where it goes** — which **section** does it belong in, and is it a new card or a change to one?
+3. **Structure for the LLM** — a canonical `fact` card, or a reference card that cites facts?
 
-The golden rule: **extract, never invent.** KB facts come only from what Peter actually wrote. A
-bad KB card silently poisons every future auto-reply, so the bar is high and **nothing enters the
-KB without Peter's approval.**
+The golden rule: **extract, never invent.** Facts come only from what Peter actually wrote. A bad
+card silently poisons every future auto-reply, so the bar is high and **nothing enters the 知識庫
+without Peter twice**: he approves the proposal here (Step 4), and he publishes each draft in Atlas.
 
 > **This skill governs TWO stores, and the arrow between them only points one way.**
 >
 > ```
-> Zynkr platform KB  ──(mirror)──▶  Google Drive Docs
->    (writable SOT)                  (read-only backup)
+> Zynkr Atlas 知識庫 (collection kb)  ──(mirror)──▶  Google Drive Docs
+>   (SOT · drafts wait in 審核)                       (read-only backup)
 > ```
 >
-> - **Zynkr platform 知識庫** (Supabase-backed, `https://platform.zynkr.ai/kb`, via the `zynkr`
->   MCP server) — the **only writable KB** and the single source of truth. `/zynkr-support`
->   reads this, never the mirror.
-> - **Google Drive** `[3.2] 客服知識庫 (KMS)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) — the
->   **backup mirror**: one Doc per section plus a full-fidelity `_KB-SNAPSHOT.json`. Rewritten
->   from the platform on every run (Step 6). Never authoritative, never read back into the KB;
->   a human edit made there is destroyed on the next mirror. If the two disagree, the platform
->   is right.
+> - **Zynkr Atlas** (`https://atlas.zynkr.ai`, the `zynkr-atlas` MCP server) — the source of
+>   truth: the published collection `kb`, one collection per section under it (`kb.<slug>`), the
+>   cards filed in those. This skill writes **drafts only**; a person publishes them in Atlas's
+>   審核. `/zynkr-support` and `/sales-inbound` read the published cards, never the mirror.
+> - **Google Drive** `[3.2] 客服知識庫 (KMS)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) — the **backup
+>   mirror**: one Doc per section plus a restore copy, `_KB-SNAPSHOT.json`. Rewritten from Atlas at
+>   the start of every run (Step 0). Never authoritative, never read back into Atlas; a human edit
+>   made there is destroyed on the next mirror. If the two disagree, Atlas is right.
+
+## Configuration
+
+This skill drafts into a **知識庫** it does not ship.
+
+1. **Why it is withheld:** the cards are the company's own — its prices, policies and past
+   answers — and they change every week, so a copy in this file would be out of date the day it
+   shipped.
+2. **The configure slot:** the `zynkr-atlas` MCP server, connected with an Atlas token of your
+   workspace minted with 「可以建立草稿」, and that workspace's published collection `kb`. The Drive
+   mirror (Step 0) takes a second token, minted with 「可以匯出知識（給鏡像用）」 alone, in
+   `~/.config/zynkr/kb-mirror.env`, and a Drive folder of your own.
+3. **What the 知識庫 must contain:** a published collection keyed `kb`; under it, one collection
+   per section (`kb.<slug>`); in the sections, `fact` notes for the canonical numbers and policies
+   and `reference` notes (one per resolved question) that cite the facts they rest on; and two
+   style cards keyed `tone-voice-rules` and `term-mapping-table`.
+4. **The Zynkr default:** the `kb` collection of Zynkr's own Atlas workspace and the `[3.2]
+   客服知識庫 (KMS)` folder. There is nothing to fill in beyond the two tokens.
+5. **Not found:** if Atlas cannot be reached, the token reads no `kb` collection, or the walk in
+   Step 3 cannot finish, draft nothing: go straight to Step 7, label only what Step 0's
+   `pending_published` names, and report why. Never write to another knowledge base, the Drive
+   copy or memory instead. A mirror that cannot run (no export token, a refusal) is reported, and
+   the run goes on: the mirror is a backup. Steps 1–7 need only the manifest Step 0 downloads.
+6. **Loaded at run time:** the skill reads it on every run; nothing from it is copied into this
+   file.
 
 ---
 
 ## Resources you'll use (fixed facts — don't re-derive)
 
-- **KB access** — the **`zynkr` MCP server** (the platform's own MCP at `platform.zynkr.ai`,
-  authenticated as Peter's workspace). The tools you'll use:
-  - `mcp__zynkr__list_kb_sections` — the live section vocabulary (run this first)
-  - `mcp__zynkr__search_kb` / `mcp__zynkr__list_kb_articles` — dedupe & lookup
-  - `mcp__zynkr__get_kb_article` — fetch one card by uuid **or by `fact_id`** (qa cards resolve
-    their cited facts inline)
-  - `mcp__zynkr__create_kb_article` / `mcp__zynkr__update_kb_article` — the write pair
-  - `mcp__zynkr__create_kb_section` — only for a Peter-approved NEW intent category
-- **Write safety** — the write tools are preview-by-default: called without `confirm` they return a
-  dry-run. Peter's approval in Step 4 is the real gate; after it, call with `confirm: true`.
-- **KB UI** (for links in your summary): `https://platform.zynkr.ai/kb`
+- **知識庫 access** — the **`zynkr-atlas` MCP server**. The tools you'll use:
+  - `mcp__zynkr-atlas__list_knowledge` — the walk: the sections and every published card, by key,
+    without text (Step 3)
+  - `mcp__zynkr-atlas__search_knowledge` — dedupe by words
+  - `mcp__zynkr-atlas__get_knowledge` — read one card, with its 「Part of」 and 「Cites」 lines
+  - `mcp__zynkr-atlas__draft_note` — the only write: a NEW draft, filed under its section
+    (`collection`) and linked to the published notes it cites (`cites`)
+  - `mcp__zynkr-atlas__whoami` — the workspace's slug, for links
+- **What this skill can never do over MCP** — edit, publish, archive or verify a published card,
+  or touch a company fact (`company.*`). A change to a published card is a **correction packet**
+  for Peter (Step 5c); publishing is his act in 審核.
+- **Links** — a card: `https://atlas.zynkr.ai/w/<workspace-slug>/knowledge/<key>`; the 知識庫:
+  `https://atlas.zynkr.ai/w/<workspace-slug>/knowledge`; 審核: `https://atlas.zynkr.ai/w/<workspace-slug>/review`.
+  The slug is the one `whoami` names (Zynkr's is `zynkr`).
 - **Google account**: `<your-google-workspace-account>` — **MCP server `google-workspace`** for all Gmail tools.
-  Gmail is still where tickets live; only the KB moved.
+  Gmail is still where tickets live; only the 知識庫 moved.
 - **Source labels** (nested — use the **full path**):
   - Support: `[3] Operation/[3.8] Support`
   - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales`
-- **Ingest-ledger label**: `KMS-ingested` — applied once a thread's answer is in the KB. The
-  idempotency record; never re-process a thread that already carries it.
+- **Ingest-ledger label**: `KMS-ingested` — applied once a thread's answer is **published** in the
+  知識庫. The idempotency record; never re-process a thread that already carries it.
 - **Drive mirror** (the backup half — full mechanics in `references/drive-mirror.md`):
   - Folder `[3.2] 客服知識庫 (KMS)` — `1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`
-  - `scripts/kb-drive-mirror.mjs` — renders the KB to Markdown locally (read-only; needs
-    `--workspace`, see below). Card bodies stay on disk, out of context.
+  - `scripts/kb-drive-mirror.mjs` (v2) — reads the `kb` collection through Atlas with the export
+    token and renders it locally; never uploads. Card bodies stay on disk, out of context.
+  - The working folder `~/.workspace-mcp/attachments/kb-mirror/` — the `google-workspace` MCP only
+    uploads from under `~/.workspace-mcp/attachments/`. Every run first downloads Drive's
+    `_MANIFEST.json` and `_KB-SNAPSHOT.json` into it (Step 0) and builds on those. Pass it as an
+    absolute path.
   - `mcp__google-workspace__update_drive_file` — uploads in place by Doc ID (`source_format: "md"`
     converts Markdown → native Doc and **keeps the Doc ID**)
-  - ⚠️ **Your workspace is `<your-crm-workspace-id>`.** `crm_kb_*` is a shared
-    multi-tenant table whose other tenants have `nn`-colliding sections; an unscoped read mirrors
-    their cards into Peter's Drive. `mcp__zynkr__list_kb_sections` is already workspace-scoped.
-
-    > **`<your-crm-workspace-id>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.crm-workspace-id`, on the `zynkr-atlas` MCP server; the value is the `value:` line) and pass it as `--workspace`. If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run with the blank still in it.
-  - ⚠️ The `google-workspace` MCP only accepts local paths under
-    `~/.workspace-mcp/attachments/` — stage rendered files there before uploading.
+  - ⚠️ **The export token is a secret.** It lives in `~/.config/zynkr/kb-mirror.env`
+    (`ATLAS_MCP_TOKEN=…`, `chmod 600`), minted by the owner with 「可以匯出知識（給鏡像用）」 and
+    nothing else, renewed every 90 days. Never print it, paste it into chat, or put it on a
+    command line; the script reads the file itself.
 - **Companion files**:
   - `references/intent-taxonomy.md` — intent categories, aliases, and the intent → section map
-  - `references/entry-schema.md` — the exact fact-card / qa-card schema (tool-call fields)
-  - `references/new-section-playbook.md` — how to add a **new section** for a new intent
-  - `references/drive-mirror.md` — the Drive backup: arrow of truth, Doc-ID registry, how to run
-    a mirror or a full reconcile, and how to restore from the snapshot
+  - `references/entry-schema.md` — the card shapes: what `draft_note` takes, the body and its
+    footer, the correction packet
+  - `references/new-section-playbook.md` — how a **new section** is drafted and published
+  - `references/drive-mirror.md` — the Drive backup: arrow of truth, Doc-ID registry, how a run
+    goes, how to verify it, and how to restore from the snapshot
+
+---
+
+## Step 0: Catch the Drive mirror up (every run)
+
+Peter publishes drafts in Atlas between runs, so the mirror starts every run by catching up.
+`/zynkr-kms mirror` (or "back up the KB", "sync the KB to Drive") is this step alone, in full.
+How a run goes, the Doc registry and the checks: `references/drive-mirror.md`.
+
+1. **Download Drive's pair** over the working folder's copies — every run, on every machine:
+   `_MANIFEST.json` (`1I0fE1bId4s5pXmQFWbwioSz0WQBUMBoM`) and `_KB-SNAPSHOT.json`
+   (`1UbDlalP9rP3s0LxitM5q9GMplw3qvLm7`), each with
+   `mcp__google-workspace__get_drive_file_download_url`, then copy the saved file in. Drive's pair
+   is the record; the local copies may be another machine's, or a stopped run's. If a download
+   fails, stop and report it: Steps 1–7 read and write the manifest's `pending[]`.
+2. **Render** —
+   `node scripts/kb-drive-mirror.mjs --out <absolute path of ~/.workspace-mcp/attachments/kb-mirror>`
+   (add `--full` for `/zynkr-kms mirror`). It reads Atlas with the export token, writes only the
+   working folder, and decides by itself when a run must be full.
+3. **Read its JSON summary**: `upload[]` names the files to upload; `pending_published` names the
+   drafts that are published and still in `pending[]`, each with its Gmail `thread` (Step 7 labels
+   those, then drops them); `removed`, `removed_sections` and `orphans` go to the report.
+4. **Check who can read** — `mcp__google-workspace__get_drive_file_permissions` on the folder
+   (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`) and on each file before you write it: no `anyone` link, no
+   domain grant, and every named reader a member of the Atlas workspace (ask when you cannot tell).
+   The mirror copies team-only text; whatever reads wider gets nothing written — say so.
+5. **Upload** every file in `upload[]`, in its order, in place, each Doc found in the registry **by
+   its section key** — never by the number in its file name — with
+   `mcp__google-workspace__update_drive_file` (`file_path`, `source_format: "md"`, `name` = the
+   entry's `doc_title`); the two JSON files as `application/json`, never converted to Docs. A
+   section with no Doc yet gets one with `mcp__google-workspace__import_to_google_doc`; add its ID
+   to the registry. A key in `removed_sections` keeps its Doc: tell Peter, never delete it. **Stop
+   at the first file that fails or is skipped** and upload nothing after it — never the two JSON
+   files — so Drive's pair never claims a Doc it does not hold.
+6. **If it exits 1**, upload nothing, put the line it printed in the report and go on with Step 1
+   (the queue).
+   A refusal rewrote nothing; after a failed write, the next run's download replaces what it left.
+   A line naming `ATLAS_MCP_TOKEN` means the env file is missing, malformed, expired or revoked —
+   Peter mints a new token; never work around it.
 
 ---
 
@@ -131,8 +202,11 @@ website inquiries too):
 from:website@zynkr.ai -label:KMS-ingested newer_than:90d
 ```
 
-Dedupe by thread ID. If nothing comes back, tell Peter the KB is already up to date and stop.
-Otherwise list what you found (subject · sender · queue) and say you're reviewing N threads.
+Dedupe by thread ID. A thread named in the working folder's `_MANIFEST.json` `pending[]` (its
+`thread`) already has a draft — waiting in 審核, or published and not yet labelled (Step 7): list
+it as such and do not re-process it. If nothing is left, tell Peter the 知識庫 is already up to
+date and stop. Otherwise list what you found (subject · sender · queue) and say you're reviewing N
+threads.
 
 ---
 
@@ -162,234 +236,268 @@ For each learnable thread, extract:
 - **Never invent or "improve" facts.** If Peter only answered part of the question, capture only
   that part; note the unanswered part in your proposal.
 - **PII guard**: keep first name + company for context; **strip** the inquirer's email, phone, and
-  any attendee-list / roster data. None of it reaches the KB.
+  any attendee-list / roster data. None of it reaches the 知識庫.
 
 ---
 
 ## Step 3: Apply the three lenses → draft a proposed card
 
-Start by calling `mcp__zynkr__list_kb_sections` once — it returns the live section vocabulary
-(slug, title, aliases, section `id`). For each question you extracted:
+**Once per run, before the first thread, walk the 知識庫's keys:**
+`mcp__zynkr-atlas__list_knowledge(collection: "kb", max_chars: 60000)`. While `truncated` is
+true, call it again with `after` set to `next_after` (same collection and budget). Every key the
+pages list is **the set**: the sections (kind `collection`, filed under `kb`) and their cards, each
+with its title, the section it is filed in and the keys it cites. The sections in the set are the
+live vocabulary; `references/intent-taxonomy.md` says what each covers. If a page fails or an answer
+arrives cut off (no `truncated` at its end), the set is unknown: draft nothing this run
+(Configuration, point 5).
+
+For each question you extracted:
 
 ### Lens 1 — Intent taxonomy
-Classify into the best-fit section from `references/intent-taxonomy.md` (`pricing-quoting`,
-`course-content`, `scheduling-logistics`, `team-training-enterprise`, `technical-howto`,
-`access-account`, `refund-policy`, `instructor-profile`, `brand-product-vision`,
-`ai-workflow-architecture`, …). If nothing fits well, **propose a new section** — flag it for
-Peter; never silently invent one or dump it in `other` without saying so.
+Classify into the best-fit section from `references/intent-taxonomy.md` (`kb.pricing-quoting`,
+`kb.course-content`, `kb.scheduling-logistics`, `kb.team-training-enterprise`,
+`kb.technical-howto`, `kb.access-account`, `kb.refund-policy`, `kb.instructor-profile`,
+`kb.brand-product-vision`, `kb.ai-workflow-architecture`, …). If nothing fits well, **propose a
+new section** — flag it for Peter; never silently invent one or dump it in `kb.other` without
+saying so.
 
 > **Style rules are not Q&A.** When Peter gives a **tone / wording / term** rule (e.g.
-> `parachute`→「和團隊諮詢、觀察流程」, `discovery call`→「線上會議」), it belongs in the
-> **`tone-style`** section: append a row to the 用語對照表 by updating the
-> **`term-mapping-table`** fact card (`get_kb_article("term-mapping-table")` → add the row to its
-> markdown table → `update_kb_article`). Broader voice rules go in the **`tone-voice-rules`** card.
+> `parachute`→「和團隊諮詢、觀察流程」, `discovery call`→「線上會議」), it belongs on a style card
+> in `kb.tone-style`: a new row in the 用語對照表 is a **correction packet** for
+> `term-mapping-table` (read it with `get_knowledge(key: "term-mapping-table", max_chars: 60000)`
+> and quote the rows around where the new one goes). A broader voice rule is a packet for
+> `tone-voice-rules`.
 
-### Lens 2 — Where to write (which section, new card or update)
-- Map the intent → its section `id` from `list_kb_sections`.
-- **Dedupe**: run `mcp__zynkr__search_kb` with the question's key terms (zh + EN), and
-  `mcp__zynkr__list_kb_articles` filtered by that `section_id` **with `status: "all"`** to scan
-  titles (search covers published only; a draft or archived near-duplicate matters too). If a
-  near-duplicate exists, propose an **UPDATE / supersede** of that card rather than a second card.
-  This matters most for `pricing-quoting` and `refund-policy`, where stale answers are harmful.
+### Lens 2 — Where it goes (which section, new card or a change)
+- Map the intent → its section key (`kb.<slug>`), one that is in the set.
+- **Dedupe**, three ways:
+  1. `mcp__zynkr-atlas__search_knowledge` with the question's key terms — one or two words a call,
+     zh and EN apart (the search matches every word of a query literally). Keep only hits whose
+     key is in the set.
+  2. The set's titles in that section.
+  3. `pending[]` in the working folder's `_MANIFEST.json` — the drafts this skill filed, which
+     `list_knowledge` lists only once they are published.
 
-### Lens 3 — Structure for the LLM (fact card vs. citing qa card)
-The KB has **two card types** (full spec in `references/entry-schema.md`):
+  A near-duplicate **published** card → a **correction packet** for it (Step 5c), never a second
+  card. A near-duplicate in **`pending[]`** → nothing new; say it is waiting, or published if the
+  set lists it. This matters most for
+  `kb.pricing-quoting` and `kb.refund-policy`, where stale answers are harmful.
+
+### Lens 3 — Structure for the LLM (fact card vs. citing reference card)
+The 知識庫 has **two kinds of card** (full spec in `references/entry-schema.md`):
 
 - **`fact` card** — canonical, reusable truths whose *numbers/terms live once*: the pricing table,
-  refund policy, standard durations. Each has a stable kebab-case **`fact_id`** (e.g.
-  `pricing-rates`), unique per workspace.
-- **`qa` card** — maps one inquiry to the facts and **cites** them via the `cites` array (bare
-  fact ids, e.g. `["pricing-rates"]`) rather than restating the numbers.
+  refund policy, standard durations. Its key is a stable kebab-case id (e.g. `pricing-rates`),
+  never one starting `company.`.
+- **`reference` card** — maps one inquiry to the facts and **cites** them (`cites`, by key) rather
+  than restating the numbers. Its key is `qa.<english-slug>`.
 
-**Decide which you're writing.** If the answer rests on a fact that could appear in other answers or
-changes over time (price, rate, policy, lead time):
-1. Is there already a fact card for it? Check with `get_kb_article("<fact-id-guess>")` and
-   `search_kb`. → the qa card just lists it in `cites` and describes the *mapping/logic*, **no
+**Decide which you're drafting.** If the answer rests on a fact that could appear in other answers
+or changes over time (price, rate, policy, lead time):
+1. Is there already a published fact for it? Check with `get_knowledge(key: "<fact-key>")` and the
+   set. → the reference card just lists it in `cites` and describes the *mapping/logic*, **no
    restated numbers**.
-2. No fact yet? → propose a **NEW fact card** (numbers go there) **and** a thin citing qa card.
-3. The fact exists but Peter's reply changes it (new rate)? → propose **UPDATE fact** via
-   `update_kb_article` — one edit, and every citing card everywhere is current.
+2. No fact yet? → propose a **NEW fact draft** (the numbers go there). The reference card that
+   cites it **waits for the next run**: a draft can cite only published notes, so it is drafted
+   once Peter has published the fact.
+3. The fact exists but Peter's reply changes it (new rate)? → a **correction packet** for the fact
+   — one edit in Atlas, and every citing card is current.
 
-Draft each proposed card with these fields (they map 1:1 onto `create_kb_article`):
+Draft each proposed card with these fields (they map 1:1 onto `draft_note`):
 
 ```
-type:        fact | qa
+kind:        fact | reference
+key:         fact → stable kebab-case id (e.g. pricing-rates) · reference → qa.<english-slug>
 title:       fact → short human title (e.g. 授課費率表)
-             qa   → the canonical, normalized question (e.g. 一天 N 小時的 AI 課程如何報價？)
-fact_id:     fact only — stable kebab-case id (e.g. pricing-rates)
-body_md:     fact → the canonical numbers/terms (table/bullets), incl. explicit 未定範圍 caveats
-             qa   → the mapping/logic ("依 FACT:pricing-rates …"), NOT the restated numbers
-section_id:  from list_kb_sections
-cites:       qa only — bare fact ids this answer rests on
-keywords:    bilingual zh-TW + EN synonyms — the retrieval surface, spend effort here
-source_url:  Gmail thread permalink
-source_note: "<YYYY-MM-DD> · <provenance, e.g. inbound 詢價>"
-source_type: fact → core_fact · qa → peter_answer
+             reference → the canonical, normalized question (e.g. 一天 N 小時的 AI 課程如何報價？)
+body:        fact → the canonical numbers/terms (table/bullets), incl. explicit 未定範圍 caveats
+             reference → the mapping/logic ("依 FACT:pricing-rates …"), NOT the restated numbers
+             then `---` and the footer: Keywords · source_type (references/entry-schema.md)
+collection:  the section key, e.g. kb.pricing-quoting (facts: kb.core-facts)
+cites:       the published keys the answer rests on (a company fact by key, never its value)
 ```
 
-Only inline a hard number in a qa card when it is specific to this ticket and lives in **no** fact
-(then preserve it verbatim). `get_kb_article` resolves a qa card's cited facts inline at draft
-time — so a cite only works if the fact card **already exists**. Always write/UPDATE the fact first.
+Only inline a hard number in a reference card when it is specific to this ticket and lives in
+**no** fact (then preserve it verbatim).
 
 ---
 
 ## Step 4: Propose, then wait for approval (the write gate)
 
-Present **one table** of everything you intend to write — nothing is written yet:
+Present **one table** of everything you intend to do — nothing is drafted yet:
 
 ```
-Proposed KB changes from N resolved threads:
+Proposed 知識庫 changes from N resolved threads:
 
-| # | Action | Section | Card / fact_id | Preview | Flag |
-|---|--------|---------|----------------|---------|------|
-| 1 | UPDATE fact | core-facts | pricing-rates | 實體 rate → NT$Y | ⚠ pricing change |
-| 2 | NEW qa      | pricing-quoting | Q: … | cites pricing-rates | — |
-| 3 | NEW fact    | core-facts | refund-policy | (creates canonical fact) | ⚠ new fact |
-| 4 | NEW SECTION | (new) + qa | logistics-overseas | create_kb_section + card | ⚠ new category |
+| # | Action            | Section            | Key              | Preview                        | Flag             |
+|---|-------------------|--------------------|------------------|--------------------------------|------------------|
+| 1 | CORRECTION packet | kb.core-facts      | pricing-rates    | 實體 rate → new line           | ⚠ pricing change |
+| 2 | NEW reference     | kb.pricing-quoting | qa.half-day-quote | Q: … · cites pricing-rates    | —                |
+| 3 | NEW fact          | kb.core-facts      | refund-window    | (canonical fact)               | ⚠ new fact       |
+| 4 | HELD reference    | kb.refund-policy   | qa.refund-window | waits for refund-window        | next run         |
+| 5 | NEW SECTION       | kb (new)           | kb.logistics-overseas | collection draft          | ⚠ new category   |
 ```
 
-Then show the **full rendered card** for each proposed entry below the table.
+Then show the **full card** for each proposed draft, and the **full packet** for each correction,
+below the table.
 
 **Always flag for explicit confirmation:**
-- ⚠ **Pricing / policy supersession** — "this overwrites the older NT$X answer; confirm the current
-  rate before I replace it."
+- ⚠ **Pricing / policy change** — "this replaces the older answer on the published card; confirm
+  the current rate before you apply it."
 - ⚠ **New section** — proposing a category that doesn't exist yet.
 - ⚠ **Ambiguous intent** or **partial answer**.
 
 Peter approves all / edits / rejects per row. **Only approved rows proceed to Step 5.** If he
-rejects a thread entirely, do not label it ingested (Step 6).
+rejects a thread entirely, do not label it ingested (Step 7).
 
 ---
 
-## Step 5: Write approved cards to the platform KB
+## Step 5: Draft the approved cards in Atlas
 
-**Order matters: write/UPDATE the fact card FIRST, then the qa card that cites it** — cites resolve
-only against facts that already exist.
+**Order matters:** a new section first (5d), then fact drafts (5a), then the reference drafts whose
+`cites` are all published (5b). A draft is filed only under a **published** collection and cites
+only **published** notes, so a card whose section or fact is itself a draft this run is held for
+the next one.
 
-### 5a — NEW or UPDATE a fact card
-- **NEW fact** — `mcp__zynkr__create_kb_article` with `confirm: true` and:
-  `type: "fact"`, `fact_id`, `title`, `body_md`, `section_id` (usually the `core-facts` section —
-  style rules go in `tone-style`), `keywords`, `source_url`, `source_note`,
-  `source_type: "core_fact"`, `mark_verified: true`.
-- **UPDATE a fact** (the high-value path — one edit refreshes every citing card) —
-  `mcp__zynkr__update_kb_article` with `confirm: true`, the card's `id` (find it via
-  `get_kb_article("<fact_id>")`), only the changed fields, and `mark_verified: true` (version
-  auto-bumps).
+### 5a / 5b — a NEW fact or reference card
+`mcp__zynkr-atlas__draft_note` with `key`, `kind` (`fact` or `reference`), `title`, `body` (text,
+`---`, the footer), `collection` (the section key) and `cites` (published keys only).
 
-### 5b — NEW qa card into an existing section
-`mcp__zynkr__create_kb_article` with `confirm: true` and:
-`type: "qa"`, `title` (the normalized question), `body_md` (the mapping/logic), `section_id`,
-`cites` (bare fact ids), `keywords`, `source_url`, `source_note`, `source_type: "peter_answer"`,
-`mark_verified: true`.
+The answer starts 「Drafted note `<key>`」 and says what it is filed under and what it cites —
+compare it with what you asked (a draft cannot be read back with `get_knowledge`, which serves
+published notes only). Then record it, at once:
 
-### 5c — UPDATE / supersede an existing qa card
-`mcp__zynkr__update_kb_article` with `confirm: true`, `id` = the existing card's uuid, only the
-changed fields (`body_md`, `cites`, `keywords`, `source_url`, `source_note`), `mark_verified: true`.
-**Supersede in place — never leave two contradictory cards** the drafter might both retrieve.
+```
+node scripts/kb-drive-mirror.mjs pending-add --out <the working folder> --key <key> --collection <section key> --title "<title>" --thread <gmail thread id>
+```
 
-### 5d — NEW SECTION (intent has no section yet)
-Follow `references/new-section-playbook.md`:
-1. `mcp__zynkr__create_kb_section` with `confirm: true` — kebab `slug`, `title`, `title_zh`,
-   `description`, bilingual `aliases` (they aid routing/search), an appropriate lucide `icon`
-   (`nn` auto-assigns).
-2. Then write the card(s) into it per 5a/5b using the returned section `id`.
-3. Add the new category to `references/intent-taxonomy.md` so it's first-class next time.
+If it exits 1 (no manifest in the working folder, or one it could not write), say so in the
+report: the draft is in 審核, but the next run cannot see it waiting. A v1 manifest, from before
+the first v2 run, takes the entry like a v2 one.
 
-### Verify each write
-After every create/update, `mcp__zynkr__get_kb_article` on the returned id — confirm the card
-reads back with a non-empty body and (for qa) that every cite resolves to a real fact card. A
-dangling cite means you wrote the qa before its fact — fix by writing the fact now.
+**When draft_note refuses**, nothing was written; never work around it:
+- `key_taken` — a note already holds the key: a card dedupe missed, or a draft or archived note.
+  Stop that row and report it; never retry under another key unasked.
+- `collection_not_found` — the section is not published (a draft section, or a typo): hold the card.
+- `cite_not_found` — a cited key is not a published note: hold the card, name the key.
+- `daily_cap` — this token's 20 drafts for today are spent: stop drafting, report the rows left.
+- `not_permitted` — the token cannot draft (minted without 「可以建立草稿」, or its holder can no
+  longer write): stop and tell Peter.
+- `fact_key` — never draft a `company.` key: company facts are the owner's, in the app.
+
+### 5c — a change to a published card: the correction packet
+This skill never edits a published card. Each approved change goes to Peter as a packet he applies
+by hand in Atlas (format in `references/entry-schema.md`):
+
+```
+Correction · `<key>` — <title>
+Link:     https://atlas.zynkr.ai/w/<workspace-slug>/knowledge/<key>
+Old:      <the line(s) as the card reads now, quoted from get_knowledge>
+New:      <the line(s) as they should read>
+Evidence: <Gmail thread permalink> · <YYYY-MM-DD> · Peter: 「<his words>」
+⚠ price / policy change — confirm before applying     (only when it is one)
+```
+
+**Supersede in place — never leave two contradictory cards** the drafter might both retrieve. The
+thread stays un-labelled, so the next run checks the card again: once it reads the packet's new
+line, the packet is **applied** — label the thread (Step 7) and say so in the report.
+
+### 5d — a NEW SECTION (the intent has no section yet)
+Follow `references/new-section-playbook.md`: `draft_note` with `key: "kb.<slug>"`, `kind:
+"collection"`, `collection: "kb"`, the section's title and its body (what it covers, then
+`Aliases: …`). Its cards wait until Peter publishes it. Record it with `pending-add` like a card.
 
 ---
 
-## Step 6: Mirror the change to the Google Drive backup
+## Step 6: Upload the manifest
 
-Every approved write in Step 5 must reach the Drive mirror in the same run — a KB write that
-isn't mirrored is exactly the drift this step exists to prevent. Mirror **after** the writes
-land (it renders whatever the KB currently holds), and only for the sections you touched.
-
-Full mechanics, the Doc-ID registry, and the restore procedure live in
-`references/drive-mirror.md`. The short form:
-
-1. **Render** the touched sections —
-   `node scripts/kb-drive-mirror.mjs --out <staging> --workspace <Peter's uuid> --env <.env.local>
-   --sections <slug,slug>`. Omit `--sections` for a full reconcile (also refreshes the snapshot,
-   the manifest and the 00 INDEX Doc). The script is read-only and prints just a counts summary.
-2. **Stage** the rendered files into `~/.workspace-mcp/attachments/kb-mirror/`.
-3. **Upload in place** with `mcp__google-workspace__update_drive_file` — `file_id` from the
-   registry, `source_format: "md"`, and the AUTO-GENERATED MIRROR banner as `description`. Never
-   create a second Doc for a section that already has one.
-4. **Refresh `_KB-SNAPSHOT.json`** whenever any card changed — it is the only artifact with
-   enough fidelity to restore from (`fact_id`, `cites`, `keywords`, `version`, `source_*`).
-5. If Step 5d created a **new section**, the mirror gains a Doc: use
-   `mcp__google-workspace__import_to_google_doc` (`create_drive_file` leaves raw markdown, not a
-   Doc), then add its ID to the registry in `references/drive-mirror.md`.
-
-**Check before moving on:** the script's `sections` count must match
-`mcp__zynkr__list_kb_sections`, and `orphans` must be `0`. A larger `sections` number means the
-workspace filter was dropped — stop and fix it rather than uploading.
+`pending-add` changed the working folder's `_MANIFEST.json`: upload it to Drive in place
+(`1I0fE1bId4s5pXmQFWbwioSz0WQBUMBoM`, `mime_type: application/json`, never converted to a Doc;
+its sharing checked as in Step 0), so Drive's copy of `pending[]` is current. Upload it even when
+Step 0's upload stopped part-way: the next run sees a manifest and a snapshot from different runs
+(the first time, a v1 snapshot) and renders every Doc again. Nothing else in the mirror changes until Peter publishes — the next
+run's Step 0 picks that up.
 
 ---
 
 ## Step 7: Mark ingested + report
 
+Label `KMS-ingested` **only a thread whose answer is published** in the 知識庫:
+- its answer was already there (dedupe found it; nothing drafted);
+- its drafts are published: every `pending[]` entry for the thread is in Step 0's
+  `pending_published`;
+- its correction packet was applied (the card now reads the new line).
+
+Do **not** label a thread with a draft still waiting, a held card, an open packet, or one that was
+skipped or rejected.
+
 - Resolve the ledger label's **ID**: `mcp__google-workspace__list_gmail_labels` and find
   `KMS-ingested`. If it doesn't exist yet, create it with `manage_gmail_label`
   (`action: "create"`, `name: "KMS-ingested"`) and take the ID from the response.
-- Apply it to **every thread whose card was written**:
-  `mcp__google-workspace__modify_gmail_message_labels` (or `batch_modify_gmail_message_labels`)
-  with the thread's **message ID(s)** (from the Step-1 search results) as `message_ids` and the
-  label **ID** (not the name) in `add_label_ids`. Do **not** label skipped or rejected threads.
+- Apply it with `mcp__google-workspace__modify_gmail_message_labels` (or
+  `batch_modify_gmail_message_labels`): the thread's **message ID(s)** as `message_ids` and the
+  label **ID** (not the name) in `add_label_ids`.
+- Then take out of `pending[]` each published key whose thread you labelled, and each one with no
+  `thread`: `node scripts/kb-drive-mirror.mjs pending-drop --out <the working folder> --key <key>`.
+  Upload the manifest again, as in Step 6. A key whose thread you could not label stays, and the
+  next run names it again.
 
 Then give Peter a single summary:
 
 ```
-KB updated — N cards from M threads:
+知識庫 — N drafts from M threads, waiting in 審核:
 
-✅ Added (X):
-  - [section] — Q: … — [sender / company]
-✏️  Updated / superseded (Y):
-  - [section] — card/fact_id: … — replaced older answer (e.g. pricing)
-🆕 New sections created (Z):
-  - [slug — title] (now in list_kb_sections + intent-taxonomy.md)
+✅ Drafted (X):
+  - [kb.section] `key` — Q: … — [sender / company]
+✏️  Correction packets (Y):
+  - `key` — what changes (⚠ price / policy) — link
+🆕 New section drafts (Z):
+  - `kb.<slug>` — title (publish it before its cards can be drafted)
+⏸️  Held for the next run (H):
+  - `key` — waits for `<key>` to be published
+✔️  Published and labelled (P):
+  - `key` — thread labelled KMS-ingested, dropped from pending[]
 ⏭️  Skipped (W):
-  - [Subject] — [reason: holding reply / no answer yet / out of scope]
-💾 Mirrored to Drive (S sections + snapshot):
-  - [NN slug] … — or "full reconcile, N cards"
+  - [Subject] — [reason: holding reply / no answer yet / out of scope / still waiting in 審核]
+💾 Drive mirror: <full | incremental> — S Docs uploaded · <sections> sections · <orphans> orphans · <pending> pending
+   (or the line it stopped on)
 ⚠️  For your attention:
   - [anything you want Peter to double-check]
 
-Browse: https://platform.zynkr.ai/kb
+Review: https://atlas.zynkr.ai/w/<workspace-slug>/review
+知識庫: https://atlas.zynkr.ai/w/<workspace-slug>/knowledge
 Backup: https://drive.google.com/drive/folders/1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6
 ```
 
-If a new section was created, confirm it's added to `references/intent-taxonomy.md`.
+If a new section was drafted, add its row to `references/intent-taxonomy.md` (a workbench change)
+once Peter has published it.
 
 ---
 
 ## Things to be careful about
 
-- **Extraction, not generation.** Every fact in the KB must trace to something Peter wrote. Holding
-  replies teach nothing — skip them.
-- **One source of truth: the platform KB.** Drive is a *backup*, not a second KB. Never author a
-  card in Drive, never cite the mirror as current, and never read a Drive edit back into the
-  platform. If the two disagree, the platform is right and the mirror is stale.
-- **A write that isn't mirrored is drift.** Step 6 runs in the same pass as Step 5, every time;
-  a write left for later leaves cards in one store only.
-- **Never mirror unscoped.** `crm_kb_*` is shared/multi-tenant; always pass Peter's
-  `--workspace`. An unscoped run leaks other tenants' cards into Peter's Drive.
-- **Canonical numbers live once.** Pricing/policy/rates go in a `fact` card; qa cards **cite** it
-  (`cites: ["<fact_id>"]`). Update the fact in one place rather than chasing numbers across cards.
-- **Write the fact before the citing qa card** — cites only resolve against existing facts.
-- **Supersede, don't pile up.** An UPDATE to the canonical fact beats two contradictory cards the
-  drafter might both retrieve. `update_kb_article` auto-bumps `version`, so history is kept.
-- **Never archive/delete without Peter asking.** Archiving (`status: "archived"`) is Peter's call.
-- **PII never lands in the KB** — first name + company only.
-- **Idempotency is the label.** A thread carrying `KMS-ingested` is done; never re-write it. A
-  skipped thread stays un-labelled so it's reconsidered once truly answered.
+- **Extraction, not generation.** Every fact in the 知識庫 must trace to something Peter wrote.
+  Holding replies teach nothing — skip them.
+- **One source of truth: Atlas.** Drive is a *backup*, not a second 知識庫. Never author a card in
+  Drive, never cite the mirror as current, and never read a Drive edit back into Atlas. If the two
+  disagree, Atlas is right and the mirror is stale.
+- **Drafts only.** This skill never edits, publishes, archives or verifies a card. A change to a
+  published card is a correction packet; the rest is Peter's in Atlas.
+- **Canonical numbers live once.** Pricing/policy/rates go in a `fact` card; reference cards
+  **cite** it. A change is made in one place rather than chased across cards.
+- **A card cites only published notes.** Draft the fact, hold the card that cites it until the fact
+  is published.
+- **Stop on `key_taken`.** It means a note already holds that key — find out which, never invent a
+  second key to get past it.
+- **Never draft a company fact.** `company.*` keys are the owner's, in the app; a card that rests on
+  one cites it by key and never copies its value.
+- **The export token never leaves its file.** Not in chat, not in a command line, not in a report.
+- **PII never lands in the 知識庫** — first name + company only.
+- **Idempotency is the label, plus `pending[]`.** A thread carrying `KMS-ingested` is done; a
+  thread named in `pending[]` is skipped until Step 7 labels it and drops its keys. A skipped thread
+  stays un-labelled so it's reconsidered once truly answered.
 - **zh-TW default**, bilingual keywords — match how Peter and his inquirers actually search.
-- **Preview is not approval.** The MCP write tools dry-run without `confirm: true`; that's a safety
-  net, not the gate. The gate is Peter's explicit approval in Step 4.
+- **A draft is not approval.** The gates are Peter's approval in Step 4 and his publish in Atlas.
 
 ## House style
 

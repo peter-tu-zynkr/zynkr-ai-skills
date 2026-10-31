@@ -8,7 +8,7 @@ description: >-
   client's asks by an openly-stated criterion and presents them as 第一順位／額外項目
   (never colour codes, never our internal IDs); splits them into a recurring lane
   and a one-off build lane; prices every line from the B2B pricing sheet anchored at
-  NT$10,000/hr with the hours shown; and writes an honest-boundaries section saying
+  the hourly rate Atlas holds as a company fact, with the hours shown; and writes an honest-boundaries section saying
   what we will not do and why. On later rounds it reads the review comments on the
   document, applies them, resolves them, verifies the published body by checksum,
   and syncs the CRM note and the kickoff doc in the same pass, telling the outbound owner
@@ -29,9 +29,10 @@ visibility: public
 author: Peter Tu
 sheetId: "2.47"
 input: "A CRM deal id or name, plus the client's own material — a requirement sheet, discovery/meeting notes, a transcript, or a prior proposal version to revise."
-process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into recurring and build lanes → price each line at NT$10,000/hr → publish as 交付文件 → CRM note + chase task. Revisions: comment → apply → resolve → checksum → sync."
+process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into recurring and build lanes → price each line at the hourly rate → publish as 交付文件 → CRM note + chase task. Revisions: comment → apply → resolve → checksum → sync."
 output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note with the pricing rationale, a chase task on the deal, and a handoff line for the outbound owner's covering email."
 synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "project-init"]
+reads: ["company.pricing-hourly-rate", "b2b-enterprise-pricing", "company.sales-pipeline-rules"]
 house-style: bound
 type: agent
 ---
@@ -62,8 +63,10 @@ new one. The revision loop below is the half that earns its keep.
 ## Fixed facts
 
 - **Pricing source of truth** — 《[2.1] Zynkr B2B Pricing Sheet (企業報價準則)》. Every number
-  traces to the **NT$10,000/hr** anchor. Never invent a tier; if the shape does not fit, quote
+  traces to the hourly-rate anchor, **`<your-pricing-hourly-rate>`**. Never invent a tier; if the shape does not fit, quote
   hours × anchor and say so.
+
+  > **`<your-pricing-hourly-rate>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never price a line with the blank still in it.
 - **Delivery surface** — the 交付文件 module on the Zynkr platform. Published with
   `visibility: link` unless the content warrants a password. The renderer is a **sandboxed
   iframe: scripts do not run**, so inline all CSS and never rely on JS for content to appear.
@@ -131,6 +134,12 @@ The judgement, in one line the client can check: **買了之後你會的，走�
 
 - Every line shows **hours and amount**, both derived from the anchor. The client should always
   be able to see which hours they are paying for.
+- **Discounts and credits follow the 知識庫 card `b2b-enterprise-pricing`** — read it from Atlas
+  before you price (`mcp__zynkr-atlas__get_knowledge`, key `b2b-enterprise-pricing`): which
+  reductions exist, when an entry price credits against later fees, and what we
+  never offer. It is internal policy — apply it, never quote it to the client. If Atlas cannot be
+  reached or the card is missing, price at the anchor with no reduction and flag it for Peter;
+  never apply a rule from memory or from an older copy of this file.
 - **Do not quote what is not scoped.** An unpriced line with a stated reason
   (「範圍要先確認」) beats a number that will move. Say where the answer will come from.
 - Offer a paid scoping step when the sequence genuinely depends on seeing their current process.

@@ -30,6 +30,7 @@ input: "ONE person's interest signal carrying an email — a pasted DM/chat thre
 process: "Parse the signal → enrich from any profile link → write the CRM lead (find-or-create company + contact, new deal, source note, follow-up task) → if a meeting is the ask, read the calendar for three 台北時間 slots → draft the Gmail reply → report."
 output: "A CRM lead (company + contact + deal + note + task) in Zynkr CRM, plus a Gmail draft in Peter's inbox — with three calendar-checked 台北時間 slots when a meeting is the ask."
 synergy: []
+reads: ["gov-subsidy-mechanics", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules"]
 house-style: bound
 
 ---
@@ -424,6 +425,10 @@ unchecked. Never re-implement either list inside this file.
 2. **階梯是 ask → ask → 長相 → 純給 → 放手。** 第 4 封必須零 ask，否則第 5 封還沒寄就被封鎖。
 3. **`[2.7] 政府補助 knowledge` 絕對不可外發**（它自己第 5 節標了「內部資訊，勿外流」）。
    顧問姓名、拆帳、加價機制、盤點數字、難度分級一律不得進信裡。
+   第 4 封的判斷點與時程一句改從知識庫卡片 `gov-subsidy-mechanics` 取，卡片沒寫的不寫；
+   卡名、連結和卡片 `---` 以下的頁尾（Keywords、source_type）同樣不得進信。
+
+   > **第 4 封的補助判斷點是知識庫卡片——從 Atlas 讀**（`mcp__zynkr-atlas__get_knowledge`，key `gov-subsidy-mechanics`，只用 `---` 以上的正文）。Atlas 連不上或沒有這張卡，就停下來問；絕不憑記憶或舊版檔案寫補助內容。
 4. **草稿建好 ≠ 已寄出。** 接觸紀錄的 Remark 要註明「尚未寄出」，寄出後才拿掉。
 5. **五封就停。** 沒回的改 `暫時沒需求`。一天一批、一批不超過 5 人。
 6. **三天一封、第 1 封一律禮拜二**（二、五、一、四、日），時段只放第 1 封，三格落在 T+2 到 T+8。
