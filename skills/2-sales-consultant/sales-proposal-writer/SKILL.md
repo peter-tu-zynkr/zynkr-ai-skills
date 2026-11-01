@@ -66,7 +66,7 @@ new one. The revision loop below is the half that earns its keep.
   traces to the hourly-rate anchor, **`<your-pricing-hourly-rate>`**. Never invent a tier; if the shape does not fit, price it
   as hours × anchor, show the client only the amount, and keep the hours in the CRM note.
 
-  > **`<your-pricing-hourly-rate>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never price a line with the blank still in it.
+  > **`<your-pricing-hourly-rate>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, stop and ask the user to make the fact readable: switch the `zynkr-atlas` server back on or renew its token, or ask an owner or admin of the Atlas workspace to publish the fact with its `value:` line. The figure stays out of the chat: never ask anyone to type it there, and never write it in your own replies. Never price a line with the blank still in it.
 - **Delivery surface** — the 交付文件 module on the Zynkr platform. Published with
   `visibility: link` unless the content warrants a password. The renderer is a **sandboxed
   iframe: scripts do not run**, so inline all CSS and never rely on JS for content to appear.
@@ -133,14 +133,19 @@ The judgement, in one line the client can check: **買了之後你會的，走�
 ### 5 · Price it
 
 - Every line shows **the deliverable and its amount**. Hours stay in the internal CRM pricing note
-  and never sit beside a fee in anything the client sees, so no hourly rate can be worked out
-  (owner ruling, 2026-11-01).
+  and appear nowhere the client sees (owner ruling, 2026-11-01): not beside a fee, and not in the
+  scope, the schedule or a header, in the proposal, the kickoff doc or the points handed over for
+  the covering email. That covers a length in any form: an hour count, a clock-time range
+  (09:30–12:30), a timed agenda. A one-off event names its format (半天 / 全天); a recurring session
+  gives its cadence (每週一次), never its length. A session's length and a week count together give
+  the rate away when the page has one priced line.
 - **Discounts and credits follow the 知識庫 card `b2b-enterprise-pricing`** — read it from Atlas
   before you price (`mcp__zynkr-atlas__get_knowledge`, key `b2b-enterprise-pricing`): which
   reductions exist, when an entry price credits against later fees, and what we
-  never offer. It is internal policy — apply it, never quote it to the client. If Atlas cannot be
-  reached or the card is missing, price at the anchor with no reduction and flag it for Peter;
-  never apply a rule from memory or from an older copy of this file.
+  never offer. It is internal policy — apply it, never quote it to the client. If the card cannot
+  be read but the rate was, price at the anchor with no reduction and flag it for Peter. If the
+  rate itself cannot be read, nothing can be priced: stop, as its lookup line says. Never apply a
+  rule from memory or from an older copy of this file.
 - **Do not quote what is not scoped.** An unpriced line with a stated reason
   (「範圍要先確認」) beats a number that will move. Say where the answer will come from.
 - Offer a paid scoping step when the sequence genuinely depends on seeing their current process.
