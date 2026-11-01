@@ -129,8 +129,12 @@ This skill drafts into a **知識庫** it does not ship.
     uploads from under `~/.workspace-mcp/attachments/`. Every run first downloads Drive's
     `_MANIFEST.json` and `_KB-SNAPSHOT.json` into it (Step 0) and builds on those. Pass it as an
     absolute path.
-  - `mcp__google-workspace__update_drive_file` — uploads in place by Doc ID (`source_format: "md"`
-    converts Markdown → native Doc and **keeps the Doc ID**)
+  - `mcp__google-workspace__update_drive_file` — uploads a Doc in place by its ID
+    (`source_format: "md"` converts Markdown → native Doc and **keeps the Doc ID**). It rewrites
+    Google Docs, Sheets and Slides only, never a JSON file.
+  - `mcp__google-workspace__create_drive_file` — writes the two JSON files as new files every run
+    (`fileUrl: "file://…"`), and `update_drive_file` with `trashed: true` moves the pair they
+    replace to Drive's bin. Their IDs therefore change every run: Step 0 finds them by name.
   - ⚠️ **The export token is a secret.** It lives in `~/.config/zynkr/kb-mirror.env`
     (`ATLAS_MCP_TOKEN=…`, `chmod 600`), minted by the owner with 「可以匯出知識（給鏡像用）」 and
     nothing else, renewed every 90 days. Never print it, paste it into chat, or put it on a
@@ -151,12 +155,17 @@ Peter publishes drafts in Atlas between runs, so the mirror starts every run by 
 `/zynkr-kms mirror` (or "back up the KB", "sync the KB to Drive") is this step alone, in full.
 How a run goes, the Doc registry and the checks: `references/drive-mirror.md`.
 
-1. **Download Drive's pair** over the working folder's copies — every run, on every machine:
-   `_MANIFEST.json` (`1I0fE1bId4s5pXmQFWbwioSz0WQBUMBoM`) and `_KB-SNAPSHOT.json`
-   (`1UbDlalP9rP3s0LxitM5q9GMplw3qvLm7`), each with
-   `mcp__google-workspace__get_drive_file_download_url`, then copy the saved file in. Drive's pair
-   is the record; the local copies may be another machine's, or a stopped run's. If a download
-   fails, stop and report it: Steps 1–7 read and write the manifest's `pending[]`.
+1. **Download Drive's pair** over the working folder's copies — every run, on every machine. Each
+   run writes the pair as new files (point 5), so find it by name, never by an ID from an earlier
+   run: `mcp__google-workspace__list_drive_items` on the folder
+   (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, `order_by: "createdTime desc"`), then the newest file named
+   exactly `_MANIFEST.json` and the newest named exactly `_KB-SNAPSHOT.json`
+   (`_KB-SNAPSHOT-CRM-<date>.json` is another file). Note their IDs, and the IDs of any older copy
+   of either name, which a stopped run left behind: point 5 bins them all. Download the two with
+   `mcp__google-workspace__get_drive_file_download_url`, then copy each saved file in. Drive's pair
+   is the record; the local copies may be another machine's, or a stopped run's. If either name is
+   missing or a download fails, stop and report it: Steps 1–7 read and write the manifest's
+   `pending[]`.
 2. **Render** —
    `node scripts/kb-drive-mirror.mjs --out <absolute path of ~/.workspace-mcp/attachments/kb-mirror>`
    (add `--full` for `/zynkr-kms mirror`). It reads Atlas with the export token, writes only the
@@ -165,17 +174,29 @@ How a run goes, the Doc registry and the checks: `references/drive-mirror.md`.
    drafts that are published and still in `pending[]`, each with its Gmail `thread` (Step 7 labels
    those, then drops them); `removed`, `removed_sections` and `orphans` go to the report.
 4. **Check who can read** — `mcp__google-workspace__get_drive_file_permissions` on the folder
-   (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`) and on each file before you write it: no `anyone` link, no
-   domain grant, and every named reader a member of the Atlas workspace (ask when you cannot tell).
-   The mirror copies team-only text; whatever reads wider gets nothing written — say so.
-5. **Upload** every file in `upload[]`, in its order, in place, each Doc found in the registry **by
-   its section key** — never by the number in its file name — with
-   `mcp__google-workspace__update_drive_file` (`file_path`, `source_format: "md"`, `name` = the
-   entry's `doc_title`); the two JSON files as `application/json`, never converted to Docs. A
-   section with no Doc yet gets one with `mcp__google-workspace__import_to_google_doc`; add its ID
-   to the registry. A key in `removed_sections` keeps its Doc: tell Peter, never delete it. **Stop
-   at the first file that fails or is skipped** and upload nothing after it — never the two JSON
-   files — so Drive's pair never claims a Doc it does not hold.
+   (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`), on each Doc before you write it, and on each JSON file
+   once it is written (it is new, and takes the folder's readers): no `anyone` link, no domain
+   grant, and every named reader a member of the Atlas workspace (ask when you cannot tell). The
+   mirror copies team-only text; whatever reads wider gets nothing written — say so.
+5. **Upload** every file in `upload[]`, in its order. **Stop at the first file that fails or is
+   skipped** and upload nothing after it — never the two JSON files — so Drive's pair never claims
+   a Doc it does not hold.
+   - **A Doc** goes in place, found in the registry **by its section key** — never by the number in
+     its file name — with `mcp__google-workspace__update_drive_file` (`file_path`,
+     `source_format: "md"`, `name` = the entry's `doc_title`). A section with no Doc yet gets one
+     with `mcp__google-workspace__import_to_google_doc`; add its ID to the registry. A key in
+     `removed_sections` keeps its Doc: tell Peter, never delete it.
+   - **The two JSON files** come last, `_KB-SNAPSHOT.json` then `_MANIFEST.json`, each as a NEW
+     file, because `update_drive_file` cannot rewrite one: `mcp__google-workspace__create_drive_file`
+     with `file_name` its name, `folder_id` the folder, `mime_type: "application/json"` (never
+     converted to a Doc) and `fileUrl: "file://<its absolute path in the working folder>"`. Never
+     pass `content`: the snapshot holds every card's text. Check each new file's readers (point 4);
+     if one reads wider, stop and tell Peter.
+   - **Once both are written,** move to the bin the pair point 1 downloaded and every older copy it
+     noted: `mcp__google-workspace__update_drive_file` with that `file_id` and `trashed: true`. Bin
+     nothing else: never a Doc, never `_KB-SNAPSHOT-CRM-<date>.json`. If either new file failed,
+     bin nothing. The next run then takes the newest of each name, and a manifest and a snapshot
+     from two runs make it full by itself.
 6. **If it exits 1**, upload nothing, put the line it printed in the report and go on with Step 1
    (the queue).
    A refusal rewrote nothing; after a failed write, the next run's download replaces what it left.
@@ -414,12 +435,14 @@ Follow `references/new-section-playbook.md`: `draft_note` with `key: "kb.<slug>"
 
 ## Step 6: Upload the manifest
 
-`pending-add` changed the working folder's `_MANIFEST.json`: upload it to Drive in place
-(`1I0fE1bId4s5pXmQFWbwioSz0WQBUMBoM`, `mime_type: application/json`, never converted to a Doc;
-its sharing checked as in Step 0), so Drive's copy of `pending[]` is current. Upload it even when
+`pending-add` changed the working folder's `_MANIFEST.json`, so write it to Drive as a new file, as
+in Step 0.5 (`create_drive_file`, `mime_type: "application/json"`, its readers checked). Then bin
+the `_MANIFEST.json` it replaces, the newest one Drive held before it: the one Step 0.5 wrote, or
+Step 0.1's if Step 0.5 wrote none. Drive's copy of `pending[]` is then current. Write it even when
 Step 0's upload stopped part-way: the next run sees a manifest and a snapshot from different runs
-(the first time, a v1 snapshot) and renders every Doc again. Nothing else in the mirror changes until Peter publishes — the next
-run's Step 0 picks that up.
+(the first time, a v1 snapshot) and renders every Doc again. If the write fails, bin nothing and
+name the new drafts' keys in the report: the next run cannot see them in `pending[]`. Nothing else
+in the mirror changes until Peter publishes — the next run's Step 0 picks that up.
 
 ---
 
@@ -442,7 +465,7 @@ skipped or rejected.
   label **ID** (not the name) in `add_label_ids`.
 - Then take out of `pending[]` each published key whose thread you labelled, and each one with no
   `thread`: `node scripts/kb-drive-mirror.mjs pending-drop --out <the working folder> --key <key>`.
-  Upload the manifest again, as in Step 6. A key whose thread you could not label stays, and the
+  Write the manifest again, as in Step 6. A key whose thread you could not label stays, and the
   next run names it again.
 
 Then give Peter a single summary:

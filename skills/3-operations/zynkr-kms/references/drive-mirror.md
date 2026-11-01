@@ -28,8 +28,8 @@ Atlas 知識庫 (collection kb)  ──(mirror)──▶  Google Drive Docs
 |---|---|
 | Mirror folder | `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, at the top of the owner's My Drive |
 | Section Docs | one per section, `Zynkr Support KB — NN <title>` (see registry below) |
-| Restore copy | `_KB-SNAPSHOT.json` — `1UbDlalP9rP3s0LxitM5q9GMplw3qvLm7` |
-| Run manifest | `_MANIFEST.json` — `1I0fE1bId4s5pXmQFWbwioSz0WQBUMBoM` |
+| Restore copy | `_KB-SNAPSHOT.json` — a new file every run, so found by name (the newest), never by ID |
+| Run manifest | `_MANIFEST.json` — likewise |
 | The script | `scripts/kb-drive-mirror.mjs` (v2) |
 | Working folder | `~/.workspace-mcp/attachments/kb-mirror/` — kept between runs |
 
@@ -41,7 +41,8 @@ The working folder sits under `~/.workspace-mcp/attachments/` because the `googl
 uploads only from there. Pass it to the tools as an absolute path. **Drive's `_MANIFEST.json` and
 `_KB-SNAPSHOT.json` are the record, never the working folder's copies:** every run, on every
 machine, first downloads both over the local ones (zynkr-kms Step 0), so a run on another Mac, or
-after a run that stopped half-way, builds on what Drive holds.
+after a run that stopped half-way, builds on what Drive holds. Each run writes the pair as new files
+(Upload, below), so the run finds it by name in the folder, the newest file of each name.
 
 ## Who may read it
 
@@ -129,7 +130,7 @@ says why, and the upload is skipped:
 
 Report it either way.
 
-## Upload (in place, by Doc ID)
+## Upload (Docs in place by ID, the JSON pair as new files)
 
 Upload in `upload[]`'s order, one at a time, and **stop at the first file that fails or is
 skipped**: never upload `_KB-SNAPSHOT.json` or `_MANIFEST.json` after a file before them failed,
@@ -143,7 +144,20 @@ and renders those Docs again. For each entry:
   entry's `doc_title`, so the Doc's name follows its section's title in Atlas;
 - **`00-index.md`** — the same way, to the 00 Doc;
 - **`_KB-SNAPSHOT.json` and `_MANIFEST.json`** — plain JSON files (`mime_type: "application/json"`),
-  which must **never** be converted to Docs.
+  which must **never** be converted to Docs. `update_drive_file` rewrites only Google Docs, Sheets
+  and Slides, so each is written as a **new file**: `mcp__google-workspace__create_drive_file`
+  with `file_name` its name, `folder_id` the mirror folder, the MIME type above and
+  `fileUrl: "file://<its absolute path in the working folder>"` — never `content`, which would put
+  the snapshot's text into context. A new file takes the folder's readers; check them once it is
+  written.
+
+**Then bin the pair they replace.** Once both new files are written, move the pair the run
+downloaded, and every older copy of either name, to Drive's bin: `update_drive_file` with
+`trashed: true`. Nothing else is ever binned — not a Doc, not `_KB-SNAPSHOT-CRM-<date>.json`. If
+either new file failed, bin nothing: the next run downloads the newest of each name, and a manifest
+and a snapshot from two runs make that run full by itself (above). The bin keeps a file for 30
+days, so the last month's snapshots can still be restored from it. A manifest written again later
+in the run (zynkr-kms Steps 6 and 7) is a new file too, and bins the one it replaces.
 
 A section with no Doc yet: `mcp__google-workspace__import_to_google_doc` (`file_name` = its
 `doc_title`, `file_path`, `source_format: "md"`, `folder_id` = the mirror folder), then add its ID
@@ -180,7 +194,7 @@ right after `draft_note` answers (Step 5). **A key stays in the list until `pend
 out.** Once `list_knowledge` lists it, every run names it in `pending_published` — the index no
 longer shows it as waiting — until zynkr-kms has labelled its thread and dropped it (Step 7), so a
 run that stops in between loses nothing. A draft Peter rejected is never published, so it is
-dropped by hand, and the manifest uploaded again (Step 6):
+dropped by hand, and the manifest written again (Step 6):
 
 ```bash
 node scripts/kb-drive-mirror.mjs pending-drop --out <working folder> --key <key>
@@ -194,13 +208,16 @@ node scripts/kb-drive-mirror.mjs pending-drop --out <working folder> --key <key>
   collection no section holds.
 - No body is missing: `jq '[.notes[] | select(.body_md == null)] | length' _KB-SNAPSHOT.json` → `0`.
 - Spot-check one Doc you just wrote: its `Mirrored:` line should carry this run's time.
+- The folder holds one `_MANIFEST.json` and one `_KB-SNAPSHOT.json`, both written by this run and
+  both naming its `mirrored_at`, besides the CRM era's file.
 - The first run after the move is compared key by key with the import's read-back (ATL-114
   AC-22): `jq -r '.notes[] | [.key, .sha256] | @tsv' _KB-SNAPSHOT.json | sort` must equal it line
   for line.
 
 ## Restoring from the mirror
 
-Read `_KB-SNAPSHOT.json` — not the Docs. Every note in it is whole, and each `body_md` must still
+Read the folder's newest `_KB-SNAPSHOT.json` — not the Docs (older ones wait in Drive's bin for
+30 days). Every note in it is whole, and each `body_md` must still
 hash to its `sha256`. Re-create the collections first (`kb`, then the sections), then the facts,
 then the reference cards, so every `part_of` and `cites` resolves, and keep each key exactly. A
 restore is an operator's job in Atlas, never this skill's through `draft_note`.
@@ -212,4 +229,6 @@ since the mirror began reading Atlas — never their text.
 > scoped to one workspace by hand; that script is in git history. v2 reads Atlas through MCP,
 > where the token's own workspace is the only one it can see. After the move the folder also
 > holds `_KB-SNAPSHOT-CRM-<date>.json`, the CRM era's last snapshot: kept as it is, never
-> rewritten.
+> rewritten or binned. v2's first text told the run to rewrite the JSON pair in place, which the
+> Drive tool refuses for a JSON file, so the pair written on 26 Aug was never updated; each run
+> now writes the pair as new files.
