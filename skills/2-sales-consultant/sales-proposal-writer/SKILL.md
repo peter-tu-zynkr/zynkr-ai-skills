@@ -8,7 +8,7 @@ description: >-
   client's asks by an openly-stated criterion and presents them as 第一順位／額外項目
   (never colour codes, never our internal IDs); splits them into a recurring lane
   and a one-off build lane; prices every line from the B2B pricing sheet anchored at
-  the hourly rate Atlas holds as a company fact, with the hours shown; and writes an honest-boundaries section saying
+  the hourly rate Atlas holds as a company fact, shown to the client as a fixed amount per deliverable, never as hours; and writes an honest-boundaries section saying
   what we will not do and why. On later rounds it reads the review comments on the
   document, applies them, resolves them, verifies the published body by checksum,
   and syncs the CRM note and the kickoff doc in the same pass, telling the outbound owner
@@ -63,8 +63,8 @@ new one. The revision loop below is the half that earns its keep.
 ## Fixed facts
 
 - **Pricing source of truth** — 《[2.1] Zynkr B2B Pricing Sheet (企業報價準則)》. Every number
-  traces to the hourly-rate anchor, **`<your-pricing-hourly-rate>`**. Never invent a tier; if the shape does not fit, quote
-  hours × anchor and say so.
+  traces to the hourly-rate anchor, **`<your-pricing-hourly-rate>`**. Never invent a tier; if the shape does not fit, price it
+  as hours × anchor, show the client only the amount, and keep the hours in the CRM note.
 
   > **`<your-pricing-hourly-rate>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never price a line with the blank still in it.
 - **Delivery surface** — the 交付文件 module on the Zynkr platform. Published with
@@ -132,8 +132,9 @@ The judgement, in one line the client can check: **買了之後你會的，走�
 
 ### 5 · Price it
 
-- Every line shows **hours and amount**, both derived from the anchor. The client should always
-  be able to see which hours they are paying for.
+- Every line shows **the deliverable and its amount**. Hours stay in the internal CRM pricing note
+  and never sit beside a fee in anything the client sees, so no hourly rate can be worked out
+  (owner ruling, 2026-11-01).
 - **Discounts and credits follow the 知識庫 card `b2b-enterprise-pricing`** — read it from Atlas
   before you price (`mcp__zynkr-atlas__get_knowledge`, key `b2b-enterprise-pricing`): which
   reductions exist, when an entry price credits against later fees, and what we
@@ -209,7 +210,8 @@ Proposals are not written once. When comments come back:
 6. **Publish, then verify the published body by checksum against the local file.** Same length is
    not the same content.
 7. **Resolve each comment** once its change is live.
-8. **Sync every downstream copy in the same pass**: the CRM note and the kickoff doc. If an unsent
+8. **Sync every downstream copy in the same pass**: the CRM note (amounts and hours) and the
+   kickoff doc (amounts only: hours never leave the CRM note). If an unsent
    covering email already sits in Gmail, it belongs to whoever picks up the outbound. Tell them
    which totals and lines changed, and do not rewrite their email. A stale total in an unsent
    email is the failure mode this step exists to stop.
@@ -220,10 +222,11 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
 ## Output contract
 
 - A published 交付文件 with a share URL
-- A CRM note: ranking criterion · lane split · per-line pricing with hours · internal→external
+- A CRM note (internal, the only place hours are written): ranking criterion · lane split ·
+  per-line pricing with hours · internal→external
   module mapping · anything deliberately unquoted and why
 - A handoff line for whoever picks up the outbound with this client: the share URL and
-  password, the current version, the points the covering email should land, and the chase
+  password, the current version, the points the covering email should land (amounts, never hours), and the chase
   task's due date
 - A chase task on the deal, due by the policy's follow-up rhythm
 - On revisions: the comment→change table, the checksum verification, and what was synced

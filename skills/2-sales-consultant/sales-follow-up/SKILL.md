@@ -9,7 +9,7 @@ description: >-
   sends), in the prospect's language and Peter's voice — opening by mirroring the
   exact pain points they raised, mapping each to the matching Zynkr CRM
   capability (zynkr.ai/crm), and moving them toward adopting the
-  solution, with a "sales kit attached manually" line; (2) syncs the EXISTING
+  solution, ending on a link to the Zynkr success-stories page; (2) syncs the EXISTING
   CRM deal — finds the deal / contact / company, logs the demo as a note
   activity, refreshes the deal summary, nudges the stage if warranted, closes the
   now-stale scheduling task, and creates the agreed follow-up task. Trigger on
@@ -193,8 +193,10 @@ Follow-up-specific beats, in order:
   Name Plus or team pricing only as the level-up, never as the ask, and only at the price
   `https://zynkr.ai/crm-pricing` shows that day — never one from memory. Never paste a
   feature table into the mail — link it instead.
-- **Sales-kit line** — end with 「先附上 Zynkr 的介紹資料給你參考」 so Peter's manually-attached kit
-  reads naturally.
+- **Success-page line** — end with 「先附上 Zynkr 的成功案例給你參考：https://crm.zynkr.ai/d/ce18a6456fbb4e8c95c7b85828dc1ddb2760ae5cfb704f98aad4d37c41a9ca83」
+  (the CRM 交付文件「Zynkr 成功案例」), or the same sentence in the mail's language when the prospect
+  writes in another. If the mail names anything else to attach, it is an item Atlas `sales-kit`
+  marks 可外發, named by its file name; never one marked 內部 or 暫停外發.
 
 Condensed house style (fallback only — the Doc is authoritative):
 - Greeting `Hi <名>，` / `哈囉 <名>，` / `<名> 你好，` / `<名> 您好，` (cold, HR, senior), always with a
@@ -245,7 +247,7 @@ Demo 跟進已就緒：王小明（範例科技 ExampleCo）
 
 | 產出 | 連結 / 狀態 |
 |------|------------|
-| Gmail 跟進草稿 | 已放進收件匣（threaded），待你過目 + 附 sales kit 後寄出 |
+| Gmail 跟進草稿 | 已放進收件匣（threaded），信尾附成功案例連結，待你過目後寄出 |
 | CRM Deal | <deal url>（stage: qualified → …） |
 | Demo 紀要 | note 已寫入 timeline |
 | 排程任務 | 「安排 demo」已標記完成 |
@@ -279,7 +281,7 @@ Call out anything you left for Peter's judgement (a stage you did NOT auto-advan
   email that says "here's the exact thing that fixes the problem you told me
   about" converts. That's why step 3 (ground in the solution page) exists.
 - **Email is a draft, not a send.** Outbound to a real prospect is Peter's call —
-  the skill prepares, he approves and attaches the sales kit himself.
+  the skill prepares, he approves and sends, attaching by hand anything the mail names.
 - **Don't log the email; do log the demo.** The Gmail→CRM sync captures the sent
   mail on send (logging it here = a duplicate row). The demo isn't in Gmail, so
   the demo `note` is the record only this skill can write.
