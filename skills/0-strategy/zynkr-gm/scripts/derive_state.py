@@ -21,7 +21,9 @@ Rules (today = --today):
   OVERDUE       (狀態 == 進行中 and 結束 < today) OR (狀態 == 未開始 and 開始 < today)
   UNDATED       Priority in {P0,P1}, 狀態 is LIVE, and 開始 or 結束 is blank / a `YYYY-MM-DD` placeholder
   CHANGED       any of 狀態/開始/結束/負責人 differs from the --prev snapshot (new rows count as CHANGED)
-  PROPOSE_DONE  狀態 == 進行中 and 備註 matches 完成|shipped|done|上線|已上線
+  PROPOSE_DONE  狀態 == 進行中 and 備註 says the whole item is done: 完成|結案|上線|shipped|done
+                preceded by 已/已經/already or opening a segment (「完成 2026-09-21」); not 「快完成」,
+                「WBS 10/12 完成」, 「完成度」 or a future date (「上線 11/20」)
   DONE          狀態 == 完成 (terminal; excluded from load and from every deadline/date flag)
   PAUSED        狀態 == 暫停 (no schedule; check the weekly log — a "paused" row that is actually
                 running is a real SOR divergence and belongs in the brief)
@@ -43,7 +45,14 @@ import sys
 ITEM_KEYS = ("項目（正規化）", "項目(正規化)", "項目")
 STATUS_KEY, START_KEY, END_KEY, OWNER_KEY, PRIO_KEY, NOTE_KEY, ID_KEY = "狀態", "開始", "結束", "負責人", "Priority", "備註", "#"
 CHANGE_FIELDS = (STATUS_KEY, START_KEY, END_KEY, OWNER_KEY)
-DONE_WORDS = re.compile(r"完成|shipped|done|已上線|上線", re.IGNORECASE)
+DONE_WORDS = re.compile(r"完成|結案|上線|(?<![A-Za-z])(?:shipped|done)(?![A-Za-z])", re.IGNORECASE)
+# A done-word counts only when the note says the WHOLE item is finished: 「已上線」「已經完成」, or the word
+# opens a segment (「完成 2026-09-21」「｜完成」「4. 結案」). Mid-sentence hits are progress notes about a
+# step — 「快完成」, 「WBS 10/12 完成」, 「銷售頁 11/2 上線」 — and were false PROPOSE_DONE flags (recap W44).
+DONE_ALREADY = re.compile(r"(?:已經|已经|已|already)\s*$", re.IGNORECASE)
+DONE_SEGMENT_START = re.compile(r"(?:^|[｜|：:；;。\n]|(?:^|[｜|：:；;。\n])\s*(?:\d+[.、)）]|[-•*]))\s*$")
+DONE_MEASURE_AFTER = re.compile(r"^(?:度|率|前|後|后|日|時間|时间|目標|目标)")
+DONE_DATE_AFTER = re.compile(r"^\s*[:：]?\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}/\d{1,2})")
 STATUS_NOT_STARTED, STATUS_ACTIVE, STATUS_DROPPED, STATUS_DONE, STATUS_PAUSED = "未開始", "進行中", "放棄", "完成", "暫停"
 KNOWN_STATUSES = frozenset({STATUS_NOT_STARTED, STATUS_ACTIVE, STATUS_DROPPED, STATUS_DONE, STATUS_PAUSED})
 TERMINAL_STATUSES = frozenset({STATUS_DROPPED, STATUS_DONE})      # no owner load, no flags
@@ -90,6 +99,21 @@ def parse_date(text, today):
         except ValueError:
             return None, "placeholder"
     return None, "placeholder"
+
+
+def done_word(note, today):
+    """The done-word that says the whole item is finished, or None (see DONE_ALREADY / DONE_SEGMENT_START)."""
+    for m in DONE_WORDS.finditer(note):
+        before, after = note[:m.start()], note[m.end():]
+        if DONE_MEASURE_AFTER.match(after):            # 完成度 · 完成率 · 上線日 · 上線前 — a measure, not a fact
+            continue
+        if not (DONE_ALREADY.search(before) or DONE_SEGMENT_START.search(before)):
+            continue
+        d = DONE_DATE_AFTER.match(after)
+        if d and (parse_date(d.group(1), today)[0] or today) > today:   # 「上線 11/20」 is a plan
+            continue
+        return m.group(0)
+    return None
 
 
 def is_header(row):
@@ -154,9 +178,10 @@ def derive(rows, today, prev_rows=None):
                 if diffs:
                     states.append("CHANGED")
                     evidence.extend(diffs)
-        if status == "進行中" and note and DONE_WORDS.search(note):
+        done = done_word(note, today) if status == "進行中" and note else None
+        if done:
             states.append("PROPOSE_DONE")
-            evidence.append(f"備註 matches done-word: {DONE_WORDS.search(note).group(0)!r} (status still 進行中)")
+            evidence.append(f"備註 matches done-word: {done!r} (status still 進行中)")
         if status == STATUS_DONE:
             states.append("DONE")
             evidence.append(f"狀態 {STATUS_DONE} — terminal; dropped from owner load and from deadline/date flags")
@@ -324,6 +349,15 @@ def selftest():
     assert parse_date("2026/8/5", SAMPLE_TODAY)[0] == dt.date(2026, 8, 5)
     assert parse_date("08-28", SAMPLE_TODAY)[0] == dt.date(2026, 8, 28)
     assert parse_date("", SAMPLE_TODAY) == (None, "blank")
+    # done-word must say the WHOLE item is finished (W44 recap flagged 「快完成」 and a WBS milestone)
+    t = SAMPLE_TODAY
+    for note, want in (("drip 已上線", "上線"), ("完成 2026-08-10｜名單：x", "完成"), ("備註｜完成", "完成"),
+                       ("1. 規劃稿\n2. 結案", "結案"), ("已經完成，等驗收", "完成"), ("Done", "Done"),
+                       ("already shipped", "shipped"), ("1. x\n4. 10-19 回信：快完成。名單已於 9 月匯入", None),
+                       ("章程 8/8、WBS 8/12 完成；銷售頁 9/2 上線", None), ("尚未完成", None), ("還沒上線", None),
+                       ("完成度 80%", None), ("上線日 8/20", None), ("上線 9/20", None), ("完成 8/10", "完成"),
+                       ("abandoned", None), ("not done yet", None), ("", None)):
+        assert done_word(note, t) == want, (note, done_word(note, t), want)
     render_text(res)
     print("derive_state selftest OK")
     return 0
