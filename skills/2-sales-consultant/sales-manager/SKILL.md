@@ -32,6 +32,7 @@ output: "Whatever the delegated children produced (CRM records · Gmail drafts �
 synergy: []
 type: agent
 skills: ["sales-client-sourcing", "sales-specialist", "sales-outbound", "sales-follow-up", "sales-research", "sales-proposal-writer"]
+reads: ["company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 
 ---
@@ -84,9 +85,12 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
 ## Fixed facts (don't re-derive these)
 
 - **CRM reads** use the `zynkr` MCP server: `list_deals` (optional `stage` filter),
-  `list_deal_stages`, `list_tasks`, `list_contacts`, `get_deal`, `get_company`.
+  `list_deal_stages`, `list_tasks`, `list_contacts`, `get_contact`, `get_deal`, `get_company`,
+  `whoami`, `list_tags` (`mcp__zynkr__list_tags`, given `entity_type` + `entity_id` it lists one
+  record's tags).
 - **CRM writes** use `move_deal_stage` (stage changes — never `update_deal` for stage,
-  the pipeline side-effects must fire), `update_deal`, `set_task_status`, `create_task`.
+  the pipeline side-effects must fire), `update_deal`, `set_task_status`, `create_task`,
+  `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag`.
   Every `zynkr` write tool is a two-call handshake: `confirm:false` previews,
   `confirm:true` applies.
 - **Record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}`.
@@ -174,6 +178,27 @@ pulse and `/zynkr-gm` read that phrase.
   rhythm: read the client's reply lag from the timeline, pick the fast, normal or slow days, and
   never later than a `客戶時限：` line in the deal's notes.
 
+**Tag checks.** For the contacts on the runner's own open deals (`whoami` names the runner; a
+teammate's records are theirs to fix), read `list_tags(entity_type="contact", entity_id=…)` and list
+two things under the bucket table, by `company.crm-tag-rules`:
+- **待確認 still on** — each `review-values` tag, with what clears it in the policy's 待確認 table.
+  When `get_contact` shows the gap filled (a phone, a title, a linked company), put a `remove_tag`
+  (`group="review"`) in the batch; otherwise the row says what to fill in. 來源不明 is filled once
+  `list_tags` shows a 來源 other than 其他. `get_contact` does not return `legal_basis`, so
+  同意權未確認 is never removed here: its row asks the owner to check the consent in the app and
+  remove the tag there.
+- **No 來源** — the tag is where the person first came from, and a deal's `lead_source` is only how
+  that deal came in; policy §1 ties the two on a contact's first deal alone. So use a deal only when
+  it is the only deal naming this contact in the deals REVIEW read (all stages, open and closed);
+  with more than one, the row asks the owner. Every proposal sits in the one batch the owner agrees. Put a 來源 (`group="source"`, `source="rule"`) in the batch when that deal's
+  `lead_source` maps back to exactly one value in `source-to-lead-source`. When it maps back to
+  several and one of them is 其他, the batch proposes 其他 with the 待確認 value 來源不明
+  (`group="review"`) beside it, as policy §1 says; if the owner picks another of those values in the
+  batch, 來源不明 leaves the batch with it. Otherwise the row asks the owner which value it is. Never
+  infer it from a job title or an industry.
+
+> **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). `group` is the platform's English key (`source`, `review`) and `name` is the policy's value. If Atlas cannot be reached, the key or a line you need is missing, or any of `mcp__zynkr__list_tags`, `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag` is not among your tools, skip the tag checks, put no tag change in the batch, and say so in the report; the rest of REVIEW runs as usual. A tag change in the batch that answers `not_found`, `invalid_input` or any other error except `conflict` (`forbidden`, `rate_limited`, `internal`, …) is left undone and listed in the report, with no retry and no stopping to ask; on `conflict`, read the contact back with `list_tags`, report what it shows, and do not retry. Never fall back to a value from memory or from an older copy of this file.
+
 This file is where the buckets and the band are defined from the policy's words. The team's
 Monday sales pulse mail applies the same policy to every member.
 
@@ -195,11 +220,14 @@ only after a single explicit confirmation:
 移到 lost      · 3 個 deal   — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
 關掉過期 task  · 8 個        — 早已完成或已無意義
 建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度）
+加／移除標籤   · 4 位聯絡人 — 待確認已補齊的移除；沒有來源、lead_source 對得上的補上
 
 要我執行嗎？想留下哪一筆，說一聲原因就好
 ```
 
-Fill `<stale-days>` with the policy's number when you write the batch.
+Fill `<stale-days>` with the policy's number when you write the batch. Each tag change in it is
+`apply_tag` or `remove_tag` (`entity_type="contact"`), previewed, then repeated with `confirm:true`
+after the one confirmation, then read back with `list_tags`.
 A stale deal moved to `lost` gets one note on the deal — `放掉 · stale（company.sales-pipeline-rules <value date>）：最後一次客戶往來 <date>` —
 so whoever reopens it sees why. A stale deal the owner keeps gets their reason as a note instead,
 and stays out of the batch.
@@ -216,7 +244,8 @@ Rules:
 ### 6 · Report
 
 State the mode, what each child produced (with record URLs), and — for REVIEW — the
-`company.sales-pipeline-rules` version used (its `value:` date), the band lines, the bucket counts and
+`company.sales-pipeline-rules` version used (its `value:` date), the band lines, the bucket counts,
+the two tag-check counts with the `company.crm-tag-rules` version (or why they were skipped), and
 exactly what the confirmed batch changed. If the batch was declined,
 say so plainly and leave the list.
 

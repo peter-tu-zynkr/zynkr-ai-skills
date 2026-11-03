@@ -362,26 +362,46 @@ Best regards,
 | `owner_id` | 7.1 解出的 id | |
 
 **不建公司、不建 deal、不手動記活動。** 名單沒有公司欄位；deal 等對方有回應再照 Mode A 建，
-所以 pipeline 數字不受影響。活動不用自己記，因為有兩種會自動產生：
+所以 pipeline 數字不受影響。唯一的例外是 7.4 的 `標籤建議` note：標籤貼不上時記一則，讓人之後手動補。
+活動不用自己記，因為有兩種會自動產生：
 - `create_contact` 一定會寫一筆 `created` 活動。
 - 從有連 Google 的信箱寄出後，Gmail 同步會把五封外寄信都記在這個聯絡人身上。
 
 代價要知道：一批 5 人、每人 5 封，首頁動態牆會被這些外寄信擠滿，真正 deal 的往來會被往下推。
 
-### 7.4 · 先預覽再寫入
+### 7.4 · 先預覽再寫入，接著貼標籤
 
 `create_contact` 是兩段式：先 `confirm:false` 預覽，
 **當輪全部預覽沒錯**，再逐筆 `confirm:true` 寫入。任一筆預覽報錯就整批先停，不要寫一半。
 
+聯絡人寫入後，同一步替**當輪新建的每一位**貼標籤，跟聯絡人算同一批，不另外再問一次。
+值只取 Atlas `company.crm-tag-rules` 列出的（讀法在 SKILL.md Workflow 第 4 步那一行）：
+
+- **來源**（`group="source"`）：取政策 `outbound-mode-b-source` 那一行的值，不要自己挑。
+- **待確認**（`group="review"`）：一個缺漏貼一個值。`電話` 空白 → 電話缺漏；`職業` 空白或「其它」→ 待補職稱；
+  信箱是公司網域（不是 gmail、yahoo 這類個人信箱）→ 未關聯公司（這一步不建公司，所以公司網域的人都會貼）；
+  `legal_basis` 空白 → 同意權未確認（7.3 一律帶，正常不會貼）。
+- 兩組都是固定規則，`source` 一律 `"rule"`。每個標籤先
+  `mcp__zynkr__apply_tag(group=…, name=…, entity_type="contact", entity_id=<id>, source="rule")` 預覽，
+  再用同一個呼叫加 `confirm:true` 寫入。
+
+**貼不上就記下來，不要硬貼。** 政策讀不到、缺要用的那一行、可用工具裡沒有 `mcp__zynkr__list_tags`
+或 `mcp__zynkr__apply_tag`，或它回 `not_found`（CRM 還沒有這個值）或 `invalid_input`（值已封存、組別不適用），
+那個標籤就不貼，改寫一則
+`mcp__zynkr__create_note(contact_id=<id>, subject="標籤建議", body=<一行一個 標籤建議：<group>=<value>>)`，
+一位最多一則，一樣先預覽再 `confirm:true`。整份政策讀不到時只記證據（`標籤建議：來源=陌開名單`），
+不憑記憶挑值。回 `conflict` 就用 `list_tags` 讀回、照實回報，不重試；其他錯誤（`forbidden`、`rate_limited`、`internal` 等）比照 `not_found`，不重試也不停下來問。標籤失敗不影響已建的聯絡人，不要回頭刪。
+
 ### 7.5 · 驗收與回報
 
 寫完逐筆 `get_contact(id)` 重讀，核對 `email`、`lifecycle_stage` 兩欄，
+再用 `mcp__zynkr__list_tags(entity_type="contact", entity_id=<id>)` 讀回標籤，核對跟預覽一致，
 不要只信寫入工具回傳的成功訊息。負責人讀不回來（`get_contact` 不回傳 `owner_id`），以預覽裡的負責人為準，
 回報表附上聯絡人連結，讓人點開確認。交付文件的「收件人」表填 `CRM 聯絡人` 那列，回報加一張表：
 
 ```
-| 姓名 | Email | CRM | 負責人 | 結果 |
-| 某某 | x@y.com | https://platform.zynkr.ai/contacts/{id} | {成員名} | 新建／既有略過／對不到成員 |
+| 姓名 | Email | CRM | 負責人 | 標籤 | 結果 |
+| 某某 | x@y.com | https://platform.zynkr.ai/contacts/{id} | {成員名} | 來源 · 電話缺漏（已讀回）／標籤建議（原因） | 新建／既有略過／對不到成員 |
 ```
 
 「對不到成員」與「既有略過」的列放最上面，那些要人手動處理。

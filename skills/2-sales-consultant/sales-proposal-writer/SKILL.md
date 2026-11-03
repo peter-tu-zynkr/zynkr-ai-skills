@@ -32,7 +32,7 @@ input: "A CRM deal id or name, plus the client's own material — a requirement 
 process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into recurring and build lanes → price each line at the hourly rate → publish as 交付文件 → CRM note + chase task. Revisions: comment → apply → resolve → checksum → sync."
 output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note with the pricing rationale, a chase task on the deal, and a handoff line for the outbound owner's covering email."
 synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "project-init"]
-reads: ["company.pricing-hourly-rate", "b2b-enterprise-pricing", "company.sales-pipeline-rules"]
+reads: ["company.pricing-hourly-rate", "b2b-enterprise-pricing", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 type: agent
 ---
@@ -187,6 +187,22 @@ chase task is already on the deal.
 
 > **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
+**Tag the product.** Publishing a proposal is when the policy's 產品 tag (`group="product"`) is
+applied. Tag the deal's contact and its company (ids from `get_deal`; when the deal has no
+`company_id`, the contact only; when it has no `contact_id`, the company only; with neither, no
+tag) with one `product-values` value per product line the proposal prices. The value comes from the
+proposal's own priced lines, not from the deal's `service_tier`, which `get_deal` does not return.
+A published proposal is a fixed rule, so `source="rule"`. 產品 only grows:
+read `mcp__zynkr__list_tags(entity_type=…, entity_id=…)` first and skip a value already there, which
+is what keeps a revision round from tagging twice. Each tag is
+`mcp__zynkr__apply_tag(group=…, name=…, entity_type=…, entity_id=…, source="rule")`, previewed, then
+repeated with `confirm:true`, then read back with `list_tags`. A priced line that fits no value is
+written as `標籤建議：產品=<value>（新值）`, the policy's own form. Any tag left unapplied goes into
+one `mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)` (or `company_id=…` when the
+deal has no contact), and the handoff line says so.
+
+> **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `relationship`, `product`, `size`, `interest`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input` (an archived value, a group that does not fit the record): write each tag you would have applied as one line `標籤建議：<group>=<value>` in a CRM note on the record, say so in the report, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：主題=<what they asked about, in brief>`, `標籤建議：來源=<the channel they came through>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the record back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
+
 ## Client-facing language
 
 Beyond House style, three rules this surface gets wrong most:
@@ -234,6 +250,7 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
   password, the current version, the points the covering email should land (amounts, never hours), and the chase
   task's due date
 - A chase task on the deal, due by the policy's follow-up rhythm
+- The proposal's 產品 tags on the contact and the company, read back (or the `標籤建議` note)
 - On revisions: the comment→change table, the checksum verification, and what was synced
 
 ## House style

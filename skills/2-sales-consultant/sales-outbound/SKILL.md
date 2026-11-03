@@ -30,7 +30,7 @@ input: "ONE person's interest signal carrying an email — a pasted DM/chat thre
 process: "Parse the signal → enrich from any profile link → write the CRM lead (find-or-create company + contact, new deal, source note, follow-up task) → if a meeting is the ask, read the calendar for three 台北時間 slots → draft the Gmail reply → report."
 output: "A CRM lead (company + contact + deal + note + task) in Zynkr CRM, plus a Gmail draft in Peter's inbox — with three calendar-checked 台北時間 slots when a meeting is the ask."
 synergy: []
-reads: ["gov-subsidy-mechanics", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules"]
+reads: ["gov-subsidy-mechanics", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 
 ---
@@ -68,7 +68,8 @@ transcript (that is `sales-follow-up`).
 
 It runs **autonomously**: parse → enrich → write CRM → check calendar → draft email
 → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
-before sending) and the CRM write is one atomic statement.
+before sending) and the CRM write is one atomic statement. Tagging the new contact comes after
+that statement, as its own small step (step 4): a failed tag never undoes the lead.
 
 ## Two modes
 
@@ -85,6 +86,7 @@ Mode B 的認領與接觸紀錄寫在 `Outbound touches` 試算表：認領寫 `
 **最後一步把當輪的人建成 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）：`lifecycle_stage=lead`、負責人＝實際去聯絡的人，
 **不建 deal**。pipeline 數字只看 deal，所以聯絡人進 CRM 不會灌水；
 好處是對方一回信，Gmail 同步就有聯絡人可掛、也看得到該找誰。
+新建的聯絡人同一步貼上標籤：來源取政策的 `outbound-mode-b-source`，加上看到的缺漏對應的 待確認，依 `company.crm-tag-rules`（`sequence-5touch.md` 7.4）。
 
 > **下表的空白是公司事實——逐一從 Atlas 讀**（`zynkr-atlas` MCP 的 `get_knowledge`，key 見表，值在 `value:` 那一行）。Atlas 連不上、沒有這個 key、或沒有 `value:` 那一行，就停下來問；絕不帶著空白直接執行。
 
@@ -226,9 +228,38 @@ blocking: `list_contacts(search=<email>)` to dedupe, then `create_contact` →
 resolve workspace + pipeline natively, but two things the SQL did for free you must
 now pass explicitly: **`legal_basis`** (`legitimate_interest` — the same house value
 baked into the SQL) and **`owner_id`** (Peter's workspace member id, from `whoami`).
-There is no find-or-create on this path, hence the explicit dedupe first.
+There is no find-or-create on this path, hence the explicit dedupe first. On either path, write
+the phone and title the signal gave (`{{PHONE}}` / `{{TITLE}}`, or `phone` / `title` on
+`create_contact`); the 待確認 gaps below are judged on what was written, not on the signal.
 
 See *Inference defaults* below for the enum fields.
+
+**Tag the contact.** After the insert, tag the contact **only when this run created it**
+(`contact_existed` false). An existing contact keeps its tags: a missing 來源 there is
+`/sales-manager` REVIEW's to find. Use the `zynkr` MCP. This is the tool's own handshake, not a
+question to Peter: each tag is
+`mcp__zynkr__apply_tag(group=…, name=…, entity_type="contact", entity_id=<contact_id>, source="rule")`
+to preview, then the same call with `confirm:true`. Both groups come from fixed rules, so `source`
+is `rule`.
+- **來源** (`group="source"`) — the value on the policy's `outbound-mode-a-source` line, but only
+  when its entry in `source-to-lead-source` equals the deal's `lead_source`. When they differ (an
+  event feedback row is `workshop`, an introduction `referral`), apply none and write
+  `標籤建議：來源=<the channel they came through>`.
+- **待確認** (`group="review"`) — one value from `review-values` per gap: no phone → 電話缺漏, no
+  title → 待補職稱, a company email or company name but no company record → 未關聯公司. The insert
+  always sets `legal_basis`, so 同意權未確認 does not arise here.
+
+Never infer a tag from a job title or an industry. Read the result back with
+`mcp__zynkr__list_tags(entity_type="contact", entity_id=<contact_id>)` and report what it shows.
+When the policy or either tag tool is missing, apply nothing and put **no** tag suggestion into
+`{{NOTE_BODY}}`: the insert is a find-or-create, so before it runs you cannot know whether the
+contact is new, and a suggestion followed by hand on an existing contact would change a complete
+record. Only after the insert returns `contact_existed` false, and only when
+`mcp__zynkr__create_note` is among your tools, write the 來源 and 待確認 suggestions in one
+`mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)`; otherwise write none. A tag
+refused after the insert goes into that same kind of note.
+
+> **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `relationship`, `product`, `size`, `interest`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input` (an archived value, a group that does not fit the record): write each tag you would have applied as one line `標籤建議：<group>=<value>` in a CRM note on the record, say so in the report, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：主題=<what they asked about, in brief>`, `標籤建議：來源=<the channel they came through>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the record back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
 
 ### 5 · If the ask is a meeting, derive three REAL slots
 
@@ -332,6 +363,7 @@ Show the client card, then a compact artifact table:
 | 聯絡人 | <contact url>（新建 / 既有） |
 | 公司 | <company url>（新建 / 既有） |
 | 活動 | note · 1 task |
+| 標籤 | 來源=… · 待確認=…（已讀回）／ 未貼，標籤建議已記在 note（原因） |
 | Gmail 草稿 | 已放進收件匣，待你過目後寄出（已確認未寄出） |
 ```
 
@@ -435,6 +467,8 @@ unchecked. Never re-implement either list inside this file.
 7. **最後把當輪名單寫進 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）。負責人＝接觸紀錄的 `接觸人員`
    （沒有就用 `認領人`），用 `list_workspace_members` 對成員 id，對不到就跳過那一位，不要猜。
    先用 email 查重，只建新的；已經在 CRM 的人不寫入，回報「既有，略過」。`lifecycle_stage` 一定要帶 `lead`（工具預設是 `opportunity`）。**不建 deal。**
+   新建的每一位貼 來源（政策的 `outbound-mode-b-source`）與缺漏對應的 待確認（`source: "rule"`），跟聯絡人同一批寫入、寫完用 `list_tags` 讀回，不另外再問一次；
+   標籤規則讀不到、沒有標籤工具、或工具拒絕，就不貼，改記一行 `標籤建議：` note（讀法與降級見上方 Workflow 第 4 步的 `company.crm-tag-rules` 那一行）。
 
 > 這批人是付過錢、上過 9–17 場的學員，`zynkr.ai` 網域信譽與《彼得的外商隨筆》電子報共用。
 > 被檢舉成垃圾郵件是整個網域一起遭殃，不是這一封的事。

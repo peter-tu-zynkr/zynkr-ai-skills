@@ -33,6 +33,7 @@ input: "A demo transcript — a Fireflies meeting (id/URL/name; preferred), a Go
 process: "Parse the transcript (pains / what was shown / feedback / next steps) → map pains to solution-page capabilities → draft a threaded Gmail follow-up (never send) → sync the existing deal (demo note, refreshed summary, stage nudge, follow-up task) → report."
 output: "A threaded Gmail follow-up draft in Peter's inbox + an updated CRM deal (demo note, refreshed summary, follow-up task). Doesn't log the email — Gmail sync captures it on send."
 synergy: ["sales-outbound", "project-init", "sales-specialist"]
+reads: ["company.sales-pipeline-rules"]
 house-style: bound
 
 ---

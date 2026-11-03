@@ -18,6 +18,7 @@ synergy:
   - "sales-proposal-writer"
 type: agent
 skills: ["sales-discovery-pains", "sales-discovery-vision"]
+reads: ["company.contact-email", "company.crm-tag-rules"]
 house-style: bound
 
 ---
@@ -108,17 +109,40 @@ writes the proposal or runs the consulting work finds them there and not only in
    never creates a deal; Sales opens it (`/sales-inbound`, `/sales-outbound`). If there is no deal,
    say so, print the summaries, and skip to the hand-off.
 2. **Log the call as a meeting.** Call `mcp__zynkr__log_meeting(deal_id=…, subject="[DISCOVERY] 痛點與願景摘要",
-   body=…, occurred_at=<when the call happened, ISO 8601>)`. The deal is the only parent. Preview it, show
-   the user the preview, and re-call with `confirm:true` only after they agree.
+   body=…, occurred_at=<when the call happened, ISO 8601>)`. The deal is the only parent. Preview it
+   together with the tag writes of item 3 (and their `標籤建議` note, if any), show the user all of
+   it as one preview, and re-call each with `confirm:true` only after they agree: one question, not two.
    - Pass `occurred_at` whenever the call was not today.
    - The body is `STAGE1_SUMMARY` under 「痛點（需求定義）」, then `STAGE2_SUMMARY` under 「願景（策略探索）」, in the
      client's language and exactly as the user agreed them.
    - If only one stage ran, log that one and say which.
-3. **Use a meeting entry and nothing else.** Never write the summaries into the deal's `notes` field. Other
+3. **The tags in that preview.** `company.crm-tag-rules` gives this call the tags below. Every one is
+   `source="ai"`, because it is read from what the client said. They go on the deal's contact and,
+   for 產品 and 關係, on its company too (both ids from `get_deal`; when the deal has no `company_id`,
+   skip the company; when it has no `contact_id`, skip the contact and its 主題, and file any
+   suggestion note on the company with `company_id`; with neither, apply no tag and say so):
+   - **主題** (`group="interest"`) — the `interest-values` topics the client said they care about
+     (contact only).
+   - **產品** (`group="product"`) — a `product-values` line the client named as wanted. What we only
+     recommended does not count.
+   - **關係** (`group="relationship"`) — a `relationship-values-skills-write` value, only when the
+     client said it or the relationship is explicit.
+
+   Nothing said, no tag; never from a job title or the industry. Read
+   `mcp__zynkr__list_tags(entity_type=…, entity_id=…)` first and skip a value already there. Each tag is
+   `mcp__zynkr__apply_tag(group=…, name=…, entity_type=…, entity_id=…, source="ai")`, previewed with the
+   meeting, then repeated with `confirm:true`; read the result back with `list_tags`. A tag left
+   unapplied goes into one `mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)` (or
+   `company_id=…` when the deal has no contact), in the same preview and the same agreement.
+
+   > **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `relationship`, `product`, `size`, `interest`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input` (an archived value, a group that does not fit the record): write each tag you would have applied as one line `標籤建議：<group>=<value>` in a CRM note on the record, say so in the report, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：主題=<what they asked about, in brief>`, `標籤建議：來源=<the channel they came through>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the record back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
+4. **Use a meeting entry and nothing else.** Never write the summaries into the deal's `notes` field. Other
    skills parse its link lines (`專案資料夾：<url>`, `部署紀錄（<SPEC_ID>）：<url>`), and `update_deal`
    replaces the whole field. Never use the description either, which is not shown on the deal. The call
-   happened, so log it as a meeting, not a note.
-4. **Say what was saved:** the subject, the date, and the deal it went on. No tool reads a deal's timeline
+   happened, so log it as a meeting, not a note. The one note this skill may write is item 3's
+   `標籤建議` note, and it holds tag suggestions, never the summaries.
+5. **Say what was saved:** the subject, the date, the deal it went on, and the tags as `list_tags`
+   read them back (or the `標籤建議` note and why). No tool reads a deal's timeline
    back yet (`get_deal` returns the fields only), so the next skill does not see this entry on its own.
    Hand the summaries on in the same conversation, or tell the user they are on the deal's timeline.
 

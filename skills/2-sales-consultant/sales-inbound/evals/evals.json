@@ -18,6 +18,7 @@
         "Created no Drive folder and no kickoff doc",
         "The deal notes carry the source line and the brief context, and no 專案資料夾： line",
         "Skipped the GA4 Test row as a test (no deal and no draft for it)",
+        "Opened the deal with lead_source=content (how the inquiry came in, not any existing tag). If this run created Jane's contact, tagged it by company.crm-tag-rules: 來源 (group=source, source=rule) only when its source-to-lead-source entry equals content, 主題 (group=interest, source=ai) only for topics her inquiry names, 待確認 (group=review) only for gaps the inquiry could not fill; read back with list_tags. Where the policy or a tag tool is unavailable or apply_tag refuses, applied none and wrote a 標籤建議 note instead",
         "Reported the summary table (交易 and 回覆草稿 columns, no folder column) listing both leads and their outcomes"
       ]
     },
@@ -34,6 +35,7 @@
         "Created 0 new deals — no duplicate Jane deal (DB count stays 1)",
         "Created 0 new reply drafts — Jane's draft from eval 0 is not duplicated",
         "Created no Drive folder or doc",
+        "Applied no tag and wrote no 標籤建議 note on the re-run",
         "Reported that nothing new was created, with per-lead skip reasons"
       ]
     }

@@ -32,6 +32,7 @@ synergy:
 reads:
   - "kb"
   - "company.sales-pipeline-rules"
+  - "company.crm-tag-rules"
 house-style: bound
 
 ---
@@ -209,9 +210,11 @@ Every write previews first — call it once without `confirm`, then again with
    `mcp__zynkr__create_company(name="<Company>", confirm=true)`. Keep the id.
 2. **Contact** — `mcp__zynkr__list_contacts(search="<Email>")`; on no match,
    `mcp__zynkr__create_contact(first_name="<Name>", email="<Email>",
+   phone="<phone, if the inquiry gives one>", title="<title, if it gives one>",
    company_id="<company id, if any>", legal_basis="consent",
    lifecycle_stage="lead", confirm=true)`. Keep the id. `legal_basis` is
-   required by the tool — an inbound form submission is `consent`.
+   required by the tool — an inbound form submission is `consent`. Leave out
+   `phone` and `title` when the inquiry does not carry them.
 3. **Deal** — `mcp__zynkr__create_deal(name="<DEAL_NAME>", contact_id=…,
    company_id=…, stage="new", service_tier="advisory", priority="medium",
    lead_source="content", close_date="<today + 30 days>", notes="<NOTES>",
@@ -227,12 +230,34 @@ Every write previews first — call it once without `confirm`, then again with
 5. **Owner's open-deal count** — count the owner's open deals (stage not `won`/`lost`). At or
    over `max-open-deals`, the lead is still logged; the report says
    `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
+6. **Tags** — only on a contact this run created in item 2; an existing contact keeps its tags
+   (a missing 來源 there is `/sales-manager` REVIEW's to find). By `company.crm-tag-rules` (its line
+   is below), each tag is
+   `mcp__zynkr__apply_tag(group=…, name=…, entity_type="contact", entity_id=<contact id>, source=…)`,
+   previewed, then repeated with `confirm=true`.
+   - **來源** (`group="source"`, `source="rule"`) — the `source-values` value the policy's 來源 table
+     gives for how they reached us, applied only when its entry in `source-to-lead-source` equals
+     the `lead_source` item 3 set. When the channel cannot be told, apply 其他 and add the 待確認
+     value 來源不明 (policy §1). When they differ, apply none and write
+     `標籤建議：來源=<the channel they came through>`.
+   - **主題** (`group="interest"`, `source="ai"`) — the `interest-values` the inquiry itself asks
+     about, and none when it names none. Never from their title or their company's industry.
+   - **待確認** (`group="review"`, `source="rule"`) — only for a gap item 2 could not fill: no phone →
+     電話缺漏, no title → 待補職稱, a company email or company name but no linked company → 未關聯公司,
+     and 來源不明 as the 來源 bullet says.
+
+   Read them back with `mcp__zynkr__list_tags(entity_type="contact", entity_id=…)`. A tag left
+   unapplied (see the line below) goes into one
+   `mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)`, previewed then confirmed; the
+   deal is logged either way.
+
+> **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `relationship`, `product`, `size`, `interest`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input` (an archived value, a group that does not fit the record): write each tag you would have applied as one line `標籤建議：<group>=<value>` in a CRM note on the record, say so in the report, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：主題=<what they asked about, in brief>`, `標籤建議：來源=<the channel they came through>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the record back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
 
 > **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
 
 **`lead_status` / `deal_status` stay empty** — the MCP cannot set them on the
 contact. The attribution lives on the deal as `lead_source="content"` — look there, not on the
-contact.
+contact. A new contact's 來源 tag agrees with it (item 6).
 
 Values:
 
@@ -257,6 +282,9 @@ For an Inbound Sales lead the source line is `來源：Inbound Sales 信件 · <
 `lead_source` follows how they found Peter: `content` (a post or the website),
 `workshop` (an event or livestream they name), `referral` (a warm introduction),
 otherwise `other`. Never `outbound`: they wrote in.
+That rule is how this inquiry came in, never the contact's existing 來源 tag: a contact an earlier
+outbound round filed still opens an inbound deal here. It does not need the tag policy: without it
+the deal opens the same way and only the tags wait.
 
 `create_deal` returns the new `deal_id`; the report links it. If step 3 already
 flagged this lead as handled, you never reach here, and the report says so.
@@ -313,14 +341,15 @@ inquiry, including the skipped ones so nothing is silently dropped:
 ```
 本週進件：官網 N 封 · Inbound Sales K 封，建立 M 筆
 
-| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 跟進任務 | 回覆草稿 |
-|---|------|------|------|------|------|----------|----------|
-| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | 10/28 到期 | ✅ 已擬 |
-| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — |
-| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | — | ⏭️ 已回過 |
+| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 跟進任務 | 標籤 | 回覆草稿 |
+|---|------|------|------|------|------|----------|------|----------|
+| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | 10/28 到期 | 來源 · 主題 ×2 · 待確認 ×1（已讀回） | ✅ 已擬 |
+| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — | — |
+| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | — | — | ⏭️ 已回過 |
 ```
 
-Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
+In the 標籤 column name the values applied; a lead whose tags were not applied says
+`標籤建議已記在 note` and why. Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
 any `[[NEEDS PETER]]` drafts (and, when the 知識庫 walk failed, that it did, so every price
 answer waited), and state the headline in prose (e.g. "Created 2 deals +
 2 reply drafts; skipped 1 test and 1 already-processed; 1 proposal waiting for you").

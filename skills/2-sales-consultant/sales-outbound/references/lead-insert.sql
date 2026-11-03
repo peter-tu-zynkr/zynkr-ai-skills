@@ -16,6 +16,7 @@
 --   {{LAST_NAME}}        e.g. NULL
 --   {{EMAIL}}            e.g. 'prospect@example.com'    (find-or-create key; keep real)
 --   {{TITLE}}            e.g. '品牌策略行銷顧問'           (or NULL)
+--   {{PHONE}}            e.g. '0912-345-678'              (as the signal gave it, or NULL)
 --   {{CONTACT_LIFECYCLE}} e.g. 'sql'                      (lifecycle_stage enum)
 --
 -- BAKED IN (not a placeholder): legal_basis = 'legitimate_interest'.
@@ -79,8 +80,8 @@ existing_contact AS (
   LIMIT 1
 ),
 new_contact AS (
-  INSERT INTO crm_contacts (first_name, last_name, email, title, company_id, owner_id, workspace_id, lifecycle_stage, legal_basis, last_contacted_at)
-  SELECT {{FIRST_NAME}}, {{LAST_NAME}}, {{EMAIL}}, {{TITLE}},
+  INSERT INTO crm_contacts (first_name, last_name, email, title, phone, company_id, owner_id, workspace_id, lifecycle_stage, legal_basis, last_contacted_at)
+  SELECT {{FIRST_NAME}}, {{LAST_NAME}}, {{EMAIL}}, {{TITLE}}, {{PHONE}},
          (SELECT id FROM company LIMIT 1),
          (SELECT uid FROM peter), (SELECT uid FROM peter), {{CONTACT_LIFECYCLE}}::lifecycle_stage,
          'legitimate_interest'::legal_basis, now()
