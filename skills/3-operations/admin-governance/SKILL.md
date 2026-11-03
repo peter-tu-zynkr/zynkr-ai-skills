@@ -1,7 +1,7 @@
 ---
 name: admin-governance
 sheetId: "3.05"
-description: "Weekly hygiene ritual for Zynkr's local↔cloud knowledge governance. Lists Google Drive Docs modified in the last N days across the 8 LOB folders (and Drive root), diffs against local `_INDEX.md` entries in `~/Desktop/Claude/zynkr/`, and proposes specific index edits: new entries to add, broken/renamed links to fix, deleted Docs to remove. Triggers on phrases like 'drift check', 'weekly hygiene', 'sync indexes', 'check cloud changes', 'what changed in cloud this week', '/admin-governance', or when the user pastes nothing but asks to reconcile local/cloud state. Should fire eagerly when the user references the weekly hygiene ritual from the Zynkr knowledge-governance model."
+description: "Weekly hygiene ritual for Zynkr's local↔cloud knowledge governance. Lists Google Drive Docs modified in the last N days across the nine department folders [0]–[8] (and Drive root), diffs against local `_INDEX.md` entries in `~/Desktop/Claude/zynkr/`, and proposes specific index edits: new entries to add, broken/renamed links to fix, deleted Docs to remove. Triggers on phrases like 'drift check', 'weekly hygiene', 'sync indexes', 'check cloud changes', 'what changed in cloud this week', '/admin-governance', or when the user pastes nothing but asks to reconcile local/cloud state. Should fire eagerly when the user references the weekly hygiene ritual from the Zynkr knowledge-governance model."
 category: operations
 project: admin-governance
 platform: claude
@@ -54,9 +54,9 @@ Call `mcp__google-workspace__list_drive_items` with:
 - `folder_id`: from `references/lob-folder-map.md`
 - `page_size`: 100
 
-Some LOBs map to multiple cloud folders (e.g., `7` → `[7.1]`, `[7.2]`, `[7.3]`). List each.
+Each department is one Drive folder with numbered sub-folders (e.g., `7` → `[7.1]`, `[7.2]`, `[7.3]`). List the department folder's first level, then each sub-folder the map names. Skip every `[N.9] 封存` archive.
 
-For LOB `5` the cloud counterpart is the `[5.x]` series under the Drive root (`1rqkpNt1NFmRXhXnVAXL_eoXVfON4qD32`) — list the root and filter to children whose name starts with `[5.`.
+List the Drive root (`1rqkpNt1NFmRXhXnVAXL_eoXVfON4qD32`) once as well: since 2026-11-03 it holds only the nine department folders, so anything else there is misfiled — report it with the department it belongs in.
 
 ### 2b. Filter to the time window
 
@@ -117,7 +117,7 @@ Drift check — 2026-05-27 (window: 7 days, scope: all): all clean ✓
 ## 4) Self-checks
 
 - Did you scan every LOB in scope? Cross-check against `references/lob-folder-map.md`.
-- Did you handle the `[5.x]` multi-folder case?
+- Did you list the Drive root and report anything misfiled there?
 - Did you handle the `[7.x]` multi-folder case?
 - Did you skip the BROKEN check when window < 30d, and say so?
 

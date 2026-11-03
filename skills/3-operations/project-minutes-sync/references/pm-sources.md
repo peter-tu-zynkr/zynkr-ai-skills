@@ -61,18 +61,28 @@ with no config file present. Use them verbatim; do not re-derive them from a Dri
 | **會議記錄** | `[會議記錄]` — 進度更新（狀態 On track／At risk／Delayed／Done, a **health** reading）· 提醒與阻礙 · 決議 · Action Items（`對應管控表任務 no.`）· 討論摘要 | Doc | `1NbaL92dg0NWty5Wba-tlIWGE7d0qm0R0aXtFgbkOeNs` |
 | **復盤** | `[復盤]` — §1 結案確認（通過／有條件通過／未交付, the **closure verdict** axis）· §2 成果 vs BC · §3 Lessons · §4 封存檢查表（7 boxes, 2 客戶案-only）· §5 PIR 30–90 天 | Doc | `1mHrs1M_hasg9mjIeuiJDWBsoXx_d0-GjLCPt9YvnveY` |
 
-**Where they live.** Template folder is `[3.3] 專案管理 PMO｜Playbook & Templates` →
-sub-folder `[1] Templates 模板庫`, which holds **exactly these 7 template files** (the
-Playbook itself sits one level up). Copy from there and nowhere else — 鐵律 2.
+**Where they live.** Template folder is `[5.2] 專案管理 PMO｜Playbook & Templates` (inside
+`[5] 流程優化部門 (Transform)`) → sub-folder `[1] Templates 模板庫`, which holds **exactly these
+7 template files** (the Playbook itself sits one level up). Copy from there and nowhere else —
+鐵律 2.
 
 **Folder name — corrected at source on 2026-09-02.** The five PMO Docs used to write the
 template folder as `[3.4]`. All **17** occurrences were corrected to `[3.3]` on **2026-09-02**
-— Playbook 12 · Business Case 1 · Kickoff 1 · 會議記錄 1 · 復盤 2. `[3.3]` is now both the
+— Playbook 12 · Business Case 1 · Kickoff 1 · 會議記錄 1 · 復盤 2. `[3.3]` was then both the
 real name and the 原文: **鐵律 2 genuinely reads `[3.3]`**, so quote it as it stands. There is
 no live drift left to preserve — the old instruction to quote a `[3.4]` and flag it in the
 same breath is now wrong, and any skill text still carrying it is stale and must be deleted.
-Cite `[3.3]/[1]` everywhere, in quotation and in prose alike. If `[3.4]` ever reappears in a
-live PMO Doc, that is *new* drift: fix the Doc, do not re-introduce a workaround here.
+If `[3.4]` ever reappears in a live PMO Doc, that is *new* drift: fix the Doc, do not
+re-introduce a workaround here.
+
+**Folder renamed `[3.3]` → `[5.2]` on 2026-11-03 (Taxonomy v3, `SKB-101`).** The Drive
+restructure moved the PMO folder into `[5] 流程優化部門 (Transform)` and renamed it
+`[5.2] 專案管理 PMO｜Playbook & Templates`; its ID (`1nnoKI115tWCMPOXTuWCbCW445v3BJZy6`) and
+the 8 artefact IDs above did not change. The five PMO Docs were corrected the same day: all
+**17** `[3.3]` → `[5.2]` (same split as above), so **鐵律 2 now genuinely reads `[5.2]/[1]`** —
+quote it as it stands and cite `[5.2]/[1]` everywhere. The Playbook's filing map also now
+says client projects live in `[3.1] 顧問部門：專案`. If `[3.3]` ever reappears in a live PMO Doc
+as the folder name, that is *new* drift: fix the Doc, do not add a workaround here.
 
 **Sub-folders inside a live project:** `[1] 會議` · `[2] 素材` · `[3] 交付物` · `[4] 封存`.
 
@@ -121,7 +131,7 @@ is §3.
     "客戶案": {
       "filing_home": {
         "folder_id": "<folder-id>",   // where a new project folder is created
-        "label": "[2.2]",             // the bracket label, for prose and for backlinks
+        "label": "[3.1]",             // the bracket label, for prose and for backlinks
         "archive_folder_id": "<folder-id>"  // optional: where closed projects' folders move; their [N]
                                       // stay taken, so project-init numbers past them
       },
@@ -222,7 +232,7 @@ Three regimes, and every identifier a PM skill touches belongs to exactly one:
 | Identifier class | Regime | Where it lives | Why that regime |
 |---|---|---|---|
 | The 8 PMO template IDs (§1) | **committed literal** | this file, and its copy in every PM-family `references/` | One org-wide set; changes ~never; a skill must copy a template before any config exists |
-| Template folder `[3.3]` → `[1] Templates 模板庫` | **committed literal** | this file §1 | Same — and since the 2026-09-02 Doc correction the literal and the 原文 finally agree |
+| Template folder `[5.2]` → `[1] Templates 模板庫` | **committed literal** | this file §1 | Same — the folder was `[3.3]` until 2026-11-03; the five PMO Docs were corrected to `[5.2]` the same day (§1) |
 | Column headers, tab names, the 14-column v2 layout | **committed literal** | `pm-sheet-schema.json`, and its copy in every PM-family `references/` | Schema, not an identifier — versioned with the pack |
 | The five axes, mappings, the % denominator rule | **committed literal** | `pm-status-crosswalk.json`, and its copy in every PM-family `references/` | Policy — the whole point of the shared seed |
 | Per-project 管控表 Sheet ID | **private config** | `pm.json` → `projects.<slug>.tracker_sheet_id` | One per project, grows every month, some client-confidential |
@@ -233,7 +243,7 @@ Three regimes, and every identifier a PM skill touches belongs to exactly one:
 | Per-project status-mail recipients | **private config**, no fallback | `pm.json` → `projects.<slug>.report_recipients` | People change and the list is not the repo's business; the wrong list is an unsendable mistake. Missing ⇒ **fail loud** |
 | Row values: `Status`, dates, `Owner`, `Note`, % complete | **runtime lookup** | read from the Sheet on every run | State. Never cached in a file, never carried between runs |
 | Person → email | **runtime lookup** | the artefact's own `Owner` / `負責人` column | The roster changes; no contact data belongs in this repo |
-| Which templates exist right now | **runtime lookup** | list `[3.3]/[1]`, cross-check TEMPLATE-INDEX | The folder is authoritative over any list written down |
+| Which templates exist right now | **runtime lookup** | list `[5.2]/[1]`, cross-check TEMPLATE-INDEX | The folder is authoritative over any list written down |
 
 ### 2.3 · The rule that resolves the course-tracker mess
 
@@ -298,7 +308,7 @@ engagement type, so the per-type differences are visible side by side.
     "$note": "Keys are the literal 專案類型 values in the Business Case / Kickoff header, so a run reads the field and looks the key up directly. Adding a fourth type is a config change, not a code change.",
 
     "客戶案": {
-      "filing_home": { "folder_id": "<folder-id-client-projects>", "label": "[2.2]", "archive_folder_id": "<folder-id-closed-client-projects>" },
+      "filing_home": { "folder_id": "<folder-id-client-projects>", "label": "[3.1]", "archive_folder_id": "<folder-id-closed-client-projects>" },
       "creates_crm_deal": true,
       "kickoff_fields_omitted": [],
       "closure_extra_steps": ["CRM deal 關閉", "客戶版連結權限"],

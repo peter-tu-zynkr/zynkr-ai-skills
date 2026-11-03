@@ -62,7 +62,7 @@ sweep that only reports can run every Monday without fear.
   opened a folder for each inbound lead and linked it from the deal, so older
   leads may have one. Not every folder is a build project — talks, partnerships
   and coaching land in the same parent, including the folders `/sales-inbound`'s
-  optional proposal mode still files for them.
+  old proposal mode filed for them (removed 2026-11-03).
 - **At qualified** (`SKB-045`: the deal is labelled `qualified` after the
   discovery call), `/project-init 客戶案` reuses the deal's folder or
   numbers a new `[N]`, lays the project set (`[Kickoff] <專案名稱>`,
@@ -100,8 +100,8 @@ documents, never from its stage.
 ## Fixed facts (don't re-derive these)
 
 - **Google account** for all Drive/Docs tools: `<your-google-workspace-account>`
-- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, where the numbered `[N]` folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
-- **Closed-projects archive** (`[Archive] [2.2] 結案專案`, beside the parent; a finished project's folder moves here and keeps its `[N]`): `1OP38Kx8oBxHuZjXL-LEsQETsNj0SSA7u`
+- **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, where the numbered `[N]` folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **Closed-projects archive** (`[3.2] 顧問部門：結案專案 (Closed projects)`, beside the parent; a finished project's folder moves here and keeps its `[N]`): `1OP38Kx8oBxHuZjXL-LEsQETsNj0SSA7u`
 - **CRM deal URL** for report lines: `https://platform.zynkr.ai/deals/{deal_id}`
 - Every call this skill makes is a **read**, by design — it never writes.
 
@@ -214,7 +214,7 @@ Then sort what you have:
   I6 skip it.
 - **Moved out** — a live deal whose line points at a folder that still exists
   outside the parent (`list_drive_items` on the id answers): archived. One
-  已移出 [2.2] line, and nothing else for that deal.
+  已移出 [3.1] line, and nothing else for that deal.
 - **Qualified, no folder** — any other deal at qualified or later that has no
   `專案資料夾：` line and no folder attributed to it (a line whose folder is
   gone is I1's *Dangling*, never also listed here). It may be an event, a

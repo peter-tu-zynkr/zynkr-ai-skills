@@ -27,7 +27,7 @@ visibility: public
 author: Peter Tu
 sheetId: "2.11"
 input: "A company name/domain (and optionally a contact name), or an existing Zynkr CRM company_id / contact_id."
-process: "Resolve the CRM company record → web research + 統編 registry lookups (what they do, size/HQ, facts, sales-fit angle) → dated zh-TW brief flagged unverified → write back as a CRM note via create_note → optional note on a named contact → report."
+process: "Resolve the CRM company record and our past dealings → web research + 統編 registry lookups (business model, size/HQ, industry risks, sales-fit angle) → dated zh-TW brief flagged unverified → CRM note via create_note → optional contact note → report."
 output: "A dated 🔎 AI 背景研究 note on the company's CRM timeline (crm_activities, kind='note'), plus an optional note on a named contact — additive, never overwriting prior records."
 synergy: []
 house-style: bound
@@ -111,6 +111,15 @@ A contact may be named alongside the company (e.g. "research this company for
 王 at 範例科技"). If so, resolve or note the `contact_id` too — you'll use
 it in step 5.
 
+**Read what we already know before searching outward.** A brief that repeats the
+web but misses that a colleague met their COO last month is worse than none.
+`mcp__zynkr__list_deals` with the company name as `search` → `get_deal` on each
+hit for its stage, owner and `notes` (no CRM tool reads the timeline itself). If
+the company has its own domain (not a free-mail one), also search Gmail for
+`from:@<domain> OR to:@<domain>` and skim the subjects and latest messages. Note
+who on our side spoke with whom at the company, when, and what came of it; that
+becomes the brief's 過往往來 section. Read only: this step writes nothing.
+
 ### 2 · Do the research
 
 Two tracks. Run the registry track **first** whenever the company is Taiwanese and
@@ -156,6 +165,9 @@ A handful of targeted searches, not an open-ended crawl:
 
 1. `WebSearch` the company name (+ domain if known) for what they do, recent
    facts (funding, news, leadership), and anything the registry can't show.
+   Pin down four things: the core business and main products or services, the
+   business model (who pays, for what), the value proposition they claim, and
+   who their customers are. These are what the first conversation is about.
 2. If an official site/About page turns up, `WebFetch` it. Many Taiwanese
    corporate sites sit behind Cloudflare and return 403 with
    `cf-mitigated: challenge` to both `curl` and `WebFetch` — when that happens,
@@ -164,7 +176,10 @@ A handful of targeted searches, not an open-ended crawl:
    state *why* it failed.
 3. If a contact was named, one more search on their name + company for
    role/background — skip if nothing surfaces, don't guess.
-4. Think about the **sales-fit angle**: given what Zynkr sells (Zynkr CRM, the
+4. One search on the **industry**, not the company: a risk or shift it faces now
+   (tariffs, a new regulation, a labour shortage, a price swing). Keep it only
+   with a dated source; it often explains why the timing is right.
+5. Think about the **sales-fit angle**: given what Zynkr sells (Zynkr CRM, the
    AI CRM for solo founders and small teams, plus AI-adoption consulting
    and training), why might *this* company plausibly be interested? Ground it in
    what the research actually surfaced. The registry is especially good for this:
@@ -186,9 +201,12 @@ not a Wikipedia dump. Use this shape:
 
 **一句話：** 一句話講完最會改變接觸方式的那件事
 
+**過往往來** 我方誰、何時、和對方誰談過，結果如何（出處：CRM 交易 · 信件）；沒有就寫「無」
 **公司登記（<來源>）** 查得到出處的硬事實：名稱 · 狀態 · 資本 · 地址 · 董監事
 **所營事業** 登記碼 + 中文名，特別是與自我定位不符的那幾項
 **其他官方登記** 稅籍 · 產業許可（含員工人數、許可效期）
+**業務與商業模式** 核心業務 · 主要產品與服務 · 誰付錢買什麼 · 自稱的價值主張 · 客戶是誰
+**產業動態** 產業此刻面對的風險或變化，附日期與出處
 **銷售脈絡** 推論，每一點都扣回上面的事實
 **本次未能查證** 明說查不到什麼、為什麼查不到
 

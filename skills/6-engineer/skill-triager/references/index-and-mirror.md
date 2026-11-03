@@ -32,7 +32,7 @@ which lists public skills only.
 ## Fixed IDs (committed literals — do not re-derive them from a Drive search)
 
 - **Skills Index Sheet**: `1VqH1BmyRPK0khY4SBuH1uVzPtk_eh9Z2w5gfaIfKuo0`, tab `Skill Index` (gid `907874376`)
-- **Drive root** `[6.2] Skills & Knowledge Library`: `1Q0XwdR574cNUVlT7lYVbpzNbVsup2KAu`
+- **Drive folder** `[6.2] Skills & Knowledge Library` (inside `[6] 產品部門 (Product)` since 2026-11-03): `1Q0XwdR574cNUVlT7lYVbpzNbVsup2KAu`
   - `1 Skills/` — `1r92r__bUGZ61ZJP5fGcHGg_mnTaicFhz`
   - `2 Knowledge/` — `1jkloCgEHHfy83R-PFPTZBCllh4znvhi2`
 

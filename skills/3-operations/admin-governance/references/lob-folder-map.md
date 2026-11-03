@@ -1,40 +1,41 @@
 # LOB ↔ Cloud Folder ↔ Local Path Map
 
 Canonical mapping used by the `admin-governance` skill. Update this file when:
-- A new LOB is added
+- A new department is added
 - A cloud folder is renamed/moved (ID stays the same — should be rare)
 - The local repo layout changes
 
-Source of truth: established 2026-05-27 by the local↔cloud governance work (see Zynkr CLAUDE.md `Knowledge Governance` if present, otherwise the strategy v2 doc).
+Source of truth: established 2026-05-27 by the local↔cloud governance work (see Zynkr CLAUDE.md `Knowledge Governance` if present, otherwise the strategy v2 doc). **Re-mapped 2026-11-03 to the nine Taxonomy v3 departments (`SKB-101`)**, after the Drive restructure put every folder under one department folder `[0]`–`[8]`. Folder IDs did not change in that move; only names and parents did.
 
 ## Mapping
 
-| LOB | Local path (under `~/Desktop/Claude/zynkr/`) | Cloud folder ID(s) | Cloud folder name | Notes |
-|---|---|---|---|---|
-| 0 | `0 strategy-planning/` | `11LFipvdXLn-qgLSSVdtS8wqpYEfFFNBq` | `[0] Core knowledge & Strategy` | Cloud canonical |
-| 1.0 | `1.0 brand-marketing/` | `13Brg4QCuPlEdHh5mA7dvjxXlud4BvqFx` | `[1.0] 品牌與行銷部門` | SPLIT — cloud for brand assets, local for pipelines |
-| 2.0 | `2.0 sales-consultant-offering/` | `1ZapREC_tFSsYSA7BY18GaGDvxb41rIgd` | `[2.0] 業務部門與顧問` | Cloud canonical |
-| 3.0 | `3.0 operation/` | `1Y2St1Zaj3j3VS_iiPU_-TcltgR8LuBde`, `11QZXKwXsKZlNo42d0jfXaW1eiV5mHogD`, `1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`, `1nnoKI115tWCMPOXTuWCbCW445v3BJZy6` | `[3.0] 營運部門：諮詢案例，行政，流程`, `[3.1] 營運部門：線上或線下活動`, `[3.2] 客服知識庫 (KMS)`, `[3.3] 專案管理 PMO｜Playbook & Templates` | Cloud canonical (most active). **Scan all four.** `[3.1]`–`[3.3]` are Drive-ROOT siblings of `[3.0]`, not children — parentage verified 2026-09-02 — so a scan of `[3.0]` alone silently misses them. `[3.3]` is the PMO Playbook + template home the `project-*` skills copy from (`SKB-011`); `[3.2]` holds only the KMS building plan since 2026-10-31, when the `zynkr-kms` mirror of the Atlas 知識庫 moved to a members-only folder outside the company folder; this map leaves that folder out (a machine-written backup of Atlas, rewritten every run, not a LOB folder). Same shape as LOB 7 below |
-| 4.0 | `4.0 training-design/` | `1WIu-FdKFs4EF6LLBlGCyaOnWucSCB9A1` | `[4.0] 知識產品專案` | LOCAL canonical for course content; cloud holds delivery artifacts in `[4.1]`–`[4.3]` subfolders (not surveyed deeply yet) |
-| 5 (SDLC, legacy) | `5.0 product/` | (multiple — see below) | `[5.1]`–`[5.6]` 助理開發 series under Drive root | Cloud canonical for SDLC narrative. Legacy numbering — children live at Drive root, pending re-filing |
-| 5.0 (Product) | `5.0 product/` | `1UNKjQdy3wACcRP7pbd-zwU7hK6Exh7D5` | `[5.0] 產品部門` | Cloud canonical (LOB-taxonomy hub, since 2026-06-11). **Scan recursively**: subfolder `[5.1] Lucid Workflow Engineering conventions` (`1R4DfLi07Z5SaYBB4Q8-8QuKMjh7o0JYm`) holds the engineering convention docs (**.md files by design** — agent-readable/writable; don't propose Docs conversion). Their read-only local mirror is `6.0 tech/engineering-conventions/` — flag mirror drift when the cloud copies change |
-| 7 (People) | `7.0 people/` | `1t8HgbGePw7Dt9KuqBDEKXzGBEkqUkGr2`, `1P71EGNNWDDTQ8gI0II5NfrYHjjojsp8A`, `1VHgwkW_HZPuKnyqLuqiX685SuDx36R4I` | `[7.1] 人資，人力管理 🔒`, `[7.2] 人資，外包商管理 🔒`, `[7.3] Onboarding` | Cloud canonical. Scan all three folders. |
-| 8.0 | `8.0 finance-analytics/` | `16Uf0JN5SoS5v7_BUuW7Js5UeH0795Uf6` | `[8.0] 財務 💰` | SPLIT — cloud for data, local for automation code |
+The Drive root now holds nine department folders and nothing else of the company's (number 9 is reserved and has no folder). The local folders keep their v2 names until the year-end renumber, so one local path can feed a v3 department with a different number — the table says which.
 
-## Special: Drive root + `[5.x]` series
+| Dept | Local path (under `~/Desktop/Claude/zynkr/`) | Department folder ID | Sub-folders to scan (name · ID) | Notes |
+|---|---|---|---|---|
+| 0 | `0 strategy-planning/` | `11LFipvdXLn-qgLSSVdtS8wqpYEfFFNBq` `[0] 策略與規劃 (Strategy & Planning)` | — (files sit at the first level) | Cloud canonical. The Org Taxonomy Docs and the org chart keep a `[7.1]` title prefix until v3 is final; they belong here, not in `[7]` |
+| 1 | `1.0 brand-marketing/` | `1UhFqsFsgdoRSOSn2kNWujuYY1u8G6flH` `[1] 行銷部門 (Marketing)` | `[1.0] 品牌與行銷部門` `13Brg4QCuPlEdHh5mA7dvjxXlud4BvqFx` · `[1.1] 內容行銷` `1mWEWzaLlKx8-XlnYEmNY1oSRCsGWRtry` · `[1.2] 顧客經營 CRM` `1RNI-E0HOnSIlE99n4rm3E-k_yg--4Xzd` · `[1.3] 聯盟行銷與業配` `1WH_tWIMV2_klCoWvKr0_eWHEmlSvFpO9` | SPLIT — cloud for brand assets, local for pipelines. Skip `[1.9] 封存 (Archive)` `1vqdQ2EpjpbUk8lBSjts7EKYHcObTVoUN` |
+| 2 | `2.0 sales-consultant-offering/` | `1r25tCK_tnw2p0WlRH8r-F5WQI0ku2iwo` `[2] 業務部門 (Sales)` | `[2.0] 業務部門：策略和定價` `1ZapREC_tFSsYSA7BY18GaGDvxb41rIgd` · `[2.1] 業務部門：方法論 (Methodology / SOP)` `1Br5uEZv2XTIClarkA9pdRsjLNhIVOdP6` · `[2.2] 業務部門：陌生開發 (Outbound call)` `1puwXQwPlVliYY-eWHBLsePELUgVU9YQK` · `[2.4] 客戶關係管理 (CRM)` `1-ba7_UF1CNVTPYpBL6H_LuUhq6lYVwD2` | Cloud canonical. Skip `[2.9] 封存 (Archive)` `1tpU6fxnsfHPB5cDFMy7zZIJzaWD0Psyp` |
+| 3 | `2.0 sales-consultant-offering/` (shared with 2) | `1h2OMwspqWkmnm1fIZei-gZNswlkaxbS6` `[3] 顧問部門 (Consult)` | `[3.0] 顧問部門：策略與方法論 (Strategy & Methodology)` `1EvQT-1WUyFpXq6c8ZKSLNi7iPQP5RoN7` · `[3.1] 顧問部門：專案 (Project tracking)` `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` · `[3.2] 顧問部門：結案專案 (Closed projects)` `1OP38Kx8oBxHuZjXL-LEsQETsNj0SSA7u` | Cloud canonical. `[3.1]` holds one numbered `[N]` folder per client project — list it, do not recurse into every project. Skip `[3.9] 封存 (Archive)` `1ykUTtAHPmPNtujonCTJ0W6qXHCW6jwu4` |
+| 4 | `4.0 training-design/` | `13wXLL2vA4aaTMo2uX_MyeaTrju3606oV` `[4] 培訓部門 (Training)` | `[4.0] 知識產品專案` `1WIu-FdKFs4EF6LLBlGCyaOnWucSCB9A1` · `[4.2] 知識產品：知識素材 (Artifact)` `15n_eZC6bmZOV1Vb29mNvMUvq8YaH_V-E` · `[4.3] 知識產品：知識產品，課程和講義` `1ZcRVwihcyvNRQQD1bI2RXun7e2812J3K` · `[4.4] 活動與陪跑 (Events & Cohorts)` `11QZXKwXsKZlNo42d0jfXaW1eiV5mHogD` · `[4.5] 知識內容素材（直播）` `1-aXLBpLizM0PyMbYu7TIb3xw50BrFL6a` | LOCAL canonical for course content. `[4.1]` is a shortcut (`1H0LEi8eNS00XrHWHSSZ3mllfY2_1Ay3X`) to the Meet recordings folder outside the company folder — not scanned |
+| 5 | `3.0 operation/` | `126aFnX2k6P5RS1fde9hHYqB2OOzxcFUr` `[5] 流程優化部門 (Transform)` | `[5.0] 流程與 SOP (Process & SOP)` `1Y2St1Zaj3j3VS_iiPU_-TcltgR8LuBde` · `[5.1] 客服與知識庫 (Support & KB)` `1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6` · `[5.2] 專案管理 PMO｜Playbook & Templates` `1nnoKI115tWCMPOXTuWCbCW445v3BJZy6` | Cloud canonical (most active). `[5.2]` is the PMO Playbook + template home the `project-*` skills copy from (`SKB-011`). `[5.1]` holds only the KMS building plan; the `zynkr-kms` mirror of the Atlas 知識庫 lives in a members-only folder outside the company folder and stays out of this map (a machine-written backup, rewritten every run) |
+| 6 | `5.0 product/` | `1ZL5X_G-uk8ka9Xjok3-GBw3TZp-SlG-o` `[6] 產品部門 (Product)` | `[6.0] 產品管理 (PM)` `1UNKjQdy3wACcRP7pbd-zwU7hK6Exh7D5` · `[6.1] 工程 (Eng)` `1lJZxEnL97nWKpL4mxRZ00nSyIaWimCzx` · `[6.2] Skills & Knowledge Library` `1Q0XwdR574cNUVlT7lYVbpzNbVsup2KAu` | Cloud canonical. **Scan `[6.0]` recursively**: its sub-folder `1R4DfLi07Z5SaYBB4Q8-8QuKMjh7o0JYm` (Lucid Workflow Engineering conventions) holds the engineering convention docs (**.md files by design** — agent-readable/writable; don't propose Docs conversion). Their read-only local mirror is `6.0 tech/engineering-conventions/` — flag mirror drift when the cloud copies change. Skip `[6.9] 封存 (Archive)` `16Na6nsBY8TfFoOngPd8RyLPHyRhBcXmv` (the 2025 助理開發 pipeline) |
+| 7 | `7.0 people/` | `1WzvfHVjxjFMG2CDHHVxHHKKWDkIKRncZ` `[7] 人資部門 (HR)` | `[7.1] 人資，人力管理 🔒` `1t8HgbGePw7Dt9KuqBDEKXzGBEkqUkGr2` · `[7.2] 人資，合作夥伴管理 🔒` `1P71EGNNWDDTQ8gI0II5NfrYHjjojsp8A` · `[7.3] Onboarding` `1VHgwkW_HZPuKnyqLuqiX685SuDx36R4I` | Cloud canonical. Also list the first level of `[7]` (the 1-on-1 template sits there). `[7.4]` (1-on-1 records) and `[7.5]` (offboarding records) are personal records — never indexed |
+| 8 | `8.0 finance-analytics/` | `1JXKcigFTC3q_hF4OTaRh3FEiFBAtOjG7` `[8] 財務部門 (Finance · 法務)` | `[8.0] 財務 💰` `16Uf0JN5SoS5v7_BUuW7Js5UeH0795Uf6` · `[8.1] Pitch 準備` `1GVzgNIkkYKF0P96DoMCxufJvRajLutWs` · `[8.2] 法務與合約 (Legal)` `10dlHVYThUSQXQlhjDAT__w06QmFqlIFK` | SPLIT — cloud for data, local for automation code. Legal joined Finance in v3; the local `9.0 legal/` folder is still out of scope |
+
+## Special: the Drive root
 
 Drive root folder ID: `1rqkpNt1NFmRXhXnVAXL_eoXVfON4qD32`.
 
-For LOB `5` (legacy SDLC): list the Drive root and filter to children whose name starts with `[5.` — these are the SDLC phase folders. The two consulting-SDLC Google Docs ("Consulting Service Development Plan" and "Consulting Service Development Process") were also pushed at root level on 2026-05-27 — they should be present in the local index for `5.0`.
-
-⚠️ **`[5.x]` numbering collision (since 2026-06-11):** the root-level legacy `[5.1]–[5.6] 助理開發` series coexists with the new `[5.0] 產品部門` hub (whose own children are also numbered `[5.1]`, `[5.2]`, …). Distinguish by parent: legacy = direct child of Drive root; new = child of `[5.0] 產品部門` (`1UNKjQdy3wACcRP7pbd-zwU7hK6Exh7D5`). Both report into `5.0 product/_INDEX.md`.
+Since 2026-11-03 the root holds only the nine department folders. An item found directly at the root is misfiled: report it as **NEW (misfiled at root)** with the department it belongs in, rather than indexing it. The legacy `[5.1]–[5.6] 助理開發` series that used to sit at the root is now inside `[6.9] 封存` and is not scanned.
 
 ## Out of scope for admin-governance
 
 - `6.0 tech/` — code, governed by git, not by `_INDEX.md`.
-- `9.0 legal/` — not part of the 8 LOBs in scope (separate governance).
+- `9.0 legal/` (local) — not part of the scan (separate governance); its cloud folder is `[8.2]`.
 - `tools/`, `about-me/`, `0 about-me/` — utility folders, no cloud counterpart.
+- Every `[N.9] 封存 (Archive)` folder.
 
 ## Index file paths
 
-Each LOB has its index at `<local_path>/_INDEX.md`. So for example LOB 2.0 index is at `~/Desktop/Claude/zynkr/2.0 sales-consultant-offering/_INDEX.md`.
+Each department's index is at `<local_path>/_INDEX.md`, so departments 2 and 3 share `~/Desktop/Claude/zynkr/2.0 sales-consultant-offering/_INDEX.md`, and department 5 reads `~/Desktop/Claude/zynkr/3.0 operation/_INDEX.md`.

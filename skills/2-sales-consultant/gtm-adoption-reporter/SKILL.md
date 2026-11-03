@@ -60,7 +60,7 @@ operator**: reads telemetry, never touches it; 無法衡量 beats an estimate.
 
 - **Supabase project_id**: `uomieoqlkazknjgmfdda` (the shared Zynkr project; CRM tables are `crm_*`)
 - **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
-- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, where numbered project folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, where numbered project folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
 - **CRM deal URL** for the doc/report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
 - Over the Supabase MCP, `auth.uid()` is **NULL** — moot here: this skill's SQL
   is SELECT-only (hard rule 1); the step-7 deal backlink goes through the zynkr

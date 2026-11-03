@@ -55,7 +55,7 @@ that is gone.
   line is missing.
 - *Dangling*: a line whose folder no longer exists. (A folder that still
   exists outside the parent has been moved out — archived — and is not a
-  finding: one 已移出 [2.2] line, SKILL.md step 3.)
+  finding: one 已移出 [3.1] line, SKILL.md step 3.)
 - *Orphan folder*: a folder nobody claims — no line and no name, live or lost.
 - *Fork*: a folder two or more live deals' lines point at. A lost deal's line
   to the same folder does not count: a restarted client keeps its old lead's
@@ -152,7 +152,7 @@ a folder with no `[N]` prefix.
 **Fix lines.** (Drive renames keep the folder id, so a rename never breaks an
 existing backlink.)
 ```
-建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）分配（2026-10-05 前 /sales-inbound 也為新詢問配號），缺號通常代表資料夾被移走；結案的資料夾請移到「[Archive] [2.2] 結案專案」，編號仍算已用
+建議動作：確認 [<n>] 是被刪除還是漏建 — 編號由 /project-init（qualified 開案）分配（2026-10-05 前 /sales-inbound 也為新詢問配號），缺號通常代表資料夾被移走；結案的資料夾請移到「[3.2] 顧問部門：結案專案 (Closed projects)」，編號仍算已用
 建議動作：在資料夾名稱前補上 [<下一個號碼>]（本技能不改名）
 ```
 

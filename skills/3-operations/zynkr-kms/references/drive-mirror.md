@@ -53,9 +53,9 @@ skill checks this with `get_drive_file_permissions` before every write (Step 0);
 that reads wider gets nothing written, and Peter fixes its sharing.
 
 **Why the folder stands on its own (since 2026-10-31).** Drive's sharing flows down: whoever can
-read a folder can read everything inside it. The company's shared folder, which holds `[3.2]
-客服知識庫 (KMS)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`), is readable by more than the workspace
-and stays that way, so no folder inside it can be members-only. The mirror lived in `[3.2]` until
+read a folder can read everything inside it. The company's shared folder, which holds `[5.1]
+客服與知識庫 (Support & KB)` (`1LpymoVhy4YrxDBi81Sw6CRQQbZAiSLQ6`, `[3.2] 客服知識庫 (KMS)` until 2026-11-03), is readable by more than the workspace
+and stays that way, so no folder inside it can be members-only. The mirror lived in that folder until
 then; it now has a folder of its own at the top of the owner's My Drive, outside the company
 folder, shared by name with each member. Its files kept their IDs, so the Doc registry below
 stands, and `[3.2]` keeps only the KMS building plan. When someone joins the Atlas workspace,

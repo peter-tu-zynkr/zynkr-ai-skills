@@ -73,7 +73,7 @@ Liao) · recap structure from `training-lecture-recap` (4.08).
   (`mcp__claude_ai_Google_Calendar__*`) on calendar `<your-google-workspace-account>`;
   the Google Workspace connector's calendar tools (`query_freebusy`, `manage_event`,
 `get_events`) work only where its Calendar API is enabled, which it isn't on the owner's Google Cloud project.
-- **Drive parent folder** (`[2.2] 業務與顧問部門：專案`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything in it
+- **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything in it
 - **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
 
 ## Hard rules

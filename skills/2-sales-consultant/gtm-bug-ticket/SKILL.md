@@ -65,7 +65,7 @@ company + defect in the issue, person + thread in the CRM task — by design.
 ## Fixed facts (don't re-derive these)
 
 - **Google account** for all Gmail/Drive tools: `<your-google-workspace-account>`
-- **Drive parent folder** (`[2.2]` consult projects, where the client's numbered `[N]` folder lives): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, where the client's numbered `[N]` folder lives): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
 - **CRM deal URL** for the task/report (internal-only — never in the public issue): `https://platform.zynkr.ai/deals/{deal_id}`
 
 ## Hard rules

@@ -99,7 +99,7 @@ Created through the Google Workspace tools, not by a beat. Setup needs create, m
 tools that no scheduled run should hold.
 
 1. `ledger.py schema` → `create_spreadsheet(title="[3.3] Weekly Ledger 週帳本（machine-owned · 請勿手改）", sheet_names=["Weeks","Updates","Snapshot"])`.
-2. `update_drive_file` → into the PMO folder `[3.3] 專案管理 PMO`, with a "machine-owned" description.
+2. `update_drive_file` → into the PMO folder `[5.2] 專案管理 PMO` (named `[3.3]` until 2026-11-03), with a "machine-owned" description.
 3. Write the three header rows RAW, exactly as `schema` prints them.
 4. Grow `Snapshot` to 5,400 rows (`resize_sheet_dimensions(insert_rows=4400)`), which is about a
    year of weeks, and freeze row 1 on each tab.

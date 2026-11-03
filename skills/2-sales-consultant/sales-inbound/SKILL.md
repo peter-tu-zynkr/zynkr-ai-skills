@@ -23,9 +23,9 @@ status: Done
 visibility: public
 author: Peter Tu
 sheetId: "2.04"
-input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 inquiries and the [2.1] Inbound Sales label; optionally a forwarded proposal or partnership email"
-process: "Sweep both inboxes → filter real leads → idempotently create a CRM deal → draft the first reply (never sent) → report; the client folder waits for /project-init at qualified; optional proposal mode opens a Notion ticket"
-output: "Per real lead: a CRM deal and a first-reply Gmail draft; proposals listed for Peter; (optional) a Notion ticket"
+input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 inquiries and the [2.1] Inbound Sales label"
+process: "Sweep both inboxes → filter real leads → idempotently create a CRM deal → draft the first reply (never sent) → report; the client folder waits for /project-init at qualified"
+output: "Per real lead: a CRM deal and a first-reply Gmail draft; proposals listed for Peter"
 synergy:
   - "sales-outbound"
   - "zynkr-support"
@@ -123,7 +123,7 @@ the latest message they sent. Three kinds turn up there:
 - **A lead** — someone asking about Zynkr's services, a price or a call. Log it and
   draft the reply (steps 3–5).
 - **A proposal** — a 講座提案, 合作邀請 or introduction. No deal and no draft: list it
-  in the report for Peter, who can run the optional proposal mode below.
+  in the report for Peter, who decides how to take it up.
 - **Not a prospect** — a vendor pitch, a newsletter, an automated mail. Skip it and
   say so in the report.
 
@@ -386,41 +386,6 @@ answer waited), and state the headline in prose (e.g. "Created 2 deals +
 · `value=NULL` (unknown at intake) · `close_date=today+30`. They are passed
 explicitly on the `create_deal` call in step 4 — if Peter asks to change one,
 change it there.
-
----
-
-## Optional mode — inbound sales / proposal lead intake (folded in from inbound-sales-project-init)
-
-The autonomous weekly flow above handles website **consult** inquiries
-(`Interest: AI 顧問服務`) → CRM deal + first-reply draft. For a one-off
-**inbound sales / proposal lead** — a forwarded 講座提案 / 合作邀請 / introduction
-email — run this interactive branch instead, which additionally captures
-attachments and opens a Notion ticket in the Consultant service DB:
-
-1. **Locate & read the email** — a Gmail link / message ID / search hint, or a
-   pasted body. Capture `Subject` / `From` / `Date` / `Message-ID` and every
-   attachment (`filename`, `mime_type`, `attachment_id`); download attachments so
-   they can be re-uploaded to Drive.
-2. **Derive a glance-able project name**: `<Org/Sender> - <Topic> (<Key hook>)`
-   (e.g. `範例科技 - 王 講座提案 (從痛點到系統的發想框架)`). Pick Team(s) — HR/人資 →
-   `Human Resources`, revenue-bearing → also `Business Development`, product/UX →
-   `Product Design`, existing client → `Account Management` — and Priority
-   (default `Medium`).
-3. **Re-read the Notion Consultant-service DB schema** before writing (don't trust
-   a frozen snapshot); stop and ask if a property name has drifted.
-4. **Create the Drive folder** → a **context Google Doc** (metadata, inbound
-   source block, verbatim original letter, proposal breakdown, open questions,
-   next actions) → move the doc into the folder → **re-upload the attachments**
-   into the folder.
-5. **Create the Notion ticket** at status **Consult intake** in the Consultant
-   service DB and **bidirectionally link Drive ↔ Notion**.
-
-> This branch was merged in from the former `inbound-sales-project-init` skill
-> (deprecated 2026-06-06). Its config (`inbound-sales-config.md`, Notion data-source
-> id) and `references/context-doc-template.md` live in git history at
-> `skills/2-sales-consultant/inbound-sales-project-init/` (the commit before the
-> merge) — restore them into this skill's `references/` when you wire the Notion
-> branch live.
 
 ## House style
 

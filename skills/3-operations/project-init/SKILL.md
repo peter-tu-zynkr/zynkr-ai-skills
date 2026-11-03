@@ -22,13 +22,13 @@ house-style: exempt — machine artifact — writes config, no prose output
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project-init
 ```
 
-開一個新專案，今天是手工做的：找模板資料夾、複製五份檔案、改名、開四個子資料夾、把表頭填一填、把範例列刪掉。Playbook §7 把「建案時複製管控表 v2 ＋子資料夾」列為缺的那一塊，而 **鐵律 2**（「模板只從 `[3.3]/[1]` 複製，複製後第一件事：改核心目標、清空範例列」）管的正是這個動作——它也是實務上最常被漏掉的半句：範例列沒清，之後每一份週報都會把範例資料當成真任務讀進去。這個技能把整串動作跑完，並且**只跑到 Gate 1 為止**：它交出一副乾淨的骨架，不替任何人規劃任務。
+開一個新專案，今天是手工做的：找模板資料夾、複製五份檔案、改名、開四個子資料夾、把表頭填一填、把範例列刪掉。Playbook §7 把「建案時複製管控表 v2 ＋子資料夾」列為缺的那一塊，而 **鐵律 2**（「模板只從 `[5.2]/[1]` 複製，複製後第一件事：改核心目標、清空範例列」；資料夾 2026-11-03 前叫 `[3.3]`）管的正是這個動作——它也是實務上最常被漏掉的半句：範例列沒清，之後每一份週報都會把範例資料當成真任務讀進去。這個技能把整串動作跑完，並且**只跑到 Gate 1 為止**：它交出一副乾淨的骨架，不替任何人規劃任務。
 
 ---
 
 ## 這個技能讀什麼（固定事實，不要再推導）
 
-- 知識來源：references/pm-knowledge-pack.md · v2 · sha256 c0e2a89e3057
+- 知識來源：references/pm-knowledge-pack.md · v2 · sha256 5455518457db
 - `references/pm-sources.md` §1 — 八個 PMO 正本 ID 與模板資料夾的正確名稱；§2 — `~/.config/zynkr/pm.json` adapter 契約；§2.1 — 逐鍵說明；§3 — 可直接複製的 `pm.json.example`
 - `references/pm-sheet-schema.json`（管控表分頁與標頭）· `references/pm-status-crosswalk.json`（五個軸），兩者都透過技能自帶的 `scripts/pm-schema.py` 讀，不用眼睛比對
 
@@ -45,9 +45,9 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill project
 | `[專案管控表] <專案名稱>` | Sheet | `1Pc1YT4z6LdU9JjVSPT_ESN7DCa7aL8DhOD1IOpGiuvQ` |
 | `[復盤] <專案名稱>` | Doc | `1mHrs1M_hasg9mjIeuiJDWBsoXx_d0-GjLCPt9YvnveY` |
 
-`[會議記錄]` 是**每場會議一份**，不在開案時複製：開會的人從 `[3.3]` 的會議記錄模板複製一份。`/project-minutes-sync` 不建它：它讀這份 Doc，經同意才勾「已同步」欄。TEMPLATE-INDEX 只有在模板本身被改動時才需要更新，開案不動它。
+`[會議記錄]` 是**每場會議一份**，不在開案時複製：開會的人從 `[5.2]` 的會議記錄模板複製一份。`/project-minutes-sync` 不建它：它讀這份 Doc，經同意才勾「已同步」欄。TEMPLATE-INDEX 只有在模板本身被改動時才需要更新，開案不動它。
 
-**資料夾名稱一律以 `[3.3]` 為準**：Drive 上的真正名稱是 `[3.3] 專案管理 PMO｜Playbook & Templates`，模板只從 `[3.3]/[1] Templates 模板庫` 複製。
+**資料夾名稱一律以 `[5.2]` 為準**：Drive 上的真正名稱是 `[5.2] 專案管理 PMO｜Playbook & Templates`（在 `[5] 流程優化部門 (Transform)` 底下，2026-11-03 前叫 `[3.3]`），模板只從 `[5.2]/[1] Templates 模板庫` 複製。五份 PMO Doc 內文已於同日改成 `[5.2]`（`references/pm-sources.md` §1），引用鐵律 2 照原文即可。
 
 ---
 
@@ -97,7 +97,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 
 從 adapter 讀 `engagement_types[<專案類型>].filing_home`：
 
-- `folder_id` 有值 ⇒ 那就是新專案資料夾的父層（`客戶案` `[2.2]` · `課程案` `[4.3]`）。
+- `folder_id` 有值 ⇒ 那就是新專案資料夾的父層（`客戶案` `[3.1]` · `課程案` `[4.3]`）。
 - `內部案` 的 `folder_id` 是 `null`，改用 `filing_home.by_lob[<LOB>]` 解析——`內部案` 歸在自己的 LOB 資料夾，沒有單一的家。LOB 不在 `by_lob` 裡就停。
 - 找不到 `pm.json`、找不到這個案型的鍵、或解出來的值仍是 `<...>` 佔位字串 ⇒ **停**，並把缺的鍵路徑原樣說出來，例如 `config: engagement_types.內部案.filing_home.by_lob.3.0 unset`（`pm-sources.md` §2 的 fail-loud 規則）。
 
@@ -110,7 +110,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 1. **找到交易。** 交易網址 `…/deals/<id>` ⇒ `mcp__zynkr__get_deal(id)`。交易編號或公司名 ⇒ `mcp__zynkr__list_deals(search="<編號或公司名>")`，留下編號或公司相符的列，再 `get_deal`。找到不只一筆就列出來問，不要自己挑；一筆都沒有就停，並說「交易要先由 Sales 建立」。CRM 連不上就停並照實回報，不要退回去用公司名猜資料夾。
 2. **確認交易階段。** `qualified`、`proposal`、`won` ⇒ 開案。`new` 或 `contacted` ⇒ 停，回報「客戶案在交易標為 qualified（探索會議後）時開案；這筆交易目前在 `<stage>`」；只有 Peter 明說要提前開，才照做，並在交付清單第一行標明「交易尚未 qualified」。`lost` ⇒ 停，不開案。
 3. **先找既有的資料夾，再考慮編號。** 舊流程在 inbound 時就替每個詢問開了 `[N]` 資料夾，所以很多交易早已有資料夾：
-   - 交易的 `notes` 欄裡有 Drive 資料夾連結（2026-10-05 前 `/sales-inbound` 寫的舊回連）⇒ 確認它在歸檔家 `[2.2]` 底下，就用它。它在封存資料夾（`filing_home.archive_folder_id`）裡 ⇒ 這是結案過的專案：停，請 Peter 先把資料夾移回歸檔家再開。
+   - 交易的 `notes` 欄裡有 Drive 資料夾連結（2026-10-05 前 `/sales-inbound` 寫的舊回連）⇒ 確認它在歸檔家 `[3.1]` 底下，就用它。它在封存資料夾（`filing_home.archive_folder_id`）裡 ⇒ 這是結案過的專案：停，請 Peter 先把資料夾移回歸檔家再開。
    - 沒有連結 ⇒ 列出歸檔家**一次**，找名稱含交易公司名的 `[N]` 資料夾。恰好一個 ⇒ 用它並說出來；不只一個 ⇒ 列出來問。
    - 都沒有 ⇒ 編號：`N` ＝ 歸檔家與封存資料夾（`filing_home.archive_folder_id`，有設定才列）裡資料夾開頭 `[數字]` 的最大值 ＋ 1（沒有任何編號就從 1 開始；結案移去封存的資料夾編號仍算已用，絕不重用），建立 `[N] <公司名>（<專案名稱>）`；公司名空白就用 `[N] <專案名稱>`。編號只看**資料夾**，不看檔案。
 4. **沿用的資料夾就是本次的專案資料夾**，Step 4 的五份模板與四個子資料夾直接建在裡面，不再多包一層。資料夾裡已經有 inbound 時期的啟動文件（`— 專案啟動` 或 `[Kickoff] … — 專案脈絡與會議紀錄`）⇒ PMO 的 `[Kickoff]` 照樣複製，把舊文件的連結寫進新 Kickoff，舊文件不刪不改。
@@ -131,7 +131,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 
 ### 4.1 · 建資料夾並複製五份模板
 
-在解析出來的歸檔家底下建立專案資料夾，複製上面表格的五個正本進去並照 `[前綴] <專案名稱>` 改名。**只從 `[3.3]/[1] Templates 模板庫` 的正本複製**（鐵律 2），不從別的專案複製、不從零產生一份「差不多的」模板。
+在解析出來的歸檔家底下建立專案資料夾，複製上面表格的五個正本進去並照 `[前綴] <專案名稱>` 改名。**只從 `[5.2]/[1] Templates 模板庫` 的正本複製**（鐵律 2），不從別的專案複製、不從零產生一份「差不多的」模板。
 
 ### 4.2 · 建四個子資料夾
 
