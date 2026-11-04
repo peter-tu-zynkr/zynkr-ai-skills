@@ -5,7 +5,7 @@ description: >-
   The conductor of the Zynkr sales family — it decides which sales skill a given
   input needs, chains them when a job takes more than one, and reads the CRM
   across deals to say which ones need attention now. It owns the deal lifecycle;
-  the six skills under it each own one step. Three modes: ROUTE (one input →
+  the seven skills under it each own one step. Three modes: ROUTE (one input →
   the right child skill), SEQUENCE (a job that needs two or more, e.g. triage a
   whole event survey with sales-client-sourcing then run sales-outbound on each
   Hot Lead row), and REVIEW (deal-level pipeline sweep — what is stalled, what
@@ -31,7 +31,7 @@ process: "Classify into ROUTE / SEQUENCE / REVIEW → delegate to the child skil
 output: "Whatever the delegated children produced (CRM records · Gmail drafts · enriched sheet), plus for REVIEW a deal-level attention list and one confirmed batch of CRM writes."
 synergy: []
 type: agent
-skills: ["sales-client-sourcing", "sales-specialist", "sales-outbound", "sales-follow-up", "sales-research", "sales-proposal-writer"]
+skills: ["sales-client-sourcing", "sales-specialist", "sales-outbound", "sales-follow-up", "sales-research", "sales-discovery-prep", "sales-proposal-writer"]
 reads: ["sales.crm-data-standards", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 
@@ -64,6 +64,7 @@ It does three things, and **delegates everything else**:
 | `sales-outbound` | 2.09 | ONE lead signal → CRM lead + Gmail draft (+ three 台北時間 slots) | batches |
 | `sales-follow-up` | 2.10 | A completed demo transcript → threaded follow-up + deal sync | new leads |
 | `sales-research` | 2.11 | A company → background brief written back to the CRM | contacts |
+| `sales-discovery-prep` | 2.17 | A deal with a discovery call booked → two hypotheses, a tailored question list with expected answers, an agenda-mail draft and a [會前準備] note | sends mail · moves the stage |
 | `sales-proposal-writer` | 2.47 | A deal + the client's asks → a priced 交付文件 proposal, and its revision rounds | the covering email (→ whoever picks up the outbound with the client; no skill drafts it) |
 
 **Delegate, never inline.** If you find yourself writing CRM SQL, parsing a card, or
@@ -79,7 +80,7 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
 - **`/project-client-status`, `/project-governance`** — the consulting portfolio and its
   hygiene sweep. Different pipeline, different objects.
 - **`/zynkr-skills`** — routes the whole skill ecosystem. This one routes *within* sales.
-- **The six children** — each is still a first-class entry point. When Peter names a
+- **The seven children** — each is still a first-class entry point. When Peter names a
   skill, run that skill; don't insist on going through the conductor.
 
 ## Fixed facts (don't re-derive these)
@@ -126,6 +127,7 @@ Say which mode you picked in one sentence before acting.
 | A DM, feedback-form row, website enquiry, or card **text** | `/sales-outbound` |
 | A completed demo / discovery-call transcript on an existing deal | `/sales-follow-up` |
 | A company name, or a deal lacking background | `/sales-research` |
+| A deal with a discovery call booked and no [會前準備] note, or "prep my call with <company>" | `/sales-discovery-prep` |
 | A WHOLE survey sheet of many people | `/sales-client-sourcing` |
 | A client's requirement list / ask sheet, or "write the proposal", or comments on an existing proposal | `/sales-proposal-writer` |
 
@@ -133,7 +135,7 @@ Invoke via the **Skill** tool and let the child drive. Report what it produced.
 
 ### 3 · SEQUENCE — carry context across children
 
-Run the children in order, feeding each the previous one's output. The two established chains:
+Run the children in order, feeding each the previous one's output. The three established chains:
 
 1. **Event survey → funnel.** `/sales-client-sourcing` enriches the whole sheet and flags
    Hot Leads, then `/sales-outbound` runs **per Hot Lead row** to create the CRM lead and
@@ -142,6 +144,10 @@ Run the children in order, feeding each the previous one's output. The two estab
 2. **Card → informed draft.** `/sales-specialist` lands the contact, then `/sales-research`
    fills the company background, and only then is the follow-up draft written — so it
    opens with something true about their business rather than a generic line.
+3. **Booked call → prepared call.** When a reply books a discovery call, `/sales-research`
+   writes the company brief, then `/sales-discovery-prep` turns it into hypotheses, the
+   question list and the agenda-mail draft. Run them in the same conversation: no CRM tool
+   reads the research note back, so the brief has to still be in context.
 
 Never run a child twice on the same object in one pass. If a chain fails halfway, report
 what landed and what didn't; do not silently retry a CRM write.
