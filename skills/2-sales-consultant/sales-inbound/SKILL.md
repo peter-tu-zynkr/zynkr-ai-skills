@@ -24,13 +24,14 @@ visibility: public
 author: Peter Tu
 sheetId: "2.04"
 input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 inquiries and the [2.1] Inbound Sales label"
-process: "Sweep both inboxes → filter real leads → idempotently create a CRM deal → draft the first reply (never sent) → report; the client folder waits for /project-init at qualified"
-output: "Per real lead: a CRM deal and a first-reply Gmail draft; proposals listed for Peter"
+process: "Sweep both inboxes → filter real leads → pick-up gate (an open deal on the email, any owner, keeps the mail for that deal) → a CRM deal owned by the inbox owner → first-reply draft (never sent) → report; the folder waits for /project-init"
+output: "Per new lead: a CRM deal owned by the inbox owner and a first-reply Gmail draft; a lead with an open deal reported with its owner; proposals listed for Peter"
 synergy:
   - "sales-outbound"
   - "zynkr-support"
 reads:
   - "kb"
+  - "sales.crm-data-standards"
   - "company.sales-pipeline-rules"
   - "company.crm-tag-rules"
 house-style: bound
@@ -52,8 +53,9 @@ yet: `/project-init` opens the numbered folder, the kickoff documents and the de
 It runs **fully autonomously**: parse → filter → create → draft → report. No mid-run
 confirmation. The whole point is that Peter runs it (or a cron does) and comes
 back to a finished pipeline. Because it writes real CRM records and Gmail drafts,
-the safety comes from being *idempotent* — it skips tests and skips any lead that
-already has a deal, so re-running the same week never creates duplicates. A reply
+the safety comes from being *idempotent* — it skips tests and skips any lead whose
+email already has an open deal, under any owner, so re-running the same week never creates
+duplicates and never takes a client a teammate is already working. A reply
 is only ever a draft: Peter reads it and sends it himself.
 
 ## Configuration
@@ -131,7 +133,9 @@ the latest message they sent. Three kinds turn up there:
 
 - **Google account** for all Gmail/Drive tools: `<your-google-workspace-account>`
 - **CRM deal URL** for the report/doc: `https://platform.zynkr.ai/deals/{deal_id}`
-- Owner (`Peter Tu`) and pipeline (`銷售流程`) are looked up live inside the SQL — don't hardcode their ids.
+- **The owner of a new lead is the inbox's owner** — the person running the skill: `mcp__zynkr__whoami`
+  gives their email, and their member id is the `mcp__zynkr__list_workspace_members` row with that
+  email. `create_deal` resolves the pipeline (`銷售流程`) itself. Resolve both live; never hardcode an id.
 
 ---
 
@@ -181,23 +185,44 @@ proposal or not a prospect; only leads go on to step 3.
 Skipping is normal — name what you skipped and why in the final report so Peter
 can sanity-check your judgment.
 
-### 3 · De-dup against the CRM
+### 3 · The pick-up gate — de-dup against the CRM
 
-Before creating anything, check which of these leads already have a deal — they
-were processed on a previous run and must be left alone.
+Before creating anything, check which of these leads a deal already covers. One open deal per
+client: a lead whose email has an open deal belongs to that deal, whoever owns it, and must be
+left alone.
 
-Resolve the batch in two reads. First `mcp__zynkr__list_deals(limit=100)` once,
-and keep the `contact_id` of every row. Then, per lead,
-`mcp__zynkr__list_contacts(search="<email>")` — no match means a genuinely new
-lead; a match whose id appears in that contact_id set is **already handled** →
-skip it entirely (no deal, no reply draft). The rest are your work list.
+> **The pick-up rule is written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server). The six steps below are how this skill runs it, and they run as written even when Atlas cannot be reached.
 
-Checking up front is the point: it stops you creating a second deal for a
-lead that turns out to be a repeat.
+**One row per person first.** Normalise every lead's email (step 1) and de-duplicate the batch on
+it: the first occurrence wins, and each later one is reported as 「同批重複」 under the first
+one's result, with no contact, deal, task or draft of its own. Otherwise two inquiries from one
+person in the same sweep would both pass the gate and both claim.
 
-⚠️ `list_deals` returns the newest 100 rows by activity and cannot filter by
-contact. If it comes back with exactly 100, the de-dup is no longer sound —
-stop and say so rather than risk double-booking a lead.
+Then run the six steps on the `zynkr` MCP for every remaining lead. Steps 2–4 can be read once for
+the batch: the four `list_deals` calls serve every lead.
+
+1. **Normalise the email** — trim it and lower-case it.
+2. **Find the contact** — `mcp__zynkr__list_contacts(search=<email>, limit=100)`. The search is a
+   substring match over both addresses, so keep only rows whose `email` or `secondary_email`,
+   trimmed and lower-cased, equals the email exactly: `b@example.com` does not match
+   `a.b@example.com`.
+3. **No contact → step 6.** A genuinely new lead.
+4. **Find their open deals** — `mcp__zynkr__list_deals(stage=<stage>, limit=100)` once for each
+   open stage, `new`, `contacted`, `qualified` and `proposal`, keeping the rows whose `contact_id`
+   is one of the matched contacts. `list_deals` cannot filter by contact, so if any of the four
+   calls returns exactly 100 rows the check is not sound: stop the run, create nothing, and say so
+   rather than risk double-booking a lead. `won` and `lost` deals do not count: a contact whose
+   deals are all closed gets a new deal (step 4), on the same contact.
+5. **An open deal → the mail is that deal's.** No contact, deal, task, tag or reply draft for this
+   lead. Name the owner by matching the deal's `owner_id` to an `id` from
+   `mcp__zynkr__list_workspace_members`, and report one line:
+   `<email> 已有進行中的 deal：<deal_number> · <stage> · 負責人 <member name> · 最後活動 <last_activity_at, YYYY-MM-DD>`.
+   Carry on with the next lead.
+6. **Claim** — the lead goes on to step 4, which reuses the matched contact or creates it, and
+   makes the deal, both owned by the inbox's owner, before step 5 drafts anything.
+
+Checking up front is the point: it stops you creating a second deal for a lead that turns out
+to be a repeat, or one a teammate already has.
 
 ### 4 · For each surviving lead, create the CRM deal
 
@@ -208,27 +233,30 @@ Every write previews first — call it once without `confirm`, then again with
 1. **Company** — skip when `Company` is blank.
    `mcp__zynkr__list_companies(search="<Company>")`; on no match,
    `mcp__zynkr__create_company(name="<Company>", confirm=true)`. Keep the id.
-2. **Contact** — `mcp__zynkr__list_contacts(search="<Email>")`; on no match,
+2. **Contact** — the contact step 3 matched (exact email or secondary email), reused as it is;
+   only when it matched none,
    `mcp__zynkr__create_contact(first_name="<Name>", email="<Email>",
    phone="<phone, if the inquiry gives one>", title="<title, if it gives one>",
    company_id="<company id, if any>", legal_basis="consent",
-   lifecycle_stage="lead", confirm=true)`. Keep the id. `legal_basis` is
-   required by the tool — an inbound form submission is `consent`. Leave out
+   lifecycle_stage="lead", owner_id="<inbox owner's member id>", confirm=true)`. Keep the id.
+   `legal_basis` is required by the tool — an inbound form submission is `consent`. Always pass
+   `owner_id`: without it the tool leaves the contact with no owner. Leave out
    `phone` and `title` when the inquiry does not carry them.
 3. **Deal** — `mcp__zynkr__create_deal(name="<DEAL_NAME>", contact_id=…,
-   company_id=…, stage="new", service_tier="advisory", priority="medium",
-   lead_source="content", close_date="<today + 30 days>", notes="<NOTES>",
-   confirm=true)`. The pipeline, the 交易 number, the owner and the `created`
-   activity are all handled for you.
+   company_id=…, owner_id="<inbox owner's member id>", stage="new", service_tier="advisory",
+   priority="medium", lead_source="content", close_date="<today + 30 days>", notes="<NOTES>",
+   confirm=true)`. The pipeline, the 交易 number and the `created` activity are handled for
+   you; the owner is passed explicitly, so the deal is the inbox owner's claim.
 4. **Follow-up task** — `mcp__zynkr__create_task(subject="回覆 <Name> 的諮詢並約時間",
-   deal_id=<deal id>, due_at=<today + followup-fast-days, ISO 8601 with +08:00>, confirm=true)`.
+   deal_id=<deal id>, due_at=<today + followup-fast-days, ISO 8601 with +08:00>,
+   assignee_id="<inbox owner's member id>", confirm=true)`.
    They just wrote to us, so they have no reply history and the policy's rhythm is the fast one.
    Without this task the deal lands in `/sales-manager`'s 沒有下一步 bucket the day it is made.
    When the inquiry names a deadline ("十一月底前要辦內訓"), add the line
    `客戶時限：YYYY-MM-DD（原話）` under `{{NOTES}}` and make the task due on the earlier of the
    two dates.
 5. **Owner's open-deal count** — count the owner's open deals (stage not `won`/`lost`). At or
-   over `max-open-deals`, the lead is still logged; the report says
+   over `max-open-deals`, the lead is still logged — a warning, never a refusal; the report says
    `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
 6. **Tags** — only on a contact this run created in item 2; an existing contact keeps its tags
    (a missing 來源 there is `/sales-manager` REVIEW's to find). By `company.crm-tag-rules` (its line
@@ -286,8 +314,8 @@ That rule is how this inquiry came in, never the contact's existing 來源 tag: 
 outbound round filed still opens an inbound deal here. It does not need the tag policy: without it
 the deal opens the same way and only the tags wait.
 
-`create_deal` returns the new `deal_id`; the report links it. If step 3 already
-flagged this lead as handled, you never reach here, and the report says so.
+`create_deal` returns the new `deal_id`; the report links it. If step 3 found an
+open deal on this lead's email, you never reach here, and the report names that deal's owner.
 
 **No folder, no kickoff doc.** Don't create a Drive folder or a kickoff doc, and
 don't add a `專案資料夾：` line to the deal. `/project-init` does all three when the
@@ -345,10 +373,11 @@ inquiry, including the skipped ones so nothing is silently dropped:
 |---|------|------|------|------|------|----------|------|----------|
 | 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | 10/28 到期 | 來源 · 主題 ×2 · 待確認 ×1（已讀回） | ✅ 已擬 |
 | 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — | — |
-| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 跳過（已存在） | [deal](url) | — | — | ⏭️ 已回過 |
+| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 已有進行中的 deal（負責人 <member name>） | [deal](url) | — | — | ⏭️ 歸那筆 deal |
 ```
 
-In the 標籤 column name the values applied; a lead whose tags were not applied says
+Under the table, the gate's one line for every lead an open deal already holds (step 3.5), so the
+owner can be told. In the 標籤 column name the values applied; a lead whose tags were not applied says
 `標籤建議已記在 note` and why. Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
 any `[[NEEDS PETER]]` drafts (and, when the 知識庫 walk failed, that it did, so every price
 answer waited), and state the headline in prose (e.g. "Created 2 deals +
@@ -359,8 +388,9 @@ answer waited), and state the headline in prose (e.g. "Created 2 deals +
 ## Why it's built this way
 
 - **Idempotent over confirm-first.** Peter chose autonomous mode, so correctness
-  can't depend on him eyeballing a preview. The dedup-by-email check in step 3
-  is what makes an unattended or scheduled re-run safe.
+  can't depend on him eyeballing a preview. The pick-up gate in step 3 (an exact email
+  match, open deals only) is what makes an unattended or scheduled re-run safe, and what
+  keeps a teammate's client theirs.
 - **The platform creates the deal, not a hand-written statement.**
   `mcp__zynkr__create_deal` is the same path the CRM's own "Create Deal" uses,
   so it assigns the pipeline and 交易 number and logs the `created` activity on

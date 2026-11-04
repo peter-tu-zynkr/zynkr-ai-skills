@@ -1,24 +1,23 @@
 ---
 name: sales-outbound
 description: >-
-  Turn ONE person's interest signal into a tracked CRM lead AND a ready-to-send
-  reply. The signal is a copied DM / chat thread (Threads, IG, LINE, FB Messenger, WhatsApp,
-  email), one row from an event feedback or registration form, a website enquiry, or
-  business-card text — one named person who showed interest and left an email address,
-  optionally with a profile link. It writes the client context into Zynkr CRM (find-or-create
-  company + contact, a new deal, a verbatim source note, a follow-up task) and drafts the reply
-  as a Gmail DRAFT in Peter's inbox (never sent), in the signal's language and Peter's voice —
-  reading Peter's calendar FIRST and offering three real 台北時間 slots whenever the ask is a
-  meeting. Trigger on /sales-outbound or when Peter pastes a DM, a feedback-form row, or an
-  enquiry and says "draft a reply", "draft an outbound mail", "回這個", "幫我擬回覆",
-  "把這個 lead 建進 CRM 並擬信", "log this lead and draft the email", "turn this DM into a
-  draft", "這個回饋幫我建客戶並擬信". Mode B — a five-touch outbound SEQUENCE for someone who has
-  NEVER replied: trigger on "一週五封", "連續開發信", "跑一整套序列", "同一個人五次", "五封序列",
-  or when Peter points at the 陌開名單 roster; it drafts all five mails and files the batch as
-  CRM contacts, no deal (see references/sequence-5touch.md). Distinct from
-  sales-client-sourcing (BATCH-enriches a WHOLE survey Sheet), sales-inbound (the weekly
-  sweep of inbound website consult EMAILS) and sales-follow-up (ONE completed demo transcript
-  on an EXISTING deal).
+  Turn ONE person's interest signal into a tracked CRM lead AND a ready-to-send reply. The
+  signal is a copied DM / chat thread (Threads, IG, LINE, FB Messenger, WhatsApp, email), one
+  row from an event feedback or registration form, a website enquiry, or business-card text —
+  one named person who showed interest and left an email address, optionally with a profile
+  link. An open deal on their email stops the run; otherwise it claims them in Zynkr CRM
+  (company + contact, a deal owned by the runner, a verbatim source note, a follow-up task)
+  and drafts the reply as a Gmail DRAFT (never sent), in the signal's language and Peter's
+  voice, with three calendar-checked 台北時間 slots when the ask is a meeting. Trigger on
+  /sales-outbound or when Peter pastes a DM, a feedback-form row, or an enquiry and says
+  "draft a reply", "draft an outbound mail", "回這個", "幫我擬回覆", "把這個 lead 建進 CRM 並擬信", "log this
+  lead and draft the email", "turn this DM into a draft", "這個回饋幫我建客戶並擬信". Mode B — a
+  five-touch outbound SEQUENCE for someone who has NEVER replied: trigger on "一週五封", "連續開發信",
+  "跑一整套序列", "同一個人五次", "五封序列", or when Peter points at the 陌開名單 roster; it claims each person
+  first (contact + a deal owned by the claimer), then drafts all five mails (see
+  references/sequence-5touch.md). Distinct from sales-client-sourcing (BATCH-enriches a WHOLE
+  survey Sheet), sales-inbound (the weekly sweep of inbound website consult EMAILS) and
+  sales-follow-up (ONE completed demo transcript on an EXISTING deal).
 category: sales-consultant
 project: sales-outbound
 platform: claude
@@ -27,10 +26,10 @@ visibility: public
 author: Peter Tu
 sheetId: "2.09"
 input: "ONE person's interest signal carrying an email — a pasted DM/chat thread, an event feedback or form row, a website enquiry, or business-card text; optionally their profile URL."
-process: "Parse the signal → enrich from any profile link → write the CRM lead (find-or-create company + contact, new deal, source note, follow-up task) → if a meeting is the ask, read the calendar for three 台北時間 slots → draft the Gmail reply → report."
-output: "A CRM lead (company + contact + deal + note + task) in Zynkr CRM, plus a Gmail draft in Peter's inbox — with three calendar-checked 台北時間 slots when a meeting is the ask."
+process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → slots from the calendar if a meeting is the ask → Gmail draft → report."
+output: "A CRM lead (company + contact + a deal owned by the runner + note + task) and a Gmail draft, with three 台北時間 slots for a meeting; an open deal on the email stops it instead."
 synergy: []
-reads: ["gov-subsidy-mechanics", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules"]
+reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 
 ---
@@ -53,8 +52,10 @@ the person's profile link), and it:
 1. **Collects the client context** — parses the signal for name, the email they
    gave, what they want, and who initiated; enriches role / company /
    industry from any profile URL.
-2. **Writes it into the CRM** — find-or-create company + contact, a **new deal**, a
-   **verbatim source note**, and a **follow-up task** for the next step.
+2. **Claims the client in the CRM** — first the **pick-up gate**: if the email already
+   has an open deal, the run stops and names its owner. Otherwise find-or-create company +
+   contact, a **new deal owned by the person running the skill**, a **verbatim source
+   note**, and a **follow-up task** for the next step — all before any draft.
 3. **Drafts the reply** — a Gmail **draft** (never sent), in the signal's
    language and Peter's voice, that moves the next step forward — with three
    calendar-checked slots when that next step is a meeting.
@@ -66,8 +67,8 @@ is that it names a person, carries an email, and shows what they want. It is NOT
 whole spreadsheet of people (that is `sales-client-sourcing`) and NOT a meeting
 transcript (that is `sales-follow-up`).
 
-It runs **autonomously**: parse → enrich → write CRM → check calendar → draft email
-→ report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
+It runs **autonomously**: parse → enrich → pick-up gate → write CRM → check calendar →
+draft email → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
 before sending) and the CRM write is one atomic statement. Tagging the new contact comes after
 that statement, as its own small step (step 4): a failed tag never undoes the lead.
 
@@ -76,17 +77,20 @@ that statement, as its own small step (step 4): a failed tag never undoes the le
 | | 前提 | 輸入 | 產出 |
 |---|---|---|---|
 | **Mode A** | 對方**已經回過話**，談到 demo／通話 | 一段貼上的 DM／對話 | 1 個 lead ＋ 1 封回覆草稿 |
-| **Mode B** | 對方**完全沒講過話** | 陌開名單裡的一個人 | 認領 ＋ 5 封序列草稿 ＋ 接觸紀錄 ＋ CRM 聯絡人 |
+| **Mode B** | 對方**完全沒講過話** | 陌開名單裡的一個人 | CRM 認領（聯絡人 ＋ deal）＋ 5 封序列草稿 ＋ 接觸紀錄 |
 
 **Mode B 的完整做法在 `references/sequence-5touch.md`**，信的長相（節奏、主旨、第 2–5 封骨架、交付文件格式）在 `references/sequence-template.md`，頁尾在 `references/email-format.md`。走之前三份都讀。
 不要把 Mode A 的推論預設（`stage=qualified`、`lifecycle=sql`）套到 Mode B——
 那些是給「已經有回應」的人用的；Mode B 的人一律 `還沒接觸過 → 已聯絡，待回覆`。
 
-Mode B 的認領與接觸紀錄寫在 `Outbound touches` 試算表：認領寫 `AI名單` 分頁（陌開名單），接觸紀錄寫 `接觸紀錄` 分頁。
-**最後一步把當輪的人建成 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）：`lifecycle_stage=lead`、負責人＝實際去聯絡的人，
-**不建 deal**。pipeline 數字只看 deal，所以聯絡人進 CRM 不會灌水；
-好處是對方一回信，Gmail 同步就有聯絡人可掛、也看得到該找誰。
-新建的聯絡人同一步貼上標籤：來源取政策的 `outbound-mode-b-source`，加上看到的缺漏對應的 待確認，依 `company.crm-tag-rules`（`sequence-5touch.md` 7.4）。
+**Mode B 的認領是 CRM 裡的一筆 deal，在寫任何一封信之前**（`sequence-5touch.md` 步驟 0）：
+每一位先過認領關卡（跟 Mode A 第 4 步同樣六步），已經有進行中 deal 的人退出這一批、回報是誰在跟；
+其餘的人建好聯絡人（`lifecycle_stage=lead`），再建一筆負責人＝認領人的 deal，然後才開始寫信。
+對方一回信，Gmail 同步就有聯絡人和 deal 可掛，也看得到該找誰；下一個人再挑到同一個 email，關卡就會擋下來。
+每筆 deal 掛一個任務「五封未回 → 結案 lost（no_decision）」，到期日是第 5 封寄出日（T+12）再加 7 天，第 1 封改期就關掉舊任務、照新日期重建（`sequence-5touch.md` 0.3）；
+五封都沒回，就由 `/sales-manager` REVIEW 把它結成 lost、結案原因 `no_decision`，pipeline 不會堆著冷掉的 deal。
+`Outbound touches` 試算表照寫：`AI名單` 分頁的認領人給陌開名單 app 用，`接觸紀錄` 分頁記接觸，但關卡只看 CRM。
+步驟 0 新建的聯絡人在步驟 7 貼標籤：來源取政策的 `outbound-mode-b-source`，加上看到的缺漏對應的 待確認，依 `company.crm-tag-rules`（`sequence-5touch.md` 7.1）。
 
 > **下表的空白是公司事實——逐一從 Atlas 讀**（`zynkr-atlas` MCP 的 `get_knowledge`，key 見表，值在 `value:` 那一行）。Atlas 連不上、沒有這個 key、或沒有 `value:` 那一行，就停下來問；絕不帶著空白直接執行。
 
@@ -135,7 +139,7 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
   (positive rules) and 《[3.2] 禁用詞清單》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
   **category X** (sales-email forbidden patterns). The Doc wins over the rules restated below.
 - **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid the SQL returns.
-- Owner (`Peter Tu`), the caller's `workspace_id`, and the default pipeline (`銷售流程`) are resolved **live inside the SQL** — never hardcode their ids.
+- **The owner is the claimer** — the person running the skill, whose email and `workspace_id` `mcp__zynkr__whoami` gives (`{{OWNER_EMAIL}}` and `{{WORKSPACE_ID}}` in the SQL). Their member id and the default pipeline (`銷售流程`) are resolved **live** (inside the SQL, or by `mcp__zynkr__list_workspace_members` on the MCP path) — never hardcode an id, and never default the owner to `company.contact-email` when the claimer is someone else.
 - **Do NOT log the drafted email as a CRM activity.** Peter's Gmail is already synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft, it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row.
 
 ---
@@ -195,24 +199,67 @@ Assemble a compact summary and keep it for the report:
 - 語言 · zh-TW
 ```
 
-### 4 · Write the CRM lead
+### 4 · Claim the client in the CRM — the pick-up gate first
+
+**One open deal per client.** The person who picks a client up makes a deal owned by
+themselves **before** any draft, and the next person who picks up the same email must see that
+the client is taken. So the gate is the first CRM step of the run, and nothing is written, and no
+mail drafted, until it has passed.
+
+> **The pick-up rule and the deal name are written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server): the claim rule, and §1's deal name. The six steps below are how this skill runs the rule, and they run as written even when Atlas cannot be reached; only the deal name then falls back to the `{{DEAL_NAME}}` example in `references/lead-insert.sql`, and the report says so.
+
+**The claimer** is the person running the skill: `mcp__zynkr__whoami` gives their name and email,
+and their member id is the `mcp__zynkr__list_workspace_members` row with that email.
+
+#### 4a · The gate — six steps, on the `zynkr` MCP, before anything is written
+
+1. **Normalise the email** — trim it and lower-case it.
+2. **Find the contact** — `mcp__zynkr__list_contacts(search=<email>, limit=100)`. The search is a
+   substring match over both addresses, so keep only rows whose `email` or `secondary_email`,
+   trimmed and lower-cased, equals the email exactly: `b@example.com` does not match
+   `a.b@example.com`.
+3. **No contact → step 6.** A new client.
+4. **Find their open deals** — `mcp__zynkr__list_deals(stage=<stage>, limit=100)` once for each
+   open stage, `new`, `contacted`, `qualified` and `proposal`, keeping the rows whose `contact_id`
+   is one of the matched contacts. `list_deals` cannot filter by contact, so if any of the four
+   calls returns exactly 100 rows the check is not sound: stop, create nothing, and say so. `won`
+   and `lost` deals do not count: a client whose deals are all closed is free to claim again.
+5. **An open deal → stop.** No contact, deal, note, task, tag or draft: the run ends here. Name the
+   owner by matching the deal's `owner_id` to an `id` from `mcp__zynkr__list_workspace_members`,
+   and report one line:
+   `<email> 已有進行中的 deal：<deal_number> · <stage> · 負責人 <member name> · 最後活動 <last_activity_at, YYYY-MM-DD>`.
+   When the owner is the runner, the same line applies: carry the work on in that deal
+   (`/sales-follow-up` after a meeting), not a second one.
+6. **Claim** — write the lead (4b) with the claimer as the owner of the contact it creates and of
+   the deal, plus the follow-up task. Only then go on to the calendar and the draft. After the
+   claim, count the claimer's open deals (the cap line in *Inference defaults*): over the cap is a
+   warning in the report, never a refusal.
+
+#### 4b · Write the lead
 
 Read `references/lead-insert.sql`, fill the placeholders, run it via
 `mcp__supabase__execute_sql(project_id="uomieoqlkazknjgmfdda", query=...)`.
 
-> **`<your-company-contact-email>` (the CRM owner the lead is filed under) is a company fact — read it from Atlas first** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line) and put the value into the SQL before running it. If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run the insert with the blank still in it.
+`{{OWNER_EMAIL}}` is the claimer's email and `{{WORKSPACE_ID}}` the `workspace_id`, both from
+`whoami`; the SQL resolves the claimer only inside that workspace and never picks one itself. The SQL carries the same gate inside the
+statement: if a deal claimed after 4a was already saved when the statement started, it writes
+nothing and returns `blocked = true` with that deal's number, stage, owner and last activity.
+Treat that exactly as 4a step 5: stop, no draft, report the line. It takes no lock, so two claims
+running at the same instant can both pass; that true race is caught afterwards by
+`/sales-manager` REVIEW's 重複認領 check.
 
-An unfilled owner fails with a NOT NULL error (usually on `workspace_id`). One
-statement:
-- resolves owner + workspace + default pipeline live,
+An owner email that matches no user in that workspace fails with a NOT NULL error (usually on
+`workspace_id`). One statement:
+- resolves the claimer (inside `{{WORKSPACE_ID}}`) and the default pipeline live,
+- runs the gate (exact `email` / `secondary_email` match, open stages only),
 - **find-or-creates the company** (case-insensitive by name; skipped if no company),
-- **find-or-creates the contact** (case-insensitive by email; reused if it already exists),
-- inserts a **new deal**,
+- **find-or-creates the contact** (by email or secondary email; reused if it already exists),
+- inserts a **new deal owned by the claimer**,
 - logs a **`note`** activity (the verbatim conversation + who they are) and a **`task`**
-  activity (the agreed next step, due in `{{TASK_DUE_DAYS}}` days, assigned to Peter).
+  activity (the agreed next step, due in `{{TASK_DUE_DAYS}}` days, assigned to the claimer).
 
 It returns `company_id`, `contact_id`, `deal_id`, `note_id`, `task_id`, plus
-`contact_existed` / `company_existed` booleans so you can say so in the report.
+`contact_existed` / `company_existed` booleans so you can say so in the report, and `blocked`.
 
 **Escaping:** every `{{…}}` placeholder is replaced with a **SQL literal** — quote
 text and double any single quote (`O'Brien` → `'O''Brien'`), or write `NULL`. For an
@@ -222,13 +269,16 @@ no company and the deal's `company_id` is NULL).
 **If the Supabase MCP is not authenticated** — you can tell because only
 `mcp__supabase__authenticate` / `complete_authentication` are exposed and
 `execute_sql` is missing — fall back to the `zynkr` MCP CRUD tools instead of
-blocking: `list_contacts(search=<email>)` to dedupe, then `create_contact` →
-`create_deal` → `create_note` → `create_task`. Each is a two-call handshake
-(`confirm:false` to preview, then the identical call with `confirm:true`). They
-resolve workspace + pipeline natively, but two things the SQL did for free you must
-now pass explicitly: **`legal_basis`** (`legitimate_interest` — the same house value
-baked into the SQL) and **`owner_id`** (Peter's workspace member id, from `whoami`).
-There is no find-or-create on this path, hence the explicit dedupe first. On either path, write
+blocking. Run the gate in 4a exactly as written, all six steps: its matched contact is your
+dedupe. Then `create_contact` (only when the gate matched none) → `create_deal` →
+`create_note` → `create_task`. Each is a two-call handshake (`confirm:false` to preview, then
+the identical call with `confirm:true`). They resolve workspace + pipeline natively, but three
+things the SQL did for free you must now pass explicitly: **`legal_basis`**
+(`legitimate_interest` — the same house value baked into the SQL), **`lifecycle_stage`** (the
+tool defaults to `opportunity`), and **`owner_id`** = the claimer's member id on both
+`create_contact` and `create_deal` — never omitted: `create_contact` leaves the owner empty
+without it. `create_task` takes `deal_id`, `due_at` (ISO 8601 with `+08:00`) and
+`assignee_id` = the claimer. On either path, write
 the phone and title the signal gave (`{{PHONE}}` / `{{TITLE}}`, or `phone` / `title` on
 `create_contact`); the 待確認 gaps below are judged on what was written, not on the signal.
 
@@ -359,7 +409,7 @@ Show the client card, then a compact artifact table:
 
 | 產出 | 連結 / 狀態 |
 |------|------------|
-| CRM Deal | <deal url> |
+| CRM Deal | <deal url>（負責人 <claimer>） |
 | 聯絡人 | <contact url>（新建 / 既有） |
 | 公司 | <company url>（新建 / 既有） |
 | 活動 | note · 1 task |
@@ -371,8 +421,10 @@ When the mail carries slots, also show them with their Amsterdam equivalents and
 `Available` block each came from — that is what lets Peter sanity-check you did read
 the calendar rather than guess.
 
-If the contact already existed, say so (you attached a new deal to the existing
-person rather than duplicating them).
+If the contact already existed, say so: every deal they had was `won` or `lost`, so the gate
+let you attach a new deal to the same person rather than duplicating them. A run the gate
+stopped reports only its one line (4a step 5) — no table, no draft — and a run over the cap adds
+the cap line from *Inference defaults*.
 
 ---
 
@@ -405,8 +457,9 @@ Pick the closest enum from the conversation; use the fallback when there's no si
   "this month"), add the line `客戶時限：YYYY-MM-DD（原話）` to `{{DEAL_NOTES}}` and make the task
   due on the earlier of the rhythm's date and that deadline. An interval Peter promised in the
   thread ("我三天後回你") wins over both.
-- **owner's open-deal count** — after the insert, count the owner's open deals (stage not
-  `won`/`lost`). At or over `max-open-deals`, the lead is still logged — say so in the report:
+- **claimer's open-deal count** — after the claim, count the claimer's open deals (the rows of
+  the four open-stage `list_deals` calls whose `owner_id` is theirs). At or over
+  `max-open-deals`, the claim still stands — warn, never refuse — and say so in the report:
   `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
 
 > **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
@@ -417,9 +470,14 @@ Pick the closest enum from the conversation; use the fallback when there's no si
   go write the email). Peter pastes once; the lead is tracked and the reply is waiting.
 - **Email is a draft, not a send.** Outbound to a real prospect is Peter's call —
   the skill prepares, he approves. That's also why it needn't confirm before running.
-- **Find-or-create, always-new deal.** A person can come back for a second deal, but
-  they shouldn't be duplicated as a contact — so contact/company are keyed
-  (email / name), while each run books a fresh deal (re-running = a deliberate redo).
+- **Find-or-create, one open deal per client.** A person can come back for a second deal, but
+  they shouldn't be duplicated as a contact, and two people must never chase the same client —
+  so contact/company are keyed (email / name), and a new deal is booked only when the contact
+  has none open. Re-running on the same email stops at the gate instead of booking a second
+  deal; a client whose deals are all won or lost gets a fresh one.
+- **The claim comes before the draft.** The deal, owned by whoever picked the client up, is the
+  claim: made first, it is what the next person's gate finds. The claimer runs the skill in
+  their own session, so the draft lands in their own mailbox.
 - **Don't log the email activity.** The Gmail→CRM sync already captures it on send —
   logging here would double the row. The skill writes the *note* (the source signal,
   which the sync can't see) and the *task*, and leaves the email to the sync.
@@ -462,12 +520,13 @@ unchecked. Never re-implement either list inside this file.
 
    > **第 4 封的補助判斷點是知識庫卡片——從 Atlas 讀**（`mcp__zynkr-atlas__get_knowledge`，key `gov-subsidy-mechanics`，只用 `---` 以上的正文）。Atlas 連不上或沒有這張卡，就停下來問；絕不憑記憶或舊版檔案寫補助內容。
 4. **草稿建好 ≠ 已寄出。** 接觸紀錄的 Remark 要註明「尚未寄出」，寄出後才拿掉。
-5. **五封就停。** 沒回的改 `暫時沒需求`。一天一批、一批不超過 5 人。
+5. **五封就停。** 沒回的改 `暫時沒需求`，那筆 deal 結成 lost、結案原因 `no_decision`（`/sales-manager` REVIEW 依步驟 0 掛的任務批次處理）。一天一批、一批不超過 5 人。
 6. **三天一封、第 1 封一律禮拜二**（二、五、一、四、日），時段只放第 1 封，三格落在 T+2 到 T+8。
-7. **最後把當輪名單寫進 CRM 聯絡人**（`sequence-5touch.md` 步驟 7）。負責人＝接觸紀錄的 `接觸人員`
-   （沒有就用 `認領人`），用 `list_workspace_members` 對成員 id，對不到就跳過那一位，不要猜。
-   先用 email 查重，只建新的；已經在 CRM 的人不寫入，回報「既有，略過」。`lifecycle_stage` 一定要帶 `lead`（工具預設是 `opportunity`）。**不建 deal。**
-   新建的每一位貼 來源（政策的 `outbound-mode-b-source`）與缺漏對應的 待確認（`source: "rule"`），跟聯絡人同一批寫入、寫完用 `list_tags` 讀回，不另外再問一次；
+7. **先認領、後寫信**（`sequence-5touch.md` 步驟 0）。每一位先過認領關卡（Mode A 第 4 步 4a 的六步，email 精確比對、只看進行中的四個階段），
+   同一個 email 在同一批只留第一位（後面的標「同批重複」），已經有進行中 deal 的人**退出這一批**，回報「<email> 已有進行中的 deal：<交易> · <stage> · 負責人 <成員名> · 最後活動 <日期>」。
+   其餘的人建聯絡人（既有就沿用，`lifecycle_stage` 一定要帶 `lead`，工具預設是 `opportunity`）＋一筆 deal ＋一個「五封未回 → 結案 lost（no_decision）」任務，
+   聯絡人與 deal 的 `owner_id` 都是認領人：接觸紀錄的 `接觸人員`（沒有就用 `認領人`），用 `list_workspace_members` 對成員 id，對不到就跳過那一位，不要猜。
+   **全部認領完才開始寫第一封。** 步驟 7 不再建聯絡人，只替步驟 0 新建的聯絡人貼 來源（政策的 `outbound-mode-b-source`）與缺漏對應的 待確認（`source: "rule"`），寫完用 `list_tags` 讀回，不另外再問一次；
    標籤規則讀不到、沒有標籤工具、或工具拒絕，就不貼，改記一行 `標籤建議：` note（讀法與降級見上方 Workflow 第 4 步的 `company.crm-tag-rules` 那一行）。
 
 > 這批人是付過錢、上過 9–17 場的學員，`zynkr.ai` 網域信譽與《彼得的外商隨筆》電子報共用。

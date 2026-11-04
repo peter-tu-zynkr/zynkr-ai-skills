@@ -9,11 +9,12 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "Business card image(s) — single or batch"
-process: "OCR via Claude Vision → schema normalization → user review → Zynkr platform write (contact + company + 名片 note) → company research → follow-up email draft → Gmail save"
-output: "Contact + company on the Zynkr platform (platform.zynkr.ai/contacts), a 名片 note holding the rest of the card, and a personalized follow-up email saved to Gmail Drafts"
+process: "OCR via Claude Vision → schema review → pick-up gate (an open deal stops the card before any write) → Zynkr platform write (contact + company + 名片 note) → company research → follow-up draft → claim (a deal owned by the runner) → Gmail save"
+output: "Contact + company + 名片 note on the Zynkr platform, a deal owned by the runner, and a follow-up email in Gmail Drafts; a card whose email has an open deal gets neither"
 synergy: []
 type: agent
 skills: ["sales-follow-up-mail"]
+reads: ["sales.crm-data-standards", "company.sales-pipeline-rules"]
 house-style: bound
 
 ---
@@ -124,9 +125,55 @@ Accept corrections until user types `OK`. Update `CONTACTS[]` with confirmed dat
 
 ---
 
+## Step 3.2 — Pick-up Gate
+
+One open deal per client: the person who picks a client up makes a deal owned by themselves
+before any draft, and nobody drafts to a client a teammate already has. Run this gate right after
+the cards are confirmed in Step 3, for every card with an email, before Step 4 writes anything to
+the platform.
+
+> **The pick-up rule and the deal name are written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server): the claim rule, and §1's deal name. The six steps below are how this skill runs the rule, and they run as written even when Atlas cannot be reached; only the deal name then falls back to `<name>（<company>）名片交流`, and the summary says so.
+
+**The claimer** is the person running the skill: `mcp__zynkr__whoami` gives their email, and their
+member id is the `mcp__zynkr__list_workspace_members` row with that email.
+
+A card with **no email** cannot be checked or mailed: it still goes to Step 4 and is recorded, but
+it gets no claim and no draft, and the Step 8 summary says so.
+
+**One card per person first.** Normalise every card's email (step 1) and de-duplicate the batch on
+it: the first card wins, and each later one is reported as 「同批重複」 under the first card's
+result. A duplicate gets nothing of its own (no platform write, no claim, no draft), so two cards
+for one person can't both claim.
+
+For every remaining card with an email, on the `zynkr` MCP:
+
+1. **Normalise the email** — trim it and lower-case it.
+2. **Find the contact** — `mcp__zynkr__list_contacts(search=<email>, limit=100)`. The search is a
+   substring match over both addresses, so keep only rows whose `email` or `secondary_email`,
+   trimmed and lower-cased, equals the email exactly: `b@example.com` does not match
+   `a.b@example.com`.
+3. **No contact → step 6.** A new client: Step 4 creates the contact.
+4. **Find their open deals** — `mcp__zynkr__list_deals(stage=<stage>, limit=100)` once for each
+   open stage, `new`, `contacted`, `qualified` and `proposal` (once for the whole batch), keeping
+   the rows whose `contact_id` is one of the matched contacts. `list_deals` cannot filter by
+   contact, so if any of the four calls returns exactly 100 rows the check is not sound: stop,
+   write nothing, claim nothing, draft nothing, and say so. `won` and `lost` deals do not count: a
+   client whose deals are all closed is free to claim again.
+5. **An open deal → stop for this card.** It skips Steps 3.5 to 7: no platform write (no company
+   created, no company column backfilled, no contact, no 名片 note), no research, deal, task or
+   draft. Name the owner by matching the deal's `owner_id` to an `id` from
+   `mcp__zynkr__list_workspace_members`, and keep one line for the Step 8 summary:
+   `<email> 已有進行中的 deal：<deal_number> · <stage> · 負責人 <member name> · 最後活動 <last_activity_at, YYYY-MM-DD>`.
+   In a batch, carry on with the next card.
+6. **Claim at the draft** — the card goes on to Step 3.5 and Step 4. When its email is approved
+   (`[OK]` in Step 6), the claim runs **before** the draft is saved (Step 6, *Claim*). A card you
+   `[SKIP]` is not picked up: no deal.
+
+---
+
 ## Step 3.5 — Website Lookup (auto-fill if missing)
 
-For each contact where `website` is `—` or blank:
+For each card the gate did not stop (Step 3.2) where `website` is `—` or blank:
 
 Run a WebSearch query: `"[company name]" official website`
 
@@ -170,8 +217,10 @@ is no spreadsheet copy to keep in sync, and no field is dropped on the way:
 > Never append to the retired `B2B Customer List` Google Sheet: the platform holds the whole
 > card.
 
-Run this **autonomously** for every confirmed contact (no extra approval gate —
-they already signed off in Step 3). For each contact in `CONTACTS[]`:
+Run this **autonomously** for every confirmed card the gate did not stop (no extra approval gate —
+they already signed off in Step 3); a card without an email comes here too. A card Step 3.2
+stopped, or a 「同批重複」, skips this step entirely: no company created, no column backfilled.
+For each of those contacts in `CONTACTS[]`:
 
 **1. Clean the values.** Translate the `—` sentinel (and any blank) to an empty
 string for every field before using it. The platform should never store a literal `—`.
@@ -192,9 +241,13 @@ lost. If the card shows only one number, pass it as `{{MOBILE}}` and leave
 `./references/contact-insert.sql`) and substitute the placeholders, **doubling any
 single quote** (`O'Brien` → `O''Brien`).
 
-> **`<your-company-contact-email>` (the CRM owner the contact is filed under) is a company fact — read it from Atlas first** (`get_knowledge`, key `company.contact-email`, on the `zynkr-atlas` MCP server; the value is the `value:` line) and put the value into the SQL before running it. If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; never run the insert with the blank still in it.
-
-An unfilled owner fails with a NOT NULL error (usually on `workspace_id`).
+**The owner is the claimer** — the person running the skill. `mcp__zynkr__whoami` gives their
+email and the `workspace_id`: put them in `{{OWNER_EMAIL}}` and `{{WORKSPACE_ID}}`. The SQL files
+the card only in that workspace and only if the claimer belongs to it; it never picks a workspace
+itself. Never fill it with the company contact address when the
+claimer is someone else: the deal in Step 6 is owned by the claimer, and the contact is too. An
+email that matches no user in that workspace fails with a NOT NULL error (usually on
+`workspace_id`).
 
 | Placeholder      | Value |
 |------------------|-------|
@@ -210,13 +263,16 @@ An unfilled owner fails with a NOT NULL error (usually on `workspace_id`).
 | `{{LINKEDIN}}`   | `linkedin` |
 | `{{NOTES}}`      | `notes` |
 | `{{CARD_DATE}}`  | `card_date` (`YYYY-MM-DD`) |
+| `{{OWNER_EMAIL}}` | the claimer's email, from `whoami` |
+| `{{WORKSPACE_ID}}` | the `workspace_id`, from `whoami` |
 
 Run it with `mcp__supabase__execute_sql`, `project_id` = `CRM_PROJECT_ID`. One
 statement does all of it: find-or-create the company, backfill any company column
 that is still empty (**never** overwriting a value a human curated), insert the
-contact **only if the email isn't already on the platform** with the baked-in
-defaults (`lifecycle_stage=lead`, `legal_basis=consent`, `lead_status=other`,
-owner = Peter), and attach the 名片 note.
+contact **only if the email isn't already on the platform** (as anyone's email or secondary
+email) with the baked-in defaults (`lifecycle_stage=lead`, `legal_basis=consent`,
+`lead_status=other`, owner = the claimer), and attach the 名片 note. It creates no deal: the
+claim waits for the draft (Step 6).
 
 **5. Read the result and report.**
 - One row back (a `contact_id`) → created. Display:
@@ -240,7 +296,7 @@ so explicitly in the Step 8 summary rather than reporting the contact as process
 
 ## Step 5 — Company Research
 
-For each contact, run 3 WebSearch queries in sequence:
+For each contact the gate did not stop, run 3 WebSearch queries in sequence:
 
 1. **Company overview**: `"[company name]" company overview products services`
 2. **Recent news**: `"[company name]" news <this year> OR <last year>` (years from today's date)
@@ -271,7 +327,7 @@ Research looks good? [OK] or [EDIT] to add/change context.
 
 ## Step 6 — Follow-up Email Draft
 
-For each contact, launch the `followup-email-writer` agent using the Agent tool.
+For each contact with an email that the gate in Step 3.2 cleared, launch the `followup-email-writer` agent using the Agent tool.
 
 Pass the following in the prompt:
 ```
@@ -303,13 +359,38 @@ Email looks good?
 
 Accept edits until user approves.
 
+**Claim** — on `[OK]`, before Step 7 saves the draft, make the deal that claims this client.
+Each write is a two-call handshake: `confirm:false` previews, then the identical call with
+`confirm:true` applies.
+
+1. **Contact** — the contact Step 4 created (its `contact_id`), or the one the gate matched.
+   If neither exists (the platform write failed and was not retried), there is nothing to claim
+   on: no deal and no draft for this card, and the summary says so.
+2. **Company** — when the card has one, `mcp__zynkr__list_companies(search=<company>)` and take
+   the row whose name equals it (case-insensitive); none → no `company_id`.
+3. **Deal** — `mcp__zynkr__create_deal(name=<§1's deal name>, contact_id=…, company_id=…,
+   owner_id=<claimer's member id>, stage="new", lead_source="other", priority="medium")`.
+   A business-card exchange is `other`. Always pass `owner_id`.
+4. **Task** — `mcp__zynkr__create_task(deal_id=<deal id>, subject="等 <name> 回覆名片跟進信",
+   due_at=<today + followup-fast-days, ISO 8601 with +08:00>, assignee_id=<claimer's member id>)`:
+   someone met at an event has no reply history, so the rhythm is the fast one.
+5. **Cap** — count the claimer's open deals (the rows of the four open-stage `list_deals` calls
+   whose `owner_id` is theirs, plus the deals this run made). At or over `max-open-deals` the claim
+   still stands — warn, never refuse — and the summary says
+   `<owner> 現在有 M 筆 open deal（上限 <max-open-deals>）— 先跑 /sales-manager 放掉 stale 的`.
+
+If the deal write fails, save no draft for that card: an unclaimed client gets no mail. Say so in
+the summary.
+
+> **The pipeline thresholds are company policy — read them from Atlas** (`get_knowledge`, key `company.sales-pipeline-rules`, on the `zynkr-atlas` MCP server; each threshold is a `<name>: <value>` line at the top, and the `value:` line is the version date). If Atlas cannot be reached, the key is missing, or a line you need is missing, say so and ask; never fall back to a number from memory or from an older copy of this file.
+
 ---
 
 ## Step 7 — Save to Gmail Drafts
 
 This skill never sends. Every approved email is saved as a draft for a person to send, like the rest of the sales family.
 
-For each approved email, use `mcp__google-workspace__draft_gmail_message`:
+For each approved email whose card was claimed in Step 6, use `mcp__google-workspace__draft_gmail_message`:
 - `user_google_email`: `<your-google-workspace-account>`
 - `to`: contact email from `CONTACTS[i]`
 - `subject`: subject line from agent output
@@ -338,12 +419,13 @@ Processed: [N] contact(s)
 [Contact 1 Name] @ [Company]
   ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
   ✓ 名片 note attached
+  ✓ Claimed — deal [交易 number], owner [claimer] (or ⏭️ skipped / no email)
   ✓ Email saved to Drafts
 
 [Contact 2 Name] @ [Company]
-  ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
-  ✓ 名片 note attached
-  ✓ Email saved to Drafts
+  ⛔ [email] 已有進行中的 deal：[交易 number] · [stage] · 負責人 [member name] · 最後活動 [date]
+  — no platform write, no deal, no draft
+  ↳ 同批重複: [the later card(s) with the same email], nothing written for them
   ...
 
 Contacts: https://platform.zynkr.ai/contacts
@@ -351,7 +433,8 @@ Contacts: https://platform.zynkr.ai/contacts
 ```
 
 If any card shows `✗ FAILED`, list those cards again underneath and offer to retry
-the platform write — a failed card exists nowhere but the image it came from.
+the platform write — a failed card exists nowhere but the image it came from. Then the cap line
+(Step 6, *Claim*), if the claimer is at or over it.
 
 ---
 

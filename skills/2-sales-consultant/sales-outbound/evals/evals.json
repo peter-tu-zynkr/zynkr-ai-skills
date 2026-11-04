@@ -1,0 +1,63 @@
+{
+  "skill_name": "sales-outbound",
+  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts (shown to the owner first).",
+  "evals": [
+    {
+      "id": 0,
+      "name": "ac1-open-deal-stops-the-run",
+      "prompt": "幫我回這個 DM 並建 lead：「嗨，我是王小明，想約個時間聊聊你們的 AI 導入，email 是 taken.lead@example.com」",
+      "expected_output": "Setup: a test contact taken.lead@example.com with an open `new` deal owned by member A. The run reaches step 4a, matches the contact exactly, finds the open deal in the `new` stage read, and stops. It creates no contact, deal, note, task, tag or Gmail draft, never reads the calendar, and reports one line naming the deal number, stage `new`, member A by name and the last-activity date.",
+      "files": [],
+      "assertions": [
+        "Ran the gate before any CRM write: list_contacts(search=taken.lead@example.com, limit=100), then list_deals for each of new, contacted, qualified, proposal with limit=100",
+        "Matched the contact on an exact (case-insensitive) email, not on the substring search alone",
+        "Stopped at 4a step 5: list_deals(search=<交易 number>) shows the same single deal as before the run, and no second deal exists on the contact",
+        "Created no contact, note, task or tag, ran no lead-insert.sql insert, and created no Gmail draft (the runner's Drafts has nothing new to taken.lead@example.com)",
+        "Named the owner through list_workspace_members, not by id",
+        "Reported exactly the line 'taken.lead@example.com 已有進行中的 deal：<交易 number> · new · 負責人 <member A's name> · 最後活動 <YYYY-MM-DD>'"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "ac2-claim-before-draft",
+      "prompt": "這個人在活動回饋表留了資料，幫我建客戶並擬信：姓名 陳大文，email fresh.lead@example.com，想了解怎麼把報價流程交給 AI。",
+      "expected_output": "No contact has fresh.lead@example.com, so the gate goes to step 6. The run creates the contact and a deal owned by the runner (member B) with a follow-up task, and only then drafts the reply. The deal's created_at is earlier than the draft's time. A rerun on the same email, by member A or by B, stops per eval 0.",
+      "files": [],
+      "assertions": [
+        "Ran the four open-stage list_deals reads and found no matching contact before writing anything",
+        "Created the contact with owner = the claimer (member B, from whoami) and lifecycle_stage per Inference defaults",
+        "Created one deal with owner_id = member B (get_deal shows it), stage per Inference defaults, and one follow-up task assigned to member B",
+        "The deal's created_at is earlier than the Gmail draft's creation time: the claim came before the draft",
+        "Created exactly one Gmail draft to fresh.lead@example.com (html, include_signature=true) and sent nothing",
+        "A second run on fresh.lead@example.com stops at the gate with the one-line report and creates nothing"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "ac3-reopen-after-lost",
+      "prompt": "陳大文又來信了，說現在預算下來了想重新談，email 一樣是 fresh.lead@example.com，幫我建 lead 並回信。",
+      "expected_output": "Setup: the eval 1 deal is moved to lost (move_deal_stage with loss_reason no_decision). The gate finds the contact but no deal in an open stage, so the client is free: the run attaches a second deal to the same contact_id, owned by the runner, with no duplicate contact, then drafts.",
+      "files": [],
+      "assertions": [
+        "Matched the existing contact exactly and found no open deal (the lost deal does not count)",
+        "Created no new contact: contact_existed is true (SQL path) or no create_contact call was made (MCP path)",
+        "Created a second deal on the same contact_id with owner_id = the claimer",
+        "Reported that the contact already existed and that its earlier deals were all won or lost",
+        "Drafted the reply only after the new deal existed"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "ac4-substring-is-not-a-match",
+      "prompt": "幫我把這個 lead 建進 CRM 並擬信：王小美，b@example.com，想看一下 CRM 的 demo。",
+      "expected_output": "Setup: two test contacts, a.b@example.com with an open deal owned by member A, and b@example.com with no deal. list_contacts(search=b@example.com) returns both, but only b@example.com equals the email exactly, so the open deal on a.b@example.com does not stop the run: the gate claims for b@example.com.",
+      "files": [],
+      "assertions": [
+        "list_contacts(search=b@example.com) returned both test contacts, and the gate kept only b@example.com",
+        "Did not stop on the open deal of a.b@example.com and did not report it as taken",
+        "Reused the b@example.com contact (no duplicate) and created one deal on it, owned by the claimer",
+        "Left the a.b@example.com contact and its deal untouched"
+      ]
+    }
+  ]
+}

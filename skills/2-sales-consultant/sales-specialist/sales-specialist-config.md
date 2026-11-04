@@ -12,8 +12,8 @@ description: "Configuration for the business card pipeline skill — Zynkr platf
 | **Project ID** | `uomieoqlkazknjgmfdda` (shared `Zynkr` Supabase project; platform tables are `crm_*`) |
 | **Tables** | `crm_contacts` · `crm_companies` · `crm_activities` (the 名片 note) |
 | **Contacts page** | `https://platform.zynkr.ai/contacts` |
-| **Owner** | `<your-company-contact-email>` (Atlas company fact `company.contact-email`; `SKILL.md` Step 4 says how) → looked up to `owner_id` in the SQL |
-| **Insert template** | `./references/contact-insert.sql` (find-or-create company, enrich blanks, dedup-by-email, attach note) |
+| **Owner** | The claimer — the person running the skill, whose email and `workspace_id` `mcp__zynkr__whoami` gives (`{{OWNER_EMAIL}}`, `{{WORKSPACE_ID}}`; `SKILL.md` Step 4 says how) → looked up to `owner_id` in the SQL, only inside that workspace. The deal made at the draft (`SKILL.md` Step 6) is theirs too |
+| **Insert template** | `./references/contact-insert.sql` (find-or-create company, enrich blanks, dedup by email or secondary email, attach note; no deal) |
 
 ### Card → platform field mapping (all 12 fields have a home)
 

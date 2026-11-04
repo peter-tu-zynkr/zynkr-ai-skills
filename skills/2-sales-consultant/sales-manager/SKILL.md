@@ -32,7 +32,7 @@ output: "Whatever the delegated children produced (CRM records · Gmail drafts �
 synergy: []
 type: agent
 skills: ["sales-client-sourcing", "sales-specialist", "sales-outbound", "sales-follow-up", "sales-research", "sales-proposal-writer"]
-reads: ["company.sales-pipeline-rules", "company.crm-tag-rules"]
+reads: ["sales.crm-data-standards", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 
 ---
@@ -89,8 +89,9 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
   `whoami`, `list_tags` (`mcp__zynkr__list_tags`, given `entity_type` + `entity_id` it lists one
   record's tags).
 - **CRM writes** use `move_deal_stage` (stage changes — never `update_deal` for stage,
-  the pipeline side-effects must fire), `update_deal`, `set_task_status`, `create_task`,
-  `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag`.
+  the pipeline side-effects must fire; with `stage: lost` it also takes `loss_reason`, one of
+  `price`, `competitor`, `no_decision`, `poor_fit`, `timing`, `other`), `update_deal`,
+  `set_task_status`, `create_task`, `create_note`, `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag`.
   Every `zynkr` write tool is a two-call handshake: `confirm:false` previews,
   `confirm:true` applies.
 - **Record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}`.
@@ -151,15 +152,31 @@ Read `company.sales-pipeline-rules` first (see *Fixed facts*), then the pipeline
 find its **last client touch** — the newest inbound email from its contact, meeting, or stage
 change. `get_deal` shows the timeline; Gmail `from:<contact email>` fills a gap. Our own sent
 mail is not a client touch, so a deal chased every few days with no answer still goes stale.
-Classify every open deal into exactly one bucket, top row first:
+`list_deals` returns no `created_at`: every "since the deal was created" below reads it from
+`get_deal`. Classify every open deal into exactly one bucket, top row first:
+
+**In sequence first.** A Mode B deal exists from the claim, before any client touch, so the stale
+test alone would close it while its five mails are still going out. Before the table, look for an
+open 「五封未回 → 結案 lost（no_decision）」 task on the deal (`list_tasks`):
+- open and **not yet due** → the deal is *in sequence*: it skips 序列結束未回 and 放掉 · stale and
+  is tested from 沒有下一步 down (its open task usually makes it 健康). No bucket closes it.
+- open and **past `due_at`** → 序列結束未回 (or, with a reply, the task closes as below). Never
+  plain 放掉 · stale.
 
 | Bucket | Test |
 |---|---|
-| **放掉 · stale** | Stale, as the policy defines it: `stale-days` or more since the last client touch and since the deal was created |
+| **序列結束未回** | A Mode B deal whose sequence ended unanswered: its open task 「五封未回 → 結案 lost（no_decision）」 is past `due_at`, and the contact has sent nothing (no inbound email, no meeting) since the deal was created |
+| **放掉 · stale** | Not in sequence, and stale as the policy defines it: `stale-days` or more since the last client touch and since the deal was created |
 | **沒有下一步** | Open deal with no open task attached |
 | **逾期追蹤** | Has an open task whose `due_at` is in the past |
 | **草稿未寄** | A Gmail draft exists for the contact but nothing was ever sent |
 | **健康** | None of the above — do not list these individually, just count them |
+
+**序列結束未回** comes from `/sales-outbound` Mode B: the claim at pick-up makes a deal with that
+task, due seven days after the fifth mail. Check Gmail `from:<contact email>` since the deal's
+creation before you classify. No reply → the batch line `移到 lost（no_decision）`. A reply found
+→ the sequence worked: the batch closes the task (`set_task_status`, `done`) instead, and the deal
+is classified again without it (usually 沒有下一步, which proposes its follow-up task).
 
 **The pipeline band.** Each owner sits between a floor and a cap: at least `min-cooking-clients`
 clients cooking, at most `max-open-deals` open deals. Cooking is the stale line read the other
@@ -199,10 +216,23 @@ two things under the bucket table, by `company.crm-tag-rules`:
 
 > **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). `group` is the platform's English key (`source`, `review`) and `name` is the policy's value. If Atlas cannot be reached, the key or a line you need is missing, or any of `mcp__zynkr__list_tags`, `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag` is not among your tools, skip the tag checks, put no tag change in the batch, and say so in the report; the rest of REVIEW runs as usual. A tag change in the batch that answers `not_found`, `invalid_input` or any other error except `conflict` (`forbidden`, `rate_limited`, `internal`, …) is left undone and listed in the report, with no retry and no stopping to ask; on `conflict`, read the contact back with `list_tags`, report what it shows, and do not retry. Never fall back to a value from memory or from an older copy of this file.
 
+**重複認領.** One open deal per client is the pick-up rule (Atlas `sales.crm-data-standards`; every
+sales skill runs its gate before it claims). The gate leaves a few seconds between its check and
+its claim, so two people can, rarely, claim the same client. From the same four open-stage
+`list_deals` reads (`new`, `contacted`, `qualified`, `proposal`, `limit=100` each; a read that
+returns exactly 100 rows means the check is not sound, so say so), list every `contact_id` with
+two or more open deals: each deal's 交易 number, owner and creation date (`created_at` from
+`get_deal`; `list_deals` does not return it). Propose nothing on your
+own: the owners agree which deal stays, and only then does the other go into the batch as
+`移到 lost`, `loss_reason` `other`, with the note `重複認領：保留 <交易 number>`, read back after the
+move the same way as a 序列結束未回 deal below.
+
+> **The pick-up rule is written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server). This check runs as written even when Atlas cannot be reached.
+
 This file is where the buckets and the band are defined from the policy's words. The team's
 Monday sales pulse mail applies the same policy to every member.
 
-Render the four live buckets as one table (deal · owner · days since last client touch · the one thing to do).
+Render the five live buckets as one table (deal · owner · days since last client touch · the one thing to do).
 Keep it **deal-level**. Do not roll up by LOB, do not write a weekly narrative, do not
 compute revenue forecasts — that is `/zynkr-gm`'s job and duplicating it is the one
 outcome this skill was explicitly scoped to avoid.
@@ -217,6 +247,8 @@ only after a single explicit confirmation:
 ```
 我打算做這些（一次確認全部）：
 
+移到 lost（no_decision）· 2 個 deal — 序列結束未回：五封都寄了，「五封未回」任務已到期，對方一直沒回
+關掉序列任務   · 1 個        — 序列中途有回信：「五封未回」任務關掉，deal 照常追
 移到 lost      · 3 個 deal   — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
 關掉過期 task  · 8 個        — 早已完成或已無意義
 建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度）
@@ -229,8 +261,17 @@ Fill `<stale-days>` with the policy's number when you write the batch. Each tag 
 `apply_tag` or `remove_tag` (`entity_type="contact"`), previewed, then repeated with `confirm:true`
 after the one confirmation, then read back with `list_tags`.
 A stale deal moved to `lost` gets one note on the deal — `放掉 · stale（company.sales-pipeline-rules <value date>）：最後一次客戶往來 <date>` —
-so whoever reopens it sees why. A stale deal the owner keeps gets their reason as a note instead,
-and stays out of the batch.
+so whoever reopens it sees why.
+
+A 序列結束未回 deal is closed with
+`move_deal_stage(id=…, stage="lost", loss_reason="no_decision")`, previewed, then repeated with
+`confirm:true`; its 「五封未回」 task is set `done`; and the deal gets one note,
+`create_note(deal_id=…, subject="結案原因", body="結案原因：no_decision（五封未回）")`. A server
+older than `PLAT-078` drops an unknown `loss_reason` without an error, so a quiet success proves
+nothing: after the move, `get_deal` and check `loss_reason`. When it is not the reason sent, the
+`結案原因：` note line is the only record of it, and the report says the server did not record
+the loss reason (`PLAT-078` not live). A stale deal the owner keeps gets their reason as a note
+instead, and stays out of the batch.
 
 Rules:
 - **One confirmation for the whole batch**, not one per row — the point is to clear a
@@ -245,7 +286,8 @@ Rules:
 
 State the mode, what each child produced (with record URLs), and — for REVIEW — the
 `company.sales-pipeline-rules` version used (its `value:` date), the band lines, the bucket counts,
-the two tag-check counts with the `company.crm-tag-rules` version (or why they were skipped), and
+the two tag-check counts with the `company.crm-tag-rules` version (or why they were skipped), the
+重複認領 rows, any deal moved to `lost` whose `get_deal` read-back lacks the `loss_reason` sent, and
 exactly what the confirmed batch changed. If the batch was declined,
 say so plainly and leave the list.
 

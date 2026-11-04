@@ -7,7 +7,10 @@
 --   3. insert the contact — but ONLY if this email isn't already a contact
 --   4. attach a 名片 note carrying the fields that have no column of their own
 -- It mirrors the CRM's createContact server action (app/contacts/actions.ts):
--- same columns, owner = Peter, legal_basis required.
+-- same columns, owner = the claimer (the person running the skill), legal_basis required.
+-- No deal here: the pick-up gate (SKILL.md Step 3.2) runs before this statement, and a card it
+-- stops never reaches it; the claim (a deal owned by the claimer) is made in Step 6, before the
+-- draft is saved (SKB-105).
 --
 -- The Zynkr platform is the ONLY destination — every one of the 12 card fields
 -- lands somewhere here, so nothing needs a spreadsheet to fall back on:
@@ -20,7 +23,8 @@
 --   linkedin · notes · card_date             -> the 名片 note (step 4)
 --
 -- Returns the new contact id, or ZERO rows if the contact was de-duped (a
--- contact with this email already exists). Zero rows = report "already in CRM".
+-- contact with this email as its email or secondary email already exists).
+-- Zero rows = report "already in CRM".
 --
 -- Cards with NO email can't be de-duped (there's no stable key), so they always
 -- insert — that's intentional; the skill reports them so a dup is never silent.
@@ -39,7 +43,7 @@
 --   legal_basis     = 'consent'   (同意 — required by the CRM; the card was handed over)
 --   lead_status     = 'other'     (其他 — "met in person / event" has no dedicated enum)
 --   deal_status     = NULL        (not a deal yet)
--- Owner is looked up live so the template survives id changes.
+-- Owner and workspace are looked up live so the template survives id changes.
 
 WITH params AS (
   SELECT
@@ -63,19 +67,37 @@ norm AS (
                               '^www\.|/.*$', '', 'g')) AS domain
   FROM params p
 ),
--- OWNER: replace <your-company-contact-email> with the CRM owner's email before running —
--- the value of the Atlas company fact company.contact-email (SKILL.md step 4 says how).
--- Left unfilled, the inserts below fail with a NOT NULL error (usually on workspace_id).
-own AS (SELECT id FROM crm_users WHERE email = '<your-company-contact-email>' LIMIT 1),
+-- OWNER = THE CLAIMER (SKB-105): replace {{OWNER_EMAIL}} with the email of the person running
+-- the skill and {{WORKSPACE_ID}} with the workspace_id, both from mcp__zynkr__whoami (SKILL.md
+-- Step 4 says how) — never company.contact-email when the claimer is someone else. id = the
+-- claimer (owner_id); ws = {{WORKSPACE_ID}}, never derived here, and the claimer resolves only if
+-- they belong to it (its owner, or an active member). An email that matches no user, or a user
+-- outside that workspace, gives zero rows, and the inserts below fail with a NOT NULL error
+-- (usually on workspace_id). Never a guess. Exactly one row otherwise: two crm_users rows whose
+-- emails differ only by case would make every (SELECT … FROM own) below error, so the exact-case
+-- match wins, then the lowest id, LIMIT 1.
+own AS (
+  SELECT u.id,
+         '{{WORKSPACE_ID}}'::uuid AS ws
+  FROM crm_users u
+  WHERE lower(u.email) = lower(trim('{{OWNER_EMAIL}}'))
+    AND (u.id = '{{WORKSPACE_ID}}'::uuid
+         OR EXISTS (SELECT 1 FROM crm_workspace_members m
+                     WHERE m.user_id = u.id
+                       AND m.workspace_id = '{{WORKSPACE_ID}}'::uuid
+                       AND m.status = 'active'))
+  ORDER BY (u.email = trim('{{OWNER_EMAIL}}')) DESC, u.id
+  LIMIT 1
+),
 
 -- 1. company: insert only when a real (non-empty) name has no match yet
 new_co AS (
   INSERT INTO crm_companies (name, domain, industry, address, phone, owner_id, workspace_id)
   SELECT n.company_name, n.domain, n.industry, n.address, n.office_phone,
-         (SELECT id FROM own), (SELECT id FROM own) FROM norm n
+         (SELECT id FROM own), (SELECT ws FROM own) FROM norm n
   WHERE n.company_name IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM crm_companies c
-                     WHERE c.workspace_id = (SELECT id FROM own)
+                     WHERE c.workspace_id = (SELECT ws FROM own)
                        AND lower(c.name) = lower(n.company_name))
   RETURNING id
 ),
@@ -84,7 +106,7 @@ co_id AS (
   UNION ALL
   SELECT c.id FROM crm_companies c, norm n
    WHERE n.company_name IS NOT NULL
-     AND c.workspace_id = (SELECT id FROM own) AND lower(c.name) = lower(n.company_name)
+     AND c.workspace_id = (SELECT ws FROM own) AND lower(c.name) = lower(n.company_name)
   LIMIT 1
 ),
 
@@ -113,14 +135,15 @@ new_ct AS (
     (last_name, email, title, phone, company_id, owner_id, workspace_id,
      lifecycle_stage, lead_status, legal_basis, deal_status, last_activity_at)
   SELECT n.full_name, n.email, n.title, COALESCE(n.mobile, n.office_phone),
-         (SELECT id FROM co_id LIMIT 1), (SELECT id FROM own), (SELECT id FROM own),
+         (SELECT id FROM co_id LIMIT 1), (SELECT id FROM own), (SELECT ws FROM own),
          'lead', 'other', 'consent', NULL, now()
   FROM norm n
   WHERE n.email IS NULL
      OR NOT EXISTS (
        SELECT 1 FROM crm_contacts c
-       WHERE c.workspace_id = (SELECT id FROM own)
-         AND c.email IS NOT NULL AND lower(c.email) = lower(n.email)
+       WHERE c.workspace_id = (SELECT ws FROM own)
+         AND (lower(trim(c.email)) = lower(trim(n.email))
+              OR lower(trim(c.secondary_email)) = lower(trim(n.email)))
      )
   RETURNING id
 ),
