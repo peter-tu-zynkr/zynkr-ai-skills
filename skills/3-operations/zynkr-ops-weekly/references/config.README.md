@@ -56,6 +56,11 @@ One file, read by all four skills of the loop: `zynkr-ops-weekly`, `ops-weekly-d
   【週結】 go to. Until `recap_to` is set, `routine.recap_audience` decides who receives the Monday recap: `owner` (the account alone) or
   `team` (every address in `reporters`). A missing or unknown value means `owner`, so the team only
   ever receives a recap the owner switched on.
+- `routine.skills_block` (optional, `SKB-110`): `true` turns on the skill-update lines. Thursday's
+  `collect` then records Atlas's `list_installs` in the Ledger's `Skills` block, and Monday's recap
+  lists the skills whose approved version moved, came in or left, under 技能更新. It needs the
+  `zynkr-atlas` MCP server, `gh` signed in with read access to the workbench, and the SKB-110 Ledger
+  setup (`references/ledger.md`). It is off when missing or anything but `true`.
 - `routine.name_aliases` (optional) maps a name the Sales Pulse writes to the roster's spelling,
   e.g. `{"Fish": "Ding Huan Wu"}`. A first name that matches one roster name (`Peter` →
   `Peter Tu`) needs no alias.

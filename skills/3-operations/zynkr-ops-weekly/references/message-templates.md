@@ -102,8 +102,16 @@ Body sections, in order:
    待討論). Not recorded → say so and point to the Doc.
 6. **上週的變更提案** — what the 【週結】 decided: applied (live: 「核准了，已寫進總表」), would-apply
    (shadow), 退回, not named.
-7. **卡關** — from the week's `#週報` posts, and who did not post.
-8. Links to the Main Tracker, the Doc and the Ledger.
+7. **技能更新** (`SKB-110`, only with `routine.skills_block`). Each workbench skill whose approved version
+   moved since the latest earlier Thursday record (up to eight weeks back), linked to the pull request
+   that carried it: `skill-qa 1.2.0 → 1.3.0 · <PR title> (#111)`. A skill that came in is shown as
+   `（新技能）`, one that left as `（下架）`, and another commit at the same version as `（重新核准）`. When
+   that record is older than the week before, the block opens with
+   「上一份技能紀錄是 WB 9/28 那週，以下是從那週到現在的變動」. At most 12 lines, then 「還有 N 個」, and
+   last 「用 workbench 技能的人：在 Claude Code 打 /skill-sync」. If nothing moved, the week or every
+   earlier one in reach was not recorded, or a read failed, the heading is left out.
+8. **卡關** — from the week's `#週報` posts, and who did not post.
+9. Links to the Main Tracker, the Doc and the Ledger.
 
 The 1.2 notice (`【週報】WB 10/5 那週沒有產出：週五的快照沒有記到`) goes to the owner only: a recap
 built on a missing snapshot would be wrong, and a team that receives a "the robot broke" mail

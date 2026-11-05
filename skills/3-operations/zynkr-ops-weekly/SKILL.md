@@ -162,6 +162,12 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
    --week <ISO week> --rows <rows_path>`, then `block plan`, `block check` and `block confirm`. Make
    each step's calls in turn, exactly as in `recap`'s Ledger reads; `block plan` reads the 80-row
    block back in two pages, and `block check` needs both.
+   **Skill versions** (`SKB-110`; only when `routine.skills_block` is `true`). Call `list_installs` on
+   the `zynkr-atlas` MCP server and save its result unchanged to `<dir>/installs.txt`. Run
+   `python3 scripts/skills.py rows --week <ISO week> --list <dir>/installs.txt --out <dir>/skills-rows.json`,
+   then record it as above with `--tab Skills --rows <dir>/skills-rows.json`. Its `block plan` reads the
+   200-row block back in four pages. A failure here skips the block and never fails the beat: Atlas
+   not answering, or a script exiting non-zero. Note `skills-failed`, and Monday's recap leaves out 技能更新.
 6. **The chase.** Run `python3 scripts/harvest.py chase --dir <dir>`.
    - `send`: make its one `send_message` call exactly as printed, check the result names the message
      it posted, then run `harvest.py chased --dir <dir>`. The line @-mentions each quiet person once
@@ -169,7 +175,9 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
    - `none` or `already`: post nothing.
    - The chase never fails the beat, because the Ledger block is what `sections` and Monday's recap
      read. A post that fails adds `chase-failed` and is not tried again.
-7. Receipt `status=ok delivered=<block confirm's delivered>;chase-<send|none|already|failed>`.
+7. Receipt `status=ok delivered=<block confirm's delivered>;chase-<send|none|already|failed>`, adding
+   `;skills-<ok|failed>` when `routine.skills_block` is on, and `;grid-low-<tab>` for each tab a
+   `block plan` warned has fewer than eight weeks of rows left.
 
 ### `recap` (Mon 10:00 → 23:30)
 
@@ -201,6 +209,17 @@ save each result unchanged, and write the TL;DR.
      thread the search found, newest first, at most five, each fetched as HTML so the Pulse keeps one
      person per list item) and save each; with `false`, go on — the mail says the sales lines are
      missing.
+   - Then `python3 scripts/recap.py skills --dir <dir>` (`SKB-110`). The reads it compares were among
+     `blocks`' calls: the week's Skills block and the latest earlier week's that `collect` recorded (up
+     to eight weeks back).
+     - It lists `bash` commands: read-only `gh api` lookups of the pull request behind each commit.
+       Run each and save its output unchanged to its `save` path. A command that fails leaves its line
+       without the PR title.
+     - It names `missing` reads: save those results from `blocks`' calls, then run it again.
+     - `"skills": false`: go on. The mail has no 技能更新 block (`why` says why; an unreadable read or a
+       Weeks grid that stops before V is one of them, never a reason to stop).
+
+     The recap compares weeks that `collect` recorded, so it still writes nothing.
 4. `python3 scripts/recap.py build --dir <dir> --today <today, YYYY-MM-DD>` → it prints the counts,
    the plan's line count per person, whether the Pulse was read, and the path of `facts.json`. A non-zero exit means stop with `status=failed` and the reason;
    nothing has been sent.

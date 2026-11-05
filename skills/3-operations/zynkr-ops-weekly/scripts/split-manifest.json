@@ -20,6 +20,7 @@
         "scripts/ledger.py",
         "scripts/parse_routing.py",
         "scripts/recap.py",
+        "scripts/skills.py",
         "scripts/split-manifest.json"
       ]
     },

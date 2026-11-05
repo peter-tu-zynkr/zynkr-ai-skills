@@ -11,6 +11,9 @@ calls, each with a path to save the tool's result to, word for word.
                                                          Sales Pulse search
     recap.py pulse  --dir D                           -> the threads to fetch, newest first, or none
                                                          (SKB-091, SKB-096)
+    recap.py skills --dir D                           -> the skill updates: last week's Skills block
+                                                         against the week before's, and one `gh api`
+                                                         per commit for its pull request (SKB-110)
     recap.py build  --dir D --today YYYY-MM-DD        -> facts.json + a short summary for the TL;DR
     recap.py render --dir D --tldr tldr.json          -> subject, recipients, recap.html; TL;DR lines
                                                          that cite no real item # are dropped
@@ -41,6 +44,7 @@ from email.utils import parseaddr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ledger  # noqa: E402
+import skills  # noqa: E402
 from ledger import Refuse, pad, parse_values, load_result, read_call, save_run, load_run, emit  # noqa: E402
 
 DEFAULT_RULES = "~/.claude/skills/zynkr-gm/scripts/derive_state.py"
@@ -81,6 +85,7 @@ LIST_ITEM = re.compile(r"<li\b[^>]*>(.*?)</li>", re.S | re.I)
 # nothing writes Reports after 2026-W44).
 HARVEST_FROM = "2026-W45"
 PLAN_MAX = 5
+SKILLS_LOOKBACK = 8         # weeks back the 技能更新 comparison looks for the last recorded Skills block
 DECIDED = ("決議", "放棄")                   # what the meeting settled; 行動 is a plan, 進度 a state
 OPEN = ("卡關", "風險", "待討論", "待決")      # 待決: weeks before SKB-091
 
@@ -128,6 +133,8 @@ def load_all(path=None):
     aliases = {k: v for k, v in (raw.get("routine", {}).get("name_aliases") or {}).items()
                if not k.startswith("$") and isinstance(v, str)}
     cfg.update(recap_to=recap_to if "@" in recap_to and "<" not in recap_to else "", roster=roster, aliases=aliases)
+    # SKB-110: the 技能更新 block, only where collect records the Skills block (an Atlas workbench)
+    cfg.update(skills_block=raw.get("routine", {}).get("skills_block") is True)
     cfg.update(reporters=reporters, names=names, rules=rules, audience=audience if audience in ("owner", "team") else "owner",
                doc_url=("https://docs.google.com/document/d/%s/edit" % doc_id) if doc_id and "<" not in doc_id else "",
                tracker_url="https://docs.google.com/spreadsheets/d/%s/edit" % cfg["tracker"],
@@ -188,8 +195,15 @@ def r_start(runner_week, config=None, now=None, base=None):
     os.makedirs(d)
     rng = "Weeks!A%d:T%d" % (1 + k, 2 + k) if k >= 1 else "Weeks!A2:T2"
     run = dict(cfg, dir=d, runner_week=runner_week, week=target, k=k, weeks_range=rng)
-    save_run(run)
     calls = [read_call(run, cfg["ledger"], "Weeks!A1:T1", "wh"), read_call(run, cfg["ledger"], rng, "wr")]
+    if cfg.get("skills_block"):
+        # SKB-110: the Skills cells (U–V) in reads of their own, so a Ledger whose Weeks grid stops before
+        # V loses only the 技能更新 block: the header, and this week's row with the SKILLS_LOOKBACK before it
+        lo = max(0, k - SKILLS_LOOKBACK)
+        run["skills_window"] = [lo, "Weeks!U%d:V%d" % (ledger.weeks_row(lo), ledger.weeks_row(k))]
+        calls += [read_call(run, cfg["ledger"], "Weeks!U1:V1", "wsh"),
+                  read_call(run, cfg["ledger"], run["skills_window"][1], "wsw")]
+    save_run(run)
     return {"dir": d, "week": target, "label": wb_label(target), "calls": calls}
 
 
@@ -213,10 +227,10 @@ def r_blocks(d):
     wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], run["weeks_range"])
     k = run["k"]
     if k >= 1:
-        prev_row = pad(wr[0], 20) if len(wr) > 0 else [""] * 20
-        row = pad(wr[1], 20) if len(wr) > 1 else [""] * 20
+        prev_row = pad(wr[0], 22) if len(wr) > 0 else [""] * 22
+        row = pad(wr[1], 22) if len(wr) > 1 else [""] * 22
     else:
-        prev_row, row = None, pad(wr[0], 20) if wr else [""] * 20
+        prev_row, row = None, pad(wr[0], 22) if wr else [""] * 22
     if not snapshot_ok(row, run["week"], run["cycle"]):
         run.update(notice=True, reason="no committed snapshot for %s" % run["week"])
         save_run(run)
@@ -252,6 +266,35 @@ def r_blocks(d):
             name, rng = "harvest%d" % (len(pages["Harvest"]) + 1), "Harvest!A%d:H%d" % (a, min(a + ledger.PAGE - 1, last))
             pages["Harvest"].append([name, rng])
             calls.append(read_call(run, run["ledger"], rng, name))
+    # SKB-110: was the week's Skills block recorded, and which is the latest earlier week that was (up to
+    # SKILLS_LOOKBACK back)? Then both blocks are read here, in pages of 50. A U–V read that failed (a
+    # Weeks grid narrower than V) or a header without them only leaves the 技能更新 block out.
+    run["skills"] = "off"
+    if run.get("skills_block"):
+        lo, wrng = run["skills_window"]
+        try:
+            sh = parse_values(load_result(os.path.join(d, "wsh.txt")), run["ledger"], "Weeks!U1:V1")
+            cells = [pad(r, 2) for r in parse_values(load_result(os.path.join(d, "wsw.txt")), run["ledger"], wrng)]
+        except Refuse:
+            sh, cells = None, []
+        cells += [["", ""]] * (k - lo + 1 - len(cells))
+        recorded = [lo + i for i, c in enumerate(cells[:k - lo]) if c[0] == "ok"]
+        if not sh or pad(sh[0], 2) != ledger.WEEKS_FULL[20:22]:
+            run["skills"] = "no-columns"
+        elif cells[k - lo][0] != "ok":
+            run["skills"] = "not-recorded"
+        elif not recorded:
+            run["skills"] = "first"
+        else:
+            j = recorded[-1]
+            for key, wk, prefix in (("Skills", k, "sk"), ("SkillsPrev", j, "skp")):
+                first, last = ledger.block_slot("Skills", wk)
+                pages[key] = []
+                for a in range(first, last + 1, ledger.PAGE):
+                    name, prng = "%s%d" % (prefix, len(pages[key]) + 1), "Skills!A%d:G%d" % (a, min(a + ledger.PAGE - 1, last))
+                    pages[key].append([name, prng])
+                    calls.append(read_call(run, run["ledger"], prng, name))
+            run.update(skills="read", skills_prev_week=week_at(run["epoch"], j))
     calls.append(ledger.call("search_gmail_messages", {"user_google_email": run["account"], "page_size": PULSE_THREADS,
                                                        "query": pulse_query(run["account"])},
                              os.path.join(d, "pulse-search.txt")))
@@ -260,7 +303,7 @@ def r_blocks(d):
     save_run(run)
     return {"notice": False, "week": run["week"], "calls": calls,
             "first_snapshot": not prev_ok, "reports": row[10] == "ok", "decisions": row[12] == "ok",
-            "proposals": "Proposals" in pages, "harvest": "Harvest" in pages}
+            "proposals": "Proposals" in pages, "harvest": "Harvest" in pages, "skills": run["skills"]}
 
 
 def r_pulse(d):
@@ -296,6 +339,53 @@ def r_pulse(d):
                                                  {"user_google_email": run["account"], "thread_id": t,
                                                   "body_format": "html"},
                                                  os.path.join(d, f)) for t, f in zip(ids, run["pulse_files"])]}
+
+
+def week_at(epoch, j):
+    m = ledger.monday(epoch) + timedelta(days=7 * j)
+    y, w, _ = m.isocalendar()
+    return "%d-W%02d" % (y, w)
+
+
+def r_skills(d):
+    """SKB-110: the week's Skills block against the latest earlier one recorded (both read by `blocks`)
+    -> what moved, came in, left or was re-approved, and one `gh api` per commit for the pull request
+    that carried it. A read not saved yet is named and nothing changes, so a run after saving it goes
+    on; a read that does not parse, or nothing to compare, is no failure: the recap goes out without
+    the 技能更新 block. Run again, it prints the same lookups."""
+    run = load_run(d)
+    if run.get("notice") is not False:
+        raise Refuse(2, "run `recap.py blocks` first")
+    if run.get("skills") == "read":
+        missing = [n + ".txt" for key in ("Skills", "SkillsPrev") for n, _ in run["pages"][key]
+                   if not os.path.exists(os.path.join(d, n + ".txt"))]
+        if missing:
+            return {"skills": True, "missing": missing,
+                    "next": "save these reads from `recap.py blocks`, then run `recap.py skills --dir %s` again" % d}
+
+        def block(key, week):
+            rows = []
+            for name, prng in run["pages"][key]:
+                rows += parse_values(load_result(os.path.join(d, name + ".txt")), run["ledger"], prng)
+            return skills.from_rows(rows, week)
+
+        try:
+            cur, prev = block("Skills", run["week"]), block("SkillsPrev", run["skills_prev_week"])
+        except Refuse as e:
+            run.update(skills="unreadable", skills_error=str(e)[:200])
+            save_run(run)
+            return {"skills": False, "why": "unreadable", "error": run["skills_error"]}
+        if not cur and not prev:
+            run["skills"] = "empty"
+            save_run(run)
+            return {"skills": False, "why": "empty"}
+        run.update(skills="diffed", skill_changes=skills.diff(prev, cur))
+        save_run(run)
+    if run.get("skills") != "diffed":
+        return {"skills": False, "why": run.get("skills", "off")}
+    ch = run["skill_changes"]
+    return {"skills": True, "since": run["skills_prev_week"], "moved": len(ch["moved"]), "new": len(ch["new"]),
+            "gone": len(ch["gone"]), "calls": skills.pr_calls(ch, d)}
 
 
 def parse_pulse(text, account):
@@ -512,6 +602,10 @@ def r_build(d, today):
              "unknown_status": flagged("UNKNOWN_STATUS"),
              "decisions": decisions, "reports": reports, "harvest": harvest, "v4": v4,
              "proposals": proposals, "pulse": pulse_state,
+             "skills": {"state": run.get("skills", "off"),
+                        "since": wb_label(run["skills_prev_week"]) if run.get("skills") == "diffed" else "",
+                        "gap": run.get("skills") == "diffed" and run["skills_prev_week"] != previous_week(run["week"]),
+                        "lines": skills.lines_for(run["skill_changes"], d) if run.get("skills") == "diffed" else []},
              "links": {"tracker": run["tracker_url"], "doc": run["doc_url"], "ledger": run["ledger_url"]}}
     facts["plan"], facts["plan_dropped"] = build_plan(run, names, decisions["actions"], facts, pulse)
     json.dump(facts, open(os.path.join(d, "facts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
@@ -524,7 +618,7 @@ def r_build(d, today):
             "decided": len(decisions["decided"]), "open_decisions": len(decisions["open"]),
             "blockers": len((harvest if v4 else reports)["blockers"]), "proposals": len(proposals["rows"]) if proposals["recorded"] else None,
             "plan": {p["who"]: len(p["lines"]) for p in facts["plan"]}, "plan_dropped": facts["plan_dropped"],
-            "pulse": pulse_state,
+            "pulse": pulse_state, "skills": facts["skills"]["state"], "skill_lines": len(facts["skills"]["lines"]),
             "facts": os.path.join(d, "facts.json"),
             "tldr": "write at most 3 lines to tldr.json (a JSON list); each must cite an item # from facts.items"}
 
@@ -628,6 +722,17 @@ def render_html(facts, tldr):
                 xs = [x for x in prs if x["結果"] == key]
                 if xs:
                     o.append("<p><b>%s（%d 件）</b></p><ul>%s</ul>" % (title, len(xs), "".join(pline(x) for x in xs)))
+    sk = (facts.get("skills") or {}).get("lines") or []
+    if sk:
+        o.append("<h3>技能更新</h3>")
+        if facts["skills"].get("gap"):
+            o.append("<p>上一份技能紀錄是 %s 那週，以下是從那週到現在的變動</p>" % esc(facts["skills"]["since"]))
+        o.append("<ul>%s</ul>" % "".join(
+            li(esc(x["text"]) + ((' (<a href="%s">#%d</a>)' % (esc(x["url"]), x["number"])) if x["url"] else ""))
+            for x in sk[:skills.SHOWN]))
+        if len(sk) > skills.SHOWN:
+            o.append("<p>還有 %d 個</p>" % (len(sk) - skills.SHOWN))
+        o.append("<p>用 workbench 技能的人：在 Claude Code 打 /skill-sync</p>")
     o.append("<h3>卡關</h3>")
     rep, hv = facts["reports"], facts.get("harvest")
     if facts.get("v4"):
@@ -721,7 +826,7 @@ def main(argv=None):
     s = sub.add_parser("start")
     s.add_argument("--runner-week", required=True)
     s.add_argument("--config")
-    for name in ("blocks", "notice", "pulse"):
+    for name in ("blocks", "notice", "pulse", "skills"):
         p = sub.add_parser(name)
         p.add_argument("--dir", required=True)
     b = sub.add_parser("build")
@@ -746,6 +851,8 @@ def main(argv=None):
             emit(r_notice(a.dir))
         elif a.cmd == "pulse":
             emit(r_pulse(a.dir))
+        elif a.cmd == "skills":
+            emit(r_skills(a.dir))
         else:
             ap.print_help()
             return 2
@@ -883,9 +990,9 @@ def selftest():
                     open(c["save"], "w", encoding="utf-8").write(pulses[int(c["args"]["thread_id"], 16) - 0x1a2b])
                     continue
                 rng = c["args"]["range_name"]
-                tab, r0, r1 = re.match(r"^(\w+)!A(\d+):[A-Z](\d+)$", rng).groups()
-                g = sheet[tab]
-                got = [g[i - 1] if i - 1 < len(g) else [] for i in range(int(r0), int(r1) + 1)]
+                tab, c0, r0, r1 = re.match(r"^(\w+)!([A-Z])(\d+):[A-Z](\d+)$", rng).groups()
+                g, off = sheet[tab], ord(c0) - ord("A")
+                got = [(g[i - 1] if i - 1 < len(g) else [])[off:] for i in range(int(r0), int(r1) + 1)]
                 while got and not any(x.strip() for x in got[-1]):
                     got.pop()
                 open(c["save"], "w", encoding="utf-8").write(fmt(rng, got))
@@ -976,6 +1083,146 @@ def selftest():
               {"Mia Lin": (0, 5, ["drop Ben Q in /sales-manager REVIEW", "claim 5 leads"]),
                "kaywu": (1, 5, ["task 「追王小明」 is 7 days overdue, do it"]),
                "Ann": (5, 5, ["follow up the client's offer"])})
+
+        # SKB-110: the 技能更新 block, from last week's Skills block against the week before's
+        check("the 技能更新 block is off by default", "技能更新" in body, False)
+        cfgs = os.path.join(tmp, "cfg-skills.json")
+        cs = json.load(open(cfgp, encoding="utf-8"))
+        cs["routine"]["skills_block"] = True
+        json.dump(cs, open(cfgs, "w"), ensure_ascii=False)
+        c1, c2, c3 = "1" * 40, "2" * 40, "3" * 40
+
+        def srow(week, slug, version, commit):
+            return [week, "t", slug, version, commit, "skills/6-engineer/" + slug, "owner/workbench"]
+
+        def skills_sheet(w40_ok, w41_ok, header=ledger.WEEKS_FULL):
+            stamp = ["", "", "", "", "", "", "ok", "2026-10-08T09:05:00+08:00"]
+            r40 = wrow("2026-W40", w40) + (stamp if w40_ok else [""] * 8)
+            r41 = wrow("2026-W41", w41, "", "ok") + (stamp if w41_ok else [""] * 8)
+            sh = ledger_sheet([r40, r41], w40, w41, None, dec, None, header)
+            sh["Skills"] = [ledger.SKILLS_HEADER] + [[""] * 7] * 400
+            for i, r in enumerate([srow("2026-W40", "alpha", "1.0.0", c1), srow("2026-W40", "beta", "1.0.0", c1),
+                                   srow("2026-W40", "old-one", "2.0.0", c1)]):
+                sh["Skills"][1 + i] = r
+            w41s = [srow("2026-W41", "alpha", "1.1.0", c2), srow("2026-W41", "beta", "1.0.0", c1)]
+            w41s += [srow("2026-W41", "new-%02d" % i, "1.0.0", c3) for i in range(14)]
+            for i, r in enumerate(w41s):
+                sh["Skills"][201 + i] = r
+            return sh
+
+        check("the block off: Weeks is read A–T, as before SKB-110", [c["args"]["range_name"] for c in st["calls"]],
+              ["Weeks!A1:T1", "Weeks!A2:T3"])
+        sk_sheet = skills_sheet(True, True)
+        sts = r_start("2026-W42", cfgs, "2026-10-12T10:20:00+08:00", base=os.path.join(tmp, "runs"))
+        check("the block on: A–T as before, and U–V in reads of their own", [c["args"]["range_name"] for c in sts["calls"]],
+              ["Weeks!A1:T1", "Weeks!A2:T3", "Weeks!U1:V1", "Weeks!U2:V3"])
+        serve(sts["calls"], sk_sheet)
+        bs = r_blocks(sts["dir"])
+        check("skills: both weeks' blocks are read, in pages of 50", (bs["skills"],
+              [c["args"]["range_name"] for c in bs["calls"] if c["args"].get("range_name", "").startswith("Skills!")][:5]),
+              ("read", ["Skills!A202:G251", "Skills!A252:G301", "Skills!A302:G351", "Skills!A352:G401", "Skills!A2:G51"]))
+        serve(bs["calls"], sk_sheet)
+        r_pulse(sts["dir"])
+        os.rename(os.path.join(sts["dir"], "sk2.txt"), os.path.join(sts["dir"], "sk2.held"))
+        check("skills: a read not saved yet is named, and nothing changes", r_skills(sts["dir"]).get("missing"), ["sk2.txt"])
+        os.rename(os.path.join(sts["dir"], "sk2.held"), os.path.join(sts["dir"], "sk2.txt"))
+        sk = r_skills(sts["dir"])
+        check("skills: then saved, it goes on: moved, new, gone", (sk["since"], sk["moved"], sk["new"], sk["gone"]),
+              ("2026-W40", 1, 14, 1))
+        check("skills: run again, the same lookups", r_skills(sts["dir"])["calls"], sk["calls"])
+        check("skills: one gh call per commit", [c["save"].rsplit("/", 1)[1] for c in sk["calls"]],
+              ["pr-%s.txt" % c2[:12], "pr-%s.txt" % c3[:12]])
+        open(sk["calls"][0]["save"], "w").write(json.dumps(
+            [{"number": 111, "title": "feat: <b>narrow</b> the merge rule", "html_url": "https://github.com/owner/workbench/pull/111"}]))
+        open(sk["calls"][1]["save"], "w").write("[]")
+        bsk = r_build(sts["dir"], "2026-10-12")
+        check("skills: build counts the lines", (bsk["skills"], bsk["skill_lines"]), ("diffed", 16))
+        bodys = open(r_render(sts["dir"], None)["body_path"], encoding="utf-8").read()
+        check("skills: the heading and the moved line, linked and escaped",
+              ("<h3>技能更新</h3>" in bodys,
+               'alpha 1.0.0 → 1.1.0 · feat: &lt;b&gt;narrow&lt;/b&gt; the merge rule (<a href="https://github.com/owner/workbench/pull/111">#111</a>)' in bodys),
+              (True, True))
+        check("skills: twelve lines, then the rest counted", (bodys.count("（新技能）"), "還有 4 個" in bodys, "old-one" in bodys),
+              (11, True, False))
+        check("skills: the /skill-sync line", "在 Claude Code 打 /skill-sync" in bodys, True)
+        check("skills: an unchanged skill is not listed", "beta" in bodys, False)
+        for name, sheet_s, want in (("only this week recorded → first, no heading", skills_sheet(False, True), "first"),
+                                    ("this week not recorded → no heading", skills_sheet(True, False), "not-recorded"),
+                                    ("an A–T Weeks header → no heading", skills_sheet(True, True, ledger.WEEKS_FULL[:20]), "no-columns")):
+            stx = r_start("2026-W42", cfgs, "2026-10-12T10:25:00+08:00", base=os.path.join(tmp, "runs"))
+            serve(stx["calls"], sheet_s)
+            bx = r_blocks(stx["dir"])
+            serve(bx["calls"], sheet_s)
+            r_pulse(stx["dir"])
+            check(name + " (skills step)", r_skills(stx["dir"])["skills"], False)
+            bb = r_build(stx["dir"], "2026-10-12")
+            bodyx = open(r_render(stx["dir"], None)["body_path"], encoding="utf-8").read()
+            check(name, (bb["skills"], "技能更新" in bodyx), (want, False))
+
+        # a Thursday without a Skills block: W42 compares with W40, and the mail says since when
+        gsh = skills_sheet(True, True)
+        gsh["Weeks"][2] = gsh["Weeks"][2][:20] + [""] * 8
+        w42 = [["2026-W42", "2026-10-16T18:06:00+08:00"] + r[2:] for r in w41]
+        gsh["Weeks"].append(wrow("2026-W42", w42, "", "ok") + ["", "", "", "", "", "", "ok", "2026-10-15T09:05:00+08:00"])
+        gsh["Snapshot"] += [[""] * 16] * 100
+        for i, r in enumerate(w42):
+            gsh["Snapshot"][201 + i] = r
+        gsh["Skills"] += [[""] * 7] * 200
+        for i, r in enumerate(gsh["Skills"][201:217]):
+            gsh["Skills"][401 + i] = ["2026-W42"] + r[1:]
+        stg = r_start("2026-W43", cfgs, "2026-10-19T10:20:00+08:00", base=os.path.join(tmp, "runs"))
+        check("gap: the window reaches back over both earlier weeks", stg["calls"][3]["args"]["range_name"], "Weeks!U2:V4")
+        serve(stg["calls"], gsh)
+        bg = r_blocks(stg["dir"])
+        check("gap: the latest recorded week is W40", [c["args"]["range_name"] for c in bg["calls"]
+                                                       if c["args"].get("range_name", "").startswith("Skills!")][4], "Skills!A2:G51")
+        serve(bg["calls"], gsh)
+        r_pulse(stg["dir"])
+        sg = r_skills(stg["dir"])
+        check("gap: moved, new, gone since W40", (sg["since"], sg["moved"], sg["new"], sg["gone"]), ("2026-W40", 1, 14, 1))
+        for c in sg["calls"]:
+            open(c["save"], "w").write("[]")
+        r_build(stg["dir"], "2026-10-19")
+        bodyg = open(r_render(stg["dir"], None)["body_path"], encoding="utf-8").read()
+        check("gap: the mail names the week it compares with", "上一份技能紀錄是 WB 9/28 那週" in bodyg, True)
+        check("no gap: no such line", "上一份技能紀錄" in bodys, False)
+
+        # a Weeks grid narrower than V: its U–V reads fail; only the block is left out
+        stn = r_start("2026-W42", cfgs, "2026-10-12T10:30:00+08:00", base=os.path.join(tmp, "runs"))
+        serve(stn["calls"], sk_sheet)
+        for f in ("wsh.txt", "wsw.txt"):
+            open(os.path.join(stn["dir"], f), "w").write("Error: Range ('Weeks'!U1:V1) exceeds grid limits. Max rows: 1000, max columns: 20")
+        bn = r_blocks(stn["dir"])
+        check("narrow grid: no Skills reads, no failure", (bn["notice"], bn["skills"]), (False, "no-columns"))
+        serve(bn["calls"], sk_sheet)
+        r_pulse(stn["dir"])
+        bbn = r_build(stn["dir"], "2026-10-12")
+        bodyn = open(r_render(stn["dir"], None)["body_path"], encoding="utf-8").read()
+        check("narrow grid: no heading, the recap still built", (bbn["skills"], "技能更新" in bodyn), ("no-columns", False))
+
+        # a page that does not parse: no heading, and the recap still builds
+        stu = r_start("2026-W42", cfgs, "2026-10-12T10:35:00+08:00", base=os.path.join(tmp, "runs"))
+        serve(stu["calls"], sk_sheet)
+        bu = r_blocks(stu["dir"])
+        serve(bu["calls"], sk_sheet)
+        open(os.path.join(stu["dir"], "sk1.txt"), "w").write("Error: the sheet could not be read")
+        r_pulse(stu["dir"])
+        check("unreadable: the skills step degrades", r_skills(stu["dir"])["why"], "unreadable")
+        bbu = r_build(stu["dir"], "2026-10-12")
+        bodyu = open(r_render(stu["dir"], None)["body_path"], encoding="utf-8").read()
+        check("unreadable: no heading, the recap still built", (bbu["skills"], "技能更新" in bodyu), ("unreadable", False))
+
+        # the earlier week recorded with no rows: every skill this week is new, not hidden
+        esh = skills_sheet(True, True)
+        for i in range(1, 4):
+            esh["Skills"][i] = [""] * 7
+        ste = r_start("2026-W42", cfgs, "2026-10-12T10:40:00+08:00", base=os.path.join(tmp, "runs"))
+        serve(ste["calls"], esh)
+        be = r_blocks(ste["dir"])
+        serve(be["calls"], esh)
+        r_pulse(ste["dir"])
+        se = r_skills(ste["dir"])
+        check("an empty earlier block: all new", (se["moved"], se["new"], se["gone"]), (0, 16, 0))
 
         # from 2026-W45 the 卡關 come from the Harvest's waiting lines; a quiet row names who had none
         global HARVEST_FROM
@@ -1171,6 +1418,14 @@ def selftest():
 
 # ── mutation check: each breakage must turn the selftest red ────────────────
 MUTATIONS = [
+    ("the 技能更新 block is dropped", [('    sk = (facts.get("skills") or {}).get("lines") or []', '    sk = []')]),
+    ("the Skills read stops at its first page", [('                for a in range(first, last + 1, ledger.PAGE):\n                    name, prng = "%s%d"',
+                                                  '                for a in range(first, first + 1, ledger.PAGE):\n                    name, prng = "%s%d"')]),
+    ("the skills step compares with the week before only", [('            j = recorded[-1]', '            j = k - 1')]),
+    ("an unreadable Skills read fails the recap", [('        except Refuse as e:\n            run.update(skills="unreadable"', '        except KeyError as e:\n            run.update(skills="unreadable"')]),
+    ("a narrow Weeks grid stops the recap", [('        except Refuse:\n            sh, cells = None, []', '        except KeyError:\n            sh, cells = None, []')]),
+    ("a read not saved yet ends the block", [('        if missing:\n            return {"skills": True, "missing"', '        if False:\n            return {"skills": True, "missing"')]),
+    ("an empty earlier block hides the changes", [('        if not cur and not prev:', '        if not cur or not prev:')]),
     ("v4 weeks read 卡關 from Reports", [('    if facts.get("v4"):\n        if not hv["recorded"]:', '    if False:\n        if not hv["recorded"]:')]),
     ("the Harvest read stops at its first page", [("for a in range(first, last + 1, ledger.PAGE):      # 80 rows",
                                                    "for a in range(first, first + 1, ledger.PAGE):      # 80 rows")]),
@@ -1228,7 +1483,8 @@ def mutate():
     src = open(os.path.abspath(__file__), encoding="utf-8").read()
     code, marker, rest = src.partition("\nMUTATIONS = [")
     tmpd = tempfile.mkdtemp(prefix="recap-mutate-")
-    shutil.copy2(os.path.join(here, "ledger.py"), os.path.join(tmpd, "ledger.py"))   # the import must resolve
+    for dep in ("ledger.py", "skills.py"):                                          # the imports must resolve
+        shutil.copy2(os.path.join(here, dep), os.path.join(tmpd, dep))
 
     def run(text):
         p = os.path.join(tmpd, "recap_mut.py")

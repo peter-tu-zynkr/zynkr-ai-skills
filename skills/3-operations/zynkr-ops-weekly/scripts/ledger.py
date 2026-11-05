@@ -76,18 +76,25 @@ WEEKS_P3_HEADER = ["proposals", "proposals_at", "applied", "applied_at"]        
 # (shipped · moving · waiting, or quiet for a 本週無資料 week) and the line as written.
 HARVEST_HEADER = ["week", "harvested_at", "slug", "name", "workstream", "kind", "text", "file"]  # A–H
 WEEKS_HARVEST_HEADER = ["harvest", "harvest_at"]                                       # S–T
-WEEKS_FULL = WEEKS_HEADER + WEEKS_BEAT_HEADER + WEEKS_P3_HEADER + WEEKS_HARVEST_HEADER  # A–T
+# SKB-110: Thursday's collect also records which version of each workbench skill Atlas approved, one
+# row per skill (Atlas's list_installs), so Monday's recap can name the skills that moved that week.
+SKILLS_HEADER = ["week", "taken_at", "slug", "version", "commit", "folder", "repo"]       # A–G
+WEEKS_SKILLS_HEADER = ["skills", "skills_at"]                                          # U–V
+WEEKS_FULL = (WEEKS_HEADER + WEEKS_BEAT_HEADER + WEEKS_P3_HEADER + WEEKS_HARVEST_HEADER
+              + WEEKS_SKILLS_HEADER)                                                   # A–V
+WEEKS_END = "V"           # the Weeks reads reach every beat's cells; a narrower Ledger pads with blanks
 TABS = [("Weeks", WEEKS_FULL), ("Updates", UPDATES_HEADER),
         ("Snapshot", SNAPSHOT_HEADER), ("Reports", REPORTS_HEADER), ("Decisions", DECISIONS_HEADER),
-        ("Proposals", PROPOSALS_HEADER), ("Harvest", HARVEST_HEADER)]
-COLS = {"Weeks": "T", "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "I", "Proposals": "O",
-        "Harvest": "H"}
+        ("Proposals", PROPOSALS_HEADER), ("Harvest", HARVEST_HEADER), ("Skills", SKILLS_HEADER)]
+COLS = {"Weeks": WEEKS_END, "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "I", "Proposals": "O",
+        "Harvest": "H", "Skills": "G"}
 # tab -> (rows per week, header, its Weeks status column, its Weeks time column)
 BLOCKS = {"Reports": (20, REPORTS_HEADER, "K", "L"),
           "Decisions": (40, DECISIONS_HEADER, "M", "N"),
           "Proposals": (40, PROPOSALS_HEADER, "O", "P"),
           "Updates": (40, UPDATES_HEADER, "Q", "R"),
-          "Harvest": (80, HARVEST_HEADER, "S", "T")}
+          "Harvest": (80, HARVEST_HEADER, "S", "T"),
+          "Skills": (200, SKILLS_HEADER, "U", "V")}
 
 CATEGORY_RE = re.compile(r"^\d+\.0$")
 WEEK_RE = re.compile(r"^(\d{4})-W(\d{2})$")
@@ -550,12 +557,18 @@ def blk_start(tab, week, rows_path, config=None, now=None, base=None):
     run = dict(cfg, dir=d, week=week, k=k, tab=tab, weeks_row=weeks_row(k), first=first, last=last,
                rows=[pad(r, width) for r in rows])
     save_run(run)
-    r = weeks_row(k)
+    r, wend = weeks_row(k), weeks_end(tab)
     calls = [info_call(run, cfg["ledger"], "li"),
              read_call(run, cfg["ledger"], "%s!A1:%s1" % (tab, COLS[tab]), "bh"),
-             read_call(run, cfg["ledger"], "Weeks!A1:T1", "wh"),
-             read_call(run, cfg["ledger"], "Weeks!A%d:T%d" % (r, r), "wr")]
+             read_call(run, cfg["ledger"], "Weeks!A1:%s1" % wend, "wh"),
+             read_call(run, cfg["ledger"], "Weeks!A%d:%s%d" % (r, wend, r), "wr")]
     return {"dir": d, "week": week, "tab": tab, "rows": len(rows), "calls": calls}
+
+
+def weeks_end(tab):
+    """How far a block's Weeks reads reach: V only for the Skills block (SKB-110), so a Ledger whose
+    Weeks grid stops at T keeps every other block working."""
+    return WEEKS_END if tab == "Skills" else "T"
 
 
 def blk_plan(d):
@@ -570,13 +583,15 @@ def blk_plan(d):
     bh = parse_values(load_result(os.path.join(d, "bh.txt")), run["ledger"], "%s!A1:%s1" % (tab, COLS[tab]))
     if not bh or pad(bh[0], len(header)) != header:
         raise Refuse(4, "%s header changed" % tab)
-    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:T1")
+    wend = weeks_end(tab)
+    wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:%s1" % wend)
     need = ord(BLOCKS[tab][3]) - 64                 # the Weeks header must reach this block's own cells
     if not wh or pad(wh[0], need) != WEEKS_FULL[:need]:
         raise Refuse(4, "Weeks header does not reach %s (needs A–%s); run the %s setup"
-                     % (tab, BLOCKS[tab][3], "SKB-091" if need > 18 else "Phase 3" if need > 14 else "Phase 2"))
+                     % (tab, BLOCKS[tab][3], "SKB-110" if need > 20 else "SKB-091" if need > 18
+                        else "Phase 3" if need > 14 else "Phase 2"))
     r = run["weeks_row"]
-    wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], "Weeks!A%d:T%d" % (r, r))
+    wr = parse_values(load_result(os.path.join(d, "wr.txt")), run["ledger"], "Weeks!A%d:%s%d" % (r, wend, r))
     if wr and pad(wr[0], 20)[0] not in ("", run["week"]):
         raise Refuse(4, "Weeks row %d belongs to %s, not %s — was the epoch changed?" % (r, wr[0][0], run["week"]))
     first, last, rows, end = run["first"], run["last"], run["rows"], col_letter(len(header))
@@ -594,9 +609,13 @@ def blk_plan(d):
     pages = [[a, min(a + PAGE - 1, last)] for a in range(first, last + 1, PAGE)]
     readback = [read_call(run, run["ledger"], "%s!A%d:%s%d" % (tab, a, end, b), "rb" if i == 0 else "rb%d" % (i + 1))
                 for i, (a, b) in enumerate(pages)]
+    warnings = []
+    if li[tab][0] < last + size * WARN_WEEKS:          # every block, as Snapshot: say so before it is full
+        warnings.append("%s grid ends at row %d: fewer than %d weeks of room left — grow it (references/ledger.md)"
+                        % (tab, li[tab][0], WARN_WEEKS))
     run.update(planned=True, pages=pages)
     save_run(run)
-    return {"week": run["week"], "tab": tab, "rows": len(rows), "ops": ops, "readback": readback}
+    return {"week": run["week"], "tab": tab, "rows": len(rows), "ops": ops, "readback": readback, "warnings": warnings}
 
 
 def blk_check(d, now=None):
@@ -1166,8 +1185,8 @@ def selftest():
             m = re.match(r"^Weeks!([A-Z])(\d+):([A-Z])(\d+)$", a["range_name"])
             row = int(m.group(2))
             while len(sheet["Weeks"]) < row:
-                sheet["Weeks"].append([""] * 18)
-            w = pad(sheet["Weeks"][row - 1], 18)
+                sheet["Weeks"].append([""] * 22)
+            w = pad(sheet["Weeks"][row - 1], 22)
             w[ord(m.group(1)) - 65:ord(m.group(3)) - 64] = a["values"][0]
             sheet["Weeks"][row - 1] = w
             open(ck["readback"]["save"], "w", encoding="utf-8").write(
@@ -1176,9 +1195,11 @@ def selftest():
 
         def fresh_b(hdr=None):
             return {"__tabs__": {"Weeks": (100, 26), "Reports": (500, 9), "Decisions": (500, 9),
-                                 "Proposals": (2100, 15), "Updates": (2100, 14), "Harvest": (4100, 8)},
+                                 "Proposals": (2100, 15), "Updates": (2100, 14), "Harvest": (4100, 8),
+                                 "Skills": (10100, 7)},
                     "Weeks": [hdr or weeks_hdr], "Reports": [REPORTS_HEADER], "Decisions": [DECISIONS_HEADER],
-                    "Proposals": [PROPOSALS_HEADER], "Updates": [UPDATES_HEADER], "Harvest": [HARVEST_HEADER]}
+                    "Proposals": [PROPOSALS_HEADER], "Updates": [UPDATES_HEADER], "Harvest": [HARVEST_HEADER],
+                    "Skills": [SKILLS_HEADER]}
 
         sb = fresh_b()
         res = run_block(sb, rows_p)
@@ -1256,6 +1277,43 @@ def selftest():
             fails.append("a row left on the second page was committed")
         except Refuse as e:
             check("a row left on the second page is named by its own row", (e.code, "Harvest row 151 " in str(e)), (6, True))
+        # SKB-110: Skills (U–V) needs the A–V header; its 200-row block reads back in four pages
+        skills = [["2026-W41", "2026-10-08T09:05:00+08:00", "s%03d" % i, "1.%d.0" % i, "%040x" % i,
+                   "skills/6-engineer/s%03d" % i, "owner/workbench"] for i in range(130)]
+        skills_p = os.path.join(tmpb, "skills.json")
+        json.dump(skills, open(skills_p, "w"), ensure_ascii=False)
+        refuses("Skills refuses the A–T Weeks header", 4, run_block, fresh_b(WEEKS_FULL[:20]), skills_p, None, "Skills")
+        ss = fresh_b(WEEKS_FULL)
+        check("a 130-row Skills block reads back in pages and commits U",
+              run_block(ss, skills_p, tab_name="Skills")["delivered"], "130-rows;Skills!A202:G331;Weeks!U3")
+        check("Skills Weeks cells", ss["Weeks"][2][20:22], ["ok", "2026-10-06T09:45:00+08:00"])
+        check("Skills leaves the other beats' cells alone", ss["Weeks"][2][:20], [""] * 20)
+        check("Skills block slot W41", block_slot("Skills", 1), (202, 401))
+        refuses("a changed Skills cell on the third page is caught", 6, run_block, fresh_b(WEEKS_FULL), skills_p,
+                lambda v: v[:3] + ["9.9.9"] + v[4:] if v[2] == "s120" else v, "Skills")
+        rerun = fresh_b(WEEKS_FULL)
+        run_block(rerun, skills_p, tab_name="Skills")
+        json.dump(skills[:3], open(skills_p, "w"), ensure_ascii=False)
+        check("a same-week re-run overwrites its own slot and clears the rest",
+              run_block(rerun, skills_p, tab_name="Skills")["delivered"], "3-rows;Skills!A202:G204;Weeks!U3")
+        check("the cleared rows stay inside the slot", [r for r in rerun["Skills"][204:] if any(c.strip() for c in r)], [])
+        roomy = blk_start("Skills", "2026-W41", skills_p, cfgb, "2026-10-06T09:40:00+08:00", base=os.path.join(tmpb, "runs"))
+        for c in roomy["calls"]:
+            a = c["args"]
+            if c["tool"].endswith("get_spreadsheet_info"):
+                open(c["save"], "w").write(info("LED", "Ledger", dict(fresh_b(WEEKS_FULL)["__tabs__"], Skills=(1801, 7))))
+                continue
+            tab_, r0, r1 = re.match(r"^(\w+)!A(\d+):[A-Z](\d+)$", a["range_name"]).groups()
+            g = fresh_b(WEEKS_FULL)[tab_]
+            open(c["save"], "w", encoding="utf-8").write(fmt_b("LED", a["range_name"],
+                                                              [g[i - 1] for i in range(int(r0), int(r1) + 1) if i - 1 < len(g) and any(x.strip() for x in g[i - 1])]))
+        check("a block grid with fewer than eight weeks left warns", [w.split(":")[0] for w in blk_plan(roomy["dir"])["warnings"]],
+              ["Skills grid ends at row 1801"])
+        check("only the Skills block reads Weeks up to V; the rest stop at T (a narrower grid keeps working)",
+              [[c["args"]["range_name"] for c in blk_start(t, "2026-W41", p_, cfgb, "2026-10-06T09:40:00+08:00",
+                                                          base=os.path.join(tmpb, "runs"))["calls"][2:]]
+               for t, p_ in (("Harvest", harv_p), ("Skills", skills_p))],
+              [["Weeks!A1:T1", "Weeks!A3:T3"], ["Weeks!A1:V1", "Weeks!A3:V3"]])
         wrong_p = os.path.join(tmpb, "wrong.json")
         json.dump([["2026-W40"] + [""] * 8], open(wrong_p, "w"))
         refuses("block row from another week", 3, blk_start, "Reports", "2026-W41", wrong_p, cfgb,
@@ -1336,6 +1394,8 @@ def _write_cfg(tmp, tracker_id, ledger_id):
 
 # ── mutation check: each one-line breakage must turn the selftest red ────────
 MUTATIONS = [
+    ("a block grid running out gives no warning", [('    if li[tab][0] < last + size * WARN_WEEKS:', '    if False:')]),
+    ("every block reads Weeks up to V", [('    return WEEKS_END if tab == "Skills" else "T"', '    return WEEKS_END')]),
     # (name, [(old, new), ...]) — every pair is applied; each old text must occur exactly once
     ("Phase 3 blocks accept the Phase 2 header", [
         ("need = ord(BLOCKS[tab][3]) - 64", "need = min(14, ord(BLOCKS[tab][3]) - 64)")]),

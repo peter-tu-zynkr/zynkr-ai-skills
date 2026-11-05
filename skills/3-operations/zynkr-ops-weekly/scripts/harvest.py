@@ -445,7 +445,7 @@ def mutate():
     src = open(os.path.abspath(__file__), encoding="utf-8").read()
     code, marker, rest = src.partition("\nMUTATIONS = [")
     tmpd = tempfile.mkdtemp(prefix="harvest-mutate-")
-    for f in ("ledger.py", "recap.py"):
+    for f in ("ledger.py", "recap.py", "skills.py"):      # recap imports skills (SKB-110)
         shutil.copy2(os.path.join(here, f), os.path.join(tmpd, f))
 
     def run(text):
