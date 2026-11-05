@@ -85,9 +85,12 @@ Steps 1–6 are this run. Steps 7–9 are the learning loop (see **Step 9** belo
 
 ## Resources you'll use
 
-- **Gmail labels** (both nested — use the **full path** in queries):
-  - Support: `[3] Operation/[3.8] Support` (ID `Label_1343405731176716360`)
-  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` (ID `Label_1203655627141795093`) — /sales-inbound's queue; listed, never drafted on here
+- **Gmail labels** (both nested — a query names each by its **search name**; see the gotcha below):
+  - Support: `[3] Operation/[3.8] Support` (ID `Label_1343405731176716360`) — search name
+    `label:[3]-operation-[3.8]-support`
+  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` (ID `Label_1203655627141795093`) —
+    search name `label:[2]-sales---consultant-[2.1]-inbound-sales`; /sales-inbound's queue, listed,
+    never drafted on here
 - **Website form sender**: `website@zynkr.ai` — discovery-call / contact-form inquiries arrive as
   notifications *from* this address. Fallback queue source (see Step 1).
 - **KB access** — the **`zynkr-atlas` MCP server** (Zynkr Atlas, read with a token of your
@@ -124,24 +127,26 @@ The walk in Step 4 lists all of it:
   `term-mapping-table` (the anti-Chinglish 晶晶體 用語對照表): read both by key once per run
   (Step 5); every draft must follow them.
 
-> **Label gotcha (learned the hard way):** the Gmail labels are *nested*, so the leaf name alone
-> (`label:"[3.8] Support"`) matches **nothing** — use the full path
-> (`label:"[3] Operation/[3.8] Support"`). The labels also may not be reliably applied yet (no
-> filter set up), so a label search returning zero does **not** mean the queue is empty. Always run
-> the sender fallback in Step 1 before declaring the queue clear.
+> **Label gotcha (learned the hard way, twice):** the Gmail labels are *nested*, and
+> `search_gmail_messages` finds one only by its **search name**: the full path in lowercase, with
+> every space, `/` and `&` turned into `-` (`label:[3]-operation-[3.8]-support`). The leaf name
+> (`label:"[3.8] Support"`) and the quoted full path (`label:"[3] Operation/[3.8] Support"`) both
+> match **nothing**. The quoted path is why the label once looked unapplied: it is applied, website
+> forms included. Still run the sender fallback in Step 1 — a form the label missed is found there.
 
 ---
 
 ## Step 1 — Parse mail: pull the unreplied queue
 
-Run these searches with `mcp__google-workspace__search_gmail_messages` and union the results
-(dedupe by thread ID):
+Run these searches with `mcp__google-workspace__search_gmail_messages`, with `page_size: 100`;
+while an answer names a `next_page_token`, call again with it as `page_token` (one page is 10
+messages by default). Union the results (dedupe by thread ID):
 
 ```
-label:"[3] Operation/[3.8] Support" -from:me
+label:[3]-operation-[3.8]-support -from:me newer_than:30d
 ```
 
-Then the **sender fallback** (the label isn't reliably applied), scoped to recent website forms and
+Then the **sender fallback** (for a website form the label missed), scoped to recent website forms and
 leaving out the AI-consulting inquiries:
 
 ```
@@ -153,10 +158,12 @@ belong to **/sales-inbound**, which logs the lead and drafts the first reply. Ne
 here: two drafts on one thread is what this rule prevents. If one turns up anyway (a label on the
 wrong thread), list it under *Owned by /sales-inbound* in the report.
 
-**Only declare the queue empty if both return zero.** If the label search is empty but the
-fallback found threads, tell Peter at the end that auto-labeling isn't set up (he likely needs a
-Gmail filter). Otherwise list what you found — subject, sender, snippet, queue — and say you're
-processing N threads.
+The label search looks back 30 days: an inquiry left unanswered for longer drops out of the queue.
+It also returns threads Peter has already answered, and Step 2 skips each one whose last message is
+his. **The queue is empty only when Step 2 keeps no thread** — never judge it from the search
+counts, which include those answered threads. If the fallback found a website form the label
+search did not, name that form at the end: it is missing the label. List the threads Step 2 keeps
+— subject, sender, snippet, queue — and say you're processing N threads.
 
 ---
 

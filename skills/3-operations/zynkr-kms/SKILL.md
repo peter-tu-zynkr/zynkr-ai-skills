@@ -115,11 +115,14 @@ This skill drafts into a **知識庫** it does not ship.
   The slug is the one `whoami` names (Zynkr's is `zynkr`).
 - **Google account**: `<your-google-workspace-account>` — **MCP server `google-workspace`** for all Gmail tools.
   Gmail is still where tickets live; only the 知識庫 moved.
-- **Source labels** (nested — use the **full path**):
-  - Support: `[3] Operation/[3.8] Support`
-  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales`
+- **Source labels** (nested — a query names each by its **search name**: the full path in lowercase,
+  with every space, `/` and `&` turned into `-`; the quoted full path matches nothing):
+  - Support: `[3] Operation/[3.8] Support` — `label:[3]-operation-[3.8]-support`
+  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` —
+    `label:[2]-sales---consultant-[2.1]-inbound-sales`
 - **Ingest-ledger label**: `KMS-ingested` — applied once a thread's answer is **published** in the
-  知識庫. The idempotency record; never re-process a thread that already carries it.
+  知識庫, to each message of Peter's (or a website form's) up to the answer learned (Step 7). The
+  idempotency record: Step 1's searches leave out each message that carries it.
 - **Drive mirror** (the backup half — full mechanics in `references/drive-mirror.md`):
   - Folder `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, members only
     (`references/drive-mirror.md` → *Who may read it*)
@@ -213,10 +216,12 @@ this skill harvests threads he *has* replied to and that aren't ingested yet.
 If Peter handed you a **specific thread** (pasted link or "learn from this one"), use just that —
 skip the queue search.
 
-Otherwise search both queues with `mcp__google-workspace__search_gmail_messages`:
+Otherwise search both queues with `mcp__google-workspace__search_gmail_messages`, with
+`page_size: 100`; while an answer names a `next_page_token`, call again with it as `page_token`.
+Every search in this step pages the same way (one page is 10 messages by default):
 
 ```
-(label:"[3] Operation/[3.8] Support" OR label:"[2] Sales & consultant/[2.1] Inbound Sales") from:me -label:KMS-ingested newer_than:90d
+(label:[3]-operation-[3.8]-support OR label:[2]-sales---consultant-[2.1]-inbound-sales) from:me -label:KMS-ingested newer_than:90d
 ```
 
 Fallback for website-form sales inquiries answered as fresh emails (only if Peter asks you to sweep
@@ -226,7 +231,13 @@ website inquiries too):
 from:website@zynkr.ai -label:KMS-ingested newer_than:90d
 ```
 
-Dedupe by thread ID. A thread named in the working folder's `_MANIFEST.json` `pending[]` (its
+Dedupe by thread ID. Gmail keeps a label on each message, not on the thread, so
+`-label:KMS-ingested` leaves out only the messages that carry it. A thread ingested before comes
+back whenever a reply of Peter's in it carries no label (a later answer, or one an old run left
+unlabelled): process it like any other, and Step 3's dedupe finds what the 知識庫 already holds,
+so only a new answer is drafted.
+
+A thread named in the working folder's `_MANIFEST.json` `pending[]` (its
 `thread`) already has a draft — waiting in 審核, or published and not yet labelled (Step 7): list
 it as such and do not re-process it. If nothing is left, tell Peter the 知識庫 is already up to
 date and stop. Otherwise list what you found (subject · sender · queue) and say you're reviewing N
@@ -249,6 +260,11 @@ only if all three hold**:
 - Peter's last message was a holding reply ("讓我確認一下細節後再回覆您" / "let me get back to you") —
   there's no answer to learn yet. Leaving it un-labelled means it gets re-checked next run.
 - The thread is spam / out-of-scope / a thank-you with no Q&A content.
+
+**Done — label it, draft nothing,** when the thread comes back with nothing new: every answer in
+it is already in the 知識庫 (Step 3's dedupe finds each one), and all that follows the last of them
+is a thank-you or a closing line. Step 7 labels it, so it stops coming back until Peter answers
+something new in it. A holding reply is never this: it stays unlabelled (above).
 
 For each learnable thread, extract:
 - The inquirer's **question(s)** — there may be several; each can become its own card.
@@ -302,9 +318,12 @@ saying so.
   3. `pending[]` in the working folder's `_MANIFEST.json` — the drafts this skill filed, which
      `list_knowledge` lists only once they are published.
 
-  A near-duplicate **published** card → a **correction packet** for it (Step 5c), never a second
-  card. A near-duplicate in **`pending[]`** → nothing new; say it is waiting, or published if the
-  set lists it. This matters most for
+  A near-duplicate **published** card that says the same → the answer is already there; nothing
+  to draft. One that says otherwise → a **correction packet** for it (Step 5c), never a second
+  card — **unless Peter's reply is older than the card's last update** (the dates the set lists):
+  the card may have moved past it, so ask Peter which is current (⚠ in Step 4) and draft no
+  packet that could put an old value back. A near-duplicate in **`pending[]`** → nothing new; say
+  it is waiting, or published if the set lists it. This matters most for
   `kb.pricing-quoting` and `kb.refund-policy`, where stale answers are harmful.
 
 ### Lens 3 — Structure for the LLM (fact card vs. citing reference card)
@@ -369,6 +388,8 @@ below the table.
 - ⚠ **Pricing / policy change** — "this replaces the older answer on the published card; confirm
   the current rate before you apply it."
 - ⚠ **New section** — proposing a category that doesn't exist yet.
+- ⚠ **Older than the card** — Peter's reply predates the card's last update and disagrees with
+  it: which is current? (Lens 2). No packet until he says.
 - ⚠ **Ambiguous intent** or **partial answer**.
 
 Peter approves all / edits / rejects per row. **Only approved rows proceed to Step 5.** If he
@@ -449,7 +470,8 @@ in the mirror changes until Peter publishes — the next run's Step 0 picks that
 ## Step 7: Mark ingested + report
 
 Label `KMS-ingested` **only a thread whose answer is published** in the 知識庫:
-- its answer was already there (dedupe found it; nothing drafted);
+- its answer was already there (dedupe found it; nothing drafted), including a thread that came
+  back with nothing after its answer but a thank-you or a closing line (Step 2);
 - its drafts are published: every `pending[]` entry for the thread is in Step 0's
   `pending_published`;
 - its correction packet was applied (the card now reads the new line).
@@ -460,9 +482,20 @@ skipped or rejected.
 - Resolve the ledger label's **ID**: `mcp__google-workspace__list_gmail_labels` and find
   `KMS-ingested`. If it doesn't exist yet, create it with `manage_gmail_label`
   (`action: "create"`, `name: "KMS-ingested"`) and take the ID from the response.
-- Apply it with `mcp__google-workspace__modify_gmail_message_labels` (or
-  `batch_modify_gmail_message_labels`): the thread's **message ID(s)** as `message_ids` and the
-  label **ID** (not the name) in `add_label_ids`.
+- **Choose the messages from the thread itself**, never from Step 1's search: read it with
+  `get_gmail_thread_content` (the copy Step 2 read, or read it now for a thread from `pending[]`)
+  and take each message from Peter or from `website@zynkr.ai` — what Step 1's searches match —
+  dated no later than **the answer learned**: for a thread published from `pending[]`, the newest
+  `drafted_at` among its entries in the working folder's `_MANIFEST.json` (a UTC time); otherwise
+  the newest message Step 2 read. A later message stays unlabelled: no run has read its answer
+  yet, and the next one learns from it.
+- Find each chosen message's ID with `search_gmail_messages` and
+  `rfc822msgid:<its Message-ID line, without the angle brackets>`.
+- Apply the label with `mcp__google-workspace__batch_modify_gmail_message_labels`: those IDs as
+  `message_ids`, the label **ID** (not the name) in `add_label_ids`. **Never the thread ID in
+  their place:** it is the ID of the thread's first message alone, so only that message gets the
+  label and Peter's reply still matches Step 1's search (three June threads were labelled that
+  way).
 - Then take out of `pending[]` each published key whose thread you labelled, and each one with no
   `thread`: `node scripts/kb-drive-mirror.mjs pending-drop --out <the working folder> --key <key>`.
   Write the manifest again, as in Step 6. A key whose thread you could not label stays, and the
@@ -519,9 +552,14 @@ once Peter has published it.
   one cites it by key and never copies its value.
 - **The export token never leaves its file.** Not in chat, not in a command line, not in a report.
 - **PII never lands in the 知識庫** — first name + company only.
-- **Idempotency is the label, plus `pending[]`.** A thread carrying `KMS-ingested` is done; a
-  thread named in `pending[]` is skipped until Step 7 labels it and drops its keys. A skipped thread
-  stays un-labelled so it's reconsidered once truly answered.
+- **Idempotency is the label, plus `pending[]`.** A message carrying `KMS-ingested` is never
+  harvested again, so Step 7 labels each of Peter's messages up to the answer learned — found by
+  its Message-ID, never by the thread ID — and leaves a later one for the next run; a thread named
+  in `pending[]` is skipped until Step 7 labels it and drops its keys. A skipped thread stays
+  un-labelled so it's reconsidered once truly answered. A thread that comes back with a newer
+  answer, or one Peter hands you, goes through Step 3's dedupe, so only what is new is drafted;
+  one that comes back with nothing after its answer but a thank-you or a closing line is done, and
+  labelled (Step 2).
 - **zh-TW default**, bilingual keywords — match how Peter and his inquirers actually search.
 - **A draft is not approval.** The gates are Peter's approval in Step 4 and his publish in Atlas.
 

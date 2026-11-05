@@ -152,12 +152,14 @@ mcp__google-workspace__search_gmail_messages(
 )
 ```
 
-Then the second inbox this skill owns, the Inbound Sales label:
+Then the second inbox this skill owns, the Inbound Sales label. It is nested, so the query names it
+by its search name — the full path in lowercase, with every space, `/` and `&` turned into `-`; the
+quoted path (`label:"[2] Sales & consultant/[2.1] Inbound Sales"`) matches nothing:
 
 ```
 mcp__google-workspace__search_gmail_messages(
   user_google_email = "<your-google-workspace-account>",
-  query = 'label:"[2] Sales & consultant/[2.1] Inbound Sales" -from:me newer_than:7d'
+  query = 'label:[2]-sales---consultant-[2.1]-inbound-sales -from:me newer_than:7d'
 )
 ```
 
