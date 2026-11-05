@@ -8,7 +8,6 @@ platform: claude
 status: WIP
 visibility: public
 author: Peter Tu
-disable-model-invocation: true
 input: "A target SKILL.md: a file path, a skill folder, a skill/<slug> branch, or a bare slug to resolve under skills/**."
 process: "Locate target → run validate-skill.ts --tier=all --json → render a tiered report → offer HITL auto-fixes for mechanical findings → emit PASS (0 errors) / FAIL verdict and hand off to /skill-publish."
 output: "A QA report (✅/⚠️/❌ per check with file:line + fix), a PASS/FAIL verdict gated on ERROR-tier checks, and optional confirmed auto-fixes applied to the working tree."

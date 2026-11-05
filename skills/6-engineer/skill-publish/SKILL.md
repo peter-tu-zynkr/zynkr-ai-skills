@@ -42,7 +42,7 @@ The **closing step** of the Zynkr skill pipeline. `/skill-publish` lands a finis
 
 ## Step 0 — QA gate (mandatory, runs in both modes)
 
-Before anything else, the SKILL.md must clear QA. Run the engine `/skill-qa` wraps — from the repo root, `npx tsx scripts/validate-skill.ts <path> --tier=all --json` — and read its verdict (`/skill-qa` sets `disable-model-invocation: true`, so it cannot be invoked from here):
+Before anything else, the SKILL.md must clear QA. Run the engine `/skill-qa` wraps — from the repo root, `npx tsx scripts/validate-skill.ts <path> --tier=all --json` — and read its verdict (running the engine directly keeps this step self-contained):
 
 - **Recent-PASS short-circuit:** if the engine already passed this same, unchanged artifact earlier in this session, record "QA: PASS (earlier this session)" and proceed — don't re-run.
 - **ERROR-tier fail → HARD STOP.** Do not detect mode, do not dispatch (Step 5's dispatch is the only state-changing step). Print the QA report's ERRORs with their fixes and tell the user to fix and re-run `/skill-publish`.

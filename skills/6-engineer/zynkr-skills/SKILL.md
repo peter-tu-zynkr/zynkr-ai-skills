@@ -9,8 +9,8 @@ status: WIP
 visibility: public
 author: Peter Tu
 input: "Anything: a URL, local file path, skill slug, free-text idea, status question, or pasted content. The skill classifies the input shape before doing anything else."
-process: "Classify input shape → look up state across the four signals (Project / issues / on-disk / live API) when the input references a skill-pipeline item → route to the right sub-skill via the Skill tool when confidence is high (for the four it cannot start, print the command), or ask one targeted clarifying question when ambiguous. Surfaces queue / dashboard views on read-only queries."
-output: "Either: (a) an auto-invocation of the right Zynkr sub-skill, or its printed command for the four the Skill tool cannot start (most common); (b) one targeted clarifying question when intent is genuinely ambiguous; (c) a compact state table when the user asks 'what's in my queue' / 'where is X'."
+process: "Classify input shape → look up state across the four signals (Project / issues / on-disk / live API) when the input references a skill-pipeline item → route to the right sub-skill via the Skill tool when confidence is high (for the three it cannot start — `/skill-sourcer`, `/skill-triager`, `/skill-publish` — print the command), or ask one targeted clarifying question when ambiguous. Surfaces queue / dashboard views on read-only queries."
+output: "Either: (a) an auto-invocation of the right Zynkr sub-skill, or its printed command for the three the Skill tool cannot start (most common); (b) one targeted clarifying question when intent is genuinely ambiguous; (c) a compact state table when the user asks 'what's in my queue' / 'where is X'."
 synergy: ["skill-sourcer", "skill-triager", "skill-publish", "skill-finder", "content-newsletter-draft", "training-lecture-transcript", "sales-specialist", "cv-customizer", "zynkr-support", "content-governance", "zynkr-content-writer", "training-srt-optimizer", "zynkr-slide"]
 type: agent
 skills: ["skill-sourcer", "skill-triager", "skill-author", "skill-qa", "skill-publish", "skill-finder"]
@@ -78,7 +78,7 @@ Pick the slug from either the URL last segment (`.../tree/main/skills/<slug>`) o
 
 Switch on `(input-type, state)` using the table below. Auto-invoke means use the **Skill** tool with the sub-skill's name; the sub-skill loads its own SKILL.md and runs.
 
-The Skill tool cannot start a skill whose frontmatter sets `disable-model-invocation: true` — today `/skill-sourcer`, `/skill-triager`, `/skill-qa` and `/skill-publish`; Claude Code blocks the call. For those four, "auto" means: state the route in one sentence, then print the exact slash command for Peter to run, as in **Nudge** (Step 4). For a finished `local-skill-md`, print `/skill-qa <path>`, then `/skill-publish <path>` once it passes.
+The Skill tool cannot start a skill whose frontmatter sets `disable-model-invocation: true` — today `/skill-sourcer`, `/skill-triager` and `/skill-publish`; Claude Code blocks the call. For those three, "auto" means: state the route in one sentence, then print the exact slash command for Peter to run, as in **Nudge** (Step 4). For a finished `local-skill-md`, run `/skill-qa <path>` (it starts like any sub-skill since SKB-109), then, once it passes, print `/skill-publish <path>` for Peter to type.
 
 ### Skill-pipeline inputs
 
@@ -90,8 +90,8 @@ The Skill tool cannot start a skill whose frontmatter sets `disable-model-invoca
 | `pipeline-issue-ref`, label = `triage-ready`, slug not yet in the full index, no `**Built via**` line in the body | Invoke `/skill-triager` (cue Option A) | High → auto |
 | `pipeline-issue-ref`, `**Built via**: skill-publish` in the body, slug not yet in the full index | Render: "Built by `/skill-publish`; its PR is not merged yet. Merge it, then confirm-ship." Don't cue Option A: it would scaffold a competing stub | High → no-op |
 | `pipeline-issue-ref`, label = `building`, on-disk file absent | Nudge: "Run `/skill-author` on branch `skill/<slug>` to write the body" — don't auto-invoke; authoring needs you in the loop | High → nudge |
-| `local-skill-md`, slug matches an open `triage-ready` or `building` issue | Print `/skill-qa <path>` first. Once the QA run shows **PASS**, print `/skill-publish <path>` (continuation mode). On **ERROR** → stop at the QA report, don't route to publish. On **WARN-only** → list the warnings and ask "publish anyway?" before printing the publish command. | High → auto (QA → publish on PASS) |
-| `local-skill-md`, no matching open issue | Print `/skill-qa <path>` first, then `/skill-publish <path>` (fresh-intake mode) once it passes (same ERROR/WARN handling). | High → auto (QA → publish on PASS) |
+| `local-skill-md`, slug matches an open `triage-ready` or `building` issue | Run `/skill-qa <path>` first. Once it shows **PASS**, print `/skill-publish <path>` (continuation mode). On **ERROR** → stop at the QA report, don't route to publish. On **WARN-only** → list the warnings and ask "publish anyway?" before printing the publish command. | High → auto (QA → publish on PASS) |
+| `local-skill-md`, no matching open issue | Run `/skill-qa <path>` first, then print `/skill-publish <path>` (fresh-intake mode) once it passes (same ERROR/WARN handling). | High → auto (QA → publish on PASS) |
 | `pipeline-issue-ref`, PR merged + slug in the full index + open issue still carries `building` or `triage-ready` (a `/skill-publish` fresh intake stays `triage-ready`) | Invoke `/skill-triager` (cue Option D `confirm-ship`) | High → auto |
 | `pipeline-issue-ref`, label = `shipped` | Render: "Already shipped — live at `https://www.zynkr.ai/ai-skills-marketplace` (slug `<slug>`)." — or, for a team skill, "Already shipped — team skill on workbench `main` (slug `<slug>`)." Then, if it isn't installed under `~/.claude/skills/`, offer its install line (the manifest's `install_command` when it sets one, else `npx skills add … --skill <slug>`) so it's invocable locally (marketplace-live ≠ installed in your session) — never for a client build, which the client receives as its own copy. | High → no-op (offer local install if missing) |
 | `pipeline-issue-ref`, label = `parked` / `rejected` | Render the state, ask if user wants to revive | Medium → ask |
@@ -102,10 +102,10 @@ The Skill tool cannot start a skill whose frontmatter sets `disable-model-invoca
 
 | Input × State | Action | Confidence |
 |---|---|---|
-| `qa-request` + a local SKILL.md path or folder | Print `/skill-qa <path>` (standalone); report the verdict once it has run. | High → auto |
-| `qa-request` + slug resolving to an in-pipeline `building` issue | Resolve the on-disk path (`skills/<N-cat>/<slug>/SKILL.md`) or the `skill/<slug>` branch head; print `/skill-qa <path>`. | High → auto |
-| `qa-request` + slug of an already-`shipped` skill | Print `/skill-qa <slug>` for the in-tree `main` copy (re-audit / regression check). | High → auto |
-| `qa-request` + an `external-skill-url` / candidate not yet in the pipeline | Print `/skill-qa <path>` for the fetched SKILL.md as a pre-intake quality probe. On PASS, offer: "Want to source this? → `/skill-sourcer`." | High → auto, then offer |
+| `qa-request` + a local SKILL.md path or folder | Run `/skill-qa <path>` (standalone) and report the verdict. | High → auto |
+| `qa-request` + slug resolving to an in-pipeline `building` issue | Resolve the on-disk path (`skills/<N-cat>/<slug>/SKILL.md`) or the `skill/<slug>` branch head; run `/skill-qa <path>`. | High → auto |
+| `qa-request` + slug of an already-`shipped` skill | Run `/skill-qa <slug>` for the in-tree `main` copy (re-audit / regression check). | High → auto |
+| `qa-request` + an `external-skill-url` / candidate not yet in the pipeline | Run `/skill-qa <path>` on the fetched SKILL.md as a pre-intake quality probe. On PASS, offer: "Want to source this? → `/skill-sourcer`." | High → auto, then offer |
 | `qa-request` but no resolvable artifact | Ask once: "Point me at the SKILL.md (path, slug, or URL) to QA." | Medium → ask |
 
 ### Knowledge-pipeline inputs (broader Zynkr scope)
@@ -129,7 +129,7 @@ The Skill tool cannot start a skill whose frontmatter sets `disable-model-invoca
 |---|---|
 | "What's in my triage queue?" / "show me triage-ready" | `gh issue list ... --label triage-ready` and render a table |
 | "Where is `<slug>`?" / "status of `<slug>`?" | Run the Step 2 four-signal lookup and render a one-screen state card |
-| "Does `<slug>` pass QA?" / "is `<slug>` QA-clean?" | Resolve the artifact (on-disk → branch → `main`), print `/skill-qa <slug>` for a report-only run, then render its PASS/FAIL verdict card. Read-only — never publishes. |
+| "Does `<slug>` pass QA?" / "is `<slug>` QA-clean?" | Resolve the artifact (on-disk → branch → `main`), run `/skill-qa <slug>` report-only, then render its PASS/FAIL verdict card. Read-only — never publishes. |
 | "What shipped this week?" | `gh issue list ... --label shipped --search "closed:>2026-mm-dd"` and render |
 | "What's stuck?" / "what's in approved >7 days?" | `gh issue list ... --label triage-ready --json number,title,updatedAt`, keep the issues not updated in 7 days, render |
 | "Reconcile pipeline" / "close shipped" / "did anything ship without closing?" / "what's deployed but still open?" | Run the **Reconcile sweep** (section below) — diff live marketplace vs open proposals, close the matches. |
@@ -155,9 +155,9 @@ When confidence is **High** and the action is `auto`:
 2. Invoke the sub-skill via the **Skill** tool, passing the relevant input as `args`.
 3. Let the sub-skill drive from there. Don't re-implement its logic inline.
 
-For `/skill-sourcer`, `/skill-triager`, `/skill-qa` and `/skill-publish`, step 2 is printing the command instead, as in **Nudge**: the Skill tool cannot start them (Step 3).
+For `/skill-sourcer`, `/skill-triager` and `/skill-publish`, step 2 is printing the command instead, as in **Nudge**: the Skill tool cannot start them (Step 3).
 
-**QA → publish order.** When the route is a finished `local-skill-md` for a build issue, print `/skill-qa <path>` first and read its verdict once Peter has run it. Print `/skill-publish <path>` only on a **PASS** (zero ERROR-tier findings). On FAIL, stop at the QA report — never route an ERROR-tier skill to publish.
+**QA → publish order.** When the route is a finished `local-skill-md` for a build issue, run `/skill-qa <path>` first and read its verdict. Print `/skill-publish <path>` only on a **PASS** (zero ERROR-tier findings). On FAIL, stop at the QA report — never route an ERROR-tier skill to publish.
 
 ### Nudge
 

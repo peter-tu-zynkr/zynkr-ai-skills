@@ -33,7 +33,7 @@ input: "A demo transcript — a Fireflies meeting (id/URL/name; preferred), a Go
 process: "Parse the transcript (pains / what was shown / feedback / next steps) → map pains to solution-page capabilities → draft a threaded Gmail follow-up (never send) → sync the existing deal (demo note, refreshed summary, stage nudge, follow-up task) → report."
 output: "A threaded Gmail follow-up draft in Peter's inbox + an updated CRM deal (demo note, refreshed summary, follow-up task). Doesn't log the email — Gmail sync captures it on send."
 synergy: ["sales-outbound", "project-init", "sales-specialist"]
-reads: ["company.sales-pipeline-rules"]
+reads: ["company.sales-pipeline-rules", "doc-style"]
 house-style: bound
 
 ---
@@ -82,8 +82,10 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
 - **Writing style is NOT owned by this file.** Besides the House style block at the end
   (《[2.0]》 + 《[3.2]》), this surface's rules live under `[@] 寫作指南`
   (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`) and are read at runtime:
-  - 《[2.2] 內文風格指南 Style guide》 `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M`
-    — positive rules. **Part 3｜業務信件專屬 §八** is the section that governs this skill.
+  - 《[2.2] 內文風格指南 Style guide》 (address: the Atlas reference `doc-style`, read with
+    `mcp__zynkr-atlas__get_knowledge`; if Atlas cannot be reached or has no `doc-style`, say so
+    in the report and draft on 《[2.0]》 + 《[3.2]》 alone) — positive rules.
+    **Part 3｜業務信件專屬 §八** is the section that governs this skill.
   - 《[3.2] 禁用詞清單 Forbidden Words》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
     — forbidden patterns + quotas. **Category X** is the sales-email-only one.
 

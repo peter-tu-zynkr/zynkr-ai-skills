@@ -29,7 +29,7 @@ input: "ONE person's interest signal carrying an email — a pasted DM/chat thre
 process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → slots from the calendar if a meeting is the ask → Gmail draft → report."
 output: "A CRM lead (company + contact + a deal owned by the runner + note + task) and a Gmail draft, with three 台北時間 slots for a meeting; an open deal on the email stops it instead."
 synergy: []
-reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules"]
+reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules", "doc-style"]
 house-style: bound
 
 ---
@@ -135,9 +135,11 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
   (《[2.0]》 + 《[3.2]》), this surface's rules live under `[@] 寫作指南`
   (`12DBdFz3SK22ie9im_ThFMI7IBRXsTZsV`), read at runtime with
   `get_doc_as_markdown` (no tab parameter — use only `# 最終產出`, ignore `# 指令工程`):
-  《[2.2] 內文風格指南》 `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M` **Part 3 §八 業務信件**
-  (positive rules) and 《[3.2] 禁用詞清單》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg`
-  **category X** (sales-email forbidden patterns). The Doc wins over the rules restated below.
+  《[2.2] 內文風格指南》 **Part 3 §八 業務信件** (positive rules; its address is the Atlas
+  reference `doc-style` — read it with `mcp__zynkr-atlas__get_knowledge`; if Atlas cannot be
+  reached or has no `doc-style`, say so in the report and draft on 《[2.0]》 + 《[3.2]》 alone) and
+  《[3.2] 禁用詞清單》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg` **category X**
+  (sales-email forbidden patterns). The Doc wins over the rules restated below.
 - **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid the SQL returns.
 - **The owner is the claimer** — the person running the skill, whose email and `workspace_id` `mcp__zynkr__whoami` gives (`{{OWNER_EMAIL}}` and `{{WORKSPACE_ID}}` in the SQL). Their member id and the default pipeline (`銷售流程`) are resolved **live** (inside the SQL, or by `mcp__zynkr__list_workspace_members` on the MCP path) — never hardcode an id, and never default the owner to `company.contact-email` when the claimer is someone else.
 - **Do NOT log the drafted email as a CRM activity.** Peter's Gmail is already synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft, it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row.
