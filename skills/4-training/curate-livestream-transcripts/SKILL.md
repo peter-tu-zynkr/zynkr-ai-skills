@@ -1,7 +1,7 @@
 ---
 name: curate-livestream-transcripts
 sheetId: "4.09"
-description: "Weekly transcript curation. Sweeps the 直播筆記 livestream-note Google Docs across N upstream Drive folders, extracts each doc's 逐字稿 (verbatim transcript) tab, and writes one structured zh-TW summary Doc per source into the destination SOT folder. Fully idempotent — skips any source whose target already exists. Trigger on /curate-livestream-transcripts, '整理直播逐字稿', 'curate the livestream transcripts', 'process this week's 直播筆記', or the weekly Monday routine."
+description: "Weekly transcript curation. Sweeps the 直播筆記 livestream-note Google Docs across N upstream Drive folders, extracts each doc's 逐字稿 (verbatim transcript) tab, and writes one structured zh-TW summary Doc per source, with up to three story candidates for the newsletter, into the destination SOT folder. Fully idempotent — skips any source whose target already exists. Trigger on /curate-livestream-transcripts, '整理直播逐字稿', 'curate the livestream transcripts', 'process this week's 直播筆記', or the weekly Monday routine."
 category: training
 project: curate-livestream-transcripts
 platform: claude
@@ -10,7 +10,7 @@ visibility: public
 author: Peter Tu
 input: "None — folder IDs are constants below. Reads 直播筆記 Docs from the upstream folders AND sweeps Fireflies for livestreams in the same window."
 process: "list → filter → dedup-against-destination → read 逐字稿 tab → summarize → create Doc in SOT folder"
-output: "One 逐字稿_{Series}_{YYYY-MM-DD}_{topic} Google Doc per new source, in the destination folder, plus a run report."
+output: "One 逐字稿_{Series}_{YYYY-MM-DD}_{topic} Google Doc per new source, each with its 故事候選 section, in the destination folder, plus a run report."
 synergy: []
 house-style: bound
 
@@ -150,11 +150,29 @@ The 逐字稿 is long, unstructured, filler-heavy. **Never dump it raw.** Produc
 - Q: {question} — A: {answer}
 （若逐字稿中無問答互動則整段省略）
 
+## 故事候選
+### 1. {一句話：發生了什麼}
+- 時間：{逐字稿時間碼，例如 27:19–31:05}
+- 發生了什麼：{2–3 句，只照逐字稿}
+- 代價：{失去或差點失去什麼、多少，帶單位}
+- 收據：{數字 · 工具名 · 「原話」}
+- 開場模式：{表一 模式名}
+（1–3 則；一則都沒有就寫「本場沒有帶代價的故事」）
+
 ## 一句話總結
 {single-sentence wrap-up}
 ```
 
-Omit any section that has no content (except 主題, which always appears).
+Omit any section that has no content, except 主題 and 故事候選, which always appear.
+
+### 故事候選: story candidates for the newsletter
+
+/content-newsletter-draft offers these as topics, so each must be a moment an issue could open on. Write one to three per transcript.
+
+- **A cost with a unit, or no candidate.** The 代價 is what someone lost or nearly lost, and how much: time, money, a client, a group of people or a deadline. Leave out a story without one.
+- **Receipts come from the transcript only:** numbers, tool names, durations, and people's words quoted exactly in 「」. Add nothing.
+- **People become roles.** Every person or company other than Peter, Zynkr and public tools or products becomes a role (「一位帶 5 人團隊的 PM」). Drop a story that can't be told without the name.
+- **One opening pattern,** by its exact name in 《[2.2] 內文風格指南》 §三 表一: 有代價的場景 · 照出讀者的痛 · 有代價的自白 · 反直覺的主張 · 開放迴圈 · 數字變成代價 · 新聞切入，再講跟你有什麼關係 · 之前／之後 · 讀者的真實問題 · 借來的故事 · 實用承諾.
 
 ## Step 9 — Compute the target filename
 
@@ -173,6 +191,7 @@ Output (zh-TW):
 - **來源總數 N** (after filtering)
 - **略過 M（已存在）** — each with the matched existing destination filename
 - **新建 K** — each with its new filename + Doc URL
+- **故事候選** — for each new Doc, how many candidates it holds (0–3)
 - **重複註記** — any cross-source duplications flagged
 - **待下次 J** — Fireflies candidates past this run's budget of 20 transcripts, each with its date and title, for a run by hand whose window starts at the oldest of them
 - **錯誤** — per-source errors (e.g. 無逐字稿 tab, read failure). Never swallow errors silently.
