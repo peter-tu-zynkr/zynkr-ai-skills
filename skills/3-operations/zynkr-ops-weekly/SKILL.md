@@ -3,8 +3,8 @@ name: zynkr-ops-weekly
 sheetId: "3.19"
 description: >-
   The core of a small team's weekly operations loop: the machine-owned Weekly Ledger every part of
-  the loop records into, the Monday recap and plan mailed to the team (recap), and the Thursday
-  collect that reads each person's Wednesday harvest into the Ledger and chases whoever has none in
+  the loop records into, the Monday recap and plan mailed to the team (recap), and the Wednesday
+  collect that reads each person's weekly harvest into the Ledger and chases whoever has none in
   the team's Google Chat space (collect). The weekly Doc belongs to /ops-weekly-doc, the Main Tracker
   to /ops-weekly-tracker and the schedule to /project-manager. Routing is read at run time from the
   Doc's own owner person chips, never hardcoded. Trigger EAGERLY on "/zynkr-ops-weekly", "營運週報",
@@ -46,9 +46,9 @@ The loop is split by the store each part writes (`SKB-091`, v4):
 
 | Skill | Writes | Beats |
 |---|---|---|
-| **`zynkr-ops-weekly`** (this skill) | **mail, Chat, the Weekly Ledger** | `recap` (Mon), `collect` (Thu) |
-| `ops-weekly-doc` | the weekly operations Doc | `sections` (Thu), `minutes` · `tidy` (Fri) |
-| `ops-weekly-tracker` | the Main Tracker, and its own Ledger blocks | `propose` (Fri) · `apply` · `snapshot` (Fri → Sun) |
+| **`zynkr-ops-weekly`** (this skill) | **mail, Chat, the Weekly Ledger** | `recap` (Mon), `collect` (Wed) |
+| `ops-weekly-doc` | the weekly operations Doc | `sections` (Wed), `minutes` · `tidy` (after the meeting) |
+| `ops-weekly-tracker` | the Main Tracker, and its own Ledger blocks | `propose` (after the meeting) · `apply` · `snapshot` (Fri → Sun) |
 | `project-manager` | nothing but its notice mail | runs the beats on time, mails the owner when one did not run |
 
 The other two writers call this skill's `scripts/ledger.py` and `scripts/parse_routing.py` and read its
@@ -60,18 +60,23 @@ department map of its own**.
 
 ## The week
 
-| When (Taipei) | Beat | Skill | What happens |
+| When | Beat | Skill | What happens |
 |---|---|---|---|
-| Mon 10:00 → 23:30 | `recap` | this one | Mail the team last week's recap and this week's plan, read from the Ledger |
-| Wed 20:00 | — | `weekly-insights` | Each person's week closes; the harvest routine writes `harvest-<person>.md` (`SKB-094`) |
-| Thu 09:00 → 13:00 | `collect` | this one | Read the harvest into the Ledger's Harvest block; one Chat line names whoever has none |
-| Thu 09:30 → 13:30 | `sections` | `ops-weekly-doc` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's Doc section |
-| Thu 21:00 | — | team | The weekly meeting |
-| Thu 23:00 | `scaffoldNextWeek` | Apps Script | Copy the newest week section forward |
-| Fri 08:00 → 17:30 | `minutes` | `ops-weekly-doc` | The meeting's minutes from its transcript, into the Doc and the Ledger |
-| Fri 09:00 → 17:30 | `tidy` | `ops-weekly-doc` | Trim the copied section; fill next week's actions |
-| Fri 10:00 → 17:30 | `propose` | `ops-weekly-tracker` | The 【週結】: this week's tracker changes, for the owner's reply |
-| Fri 18:00 → Sun 23:00 | `apply` · `snapshot` | `ops-weekly-tracker` | Write what the owner approved; copy the tracker into the Ledger |
+| Mon 08:00 → 20:00 | `recap` | this one | Mail the team last week's recap and this week's plan, read from the Ledger |
+| Wed 20:00 Taipei | — | `weekly-insights` | Each person's week closes; the harvest routine writes `harvest-<person>.md` (`SKB-094`) |
+| Wed 14:30 → 21:00 | `collect` | this one | Read the harvest into the Ledger's Harvest block; one Chat line names whoever has none |
+| Wed 14:30 → 23:00 | `sections` | `ops-weekly-doc` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's Doc section |
+| Thu 21:00 Taipei | — | team | The weekly meeting |
+| Thu 23:00 Taipei | `scaffoldNextWeek` | Apps Script | Copy the newest week section forward |
+| Thu 18:30 → 23:00, Fri 08:00 → 11:00 | `minutes` | `ops-weekly-doc` | The meeting's minutes from its transcript, into the Doc and the Ledger |
+| Thu 19:00 → 23:00, Fri 08:00 → 11:00 | `tidy` | `ops-weekly-doc` | Trim the copied section; fill next week's actions |
+| Thu 20:00 → 23:00, Fri 08:00 → 11:00 | `propose` | `ops-weekly-tracker` | The 【週結】: this week's tracker changes, for the owner's reply |
+| Fri 11:00 → Sun 17:00 | `apply` | `ops-weekly-tracker` | Write what the owner approved |
+| Fri 11:00 → Sun 22:00 | `snapshot` | `ops-weekly-tracker` | Copy the tracker into the Ledger |
+
+Times marked Taipei are the team's clock. The beats' windows are on the runner's clock (`SKB-114`),
+which need not be Taipei's: on it every window lies between 08:00 and 23:00, and the harvest, the
+meeting and the scaffold each come before the beat that reads it.
 
 `project-manager`'s runner starts each beat in its window, hands it to the skill above, and mails the
 owner when one gave up or never ran. The full table, prerequisites included, is `beats.py --list` in
@@ -124,7 +129,9 @@ Contacts, `users/<21-digit id>` when not), and keep both if unsure.
 
 ## Step 0 — Anchor on today
 
-Resolve today in `Asia/Taipei`. The **ISO week key** (`2026-W45`) is machine-only: the runner passes it
+Resolve today in `Asia/Taipei`, only for the dates the team reads, such as what is due or overdue: the
+runner's clock need not be Taipei's (`SKB-114`), so its day can differ. The **ISO week key**
+(`2026-W45`) is machine-only: the runner passes it
 as `week=`, and it goes in the receipt. The **week label** (`WB 11/2`, the Monday that opens the week)
 is what the team reads in every subject and footer. `references/wording.md` explains why both exist.
 
@@ -137,7 +144,7 @@ receipts `status=ok` with `already-…`.
 
 ## The modes
 
-### `collect` (Thu 09:00 → 13:00)
+### `collect` (Wed 14:30 → 21:00)
 
 Each person's week, from the Wednesday harvest routine's files (`SKB-094`) into the Ledger's
 `Harvest` block, then one Chat line for whoever had a quiet week. It replaces the `#週報` posts and
@@ -150,8 +157,8 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
 2. `python3 scripts/harvest.py files --dir <dir>`:
    - `already` means the week is recorded. Receipt `status=ok` with its `delivered` and do nothing else.
    - `waiting` means the routine has not finished. Receipt `status=waiting` with its `delivered`. The
-     runner looks again an hour later, until 13:00. A harvest still not ready by then reaches the owner
-     as one 【排程沒跑完】 (`no-harvest`), and `sections` goes ahead at 13:00 with 「本週無資料」.
+     runner looks again an hour later, until 21:00. A harvest still not ready by then reaches the owner
+     as one 【排程沒跑完】 (`no-harvest`), and `sections` goes ahead from 21:00 with 「本週無資料」.
    - Otherwise, make its one call, the listing of the week folder.
 3. `python3 scripts/harvest.py read --dir <dir>`. It returns `waiting` (as above), or calls to make:
    the run file and each `harvest-<person>.md`.
@@ -179,11 +186,11 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
    `;skills-<ok|failed>` when `routine.skills_block` is on, and `;grid-low-<tab>` for each tab a
    `block plan` warned has fewer than eight weeks of rows left.
 
-### `recap` (Mon 10:00 → 23:30)
+### `recap` (Mon 08:00 → 20:00)
 
 The week's team recap, by mail, about **the ISO week that just ended** (`SKB-044` decision D2:
 the recap moved from Thursday night to Monday morning). It reads the Weekly Ledger, zynkr-gm's
-state rules and one mail, the Monday Sales Pulse (09:30), never the Doc, so it does not inherit
+state rules and one mail, the Monday Sales Pulse (09:30 Taipei, before the recap's window), never the Doc, so it does not inherit
 the Doc's multi-hour reads. It writes nothing: no Ledger cell, no tracker cell, no Chat post.
 Since `SKB-091` it also carries **this week's plan**, per person: at most five lines, in order,
 from the meeting's open actions, items overdue or due within 14 days, P0/P1 items with no dates,

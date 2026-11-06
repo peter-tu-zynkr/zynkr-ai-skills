@@ -1452,7 +1452,7 @@ check("a section heading twice in the structure: fill refuses outright",
 check("the filled labels are part of the block: walk_block reads them as machine lines",
       T.walk_block(FILLED_MD.split("\n"), 2)[1][0], "· 下一步 — 寄提案給客戶（11/13 前）〔11/5 會議〕 ／ 安裝 A 、 B〔11/5 會議〕")
 
-# The kept block on Friday is usually Thursday's `sections` block, copied forward by the scaffold:
+# The kept block is usually this week's `sections` block, copied forward by the scaffold:
 # it already holds 下一步 and 待討論 (W45 review, 10-31: fill skipped every such team as "already
 # filled", so the meeting's actions reached no team section at all). The new items go under the
 # label the block has, after its last item; a label it lacks still goes under the stamp.

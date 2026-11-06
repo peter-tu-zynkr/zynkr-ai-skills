@@ -49,7 +49,7 @@ from ledger import Refuse, pad, parse_values, load_result, read_call, save_run, 
 
 DEFAULT_RULES = "~/.claude/skills/zynkr-gm/scripts/derive_state.py"
 ITEM_NUM = re.compile(r"(?<![\d.])(\d{1,2}\.\d{2})(?![\d.])")
-# The Monday Sales Pulse (09:30): its subject prefix and its "Next step this week" lines, whose shape
+# The Monday Sales Pulse (09:30 Taipei): its subject prefix and its "Next step this week" lines, whose shape
 # /zynkr-gm parses too: `<name> - N of FLOOR cooking: <step 1>; <step 2>`.
 PULSE_SUBJECT = "Zynkr Sales Pulse - week of"
 # The search's page size, and so the most threads `pulse` fetches: newest first, the first real Pulse
@@ -665,7 +665,7 @@ def render_html(facts, tldr):
     if not facts.get("plan"):
         o.append("<p>這週沒有排定的行動、到期或缺日期的項目</p>")
     if facts.get("pulse") != "found":
-        o.append("<p>業務的下一步沒有列：%s</p>" % ("今天 10 點前沒有收到 Sales Pulse" if facts.get("pulse") == "missing"
+        o.append("<p>業務的下一步沒有列：%s</p>" % ("這封信寄出前沒有收到 Sales Pulse" if facts.get("pulse") == "missing"
                                                    else "Sales Pulse 這次讀不到"))
     o.append("<h3>上週改了什麼</h3>")
     if facts["first_snapshot"]:
@@ -1053,7 +1053,7 @@ def selftest():
         check("recap lists who did not post", "上週沒交週報：b" in body, True)
         check("recap escapes html", "<script>" not in body, True)
         check("recap plan in the mail", "<b>Ann</b></p><ul><li>#1.02 跟客戶確認（10/20 前）</li>" in body, True)
-        check("recap says the Pulse was missing", "業務的下一步沒有列：今天 10 點前沒有收到 Sales Pulse" in body, True)
+        check("recap says the Pulse was missing", "業務的下一步沒有列：這封信寄出前沒有收到 Sales Pulse" in body, True)
         check("recap shows a drop as one", "放棄：1.01 舊版不做了</li>" in body, True)
 
         # the Pulse found: its steps join the plan under the roster name
@@ -1159,7 +1159,7 @@ def selftest():
             bodyx = open(r_render(stx["dir"], None)["body_path"], encoding="utf-8").read()
             check(name, (bb["skills"], "技能更新" in bodyx), (want, False))
 
-        # a Thursday without a Skills block: W42 compares with W40, and the mail says since when
+        # a week without a Skills block: W42 compares with W40, and the mail says since when
         gsh = skills_sheet(True, True)
         gsh["Weeks"][2] = gsh["Weeks"][2][:20] + [""] * 8
         w42 = [["2026-W42", "2026-10-16T18:06:00+08:00"] + r[2:] for r in w41]

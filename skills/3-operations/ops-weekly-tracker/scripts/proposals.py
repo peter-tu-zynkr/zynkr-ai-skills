@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""The Friday proposals (SKB-044 Phase 3): what `propose` suggests, the owner's sign-off by reply,
+"""The proposals after the meeting (SKB-044 Phase 3): what `propose` suggests, the owner's sign-off by reply,
 and what `apply` makes of it.
 
 Like ledger.py, this script computes and never talks to Google. Each step prints the exact MCP
 calls to make, with a path to save each result to word for word; the next step reads them back.
 
-  propose (Fri 10:00)
+  propose (after the meeting's minutes and tidy)
     proposals.py start   --week W [--config PATH] [--now ISO]   -> run folder + the first reads
     proposals.py pages   --dir D        -> already proposed this week, or the tracker page reads
     proposals.py context --dir D        -> the items and this week's evidence, for the model
@@ -21,7 +21,7 @@ calls to make, with a path to save each result to word for word; the next step r
   The Ledger record always comes first and the mail second. A retry whose week already holds
   proposals but no recorded mail (`pages` says "resume") mails exactly those rows.
 
-  apply (Fri 18:00 → Sun 23:00)
+  apply (Friday → Sunday, around the owner's reply)
     proposals.py apply-start  --week W [--config PATH] [--now ISO]
     proposals.py apply-thread --dir D   -> when no thread was recorded: the search found it
     proposals.py apply-decide --dir D [--now ISO]
@@ -2134,7 +2134,7 @@ def selftest():
         edited[0][7] = "2026-12-31"
         check("a Proposals block edited after the mail fails", apply_with(thread(), props=edited)["delivered"],
               "proposals-changed;Proposals-block-edited-after-the-mail")
-        decisions[0][3] = "1.01 改到 11/15 交（會後補充）"           # an evidence row edited after Friday
+        decisions[0][3] = "1.01 改到 11/15 交（會後補充）"           # an evidence row edited after propose
         check("an evidence row edited after the mail does not stop a recorded thread",
               apply_with(thread(R("核准 2")))["approved"], [2])
         # no thread recorded: the search finds it (the mail is then rendered again from the Ledger), none, or two
@@ -2250,7 +2250,7 @@ def selftest():
               ([], [], []))
         check("…and records the same changes once it has read them back",
               read_back(again2["dir"], plan2, landed)["delivered"], "live;4-applied;0-skipped")
-        # a cell someone edited by hand since Friday is skipped, never overwritten
+        # a cell someone edited by hand since propose is skipped, never overwritten
         hand = [list(r) for r in sheet]
         hand[1][10] = "2026-12-01"
         hand[5][11] = "暫停"

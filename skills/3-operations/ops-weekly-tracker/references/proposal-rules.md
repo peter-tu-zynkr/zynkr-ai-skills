@@ -8,7 +8,7 @@ rule marked **checked**; the rest are judgement, and the owner sees your judgeme
 
 ## The evidence you have
 
-- **`decisions`** — this week's `Decisions` block, which Friday's `minutes` wrote from the
+- **`decisions`** — this week's `Decisions` block, which `minutes` wrote from the
   meeting: each row has `會議日期`, `類型`, `內容`, `負責人`, `期限`, `關聯 #` (the item it concerns,
   or 「新」 for an item the tracker does not hold yet) and `狀態`. `類型` is one of:
   - `決議` — decided;

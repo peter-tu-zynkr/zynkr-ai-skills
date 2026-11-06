@@ -22,7 +22,7 @@ allowed to live.
 
 ---
 
-## `propose` — Fri 10:00 (the 【週結】 mail, to the team)
+## `propose` — after the meeting's minutes (the 【週結】 mail, to the team)
 
 `ops-weekly-tracker`'s `scripts/proposals.py check` renders it from the checked rows; never compose it
 by hand. It goes to `routine.weekly_to`; only the reply of `google_account` (the owner) decides anything.
@@ -42,7 +42,7 @@ Body, in order:
 5. One line on how a reply is read: write only 核准, 退回 and the numbers (a thanks is fine), never
    「除了 2 都核准」; an approving reply that asks a question or says anything else gets asked to
    restate; `apply` confirms in the thread what it recorded, and until that confirmation a newer
-   complete reply replaces an older one; replies before Sunday 22:00 count; rows the reply does
+   complete reply replaces an older one; replies before Sunday 22:00 Taipei count; rows the reply does
    not name are not applied.
 6. While `routine.apply_mode` is `shadow`: **試行中** — approved rows are recorded, not written, and
    Monday's recap shows what would have changed.
@@ -73,7 +73,7 @@ tells its own messages from the owner's:
 
 ---
 
-## `recap` — Mon 10:00 (mail, SKB-044)
+## `recap` — Monday (mail, SKB-044)
 
 Subject: `【週報】WB 10/5 那週 — 變更 4 件 · 決議 2 件 · 逾期 1 件`. The first week reads `第一次記錄`
 instead of a change count, and a week whose decisions never reached the Ledger reads `決議沒記到`,
@@ -92,8 +92,8 @@ Body sections, in order:
 2. **這週的計畫** — per person (roster order, 全體 last), at most five lines: the meeting's
    actions (`#1.02 跟客戶確認（10/20 前）`), items overdue or due within 14 days, P0/P1 with no dates,
    then `業務：<step>` from the Sales Pulse. Every line cites an item # (the Pulse's steps name a
-   deal); one that does not is dropped. Without a Pulse by 10:00: 「業務的下一步沒有列：今天 10 點前
-   沒有收到 Sales Pulse」.
+   deal); one that does not is dropped. Without a Pulse in the last day: 「業務的下一步沒有列：
+   這封信寄出前沒有收到 Sales Pulse」.
 3. **上週改了什麼** — every changed cell in the Main Tracker between the last two Friday snapshots,
    `#1.03 SEO 文章 — 狀態：進行中 → 完成`, plus items added and removed.
 4. **要注意的** — 逾期 · 兩週內到期 · P0/P1 還沒排日期 · 備註說做完了但狀態沒改, each with its evidence,
@@ -133,10 +133,10 @@ When the run report names a beat to a person, use the beat's Chinese name, never
 | mode | 說法 |
 |---|---|
 | `recap` | 週一回顧信 |
-| `collect` | 週四收週報 |
-| `sections` | 週四各組進度 |
-| `minutes` | 週五會議紀錄 |
-| `tidy` | 週五整理 |
+| `collect` | 收週報 |
+| `sections` | 各組進度 |
+| `minutes` | 會議紀錄 |
+| `tidy` | 會後整理 |
 | `propose` | 週結信 |
 | `apply` | 套用核准 |
 | `snapshot` | 週末快照 |

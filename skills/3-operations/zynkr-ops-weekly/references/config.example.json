@@ -57,7 +57,7 @@
     "recap_audience": "owner",
     "recap_team_from": "",
     "skills_block": false,
-    "$skills_block": "true = Thursday's collect records which version of each workbench skill Zynkr Atlas approved (the zynkr-atlas MCP server's list_installs) in the Ledger's Skills block, and Monday's recap lists the ones that moved under 技能更新. Needs the SKB-110 Ledger setup and gh signed in. Missing or false = neither.",
+    "$skills_block": "true = the Wednesday collect records which version of each workbench skill Zynkr Atlas approved (the zynkr-atlas MCP server's list_installs) in the Ledger's Skills block, and Monday's recap lists the ones that moved under 技能更新. Needs the SKB-110 Ledger setup and gh signed in. Missing or false = neither.",
     "apply_mode": "shadow",
     "$apply_mode": "shadow = apply records the owner's decisions in the Ledger and writes nothing to the Main Tracker (default, and what any other value means); live = writes the approved changes.",
     "sheets_credentials": "~/.google_workspace_mcp/credentials/<google_account>.json",

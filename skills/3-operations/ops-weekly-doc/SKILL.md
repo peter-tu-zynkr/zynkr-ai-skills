@@ -2,15 +2,15 @@
 name: ops-weekly-doc
 sheetId: "3.25"
 description: >-
-  The writer of a small team's weekly operations Google Doc in the weekly loop. On Thursday it
+  The writer of a small team's weekly operations Google Doc in the weekly loop. Before the meeting it
   writes each team's section (進度 · 卡關 · 下一步 · 待討論) from the team's harvest, inside marked
-  〔自動彙整〕 blocks only (sections); on Friday it writes the meeting's minutes from the Fireflies
+  〔自動彙整〕 blocks only (sections); after it, it writes the meeting's minutes from the Fireflies
   transcript into the Doc and the Weekly Ledger (minutes), then trims the copied week section and
   fills next week's with the agreed actions (tidy). It never edits a human's line, never rebuilds
   the skeleton the Apps Script scaffold copies, and never writes a past week. Trigger on
   "/ops-weekly-doc", "週會紀錄", "會議紀錄寫進 Doc", "整理週報 Doc", "tidy the weekly doc", "write the
   team sections", "meeting minutes from Fireflies". BOUNDARY — do NOT hijack: /zynkr-ops-weekly (the
-  Monday recap and Thursday collect), /ops-weekly-tracker (the Main Tracker: 【週結】, apply,
+  Monday recap and Wednesday collect), /ops-weekly-tracker (the Main Tracker: 【週結】, apply,
   snapshot), /project-manager (the schedule), /project-minutes-sync (one client project's minutes
   into its own tracker), /admin-meeting-prep (packets for external meetings).
 category: operations
@@ -20,7 +20,7 @@ status: WIP
 visibility: public
 author: Peter Tu
 input: "A mode (sections, minutes or tidy) and the ISO week the runner passes as week=; all identifiers come from the private config at ~/.config/zynkr/ops-weekly.json."
-process: "Anchor on today and the target Thursday → read routing from the Doc's owner chips → read the week's evidence → write marked blocks only, through scripts that plan every range → read back and assert → receipt."
+process: "Anchor on the runner's week and the target Thursday → read routing from the Doc's owner chips → read the week's evidence → write marked blocks only, through scripts that plan every range → read back and assert → receipt."
 output: "Each team's 〔自動彙整〕 block in this week's section, the meeting's minutes block and Decisions rows, and a tidied week section with next week's actions filled in."
 synergy: [zynkr-ops-weekly, ops-weekly-tracker, project-manager, project-minutes-sync, zynkr-gm]
 executed_by: internal-user
@@ -38,9 +38,9 @@ The Doc's part of the weekly loop (`SKB-091`). The loop is split by the store ea
 
 | Skill | Writes | Beats |
 |---|---|---|
-| `zynkr-ops-weekly` | mail, Chat, the Weekly Ledger | `recap` (Mon), `collect` (Thu) |
-| **`ops-weekly-doc`** (this skill) | **the weekly operations Doc**, and the minutes' Ledger rows | `sections` (Thu), `minutes` · `tidy` (Fri) |
-| `ops-weekly-tracker` | the Main Tracker, and its own Ledger blocks | `propose` (Fri) · `apply` · `snapshot` (Fri → Sun) |
+| `zynkr-ops-weekly` | mail, Chat, the Weekly Ledger | `recap` (Mon), `collect` (Wed) |
+| **`ops-weekly-doc`** (this skill) | **the weekly operations Doc**, and the minutes' Ledger rows | `sections` (Wed), `minutes` · `tidy` (after the meeting) |
+| `ops-weekly-tracker` | the Main Tracker, and its own Ledger blocks | `propose` (after the meeting) · `apply` · `snapshot` (Fri → Sun) |
 | `project-manager` | nothing but its notice mail | runs the beats on time, mails the owner when one did not run |
 
 `project-manager`'s runner starts each beat with `/ops-weekly-doc <mode> week=<ISO week>`, and in a
@@ -49,13 +49,17 @@ rehearsal `config=<path>`. Use the week as given; never work it out again mid-ru
 **`<core>`** below is the `zynkr-ops-weekly` folder next to this skill's base directory
 (`<base>/../zynkr-ops-weekly`). The routing parser and the Ledger code live there and only there.
 
-| When (Taipei) | Mode | What happens |
+| When | Mode | What happens |
 |---|---|---|
-| Thu 09:30 → 13:30, after `collect` (or from 13:00 without it) | `sections` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's section, from the Ledger's Harvest rows |
-| Thu 21:00 | — | The weekly meeting. The team edits the Doc live |
-| Thu 23:00 | `scaffoldNextWeek` | **Apps Script**: duplicates the newest week section and re-stamps next Thursday |
-| Fri 08:00 → 17:30 | `minutes` | The meeting's decisions, actions and blockers from its Fireflies transcript, into the Doc and the Ledger |
-| Fri 09:00 → 17:30, after `minutes` | `tidy` | Keep the newest auto block per department, archive the rest, carry open items, fill next week's 下一步 |
+| Wed 14:30 → 23:00, after `collect` (or from 21:00 without it) | `sections` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's section, from the Ledger's Harvest rows |
+| Thu 21:00 Taipei | — | The weekly meeting. The team edits the Doc live |
+| Thu 23:00 Taipei | `scaffoldNextWeek` | **Apps Script**: duplicates the newest week section and re-stamps next Thursday |
+| Thu 18:30 → 23:00, Fri 08:00 → 11:00 | `minutes` | The meeting's decisions, actions and blockers from its Fireflies transcript, into the Doc and the Ledger |
+| Thu 19:00 → 23:00, Fri 08:00 → 11:00, after `minutes` | `tidy` | Keep the newest auto block per department, archive the rest, carry open items, fill next week's 下一步 |
+
+Times marked Taipei are the team's clock, and the Doc dates its sections by it. The modes' windows are
+on the runner's clock (`SKB-114`), which need not be Taipei's: on it the meeting and the scaffold both
+come before `minutes` opens.
 
 **Why the scaffold is not this skill's job.** Duplicating a section is purely mechanical and must never
 fail, so it belongs to Apps Script, whose authorisation does not expire. In the week this skill breaks
@@ -86,19 +90,24 @@ an id, and never fall back to a hardcoded department map.
 | `references/scaffold.md` | Installing or debugging the Apps Script half |
 | `<core>/references/ledger.md` | `minutes`, which writes Decisions rows |
 
-## Step 0 — Anchor on today, and get the off-by-one right
+## Step 0 — Anchor on the week, and get the off-by-one right
 
-Resolve today in `Asia/Taipei`. Compute:
+Work from the week the runner gave (`week=`), never from today's date: the runner's clock need not be
+Taipei's (`SKB-114`), so a run's day there can differ from the Doc's. Compute:
 
 - **Week label** — `WB 11/2`, the **Monday that opens the week**: what goes in every stamp the team
   reads. **ISO week key** — `2026-W45`, machine-only: the receipt's `week=`.
-- **The target Thursday** — the Doc names its sections by **Thursday** date. On Thursday it is
-  **today**; on Friday, before the scaffold has run, it is still yesterday's section for `minutes`, and
-  next Thursday's (the scaffold's new section) for `tidy`.
+- **The target Thursday** — the Doc names its sections by **Thursday** date. For `sections` and
+  `minutes` it is the week's own Thursday (its Monday + 3), the meeting's section; for `tidy` it is
+  next Thursday (Monday + 10), the section the scaffold made after the meeting.
+- **The stamp's time** — the `MM-DD HH:MM` in a block's stamp is the moment of writing on Taipei's
+  clock, the Doc's. Take it from the `now` that `python3 <core>/scripts/ledger.py week` prints
+  (`2026-11-11T21:40:07+08:00` → `11-11 21:40`), never from this machine's clock. It is the only time
+  a mode reads, and it never picks the week or the section.
 
-> **Never write into a past section.** Assert the target Thursday is the one this mode owns. If the
-> newest section in the Doc is already in the past on Friday, the scaffold did not run: say so loudly
-> rather than writing into a stale section.
+> **Never write into a past section.** Assert the target Thursday is the one this mode owns. If `tidy`
+> finds the week's own Thursday still the newest section in the Doc, the scaffold did not run: say so
+> loudly rather than writing into a stale section.
 
 ## Step 1 — Read routing from the Doc (every run)
 
@@ -110,11 +119,11 @@ owner; an unexpected address means a chip changed, so surface it in the report.
 
 ## The modes
 
-### `sections` (Thu 09:30 → 13:30, after `collect`)
+### `sections` (Wed 14:30 → 23:00, after `collect`)
 
 One `〔自動彙整〕` block under each team heading of **this Thursday's** section, holding 進度 · 卡關 ·
-下一步 · 待討論 for that heading's owner. The inputs are the Ledger's `Harvest` rows (from this
-morning's `collect`) and Monday's recap facts: overdue items, last week's meeting actions, the Pulse,
+下一步 · 待討論 for that heading's owner. The inputs are the Ledger's `Harvest` rows (from
+`collect`, which runs just before) and Monday's recap facts: overdue items, last week's meeting actions, the Pulse,
 paused items, and items that look done but are not marked 完成. `scripts/sections.py` decides every
 line. The write path is the fixed one in `references/doc-write-rules.md`. If a script exits non-zero,
 stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
@@ -124,10 +133,10 @@ stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
    path it gives. Keep its `label` (`WB 11/2`).
 2. **Routing** (above): save `parse_routing.py`'s output as `routing.json`.
 3. **Idempotency.** In the markdown you just read, find this Thursday's section and search it for
-   `〔自動彙整 <label>`. If it is there, receipt `status=ok delivered=already-written` and stop. Friday's
+   `〔自動彙整 <label>`. If it is there, receipt `status=ok delivered=already-written` and stop. `tidy`'s
    fill writes into the *kept* block, which still carries last week's stamp, so it never matches.
-4. `python3 scripts/sections.py render --dir <dir> --routing routing.json --stamp "<MM-DD HH:MM>"`.
-   Save what it prints as `blocks.json`.
+4. `python3 scripts/sections.py render --dir <dir> --routing routing.json --stamp "<MM-DD HH:MM>"`,
+   with the stamp's time from Step 0. Save what it prints as `blocks.json`.
    - **What it writes:**
      - a person with no harvest, a quiet harvest, or no `collect` at all gets 「本週無資料」 under 進度;
      - 待討論 offers at most three keep / hand over / drop choices, then the sure gaps;
@@ -143,7 +152,7 @@ stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
    The report names `owners_without_name` (an owner chip missing from `chat_ids`) and
    `harvest_without_heading` (a person with a harvest but no heading), so the owner can fix either.
 
-### `minutes` (Fri 08:00 → 17:30)
+### `minutes` (Thu 18:30 → 23:00, Fri 08:00 → 11:00)
 
 The meeting's minutes, from its own transcript, into Thursday's section (the meeting just held) and
 the Ledger's `Decisions` block. `scripts/minutes.py` finds the transcript and checks what you read
@@ -181,9 +190,9 @@ path to save each result to **word for word**; the next step reads them back.
 Fireflies is read here and nowhere else. The minutes never go to the Chat space, and the progress
 lines go to the Ledger only. Receipt `delivered=` is the `delivered` value `check` printed.
 
-### `tidy` (Fri 09:00 → 17:30, after `minutes`)
+### `tidy` (Thu 19:00 → 23:00, Fri 08:00 → 11:00, after `minutes`)
 
-Runs the morning after the scaffold. Its whole job is to undo the one thing the scaffold does
+Runs after the scaffold. Its whole job is to undo the one thing the scaffold does
 badly: it copies the week section forward **verbatim**. The auto blocks travel with it and
 `sections` (the Tuesday `rollup` until v4) only ever prepends. By 2026-09-15 a single section carried **22 blocks in 7 groups**,
 four deep under some departments. That is the growth engine of the Doc, and it is what the owner's
@@ -196,10 +205,11 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
 > scaffold ever stops copying forward, this argument dies and `tidy` must be re-proved before
 > it runs again.
 
-1. **Refuse to tidy a past section.** Resolve the target Thursday as in Step 0 and assert it is
-   **≥ today**. On a Friday that is only true if Thursday's scaffold fired. If it did not, stop
-   and report — and say so loudly, because this is the earliest the loop can detect a failed
-   scaffold, six days before `sections` needs the section.
+1. **Refuse to tidy a past section.** Resolve the target Thursday as in Step 0, next Thursday, and
+   assert it is the Doc's newest dated section: only the scaffold makes it. If the newest is still
+   the week's own Thursday, the scaffold did not fire: stop and report — and say so loudly, because
+   this is the earliest the loop can detect a failed scaffold, six days before `sections` needs the
+   section.
 2. Fetch the Doc as markdown, and the Drive plain-text export with `get_drive_file_content` — the
    only read that shows a `Done`/`Drop` chip. Save the export as `e0` and run
    `python3 scripts/tidy_blocks.py --input <markdown> --export e0`. It returns, per department
@@ -282,7 +292,7 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
 
    The script only returns a bullet that sits, with its whole subtree, verbatim in the previous
    week's section under the same heading — the same safety argument as the block delete, enforced
-   rather than assumed. An item closed on Friday morning in the new section is left for next week.
+   rather than assumed. An item closed in the new section after the scaffold copied it is left for next week.
    **Residual risk:** `batch_update_doc` has no revision guard. An edit landing between the 7.2
    fetch and the 7.3 delete — keep it short, it is the whole reason 7.3 follows at once — is not
    seen before the delete. The post-check then catches any damage to lines that REMAIN, but not a
@@ -319,7 +329,7 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    mostly meets a mixed block, those bullets plus step 5's typed `· 還沒收掉的 —`, and re-types it whole; a block
    from before 10-26 is typed throughout. A block already in bullets is left alone, so a re-run
    writes nothing. Every reader takes both
-   shapes: `walk_block` turns a formatted block back into its typed lines, so next Friday archives
+   shapes: `walk_block` turns a formatted block back into its typed lines, so next week's `tidy` archives
    it whole and carries from it, step 7 never takes its sub-bullets for the team's, and
    `carryover.py` skips them. Receipt: add `;<n>-formatted` to `delivered`.
 9. **Fill next week's 下一步 and 待討論 from the meeting** (`SKB-091`, AC-15). Take `fill.json` from
@@ -329,7 +339,7 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    2. `python3 scripts/tidy_blocks.py --fill <run>/fill.json --input m6 --structure s6 --tab <tab_id>
       > fill-plan.json`. Per department it writes that heading's people's agreed actions under
       `下一步` and their open topics and blockers under `待討論`. The kept block is usually
-      Thursday's `sections` block, which may hold those labels already: the new items then go under
+      this week's `sections` block, which may hold those labels already: the new items then go under
       that label, after its last item, as more of its sub-bullets. A label the block lacks goes right
       under the stamp. Each item cites the meeting (`〔10/22 會議〕`). An `All` action goes to every
       team.
@@ -346,7 +356,7 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
 
    Receipt: add `;<n>-filled` to `delivered`, and `;<m>-not-filled` when `fill-plan.json`'s
    `not_filled` is above 0: the teams the meeting gave items to that this fill passed over (a re-run's
-   "already filled" is not counted). Thursday's sections leave 下一步 to Friday once the tidy is done,
+   "already filled" is not counted). `sections` leaves 下一步 to this fill,
    so these items reach no team section unless someone adds them; the report names each with why.
 
 The archive tab is belt-and-braces, not load-bearing — the originals are already in the prior

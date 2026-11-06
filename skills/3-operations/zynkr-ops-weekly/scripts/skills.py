@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Skill updates for the weekly loop (SKB-110): which version of each workbench skill Atlas approved.
 
-Thursday's `collect` records Atlas's `list_installs` (the zynkr-atlas MCP tool) as the week's
+The Wednesday `collect` records Atlas's `list_installs` (the zynkr-atlas MCP tool) as the week's
 `Skills` block in the Weekly Ledger; Monday's `recap` compares that block with the week before's and
 names, under 技能更新, each skill whose approved version moved, came in or left, with the title of
 the pull request that carried it. Like ledger.py, this script computes and the model executes.

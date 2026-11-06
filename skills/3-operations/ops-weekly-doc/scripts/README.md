@@ -8,13 +8,13 @@ parser and the Ledger code are the core's (`../../zynkr-ops-weekly/scripts/`), n
 |---|---|
 | `carryover.py` | Doc markdown → `↻N週` per item, and the items open longest |
 | `minutes.py` | the meeting's Fireflies listing + transcript + tracker `#`s → the one transcript to read, then a check of the model's `minutes.json`, and the Ledger rows, the Doc block and `fill.json` from it |
-| `sections.py` | Thursday's team blocks (`SKB-091` AC-13): the Ledger's `Harvest` rows + Monday's recap facts + routing → 進度 · 卡關 · 下一步 · 待討論 per heading, in `render_block.py`'s block shape so `render_block.py ops` writes them. `--selftest`, `--mutate` |
+| `sections.py` | The team blocks for Thursday's meeting (`SKB-091` AC-13): the Ledger's `Harvest` rows + Monday's recap facts + routing → 進度 · 卡關 · 下一步 · 待討論 per heading, in `render_block.py`'s block shape so `render_block.py ops` writes them. `--selftest`, `--mutate` |
 | `render_block.py` | the week's evidence + routing (+ carry-over) → the `〔自動彙整〕` block per heading |
 | `tidy_blocks.py` | Doc markdown → per group the block to keep, the blocks to archive, the open items to carry. With `--closed`: Drive plain-text export + structure → the `Done`/`Drop` bullets to delete, as index ranges. With `--fill`: `fill.json` + structure → each team's 下一步 and 待討論 as operations |
 | `test_tidy_blocks.py` | The `tidy` suite; `--mutate` breaks real lines of `tidy_blocks.py` one at a time |
 | `scaffold.gs` | **Apps Script**, not Python — duplicates next week's skeleton. See `../references/scaffold.md` |
 
-## The Friday pipeline (`tidy`)
+## The pipeline after the meeting (`tidy`)
 
 ```bash
 # 1. blocks — keep the newest per group, archive the rest, carry what is still open

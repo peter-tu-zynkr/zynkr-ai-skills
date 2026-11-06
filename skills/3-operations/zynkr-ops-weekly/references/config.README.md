@@ -11,7 +11,7 @@ One file, read by all four skills of the loop: `zynkr-ops-weekly`, `ops-weekly-d
   it by copying the example and filling every `<...>`.
 - Loaded at Step 1 of **every** run. A missing or still-placeholder value → **fail loud**
   (`config: doc.id unset`). Never guess an id: a wrong Doc id writes a bot block into somebody
-  else's file, and a wrong space id posts the Thursday chase to the wrong room.
+  else's file, and a wrong space id posts the Wednesday chase to the wrong room.
 - `space.id` **must** carry the `spaces/` prefix. A bare id is rejected by `get_messages` with a
   pattern error — this is the first thing to check when a sweep returns nothing.
 - `doc.archive_tab_id` must be a **tab in the same Doc**, not another file. `carryover.py` reads
@@ -56,7 +56,7 @@ One file, read by all four skills of the loop: `zynkr-ops-weekly`, `ops-weekly-d
   【週結】 go to. Until `recap_to` is set, `routine.recap_audience` decides who receives the Monday recap: `owner` (the account alone) or
   `team` (every address in `reporters`). A missing or unknown value means `owner`, so the team only
   ever receives a recap the owner switched on.
-- `routine.skills_block` (optional, `SKB-110`): `true` turns on the skill-update lines. Thursday's
+- `routine.skills_block` (optional, `SKB-110`): `true` turns on the skill-update lines. The Wednesday
   `collect` then records Atlas's `list_installs` in the Ledger's `Skills` block, and Monday's recap
   lists the skills whose approved version moved, came in or left, under 技能更新. It needs the
   `zynkr-atlas` MCP server, `gh` signed in with read access to the workbench, and the SKB-110 Ledger

@@ -1,4 +1,4 @@
-"""Decide which 〔自動彙整〕 blocks to keep, archive and compact — for the Friday `tidy` beat.
+"""Decide which 〔自動彙整〕 blocks to keep, archive and compact — for the `tidy` beat after the meeting.
 
 WHY THIS EXISTS
     The Apps Script scaffold copies the newest week section forward **verbatim** every Thursday
@@ -905,11 +905,11 @@ def format_check(plan, lines):
 
 
 # ── Fill (SKB-091 AC-15) ─────────────────────────────────────────────────────
-# Friday's meeting decided who does what next. `minutes.py check` wrote fill.json: per roster name,
+# The meeting decided who does what next. `minutes.py check` wrote fill.json: per roster name,
 # the agreed actions (下一步) and the open topics and blockers (待討論), each citing the meeting. This
 # pass writes them into each team's kept block in next week's section, so they sit in the block the
 # team reads on Thursday and leave with it when the next tidy archives it. The kept block is usually
-# Thursday's `sections` block, copied forward by the scaffold, and that block often holds 下一步 or
+# this week's `sections` block, copied forward by the scaffold, and that block often holds 下一步 or
 # 待討論 already: the new items then go under that label, after its last item (Docs copies that
 # bullet, list and level, to the new lines). A label the block lacks goes right under the stamp. The
 # labels are frozen like the others: walk_block knows them.
@@ -1078,8 +1078,8 @@ def fill_plan(lines, paragraphs, tab_id, fill, target=None):
         res["groups"].append({**entry, "at": at, "items": items, "expect": expect, "ops": ops})
     res["unplaced"] = [n for n in names if n not in placed]
     # Teams the meeting gave items to that this fill passed over (a re-run's "already filled" is not one):
-    # the receipt names the count, so the log's OK line shows it. Thursday's sections skip 下一步 once
-    # Friday's tidy is done, so nothing else would write these items.
+    # the receipt names the count, so the log's OK line shows it. The next week's `sections` skips 下一步
+    # once this tidy is done, so nothing else would write these items.
     res["not_filled"] = sum(s["reason"] != "already filled" for s in res["skipped"]) + len(res["unplaced"])
     res["groups"].sort(key=lambda g: g["at"], reverse=True)
     res["ops"] = [{**op, "tab_id": tab_id} for g in res["groups"] for op in g.pop("ops")]

@@ -71,12 +71,12 @@ WEEKS_BEAT_HEADER = ["reports", "reports_at", "decisions", "decisions_at"]      
 PROPOSALS_HEADER = ["week", "proposed_at", "n", "#", "項目", "欄位", "現值", "建議值", "原因", "證據",
                     "來源", "信心", "決定", "決定_at", "結果"]                                 # A–O
 WEEKS_P3_HEADER = ["proposals", "proposals_at", "applied", "applied_at"]              # O–R
-# SKB-091: Thursday's collect reads each person's harvest file into Harvest, which replaces Reports
+# SKB-091: `collect` reads each person's harvest file into Harvest, which replaces Reports
 # (the Chat #週報 posts) from 2026-W45. One row per line of a harvest: its workstream, its kind
 # (shipped · moving · waiting, or quiet for a 本週無資料 week) and the line as written.
 HARVEST_HEADER = ["week", "harvested_at", "slug", "name", "workstream", "kind", "text", "file"]  # A–H
 WEEKS_HARVEST_HEADER = ["harvest", "harvest_at"]                                       # S–T
-# SKB-110: Thursday's collect also records which version of each workbench skill Atlas approved, one
+# SKB-110: `collect` also records which version of each workbench skill Atlas approved, one
 # row per skill (Atlas's list_installs), so Monday's recap can name the skills that moved that week.
 SKILLS_HEADER = ["week", "taken_at", "slug", "version", "commit", "folder", "repo"]       # A–G
 WEEKS_SKILLS_HEADER = ["skills", "skills_at"]                                          # U–V

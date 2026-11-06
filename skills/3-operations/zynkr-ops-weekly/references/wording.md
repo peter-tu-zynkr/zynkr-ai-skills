@@ -97,7 +97,7 @@ loop write duplicates:
 
 Since v4 (SKB-091) one beat posts to the space: `collect`, once a week, and only when someone's
 harvest is missing. The line is the one `harvest.py chase` prints, never retyped: the quiet people's
-@-mentions, then 「這週的 harvest 沒有資料，是比較安靜的一週嗎？有做的事在今天下午一點前回在這裡就好」.
+@-mentions, then 「這週的 harvest 沒有資料，是比較安靜的一週嗎？有做的事在週四開會前回在這裡就好」.
 It carries no footer, and nothing searches the space for it: once it went, `harvest.py chased`
 stamps the week, and a rerun reads that stamp (with `Weeks!S`) instead. Before v4 each beat's post
 opened with frozen words and ended with the footer, and the next run searched for both:

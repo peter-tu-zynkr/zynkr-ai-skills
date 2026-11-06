@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""sections.py — Thursday's team blocks (SKB-091 AC-13): under each team heading of this Thursday's
-section, one 〔自動彙整〕 block with 進度 · 卡關 · 下一步 · 待討論, from the Ledger's Harvest rows (collect,
-this morning) and Monday's recap facts (the tracker as of last week, the meeting's actions, the Pulse).
+"""sections.py — the team blocks for Thursday's meeting (SKB-091 AC-13): under each team heading of this
+Thursday's section, one 〔自動彙整〕 block with 進度 · 卡關 · 下一步 · 待討論, from the Ledger's Harvest rows (collect,
+just before) and Monday's recap facts (the tracker as of last week, the meeting's actions, the Pulse).
 
     sections.py start --week W [--config PATH]              -> the Weeks row and the Harvest block to read
     sections.py render --dir D --routing R --stamp "11-05 09:40"
@@ -13,7 +13,7 @@ What goes where, per person (the heading's owner chip, named through chat_ids):
   進度    the harvest's shipped (完成) and moving (進行中) lines, then the Pulse's sales steps;
           「本週無資料」 when there is no harvest for them
   卡關    the harvest's waiting lines, then items overdue as of Monday
-  下一步  last week's meeting actions, only when Friday's tidy did not already fill them into the
+  下一步  last week's meeting actions, only when last week's tidy did not already fill them into the
           kept block (`<last week>.tidy.done`), so the team never reads the same action twice
   待討論  at most three keep / hand over / drop choices (paused items), then the sure gaps: items the
           state rules say look done but are not marked 完成
@@ -95,7 +95,7 @@ def latest_facts(week):
 
 def mine(run, who, entries, field="負責人", everyone=False):
     """The entries `who` owns. With `everyone`, an `All` one (recap reads it as 全體) is everyone's: a
-    meeting action for the whole team goes to every team's 下一步, as Friday's fill writes it (W45
+    meeting action for the whole team goes to every team's 下一步, as tidy's fill writes it (W45
     review). A tracker item owned by 全體 is no team's here: it would fill every team's 卡關 and take
     one of each team's three 待討論 choices (review round 2, 10-31)."""
     out = []
@@ -298,7 +298,7 @@ def selftest():
               ([{"heading": "外包", "owner_email": "eve@example.com"}], ["Dan Yu"]))
         open(os.path.join(state, "2026-W44.tidy.done"), "w").write("x")
         out = s_render(st["dir"], routing, "11-05 09:40")
-        check("after Friday's fill, 下一步 is not written twice",
+        check("after tidy's fill, 下一步 is not written twice",
               [b["heading"] for b in out["blocks"] if "下一步" in b["body"]], [])
         open(st["calls"][0]["save"], "w").write(sheet("Weeks!A%d:T%d" % (rr, rr), [[W]]))
         out = s_render(st["dir"], routing, "11-05 13:05")

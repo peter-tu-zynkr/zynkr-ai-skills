@@ -1,7 +1,8 @@
 # The Apps Script half
 
 `scripts/scaffold.gs` duplicates the newest week section and re-stamps it with the next
-Thursday. It runs **Thu 18:00**, right after the meeting.
+Thursday. It runs on **Thursday at 23:00 Taipei**, anywhere in that hour (`TRIGGER_HOUR`), after the
+meeting.
 
 ## Why this is not the skill's job
 
@@ -51,19 +52,21 @@ anything.
 
 ## Verify it fired
 
-Friday's `tidy` checks that a section for the coming Thursday exists before it touches anything
+`tidy` checks that a section for the coming Thursday exists before it touches anything
 (its step 1), and fails with a `status=failed` receipt if not; `project-manager` then mails the owner
-that the 週五整理 did not run. That is the "prove it fired" check for this half — the script's own
+that the 會後整理 did not run. That is the "prove it fired" check for this half — the script's own
 success is otherwise invisible until someone opens the Doc and finds nowhere to write. (Until v4,
 Monday's `nudge` made this check.)
 
-The check deliberately does **not** run on Thursday: Apps Script fires within an hour *window*
-after the meeting, so a Thursday check would fail every week for the wrong reason. Friday clears the
-window and is six days before `sections`, the next mode that needs the section.
+The check deliberately runs only after the scaffold's hour: Apps Script fires anywhere in a one-hour
+*window* after the meeting, so a check inside it would fail for the wrong reason. `tidy` opens after
+midnight Taipei, once the window has closed (`project-manager`'s `beats.py --selftest` holds it there
+in summer and in winter), and almost six days before `sections`, the next mode that needs the section.
 
 Schedule lives in three constants at the top of the script — `TRIGGER_DAY`, `TRIGGER_HOUR`,
 `TZ`. Change one and re-run `installTriggers()`; it deletes its own prior trigger first, so that
-is idempotent. **If you ever move the scaffold off Thursday night, move the check with it.**
+is idempotent. **If you ever move the scaffold off Thursday night, move the check with it**, and keep `tidy`'s
+first window after the scaffold's hour.
 
 ## Known traps
 

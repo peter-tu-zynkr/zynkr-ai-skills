@@ -37,7 +37,7 @@ the reader has to stop and count, and everything else in this Doc is dated.
 - The stamp is also the idempotency key. Before writing, search the target section for
   `〔自動彙整 <week>`. Present → do not write a second block.
 - Never modify, reflow, or delete a line outside a stamped block.
-- Friday's `tidy` (step 8) re-types any block still holding a typed `·` line — one from before
+- `tidy` (step 8) re-types any block still holding a typed `·` line — one from before
   10-26, or its own `· 還沒收掉的 —` under the block's bullets — into the same bullet shape.
 - Promotion (turning an auto line into a real Doc line) and deletion are **human acts**, done at
   Thursday's meeting. The skill never promotes its own output.
@@ -78,7 +78,7 @@ with `end_of_segment: true` (no index arithmetic at all), then do a second pass 
 indices for formatting. That is the documented two-phase workflow, and it is the safer path
 whenever the target is the end of the tab.
 
-## Removing a block — the Friday `tidy` (SKB-030)
+## Removing a block — the `tidy` after the meeting (SKB-030)
 
 `tidy` is the only mode that deletes, and it deletes **only** whole stamped blocks that
 `tidy_blocks.py` marked for archiving — plus, in its step 7, the `Done`/`Drop` bullets,

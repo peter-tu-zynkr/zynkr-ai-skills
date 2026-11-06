@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Friday minutes (SKB-091 AC-14): find the Thursday meeting's transcript by its calendar title and
+"""The meeting's minutes (SKB-091 AC-14): find the Thursday meeting's transcript by its calendar title and
 date, then check what the model read out of it before anything is written.
 
 Like ledger.py, this script computes and never talks to Google or Fireflies. Each step prints the

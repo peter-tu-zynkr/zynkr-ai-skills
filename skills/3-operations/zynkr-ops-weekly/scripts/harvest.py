@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""harvest.py — Thursday's collect (SKB-091 AC-12): each person's week, from the Wednesday harvest
+"""harvest.py — `collect` (SKB-091 AC-12): each person's week, from the Wednesday harvest
 routine's files into the Weekly Ledger's `Harvest` tab, and one Chat line for a quiet week.
 
 The routine (weekly-insights, SKB-094) closes the week on Wednesday 20:00 and writes, in the Drive
@@ -45,7 +45,7 @@ PER_PERSON = 15
 
 
 def wednesday(week):
-    """The Wednesday that closes the harvest week: in the same ISO week as Thursday's collect."""
+    """The Wednesday that closes the harvest week: in the same ISO week as the collect that reads it."""
     return (ledger.monday(week) + timedelta(days=2)).isoformat()
 
 
@@ -256,7 +256,7 @@ def h_chase(d):
         return {"chase": "none"}
     if not run["space"]:
         raise Refuse(2, "config has no space.id (spaces/…) to post the chase to")
-    text = ("%s 這週的 harvest 沒有資料，是比較安靜的一週嗎？有做的事在今天下午一點前回在這裡就好"
+    text = ("%s 這週的 harvest 沒有資料，是比較安靜的一週嗎？有做的事在週四開會前回在這裡就好"
             % " ".join(mention(run, q) for q in quiet))
     return {"chase": "send", "quiet": quiet,
             "call": ledger.call("send_message", {"user_google_email": run["account"], "space_id": run["space"],

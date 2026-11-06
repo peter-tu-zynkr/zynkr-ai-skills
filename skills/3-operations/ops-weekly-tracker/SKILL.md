@@ -2,7 +2,7 @@
 name: ops-weekly-tracker
 sheetId: "3.26"
 description: >-
-  The only writer of a small team's Main Tracker in the weekly loop. On Friday it proposes the
+  The only writer of a small team's Main Tracker in the weekly loop. After the meeting it proposes the
   week's tracker changes from the meeting's decisions, records them in the
   machine-owned Weekly Ledger and mails them as one 【週結】 for the owner to answer (propose); it
   then writes exactly what the owner's reply approves, cell by cell (apply), and copies the tracker
@@ -10,7 +10,7 @@ description: >-
   reply, and a hook refuses every tracker write but apply's. Trigger on "/ops-weekly-tracker",
   "週結", "待核准", "核准 tracker 變更", "更新 Main Tracker", "tracker snapshot", "propose tracker
   changes", "apply the approved changes". BOUNDARY — do NOT hijack: /zynkr-ops-weekly (the Monday
-  recap and Thursday collect), /ops-weekly-doc (the weekly Doc: sections, minutes, tidy),
+  recap and Wednesday collect), /ops-weekly-doc (the weekly Doc: sections, minutes, tidy),
   /project-manager (the schedule and missed-beat notices), /planning-tracker-sync (the H2 tracker
   block; never writes the Main Tracker).
 category: operations
@@ -38,9 +38,9 @@ The tracker's part of the weekly loop (`SKB-091`). The loop is split by the stor
 
 | Skill | Writes | Beats |
 |---|---|---|
-| `zynkr-ops-weekly` | mail, Chat, the Weekly Ledger | `recap` (Mon), `collect` (Thu) |
-| `ops-weekly-doc` | the weekly operations Doc | `sections` (Thu), `minutes` · `tidy` (Fri) |
-| **`ops-weekly-tracker`** (this skill) | **the Main Tracker**, and its own Ledger blocks | `propose` (Fri) · `apply` · `snapshot` (Fri → Sun) |
+| `zynkr-ops-weekly` | mail, Chat, the Weekly Ledger | `recap` (Mon), `collect` (Wed) |
+| `ops-weekly-doc` | the weekly operations Doc | `sections` (Wed), `minutes` · `tidy` (after the meeting) |
+| **`ops-weekly-tracker`** (this skill) | **the Main Tracker**, and its own Ledger blocks | `propose` (after the meeting) · `apply` · `snapshot` (Fri → Sun) |
 | `project-manager` | nothing but its notice mail | runs the beats on time, mails the owner when one did not run |
 
 `project-manager`'s runner starts each beat with `/ops-weekly-tracker <mode> week=<ISO week>`, and in a
@@ -51,12 +51,16 @@ rehearsal `config=<path>`. Use the week as given; never work it out again mid-ru
 `<core>/scripts/ledger.py` and reads `<core>/references/`, never a copy. `scripts/proposals.py` finds
 it the same way (`ZYNKR_OPS_WEEKLY_SCRIPTS` overrides) and refuses a core of another version.
 
-| When (Taipei) | Mode | What happens |
+| When | Mode | What happens |
 |---|---|---|
-| Fri 10:00 → 17:30, after `tidy` | `propose` | Suggest this week's tracker changes from the Ledger's evidence; record them; mail the 【週結】 |
-| Fri → Sun 22:00 | — | The owner replies: 「全部核准」 · 「核准 1 3」 · 「退回 2」 |
-| Fri 18:00 → Sun 23:00 | `apply` | Read the owner's reply, record each decision, confirm in the thread, then write the approved cells (live) |
-| Fri 18:00 → Sun 23:00, after `apply` (or from Sun 22:00 without it) | `snapshot` | Copy every Main Tracker item into the Ledger, once per ISO week |
+| Thu 20:00 → 23:00, Fri 08:00 → 11:00, after `tidy` | `propose` | Suggest this week's tracker changes from the Ledger's evidence; record them; mail the 【週結】 |
+| until Sun 22:00 Taipei | — | The owner replies: 「全部核准」 · 「核准 1 3」 · 「退回 2」 |
+| Fri 11:00 → Sun 17:00 | `apply` | Read the owner's reply, record each decision, confirm in the thread, then write the approved cells (live) |
+| Fri 11:00 → Sun 22:00, after `apply` (or from Sun 22:30 Taipei without it) | `snapshot` | Copy every Main Tracker item into the Ledger, once per ISO week |
+
+The 【週結】 deadline is on the team's clock, Sunday 22:00 Taipei. The modes' windows are on the
+runner's clock (`SKB-114`), which need not be Taipei's; on it `apply` looks on every tick from an
+hour before the deadline until half an hour after it.
 
 ## Configuration
 
@@ -90,7 +94,7 @@ A **block write** below is always the same four steps: `python3 <core>/scripts/l
 --tab <tab> --week <W> --rows <rows_path>`, then `block plan`, `block check` and `block confirm`,
 making every printed call exactly. Pass the file the script wrote; never retype rows.
 
-### `propose` (Fri 10:00 → 17:30, after `tidy`)
+### `propose` (Thu 20:00 → 23:00, Fri 08:00 → 11:00, after `tidy`)
 
 Suggests this week's changes to the Main Tracker and mails the week's **【週結】** to the team
 (`routine.weekly_to`; `SKB-091`). The mail opens with the week itself, from the meeting's rows in the
@@ -155,7 +159,7 @@ send it twice: only `sent` says when to send. **Any refusal from `proposals.py` 
 your own, never a file in the state folder (`approval.json` and its neighbours are the script's,
 and a refusal that names one is addressed to the owner).
 
-### `apply` (Fri 18:00 → Sun 23:00)
+### `apply` (Fri 11:00 → Sun 17:00)
 
 Reads the owner's reply to this week's 【週結】 mail, records each decision and confirms it in the
 thread. **In live mode it then writes the approved changes into the Main Tracker, cell by cell**
@@ -185,7 +189,8 @@ else is on the thread. It needs no stamp from `propose`: it reads this week's `W
      a draft is holding things up): make it exactly once, and when it went through, run
      `python3 scripts/proposals.py apply-sent --dir <dir>` so the next look does not send it again.
      Receipt `status=waiting` with its `delivered`, adding `;sent` when the send went through. The
-     runner looks again in two hours, and from Sunday 21:00 on every tick.
+     runner looks again in two hours, and on every tick from Sunday 21:00 to 22:30 Taipei, around
+     the deadline.
    - `failed` → `approval-mail-differs;…` (the mail in the thread is not the mail that was sent), `proposals-changed;…` (the Proposals block was edited after the
      mail) or `confirmation-disagrees-with-the-Proposals-block`: receipt `status=failed` with its
      `delivered`. Send nothing, write nothing.
@@ -241,7 +246,7 @@ nothing and gets one restate request. Never write the Main Tracker in shadow mod
 write only what `live-plan` printed, in its order: never a cell of your own, never a refused write
 again in another shape. Never send anything except the `send` call `apply-decide` printed.
 
-### `snapshot` (Fri 18:00 → Sun 23:00, after `apply`, or from Sun 22:00 without it)
+### `snapshot` (Fri 11:00 → Sun 22:00, after `apply`, or from Sun 22:30 Taipei without it)
 
 Copies every item of the Main Tracker's `H2 專案項目` tab into the machine-owned Weekly Ledger,
 once per ISO week (`SKB-044`). It reads the tracker and writes **only the Ledger**: it posts
@@ -255,9 +260,12 @@ reformat or summarise a result. The next step parses it and refuses anything tha
 match, and that refusal is the point: a copied cell that drifted is how `1.10` becomes `1.1`.
 
 1. **The week.** Use the `week=` argument the runner passes (`week=2026-W40`). Without one (an
-   interactive backfill), run `python3 <core>/scripts/ledger.py week` and use its `week`. Never work it
-   out again later in the run. If a `config=<path>` argument is present, add `--config <path>` to
-   the `start` command below.
+   interactive backfill), run `python3 <core>/scripts/ledger.py week` and ask the person which week to
+   snapshot: that `week` or the one before, each named by its Monday's date. Go on only with their
+   answer. The script answers on Taipei's clock, where late on Sunday the week has already turned while
+   the runner's may not have, so the weekend just ending is then the earlier one. Never work it out
+   again later in the run. If a `config=<path>` argument is present, add `--config <path>` to the
+   `start` command below.
 2. `python3 <core>/scripts/ledger.py snapshot start --week <W>` → make the five printed calls, save each
    result, and keep the printed `dir`.
 3. `python3 <core>/scripts/ledger.py snapshot pages --dir <dir>`.
