@@ -22,7 +22,7 @@ house-style: exempt — machine artifact — issue labels, no prose output
 The **gate** of the skill-authoring chain — runs twice:
 
 - **Option A `assign-build`** (front-gate): the second-look approval right after `/skill-sourcer`. Fires `skill-build-request` → `pickup-approved-issue.yml` opens a `skill/<slug>` PR with a stub for `/skill-author` to fill.
-- **Option D `confirm-ship`** (back-gate): the audit closer after `/skill-publish` lands the SKILL.md on `main` and `ingest-skills.yml` indexes it. Read-only checks (the zynkr.ai one only for a skill marked `visibility: public`), a Sheet + Drive documentation pass, then flips the issue to `shipped`.
+- **Option D `confirm-ship`** (back-gate): the audit closer after `/skill-publish` lands the SKILL.md on `main` and `ingest-skills.yml` indexes it. Read-only checks (the zynkr.ai one only for a skill marked `visibility: public`), a Drive mirror pass and a read-only Atlas check, then flips the issue to `shipped`.
 
 ```
 /skill-sourcer  →  /skill-triager  →  /skill-author   →  /skill-qa  →  /skill-publish  →  /skill-triager
@@ -212,27 +212,29 @@ The artifact is **already built and committed** (typical for `/skill-publish` in
      | python3 -c "import sys,json; print(any(s.get('slug')=='<slug>' or s.get('name')=='<slug>' for s in json.load(sys.stdin)))"
    ```
    If `False`: the shelf has not published it yet. `export-stage.yml` stages the public skills after each push, and the shelf (`peter-tu-zynkr/zynkr-ai-skills`) picks the stage up on its next run, every hour at :27. It publishes a folder only once Zynkr Atlas lists it (Atlas `ATL-113` Part D): the merge's version approved and published in Atlas, and, for a skill **new** to zynkr.ai, the owner's sign-off on its item page (同意上架; Atlas's 審核 page lists what waits under 等待同意上架). The run summary names a skill it holds back by its sheetId, never by slug (a new folder may be a client build marked public by mistake). A new sub-agent inside a skill the shelf already publishes needs no sign-off of its own; it goes out with its folder's next published version. Re-check before flipping status.
-5. **Document it in the Sheet and the Drive mirror** — the two surfaces CI never touches. The pipeline stops at git (and, for a public skill, the shelf → Supabase → marketplace); the portfolio index and the Drive library are written by hand or not at all. Both are **team** surfaces: document team skills here exactly as public ones. Read `./references/index-and-mirror.md` for the committed folder IDs, the column contract and the staging rules. The shape of the work:
+5. **Mirror it to Drive and check Atlas.** The pipeline stops at git (and, for a public skill, the shelf → Supabase → marketplace). Zynkr Atlas is the record of every skill, and the merge reaches it as a version waiting for approval; the Drive `[6.2]` library is written by hand or not at all. Both cover team skills exactly as public ones. Read `./references/index-and-mirror.md` for the committed folder IDs, the staging rules and the Atlas check. The shape of the work:
    - **Drive — always:** create `1 Skills/<category folder>/<slug>/` and upload the merged `SKILL.md` as `text/markdown`.
    - **Drive — only when the skill ships knowledge:** if
      ```bash
      git ls-tree -r --name-only origin/main -- "skills/<N-cat>/<slug>" | grep -v '/SKILL\.md$'
      ```
-     lists anything, create `2 Knowledge/<slug>/` and upload those files **flattened** (`references/foo.md` → `references__foo.md`). A SKILL.md-only skill gets **no** knowledge folder and leaves column `N` blank. ⚠️ Some such skills already have a legacy `_SOURCES.md`-only folder from the 2026-08-28 pass, and their `N` reads `1 file` — that is the older of two competing definitions of the column. Leave those folders alone; the reference explains which definition to write and why the two disagree.
-   - **Sheet:** find the row by its `sheetId` in column `C` (append one if the skill is new), then write the four link cells — `C` → GitHub blob (the shelf `zynkr-ai-skills` for a public skill, this workbench for a team skill), `M` → the Drive `SKILL.md` file, `N` → the knowledge folder, `AG` → the skill folder — as `=HYPERLINK("<url>","<label>")` with `value_input_option="USER_ENTERED"`.
+     lists anything, create `2 Knowledge/<slug>/` and upload those files **flattened** (`references/foo.md` → `references__foo.md`). A SKILL.md-only skill gets **no** knowledge folder. ⚠️ Some such skills already have a legacy `_SOURCES.md`-only folder from the 2026-08-28 pass. Leave those folders alone.
+   - **Atlas — read only:** with the `zynkr-atlas` MCP server, compare the folder `tree` that `list_installs` records for the skill with `git rev-parse "origin/main:skills/<N-cat>/<slug>"`, after a `git fetch origin main` (a sub-agent ships inside its parent: use the parent's folder). Equal means **live** (Atlas serves this merge); otherwise `list_pending` tells **waiting** (a version of the slug, requested after the folder's last change, waits for the owner's decision) from **not yet in Atlas**. Without `list_pending`, say "not live, pending not checked"; without the server, "Atlas not checked". The reference has the exact states. **Never approve or publish here**: that waits for the owner's word after `get_draft` (SDD §5.6).
+   - **Skill Map — nothing to write.** The Zynkr Skill Map, the team's visual map of every skill by 部門, is rebuilt by its own generator from `main` and Atlas's live list. Never edit a map page from here; name the skill in the Step 5 report so the next rebuild places it.
+   - ⚠️ **The Skills Index Sheet is retired** (archived 2026-11-06, `SKB-115`). Do not read or write it. An older copy of this skill that still says to write a row there is out of date.
 
-   Verify before moving on: re-read `M`/`N`/`AG` and confirm each returns a hyperlink rather than plain text, and that the uploaded file's frontmatter `name` matches the slug — a mis-parented file looks correct in the Sheet and opens the wrong skill.
+   Verify before moving on: the uploaded file's frontmatter `name` matches the slug (a mis-parented file opens the wrong skill), and the knowledge folder's file count equals the command's count.
 
-   **This step does not gate the ship.** The skill is already shipped by the time you get here (on `main`, in the index and, if public, on the marketplace), so a Drive or Sheets failure is a bookkeeping debt, not a broken release: say exactly what is missing, name it again in the Step 5 report, and continue to the next step rather than leaving the issue open.
+   **This step does not gate the ship.** The skill is already shipped by the time you get here (on `main`, in the index and, if public, on the marketplace), so a Drive failure or an Atlas gap is a bookkeeping debt, not a broken release: say exactly what is missing, name it again in the Step 5 report, and continue to the next step rather than leaving the issue open.
 
 6. **Post the verification receipt** as an issue comment — the confirmed GitHub path, plus the marketplace URL for a public skill, so the shipped state is self-evidencing from the issue:
    ```bash
    # public skill
    gh issue comment <num> --repo peter-tu-zynkr/zynkr-skill-idea \
-     --body "confirm-ship: in main at \`<path>\` · live at https://zynkr.ai/s/<sheetId> · indexed in the Skills Index Sheet + Drive [6.2]"
+     --body "confirm-ship: in main at \`<path>\` · live at https://zynkr.ai/s/<sheetId> · mirrored to Drive [6.2] · Atlas: <state from step 5>"
    # team skill — no zynkr.ai line; it is not there by design
    gh issue comment <num> --repo peter-tu-zynkr/zynkr-skill-idea \
-     --body "confirm-ship: in main at \`<path>\` · team skill, in the workbench index · indexed in the Skills Index Sheet + Drive [6.2]"
+     --body "confirm-ship: in main at \`<path>\` · team skill, in the workbench index · mirrored to Drive [6.2] · Atlas: <state from step 5>"
    ```
 7. **Label swap on issue** — remove whichever of `triage-ready` and `building` the issue carries (an Option A build
    carries `building`; a `/skill-publish` fresh intake carries `triage-ready`), then add `shipped`:
@@ -281,7 +283,8 @@ When the session ends, summarise:
 - Triaged: N
 - Dispatched to build: M (with workflow run URLs)
 - Confirmed-shipped: S (with marketplace URLs for public skills; team skills by path)
-- Indexed: the Sheet rows and Drive folders written — and any skill left undocumented, with the reason
+- Recorded: the Drive folders written and each skill's Atlas state from step 5 — and any skill left undocumented, with the reason
+- For the Skill Map: the skills shipped this session, so its next rebuild places them
 - Deferred: D
 - Rejected: R
 
@@ -296,7 +299,7 @@ When the session ends, summarise:
 - [ ] `generated/skills-index.json` (the full index, via `gh api`) contains the slug
 - [ ] Public skills only: `/api/skills` returns the slug
 - [ ] Drive mirror written — `1 Skills/<cat>/<slug>/SKILL.md`, plus `2 Knowledge/<slug>/` **only if** the skill ships files besides its SKILL.md
-- [ ] Skills Index Sheet row present and columns `C`/`M`/`N`/`AG` re-read as live hyperlinks (or the gap named in the report)
+- [ ] Atlas state read by tree (`list_installs` vs `git rev-parse origin/main:<folder>`, then `list_pending`), nothing approved
 - [ ] Issue label swapped to `shipped` (the label is the status of record)
 - [ ] Public skills: marketplace URL posted on the issue if it wasn't already
 - [ ] Issue closed with verification comment

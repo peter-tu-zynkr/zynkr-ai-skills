@@ -1,4 +1,4 @@
-# Skills Index Sheet + Drive `[6.2]` mirror — the two destinations CI does not touch
+# Drive `[6.2]` mirror + the Atlas check — what `confirm-ship` does after CI
 
 ## Why this file exists
 
@@ -11,27 +11,32 @@ merge → ingest.ts → content/ → build-marketplace.ts → generated/skills-i
       → zynkr.ai/api/skills/sync → Supabase → marketplace
 ```
 
-It touches **git, Supabase and the website. Nothing else.** Two human-facing surfaces are
-outside that chain and no script in this repo writes them:
+It touches **git, Supabase and the website. Nothing else.** What is left for `confirm-ship`:
 
-| Surface | What writes it | Consequence if skipped |
+| Surface | What writes it | What `confirm-ship` does |
 |---|---|---|
-| **Skills Index Sheet** (`Skill Index` tab) | nothing automated | the skill is absent from the portfolio index, or present as a row whose four link columns are dead plain text |
-| **Drive `[6.2]` mirror** | nothing automated | there is no Drive target for the Sheet's link columns to point at |
+| **Zynkr Atlas** — the record of every skill, its versions and its knowledge | the workbench merge arrives there as a version waiting for approval | **read only**: compare the folder tree Atlas serves with the merge's, and say whether the merge is live, waiting or not yet there. Never approve. |
+| **Drive `[6.2]` mirror** | nothing automated | copy the merged files to Drive (Procedure A) |
+| **The Zynkr Skill Map** — the team's visual map of every skill, by 部門 | its own generator, from `main` and Atlas's live list | **nothing**: name the skill in the report for the map's next rebuild. Never edit a map page from here. |
 
-A skill merged after the last mirror run has **no Drive folder**, so its Sheet row cannot be
-linked even if someone adds the row. That is why this runs at `confirm-ship`: post-merge, the
-files are on `main` and can be copied.
+The mirror runs at `confirm-ship` because that is post-merge: the files are on `main` and can be
+copied.
 
-Both are **team surfaces** (readable by the zynkr.ai domain) and carry **every** skill, whether it
-is marked `visibility: public` or `team` — a team skill gets its Drive folder and its Sheet row
-exactly like a public one. Take the set of skills from the workbench's full index
+The mirror is a **team surface** (readable by the zynkr.ai domain) and carries **every** skill,
+whether it is marked `visibility: public` or `team`; a team skill gets its Drive folder exactly
+like a public one. Take the set of skills from the workbench's full index
 (`generated/skills-index.json` on `main`, read with `gh api`), never from `zynkr.ai/api/skills`,
 which lists public skills only.
 
+### ⚠️ The Skills Index Sheet is retired: do not read or write it
+
+The `[6.0] Zynkr Skills Index` Google Sheet was archived on 2026-11-06 (`SKB-115`). Atlas holds
+the record of every skill, and the Skill Map is the visual. The Sheet stays readable as history
+in its folder's `_archive`. A copy of this skill that still says to write a row there is out of
+date: skip that step and update the skill.
+
 ## Fixed IDs (committed literals — do not re-derive them from a Drive search)
 
-- **Skills Index Sheet**: `1VqH1BmyRPK0khY4SBuH1uVzPtk_eh9Z2w5gfaIfKuo0`, tab `Skill Index` (gid `907874376`)
 - **Drive folder** `[6.2] Skills & Knowledge Library` (inside `[6] 產品部門 (Product)` since 2026-11-03): `1Q0XwdR574cNUVlT7lYVbpzNbVsup2KAu`
   - `1 Skills/` — `1r92r__bUGZ61ZJP5fGcHGg_mnTaicFhz`
   - `2 Knowledge/` — `1jkloCgEHHfy83R-PFPTZBCllh4znvhi2`
@@ -59,30 +64,10 @@ create it, named to match the pattern above, only if it is missing.
 - **When the skill ships knowledge** — `2 Knowledge/<slug>/` holding every other git-tracked
   file in the skill directory, **flattened**: `references/foo.md` becomes `references__foo.md`,
   `scripts/bar.py` becomes `scripts__bar.py`.
-
-### ⚠️ Column `N` has two competing definitions in play — know which you are writing
-
-The 2026-08-28 pass created a `2 Knowledge/<slug>/` folder for **most** skills, including ones
-that ship nothing but a `SKILL.md`; those folders hold a single generated `_SOURCES.md` and
-nothing else. The hand-filled `N` values count **the Drive folder's contents**, so
-`skill-publish` and `skill-qa` both read `1 file` while shipping **zero** knowledge files.
-
-The generator (`scripts/skills-index/build_index_sheet.py`, since `a6179a0f`) states the other
-definition: **git-tracked files the skill ships besides its `SKILL.md`**. That is the one written
-into the Overview legend, and a full republish will rewrite roughly two-thirds of the column to
-match it.
-
-**Write the generator's definition.** It is the only one that is documented and reproducible.
-Accept that a freshly written row will disagree with its untouched neighbours until the tab is
-republished — that gap is the known correction, not a mistake you introduced.
-
-Concretely:
-
-- Skill ships knowledge files ⇒ create/refresh `2 Knowledge/<slug>/`, mirror them, label `N`
-  with that count.
-- Skill ships only `SKILL.md` ⇒ **do not create** a knowledge folder, and leave `N` blank. If a
-  legacy `_SOURCES.md`-only folder already exists for it, **leave the folder alone** — do not
-  delete it and do not point `N` at it.
+- Skill ships only `SKILL.md` ⇒ **do not create** a knowledge folder. If a legacy
+  `_SOURCES.md`-only folder already exists for it (the 2026-08-28 pass made one for most skills,
+  including ones that ship nothing but a `SKILL.md`), **leave the folder alone**: do not delete it
+  and do not count it as knowledge.
 
 ## Deciding "is there knowledge" — one command, not a judgement call
 
@@ -90,23 +75,8 @@ Concretely:
 git ls-tree -r --name-only origin/main -- "skills/<N-cat>/<slug>" | grep -v '/SKILL\.md$'
 ```
 
-The count of those lines is both the answer and the label for column `N`
-(`1 file` / `<n> files`; blank when zero).
-
-## The Sheet contract
-
-The tab is 33 columns, `A`–`AG`. Four of them carry links, one link per cell:
-
-| Col | Header | Target | Label |
-|---|---|---|---|
-| `C` | `Skill` | GitHub blob of the source path on `main` — the shelf `peter-tu-zynkr/zynkr-ai-skills` for a public skill, this workbench for a team skill (opens for collaborators only) | `<slug> (<sheetId>)` |
-| `M` | `Skills md` | the Drive **file** `1 Skills/<cat>/<slug>/SKILL.md` | `SKILL.md` |
-| `N` | `Knowledge files` | the Drive **folder** `2 Knowledge/<slug>` | `<n> files` — blank if none |
-| `AG` | `Skill folder` | the Drive **folder** `1 Skills/<cat>/<slug>` | `<slug>` |
-
-Write them as `=HYPERLINK("<url>","<label>")` with `value_input_option="USER_ENTERED"`, or the
-formula lands as literal text. Sub-skill rows (column `C` is `└`) leave `M`, `N` and `AG`
-blank — a child is filed inside its parent.
+The count of those lines is the answer: non-zero means a knowledge folder with that many files,
+zero means none.
 
 ## Procedure A — mirror to Drive
 
@@ -121,35 +91,59 @@ blank — a child is filed inside its parent.
    `text/plain`.
 6. Delete the staging directory afterwards.
 
-## Procedure B — record in the Sheet
+## Procedure B — check Atlas (read only)
 
-1. Read the tab and find the skill's row by its `sheetId` in column `C`. If the row is missing,
-   append one — its data columns come from the SKILL.md frontmatter, the same fields the
-   generator reads.
-2. Write the four link cells above.
-3. If a new row was appended, refresh the `Overview` tab's headline counts.
+The question is whether the version Atlas serves **is this merge**. Atlas numbers its versions
+itself and the SKILL.md carries none, so compare git trees, never numbers. With the `zynkr-atlas`
+MCP server connected:
+
+1. `list_installs` — find the folder `skills/<N-cat>/<slug>` (a sub-agent ships inside its
+   parent's folder: use the parent's). Its `tree` is the git tree of the version Atlas serves.
+2. Compare it to the merged folder, **fetching first** (a stale `origin/main` still holds the
+   old tree, which is the one Atlas serves, and would read as live):
+   ```bash
+   git fetch -q origin main
+   git rev-parse "origin/main:skills/<N-cat>/<slug>"
+   git log -1 --format=%cI origin/main -- "skills/<N-cat>/<slug>"   # when the folder last changed
+   ```
+3. Only if they differ, or the folder is not listed: `list_pending` — is a version of the slug
+   under `versions`, with a `requested_at` **after** the folder's last change? An older pending
+   version is an earlier merge's, not this one. Some read-only Atlas tokens do not offer
+   `list_pending`; then say so.
+
+Report exactly one state:
+
+- **live** — the two trees are equal: Atlas serves this merge. Name the `version`.
+- **waiting** — the trees differ (or the folder is new) and `list_pending` has a version of the
+  slug requested after the folder's last change. Name its `semver`. The owner decides it in Atlas after reading `get_draft`, which also
+  shows whether that version holds this merge (SDD §5.6).
+- **not yet in Atlas** — the trees differ (or the folder is new) and `list_pending` has nothing
+  for the slug requested after the folder's last change: the merge has not reached Atlas yet. Re-check later; if it stays that way, it is
+  a gap to raise, not to fix here.
+- **not live, pending not checked** — the trees differ and `list_pending` is not available.
+
+**Never approve or publish from `confirm-ship`**: an approve puts the version live for everyone
+who reads the workspace, and it waits for the owner's word (SDD §5.6). Without the MCP server,
+say "Atlas not checked" and carry on.
 
 ## Verify before flipping the issue to `shipped`
 
-- Re-read `M`/`N`/`AG` for the row and confirm each returns a hyperlink, not plain text.
-- Confirm the uploaded `SKILL.md`'s frontmatter `name` matches the slug — a mis-parented file is
-  the failure mode that looks fine in the Sheet and opens the wrong skill.
-- Confirm the knowledge folder's file count equals the label written in `N`.
+- Confirm the uploaded `SKILL.md`'s frontmatter `name` matches the slug — a mis-parented file
+  opens the wrong skill.
+- Confirm the knowledge folder's file count equals the count from the command above.
+- The Atlas state is in the report: live, waiting, not yet in Atlas, not live (pending not
+  checked), or not checked.
 
 ## Gotchas that have already cost time
 
 - **`.md` content cannot be replaced in place.** `update_drive_file` handles only native
   Docs/Sheets/Slides. A refresh means create-new + trash-old, so **file IDs churn while folder
-  IDs survive** — which is why `M` needs rewriting on every re-sync and `N`/`AG` do not.
+  IDs survive**.
 - **Two folders legitimately share the slug name** — one under `1 Skills/`, one under
   `2 Knowledge/`. A Drive search by name returns both. They are not duplicates; do not
   "clean up" either.
 - **`_SOURCES.md` is not universal.** Folders created before the 2026-08-28 pass do not have
   one, and it is generated from the Knowledge Map Doc's three-group logic. Do not hand-author
   one to make a folder look complete.
-- **Never repair the tab by republishing** `scripts/skills-index/build_index_sheet.py` unless
-  that is the intent: a full render rewrites roughly two-thirds of the `Knowledge files` values,
-  because that column only got a single stated definition after the fact. Incremental cell
-  writes are the safe repair; a full republish is a deliberate, separate act.
 - **The mirror is one-way**: `zynkr-skill-builder/skills/` → Drive. Never edit in Drive; the
   next sync destroys it. It mirrors team skills too — the shelf is the public copy, not this one.

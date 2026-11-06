@@ -280,13 +280,14 @@ Append a row in `peter-tu-zynkr/zynkr-skill-idea/SOURCED.md` with `Intake Source
 
 The board shows the same two layers as `/skill-sourcer`, `Pipeline Status` and `Build Status`, for display only; the issue's label is the status of record. After the PR merges and ingest fires, the artifact is live but the issue still carries `building` or `triage-ready`, and the board `Build Status=ready-to-ship`. **`/skill-triager` Option D `confirm-ship` is the closer**: it swaps the label to `shipped` (see Step 7).
 
-### D — Skills Index Sheet + Drive `[6.2]` mirror
+### D — Drive `[6.2]` mirror + Atlas check
 
 `ingest-skills.yml` carries the skill into the workbench's full index, and a public skill goes on to
-the marketplace through the shelf. That chain stops there. Two
-human-facing surfaces sit outside that chain and **no script in the repo writes them**: the
-**Skills Index Sheet** (the portfolio index) and the **Drive `[6.2]` Skills & Knowledge Library**
-mirror that the Sheet's link columns point at.
+the marketplace through the shelf. That chain stops there. The merge reaches Zynkr Atlas, the record
+of every skill, as a version waiting for approval, and the **Drive `[6.2]` Skills & Knowledge
+Library** mirror sits outside the chain: **no script in the repo writes it**. The Zynkr Skill Map,
+the team's visual map by 部門, is rebuilt by its own generator. The Skills Index Sheet is retired
+(archived 2026-11-06, `SKB-115`): nothing writes it any more.
 
 `/skill-publish` deliberately does **not** do this work, for the same reason it does not flip the
 issue to `shipped`: it returns before the PR merges, and the Drive mirror copies files from
@@ -305,8 +306,8 @@ Report it as one line — `Knowledge: 5 files (2 Knowledge/<slug> required)` or
 `Knowledge: none (SKILL.md only — no knowledge folder)` — so the closer does not re-derive it.
 
 > ⚠️ Until `confirm-ship` runs, the skill is **in the full index (and, once public and listed by Atlas,
-> on the marketplace) but absent from the Sheet and Drive**. That is the normal window, not a bug — but it is also how rows end up with dead
-> plain-text link columns if the loop is never closed.
+> on the marketplace) but absent from Drive**. That is the normal window, not a bug — but it is also how
+> the Drive library falls behind `main` if the loop is never closed.
 
 ---
 
@@ -320,7 +321,7 @@ Report it as one line — `Knowledge: 5 files (2 Knowledge/<slug> required)` or
 
 When you're done with `/skill-publish`, tell the user:
 
-> "Published via dispatch. PR opened (URL: <pr_url>). After the PR merges, run `/skill-triager` and pick **Option D — `confirm-ship`** on this issue to close the loop. The triager will run its read-only verifications (`gh api contents` and the full `skills-index.json`, plus `/api/skills` for a public skill), then document the skill in the Skills Index Sheet and the Drive `[6.2]` mirror (a knowledge folder only if it ships files besides its SKILL.md), before swapping the issue's label to `shipped` and closing it. Publishing alone does **not** make the skill invocable in your own Claude Code session: a public skill installs from the shelf with `npx skills add … --skill <slug>`, and a team skill with `/skill-sync <slug>` once Atlas has approved and published the merge."
+> "Published via dispatch. PR opened (URL: <pr_url>). After the PR merges, run `/skill-triager` and pick **Option D — `confirm-ship`** on this issue to close the loop. The triager will run its read-only verifications (`gh api contents` and the full `skills-index.json`, plus `/api/skills` for a public skill), then mirror the skill to Drive `[6.2]` (a knowledge folder only if it ships files besides its SKILL.md) and read its state in Atlas, before swapping the issue's label to `shipped` and closing it. Publishing alone does **not** make the skill invocable in your own Claude Code session: a public skill installs from the shelf with `npx skills add … --skill <slug>`, and a team skill with `/skill-sync <slug>` once Atlas has approved and published the merge."
 
 For a **client build**, say instead that the triager ships it like a team skill and skips the
 install offer, because the client gets its own copy. Once it is deployed, `/skill-deploy` records where it runs.
