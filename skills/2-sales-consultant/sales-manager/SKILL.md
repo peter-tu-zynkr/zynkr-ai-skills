@@ -88,11 +88,20 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
 - **CRM reads** use the `zynkr` MCP server: `list_deals` (optional `stage` filter),
   `list_deal_stages`, `list_tasks`, `list_contacts`, `get_contact`, `get_deal`, `get_company`,
   `whoami`, `list_tags` (`mcp__zynkr__list_tags`, given `entity_type` + `entity_id` it lists one
-  record's tags).
+  record's tags). No tool reads a deal's timeline (the notes written with `create_note`, its meetings
+  and emails): `get_deal` returns the deal row, its `notes` field (交易備註) included. The contact's
+  `last_activity_at` (`get_contact`) moves with every mail and meeting the CRM syncs for that
+  contact, from any teammate's mailbox; the deal's (`get_deal`) with what is logged on the deal.
+  Both count our own mail and notes too, so neither tells a client touch from ours. REVIEW says
+  where the last client touch comes from instead. The `notes` field is where the policy's one-line
+  records live (`資格：`, `客戶時限：`, `結案原因：`, and REVIEW's `保留：`), so they are the ones
+  `get_deal` can read back.
 - **CRM writes** use `move_deal_stage` (stage changes — never `update_deal` for stage,
   the pipeline side-effects must fire; with `stage: lost` it also takes `loss_reason`, one of
   `price`, `competitor`, `no_decision`, `poor_fit`, `timing`, `other`), `update_deal`,
   `set_task_status`, `create_task`, `create_note`, `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag`.
+  `update_deal` with `notes` replaces the whole field: to add a line, read the field with
+  `get_deal`, then write it back with a line break and the new line at the end, never dropping one.
   Every `zynkr` write tool is a two-call handshake: `confirm:false` previews,
   `confirm:true` applies.
 - **Record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}`.
@@ -128,6 +137,7 @@ Say which mode you picked in one sentence before acting.
 | A completed demo / discovery-call transcript on an existing deal | `/sales-follow-up` |
 | A company name, or a deal lacking background | `/sales-research` |
 | A deal with a discovery call booked and no [會前準備] note, or "prep my call with <company>" | `/sales-discovery-prep` |
+| A discovery conversation to run with the client — pain points, then vision — and log as a needs summary on the deal | `/sales-discovery` (not one of the seven children: it is handed the conversation, and nothing here chains it) |
 | A WHOLE survey sheet of many people | `/sales-client-sourcing` |
 | A client's requirement list / ask sheet, or "write the proposal", or comments on an existing proposal | `/sales-proposal-writer` |
 
@@ -156,8 +166,33 @@ what landed and what didn't; do not silently retry a CRM write.
 
 Read `company.sales-pipeline-rules` first (see *Fixed facts*), then the pipeline. For each open deal,
 find its **last client touch** — the newest inbound email from its contact, meeting, or stage
-change. `get_deal` shows the timeline; Gmail `from:<contact email>` fills a gap. Our own sent
-mail is not a client touch, so a deal chased every few days with no answer still goes stale.
+change. Our own sent mail is not a client touch, so a deal chased every few days with no answer
+still goes stale. No CRM tool reads the timeline, so take the touch from these, in order:
+
+1. **The latest Monday sales pulse.** Search Gmail for `subject:"Sales Pulse - week of" newer_than:8d`
+   and read the newest. "The pulse" below means its **sent time**, the message's own date, never the
+   week in its subject (that names the week before). The pulse is counted from the CRM's activity
+   rows, meetings included, and its next-step lines name every stale deal with its last client
+   touch, in the words `(last client touch YYYY-MM-DD)` or `(no client touch on record)` (a contract
+   of `/sales-pulse`). A deal it names was stale that Monday. An open deal it does not name, created
+   at least `stale-days` before the pulse, had a client touch in the `stale-days` before it.
+2. **Anything since the pulse.** A deal the pulse names stays stale only while nothing has happened
+   since: its `last_activity_at` (`get_deal`) and its contact's (`get_contact`) are no later than the
+   pulse, and Gmail `from:<contact email> after:<the day before the pulse's date>` shows no inbound
+   mail sent after the pulse (Gmail reads a bare date in its own time zone, so start a day early). An
+   inbound mail since the pulse makes the deal cooking again. A later `last_activity_at` without one
+   may be a meeting or a reply in a teammate's mailbox: list the deal as
+   「疑似 stale（Pulse 之後有新活動，時間軸待查）」, not in the batch.
+3. **Gone stale since the pulse.** An open deal the pulse did not name, created at least `stale-days`
+   ago, whose deal and contact `last_activity_at` are both `stale-days` or more days old, has had no
+   client touch since: list it as 「疑似 stale（Pulse 之後才到期）」, not in the batch. Next Monday's
+   pulse names it.
+4. **No pulse from the last eight days** (none went out, or you are not on its list): say so. Nothing
+   is proposed for `lost` on silence alone, neither 放掉 · stale nor 序列結束未回, and nothing is closed
+   to get under the cap. A deal that looks stale (created and, by both `last_activity_at` values, last
+   active `stale-days` or more days ago, with no inbound mail you can see in that time) is listed as
+   「疑似 stale（沒有本週 Pulse，時間軸待查）」 for its owner to check in the CRM.
+
 `list_deals` returns no `created_at`: every "since the deal was created" below reads it from
 `get_deal`. Classify every open deal into exactly one bucket, top row first:
 
@@ -166,23 +201,30 @@ test alone would close it while its five mails are still going out. Before the t
 open 「五封未回 → 結案 lost（no_decision）」 task on the deal (`list_tasks`):
 - open and **not yet due** → the deal is *in sequence*: it skips 序列結束未回 and 放掉 · stale and
   is tested from 沒有下一步 down (its open task usually makes it 健康). No bucket closes it.
-- open and **past `due_at`** → 序列結束未回 (or, with a reply, the task closes as below). Never
-  plain 放掉 · stale.
+- open and **past `due_at`** → test it as 序列結束未回 below. It reaches 放掉 · stale only once
+  that test has closed its task.
 
 | Bucket | Test |
 |---|---|
-| **序列結束未回** | A Mode B deal whose sequence ended unanswered: its open task 「五封未回 → 結案 lost（no_decision）」 is past `due_at`, and the contact has sent nothing (no inbound email, no meeting) since the deal was created |
-| **放掉 · stale** | Not in sequence, and stale as the policy defines it: `stale-days` or more since the last client touch and since the deal was created |
-| **沒有下一步** | Open deal with no open task attached |
+| **序列結束未回** | A Mode B deal whose sequence ended unanswered: its open task 「五封未回 → 結案 lost（no_decision）」 is past `due_at`, the latest pulse names it with `(no client touch on record)`, and nothing has happened since (steps 1 and 2 above) |
+| **放掉 · stale** | Not in sequence, and stale as the policy defines it (`stale-days` or more since the last client touch and since the deal was created): the latest pulse names it, and nothing has happened since (steps 1 and 2 above) |
+| **沒有下一步** | Open deal with no open task that has a due date (the policy's rule 7: an undated task is no next step) |
 | **逾期追蹤** | Has an open task whose `due_at` is in the past |
 | **草稿未寄** | A Gmail draft exists for the contact but nothing was ever sent |
 | **健康** | None of the above — do not list these individually, just count them |
 
 **序列結束未回** comes from `/sales-outbound` Mode B: the claim at pick-up makes a deal with that
-task, due seven days after the fifth mail. Check Gmail `from:<contact email>` since the deal's
-creation before you classify. No reply → the batch line `移到 lost（no_decision）`. A reply found
-→ the sequence worked: the batch closes the task (`set_task_status`, `done`) instead, and the deal
-is classified again without it (usually 沒有下一步, which proposes its follow-up task).
+task, due seven days after the fifth mail. Before you classify a deal whose task is past due, read
+the latest pulse's word on it and Gmail `from:<contact email>` since the deal's creation:
+- The pulse names it with `(no client touch on record)`, nothing has happened since (step 2), and
+  Gmail shows no inbound mail since its creation → 序列結束未回: the batch line `移到 lost（no_decision）`.
+- An inbound mail since its creation, a `(last client touch …)` date after its creation, or, for a
+  deal created at least `stale-days` before the pulse, no mention in the pulse at all → the client
+  replied or met us, and the sequence worked. The batch closes the task (`set_task_status`, `done`)
+  instead, and the deal is classified again without it (usually 沒有下一步, which proposes its
+  follow-up task, or 放掉 · stale when the pulse named it).
+- Anything else (no pulse, a deal too young for the pulse to judge, or new activity since the pulse)
+  → the 疑似 list, with nothing in the batch.
 
 **The pipeline band.** Each owner sits between a floor and a cap: at least `min-cooking-clients`
 clients cooking, at most `max-open-deals` open deals. Cooking is the stale line read the other
@@ -196,10 +238,18 @@ pulse and `/zynkr-gm` read that phrase.
 - **Below the floor** — say how many leads to claim from the 陌開名單 roster and run
   `/sales-outbound` Mode B. Stale deals are not revived to make up the count: they go in the batch.
 - **Over the cap** — the owner's stale deals go first. If they are still over, name their oldest
-  `new` / `contacted` deals to hand off or close, and put them in the batch for the owner's call.
+  `new` / `contacted` deals to hand off or close, and put them in the batch as a question: the owner
+  says, deal by deal, 「交接給 <名字>」 or 「結案」, and a deal they say nothing about stays as it is.
+  A hand-off is `update_deal(owner_id=…)` with an id from `list_workspace_members`. With no pulse
+  (step 4 above), close nothing to get under the cap: list the owner's 疑似 stale deals first, and
+  the band line keeps `· over by K`.
 - **沒有下一步 and 逾期追蹤 rows** — the one thing to do is a follow-up task due by the policy's
-  rhythm: read the client's reply lag from the timeline, pick the fast, normal or slow days, and
-  never later than a `客戶時限：` line in the deal's notes.
+  rhythm: read the client's reply lag from Gmail (the days between our mail and their replies, over
+  the last 90 days), pick the fast, normal or slow days (no exchange in your mailbox, as with many a
+  teammate's client, is the policy's no-history case: `followup-fast-days`, and the row says so),
+  and never later than a `客戶時限：` line in
+  the deal's notes. A deal whose open tasks all lack a due date gets a dated one the same way, and
+  in the same batch row the undated task is set `drop` (the new task keeps its subject).
 
 **Tag checks.** For the contacts on the runner's own open deals (`whoami` names the runner; a
 teammate's records are theirs to fix), read `list_tags(entity_type="contact", entity_id=…)` and list
@@ -230,15 +280,24 @@ returns exactly 100 rows means the check is not sound, so say so), list every `c
 two or more open deals: each deal's 交易 number, owner and creation date (`created_at` from
 `get_deal`; `list_deals` does not return it). Propose nothing on your
 own: the owners agree which deal stays, and only then does the other go into the batch as
-`移到 lost`, `loss_reason` `other`, with the note `重複認領：保留 <交易 number>`, read back after the
-move the same way as a 序列結束未回 deal below.
+`移到 lost`, `loss_reason` `other`, with the line `結案原因：other（重複認領：保留 <交易 number>）`
+added to its `notes`, closed in the order step 5 gives for every close.
 
 > **The pick-up rule is written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server). This check runs as written even when Atlas cannot be reached.
+
+**資格行 missing.** The policy's rule 8: a deal is `qualified` only once its notes carry one line
+`資格：痛點＝…；決策者＝…；預算＝…；時程＝…` with all four filled (a blank or `…` is not filled). For
+every `qualified` deal, read its `notes` field with `get_deal` and list each one without that line,
+under the bucket table: deal · owner · the parts missing. A line written as a timeline note cannot be
+read here and looks missing, so the row adds 「若寫在時間軸備註，請搬到交易備註」. Propose nothing for
+it in the batch: the deal stays where it is, and the owner asks the missing question.
 
 This file is where the buckets and the band are defined from the policy's words. The team's
 Monday sales pulse mail applies the same policy to every member.
 
 Render the five live buckets as one table (deal · owner · days since last client touch · the one thing to do).
+The days come from the pulse's words for a deal it names, else from the newest inbound mail Gmail
+shows; with neither, write 「—」, never a guess.
 Keep it **deal-level**. Do not roll up by LOB, do not write a weekly narrative, do not
 compute revenue forecasts — that is `/zynkr-gm`'s job and duplicating it is the one
 outcome this skill was explicitly scoped to avoid.
@@ -255,9 +314,11 @@ only after a single explicit confirmation:
 
 移到 lost（no_decision）· 2 個 deal — 序列結束未回：五封都寄了，「五封未回」任務已到期，對方一直沒回
 關掉序列任務   · 1 個        — 序列中途有回信：「五封未回」任務關掉，deal 照常追
-移到 lost      · 3 個 deal   — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
+移到 lost（no_decision）· 3 個 deal — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
+交接或結案     · 1 個 deal   — 超過上限：<owner> 開著 <M> 個，上限 <max-open-deals>。請逐筆說「交接給 <名字>」或「結案」，沒說的不動
+移到 lost（other）· 1 個 deal       — 重複認領：兩位 owner 已同意保留 <交易 number>
 關掉過期 task  · 8 個        — 早已完成或已無意義
-建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度）
+建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度；沒有到期日的舊任務一併 drop）
 加／移除標籤   · 4 位聯絡人 — 待確認已補齊的移除；沒有來源、lead_source 對得上的補上
 
 要我執行嗎？想留下哪一筆，說一聲原因就好
@@ -266,18 +327,27 @@ only after a single explicit confirmation:
 Fill `<stale-days>` with the policy's number when you write the batch. Each tag change in it is
 `apply_tag` or `remove_tag` (`entity_type="contact"`), previewed, then repeated with `confirm:true`
 after the one confirmation, then read back with `list_tags`.
-A stale deal moved to `lost` gets one note on the deal — `放掉 · stale（company.sales-pipeline-rules <value date>）：最後一次客戶往來 <date>` —
-so whoever reopens it sees why.
+A stale deal goes to `lost` with `loss_reason="no_decision"`, and its `notes` field gets the line
+`結案原因：no_decision（放掉 · stale：最後一次客戶往來 <date>；company.sales-pipeline-rules <value date>）`,
+so whoever reopens it sees why. A 序列結束未回 deal goes to `lost` the same way with the line
+`結案原因：no_decision（五封未回）`, and its 「五封未回」 task is set `done`.
 
-A 序列結束未回 deal is closed with
-`move_deal_stage(id=…, stage="lost", loss_reason="no_decision")`, previewed, then repeated with
-`confirm:true`; its 「五封未回」 task is set `done`; and the deal gets one note,
-`create_note(deal_id=…, subject="結案原因", body="結案原因：no_decision（五封未回）")`. A server
-older than `PLAT-078` drops an unknown `loss_reason` without an error, so a quiet success proves
-nothing: after the move, `get_deal` and check `loss_reason`. When it is not the reason sent, the
-`結案原因：` note line is the only record of it, and the report says the server did not record
-the loss reason (`PLAT-078` not live). A stale deal the owner keeps gets their reason as a note
-instead, and stays out of the batch.
+Every close runs in this order, each write previewed, then repeated with `confirm:true`:
+1. `move_deal_stage(id=…, stage="lost", loss_reason=…)`. If it fails, write nothing else for that
+   deal, and report it.
+2. `get_deal` again for the `notes` as they are now (never the copy read earlier in REVIEW), add the
+   `結案原因：` line at the end, and `update_deal` with the whole field (*Fixed facts*). If this write
+   fails, the deal is lost without its line: the report gives the exact line to add by hand, and
+   nothing is retried.
+3. `get_deal` once more: check `loss_reason`, and that `notes` ends with the line with the earlier
+   lines still there. A server older than `PLAT-078` drops an unknown `loss_reason` without an error,
+   so a quiet success proves nothing. When `loss_reason` is not the reason sent, the line is the only
+   record of it, and the report says the server did not record the loss reason (`PLAT-078` not live).
+
+A stale deal the owner keeps stays out of the batch, and its `notes` get the line
+`保留：YYYY-MM-DD（<their reason>）`, written as in steps 2 and 3. While it stays stale, the next
+REVIEW still proposes it, as rule 5 says, with the newest `保留：` line in its row, so the owner sees
+the reason they gave.
 
 Rules:
 - **One confirmation for the whole batch**, not one per row — the point is to clear a
@@ -286,14 +356,21 @@ Rules:
   then propose a second one.
 - **Never auto-close a deal as `won`.** Money is Peter's call, always.
 - **Stage changes go through `move_deal_stage`**, never `update_deal`.
+- **Every deal moved to `lost` carries its reason** (the policy's rule 9): a `loss_reason` on the
+  move and one line `結案原因：…` added to the deal's `notes`, both read back with `get_deal` as above. 序列結束未回 and 放掉 ·
+  stale → `no_decision`. A deal closed to bring its owner under the cap → `other`, with
+  `結案原因：other（超過上限）`. 重複認領 → `other`, as written there. When the owner knows the real
+  reason (price, a competitor, timing, a poor fit), that reason and their words replace the default.
 - On refusal, change nothing and keep the list — he may want it as a to-do instead.
 
 ### 6 · Report
 
 State the mode, what each child produced (with record URLs), and — for REVIEW — the
-`company.sales-pipeline-rules` version used (its `value:` date), the band lines, the bucket counts,
-the two tag-check counts with the `company.crm-tag-rules` version (or why they were skipped), the
-重複認領 rows, any deal moved to `lost` whose `get_deal` read-back lacks the `loss_reason` sent, and
+`company.sales-pipeline-rules` version used (its `value:` date), the pulse the last client touches
+came from (its week, or that none was found), the band lines, the bucket counts, the two tag-check
+counts with the `company.crm-tag-rules` version (or why they were skipped), the `qualified` deals
+without a 資格 line, the 疑似 stale deals and why each is only suspected, the 重複認領 rows, any deal
+moved to `lost` whose `get_deal` read-back lacks the `loss_reason` sent or the `結案原因：` line, and
 exactly what the confirmed batch changed. If the batch was declined,
 say so plainly and leave the list.
 
