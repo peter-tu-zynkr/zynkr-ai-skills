@@ -9,7 +9,6 @@ output: "Builder-ready sub-task cards, stores touched, gaps closed, flow type, M
 ---
 # Operations Manager ─ Process Redesign (Process Redesigner)
 
-Source: [Google Doc](https://docs.google.com/document/d/1j9IvGN9NmtcnNdmLErbM-nxv4PUEct-i4GwmHnMblQ4/edit)
 
 ## System Prompt
 

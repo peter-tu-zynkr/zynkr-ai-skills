@@ -63,7 +63,7 @@ without Peter twice**: he approves the proposal here (Step 4), and he publishes 
 >   truth: the published collection `kb`, one collection per section under it (`kb.<slug>`), the
 >   cards filed in those. This skill writes **drafts only**; a person publishes them in Atlas's
 >   審核. `/zynkr-support` and `/sales-inbound` read the published cards, never the mirror.
-> - **Google Drive** `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`) —
+> - **Google Drive** `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` (its ID is `mirror_folder_id` in `~/.config/zynkr/kms.json`; missing → stop and ask, never search for a folder by name) —
 >   the **backup mirror**, readable by the workspace's members only: one Doc per section plus a
 >   restore copy, `_KB-SNAPSHOT.json`. Rewritten from Atlas at the start of every run (Step 0).
 >   Never authoritative, never read back into Atlas; a human edit made there is destroyed on the
@@ -124,7 +124,7 @@ This skill drafts into a **知識庫** it does not ship.
   知識庫, to each message of Peter's (or a website form's) up to the answer learned (Step 7). The
   idempotency record: Step 1's searches leave out each message that carries it.
 - **Drive mirror** (the backup half — full mechanics in `references/drive-mirror.md`):
-  - Folder `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, members only
+  - Folder `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `<mirror_folder_id>` from `~/.config/zynkr/kms.json`, members only
     (`references/drive-mirror.md` → *Who may read it*)
   - `scripts/kb-drive-mirror.mjs` (v2) — reads the `kb` collection through Atlas with the export
     token and renders it locally; never uploads. Card bodies stay on disk, out of context.
@@ -161,7 +161,7 @@ How a run goes, the Doc registry and the checks: `references/drive-mirror.md`.
 1. **Download Drive's pair** over the working folder's copies — every run, on every machine. Each
    run writes the pair as new files (point 5), so find it by name, never by an ID from an earlier
    run: `mcp__google-workspace__list_drive_items` on the folder
-   (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, `order_by: "createdTime desc"`), then the newest file named
+   (`<mirror_folder_id>`, `order_by: "createdTime desc"`), then the newest file named
    exactly `_MANIFEST.json` and the newest named exactly `_KB-SNAPSHOT.json`
    (`_KB-SNAPSHOT-CRM-<date>.json` is another file). Note their IDs, and the IDs of any older copy
    of either name, which a stopped run left behind: point 5 bins them all. Download the two with
@@ -177,7 +177,7 @@ How a run goes, the Doc registry and the checks: `references/drive-mirror.md`.
    drafts that are published and still in `pending[]`, each with its Gmail `thread` (Step 7 labels
    those, then drops them); `removed`, `removed_sections` and `orphans` go to the report.
 4. **Check who can read** — `mcp__google-workspace__get_drive_file_permissions` on the folder
-   (`1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`), on each Doc before you write it, and on each JSON file
+   (`<mirror_folder_id>`), on each Doc before you write it, and on each JSON file
    once it is written (it is new, and takes the folder's readers): no `anyone` link, no domain
    grant, and every named reader a member of the Atlas workspace (ask when you cannot tell). The
    mirror copies team-only text; whatever reads wider gets nothing written — say so.
@@ -525,7 +525,7 @@ Then give Peter a single summary:
 
 Review: https://atlas.zynkr.ai/w/<workspace-slug>/review
 知識庫: https://atlas.zynkr.ai/w/<workspace-slug>/knowledge
-Backup: https://drive.google.com/drive/folders/1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK
+Backup: https://drive.google.com/drive/folders/<mirror_folder_id>
 ```
 
 If a new section was drafted, add its row to `references/intent-taxonomy.md` (a workbench change)

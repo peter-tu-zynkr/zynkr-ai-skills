@@ -86,9 +86,9 @@ Steps 1–6 are this run. Steps 7–9 are the learning loop (see **Step 9** belo
 ## Resources you'll use
 
 - **Gmail labels** (both nested — a query names each by its **search name**; see the gotcha below):
-  - Support: `[3] Operation/[3.8] Support` (ID `Label_1343405731176716360`) — search name
+  - Support: `[3] Operation/[3.8] Support` (when a call needs the ID, resolve it by name with `mcp__google-workspace__list_gmail_labels`) — search name
     `label:[3]-operation-[3.8]-support`
-  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` (ID `Label_1203655627141795093`) —
+  - Inbound Sales: `[2] Sales & consultant/[2.1] Inbound Sales` (ID resolved the same way) —
     search name `label:[2]-sales---consultant-[2.1]-inbound-sales`; /sales-inbound's queue, listed,
     never drafted on here
 - **Website form sender**: `website@zynkr.ai` — discovery-call / contact-form inquiries arrive as

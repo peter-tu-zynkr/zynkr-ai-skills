@@ -50,7 +50,7 @@ The two documents carry the work across the sign-off, so the step numbers issued
 
 **Fixed facts** (client runs):
 - **Google account** for all Drive and Docs tools: `<your-google-workspace-account>`
-- **Projects parent folder** (where the numbered `[N]` client folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
+- **Projects parent folder** (where the numbered `[N]` client folders live): `engagement_types.客戶案.filing_home.folder_id` in `~/.config/zynkr/pm.json`, the file `/project-init` files from. Missing, or still a `<...>` placeholder → stop and say which key is unset
 - **CRM deal URL**: `https://platform.zynkr.ai/deals/{deal_id}`
 
 ---
@@ -192,7 +192,7 @@ Design work kept only in chat never reaches the BRD, the PRD or the client folde
 
 **Resolve** (once per run, before any interviewing):
 - **Deal** — from a `…/deals/{id}` URL, or by company name: `mcp__zynkr__get_deal` / `mcp__zynkr__list_deals`.
-- **Folder** — the deal's `notes` may carry a `專案資料夾：<url>` backlink; take the folder id from it. Otherwise list the projects parent (`mcp__google-workspace__list_drive_items`, folder_id `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`) and match `[N] Company（…）` by company name.
+- **Folder** — the deal's `notes` may carry a `專案資料夾：<url>` backlink; take the folder id from it. Otherwise list the projects parent (`mcp__google-workspace__list_drive_items`, folder_id = that `filing_home.folder_id`) and match `[N] Company（…）` by company name.
 - **No folder** → stop. The client has no project workspace yet: open it first with `/project-init` (client project), which opens it from the qualified CRM deal. Never create a folder here.
 
 **Fill the template** — `references/assessment-template.md` or `references/blueprint-template.md`. Fill every placeholder, keep the numbered section headings (`redesign`, `/consult-brd-writer` and `/ops-prd-writer` read them back), and delete every `<!-- … -->` comment, the contract at the top included.

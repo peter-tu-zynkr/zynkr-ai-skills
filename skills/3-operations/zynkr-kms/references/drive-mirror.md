@@ -26,7 +26,7 @@ Atlas 知識庫 (collection kb)  ──(mirror)──▶  Google Drive Docs
 
 | What | Where |
 |---|---|
-| Mirror folder | `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — `1PmyV7Mn5N_mRPZfuiYa4VfWgD7y6nXjK`, at the top of the owner's My Drive |
+| Mirror folder | `客服知識庫 (KMS) · Atlas 鏡像 · 僅團隊` — ID in `~/.config/zynkr/kms.json` → `mirror_folder_id`, at the top of the owner's My Drive |
 | Section Docs | one per section, `Zynkr Support KB — NN <title>` (see registry below) |
 | Restore copy | `_KB-SNAPSHOT.json` — a new file every run, so found by name (the newest), never by ID |
 | Run manifest | `_MANIFEST.json` — likewise |

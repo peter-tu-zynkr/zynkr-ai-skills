@@ -9,7 +9,6 @@ output: "A structured evaluation table with knowledge and data gaps, transformat
 ---
 # Operations Assistant — Digital Transformation Assessor
 
-Source: [Google Doc](https://docs.google.com/document/d/1yzwtJa-J385WgWQLykEiv4C7ju8pQ7PB8liwUZEiq9k/edit)
 
 ## System Prompt
 

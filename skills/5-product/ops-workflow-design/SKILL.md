@@ -48,12 +48,12 @@ At runtime, also fetch:
 
 External canonical references (links, not content):
 
-- **Human-canonical convention docs** (Drive, cloud-canonical since 2026-06-11): `[5.1] Lucid Workflow Engineering conventions` — <https://drive.google.com/drive/folders/1R4DfLi07Z5SaYBB4Q8-8QuKMjh7o0JYm>
+- **Human-canonical convention docs** (Drive, cloud-canonical since 2026-06-11): `Lucid Workflow Engineering conventions` (a team-only Drive folder in the product department)
   - `[5.1.1] Architecture principles guidebook` — `<your-architecture-canon-doc>` (the architecture canon; a company fact, read from Atlas — see below)
-  - `[5.1.2] Color & shape principles` — <https://drive.google.com/file/d/1KauyMMbGrYcsoaStv6dzHBrl-md1D8jv/view>
-  - `[5.1.3] Lucid LLM guidebook` — <https://drive.google.com/file/d/1_COxoO-_0bQjfDYaFZsFBdeNOvqNSgBa/view>
+  - `[5.1.2] Color & shape principles` (in that folder)
+  - `[5.1.3] Lucid LLM guidebook` (in that folder)
   - Local mirrors: `6.0 tech/engineering-conventions/` (read-only; edit the Drive copies)
-- Course origin (background only, no longer canonical): Google Doc Ch5 "Process re-design" — <https://docs.google.com/document/d/14uvozN-ZAymS4oxSiGPWXXtykg_MEQ48XNjYSGfCtI8/edit#heading=h.4a2agfampqmy>
+- Course origin (background only, no longer canonical): course Doc Ch5 "Process re-design" (team-only)
 - Canonical baseline chart `[@] Architecture template`: doc id `bb9ba9aa-b4c2-4ad2-a432-87f6a805c4e0` — <https://lucid.app/lucidchart/bb9ba9aa-b4c2-4ad2-a432-87f6a805c4e0/edit>
 
 > **`<your-architecture-canon-doc>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.architecture-canon`, on the `zynkr-atlas` MCP server; the value is the `value:` line, and its `url:` line is the link). If Atlas cannot be reached, the key is missing, or there is no `value:` line, ask for it; until then work from the local copy `references/architecture-principles.md`, and never open a link with the blank still in it.

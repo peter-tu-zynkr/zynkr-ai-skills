@@ -9,7 +9,6 @@ output: "A clear, reviewable process map presented as a structured table for imp
 ---
 # Operations Assistant — Process Discovery (SIPOC Mapping)
 
-Source: [Google Doc](https://docs.google.com/document/d/1Qu9wv76TIyi-UOin3WuhvMcoFeVsjFlvBrut4RsV9hk/edit)
 
 ## System Prompt
 
