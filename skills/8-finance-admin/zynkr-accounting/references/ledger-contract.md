@@ -26,7 +26,7 @@ Sixteen columns, A–P, append-only.
 | I | `currency` | `TWD` · `USD` · `EUR` … |
 | J | `tax` | Usually blank |
 | K | `notes` | Where the evidence and the doubts go. Prefix an uncertain attribution with `⚠` |
-| L | `raw_ref` | The evidence. For statement rows: `台北富邦銀行對帳單 YYYY/MM` |
+| L | `raw_ref` | The evidence. For statement rows: `<bank>對帳單 YYYY/MM`, with the bank's name as the earlier rows spell it |
 | M | `processed_at` | ISO 8601 with the `+08:00` offset |
 | N | `twd_amount` | TWD equivalent. **Every summary tab reads this, never `amount`** |
 | O | `exchange_rate` | `1` for TWD rows |
@@ -38,14 +38,14 @@ Sixteen columns, A–P, append-only.
 
 - **`image`** — read off the bank statement itself. Often the *only* record of the transaction.
 - **`email`** — extracted from an invoice, receipt or transfer confirmation, and paid from the
-  富邦 account.
-- **`personal`** — a business expense on Peter's personal card. **Never appears on the statement.**
+  company bank account.
+- **`personal`** — a business expense on the owner's personal card. **Never appears on the statement.**
   Always carries `reimbursement_status`, and is always excluded from the balance identity.
 - **`manual`** — cash or otherwise undocumented.
 
 Getting `personal` vs `email` wrong is the single most common way to break the close: an
 `email` row that was really a card charge makes the identity fail by exactly that amount, and it
-also understates what the company owes Peter.
+also understates what the company owes the owner.
 
 ### Foreign currency
 

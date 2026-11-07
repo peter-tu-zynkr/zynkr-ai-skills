@@ -1,6 +1,6 @@
 # Reconciliation rules
 
-How a month of 台北富邦 activity becomes ledger rows, and how you prove you got it all.
+How a month of activity on the company bank account becomes ledger rows, and how you prove you got it all.
 
 ---
 
@@ -16,10 +16,10 @@ rounding slack. A residual of any size is a finding, never noise.
 There is a second, slower check worth running when something feels wrong:
 
 ```
-Monthly Summary cumulative  +  outstanding pending personal-card spend  =  富邦 account balance
+Monthly Summary cumulative  +  outstanding pending personal-card spend  =  bank account balance
 ```
 
-The second term is what the company owes Peter, and it grows every month it is not settled. It is
+The second term is what the company owes the owner, and it grows every month it is not settled. It is
 also the figure the monthly report leads its liability line with.
 
 ### Working the residual
@@ -36,16 +36,16 @@ closes exactly. Every residual has a cause; the four causes are:
 
 A phantom is the interesting one. It means a row is booked as though it were paid from this
 account when it was not. Either its `source` should be `personal`, or it settles in a later month.
-Both are Peter's call, because both change what he is owed.
+Both are the owner's call, because both change what the owner is owed.
 
 ---
 
 ## 2. The NT$15 rule, in both directions
 
-富邦 charges NT$15 per transfer, and the direction determines how it is booked.
+The bank charges NT$15 per transfer, and the direction determines how it is booked.
 
-**Outbound** — the fee is added to the amount and booked on the same row. A NT$32,000 salary
-leaves the account as **32,015**, and the ledger row is `-32,015` with a note recording the split.
+**Outbound** — the fee is added to the amount and booked on the same row. A NT$28,000 salary
+leaves the account as **28,015**, and the ledger row is `-28,015` with a note recording the split.
 No separate fee row.
 
 **Inbound** — the fee is deducted, so the money arrives NT$15 *short* of what was invoiced. How
@@ -55,7 +55,7 @@ you book that depends on the counterparty's convention:
   the platform fee as its own `platform-fee` row. The NT$15 remittance fee then needs a **third**
   row, `operating-cost` / `platform-fee`, description `撥款匯費`, amount `-15`. Without it the
   month is off by exactly 15.
-- **Net-booked counterparties** (the Hahow 分潤 payer) — income is recorded at the net amount that
+- **Net-booked counterparties** (a course platform's 分潤 payer; §5 names it) — income is recorded at the net amount that
   actually landed, and the fee lives in the `notes` as `請款 <gross> 扣匯費 15`. No separate row.
 
 Getting this backwards is a 15- or 30-dollar residual, which is small enough to be tempting to
@@ -65,14 +65,14 @@ ignore and is exactly the kind of thing that hides a real error later.
 
 ## 3. Bundled transfers
 
-One bank line is not always one ledger row. Peter routinely settles an expense reimbursement
+One bank line is not always one ledger row. The owner sometimes settles an expense reimbursement
 inside a salary transfer, and the 摘要 is the only clue.
 
-A 摘要 of `七月薪水和活動` on a NT$38,015 line is **three** things:
+Example (fictional): a 摘要 of `三月薪水和活動` on a NT$33,015 line is **three** things:
 
 ```
-32,000  salary        →  payroll / salary,        -32,015  (salary + the 15 fee)
- 6,000  event cost    →  operating-cost / event-cost,  -6,000
+28,000  salary        →  payroll / salary,        -28,015  (salary + the 15 fee)
+ 5,000  event cost    →  operating-cost / event-cost,  -5,000
     15  transfer fee  →  folded into the salary row
 ```
 
@@ -89,7 +89,7 @@ identity is what catches them:
 
 - **課程分潤 receipts** — the 摘要 may name the payer, or may say only `７月課程分潤`
 - **Inbound 匯費** — the NT$15 above
-- **Card settlements** — `ＣＤ轉收` lines from 國泰世華 / 玉山
+- **Card settlements** — `ＣＤ轉收` lines from the card acquirers
 - **Bank interest** — a small `income` / `interest` row, usually quarterly
 - **Transfers with a bare 摘要** — `轉支`, `網路跨轉` with no counterparty
 
@@ -113,8 +113,8 @@ lands in the wrong line while every total stays correct — which makes it hard 
 
 ⚠ **`總收入` in the Financial Model is not operating revenue.** A 業外 row sweeps in everything
 whose *subcategory* is `transfer`, `interest` or `refund` **regardless of category** — including
-expense rebates booked as `misc` / `refund`. A single capital transfer in has made a month look
-like a million-dollar revenue month.
+expense rebates booked as `misc` / `refund`. A single non-operating transfer in can make a month
+look like a record revenue month.
 
 Operating revenue = `總收入` − (transfer + interest + refund). State it that way in the report,
 and show the 非營業 figure separately rather than burying it.
@@ -137,7 +137,7 @@ reimbursement unless stated.
 | Buffer | ~19th | |
 | Kit (ConvertKit) | Annual, in August | Large single charge |
 
-The bank-side recurring items are payroll (four people, around the 6th, for the *previous* month)
+The bank-side recurring items are payroll (one row per person on the payroll, around the 6th, for the *previous* month)
 and 記帳士 / 國稅局 payments, which are irregular.
 
 ---

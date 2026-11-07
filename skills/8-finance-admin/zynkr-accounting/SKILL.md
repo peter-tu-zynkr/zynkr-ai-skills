@@ -2,7 +2,7 @@
 name: zynkr-accounting
 sheetId: "8.01"
 description: >-
-  The monthly financial close for the Zynkr Finance Ledger — reconciles one month's 台北富邦 bank
+  The monthly financial close for the Zynkr Finance Ledger — reconciles one month's bank
   statement against Gmail receipts, appends the rows that are missing, files the statement, and
   mails a performance report. Give it the statement PDF and a month; it reads every line on the
   statement as the spine of the month, sweeps the Finance Gmail label for invoices, receipts and
@@ -11,7 +11,7 @@ description: >-
   Appends are proposed as one batch and applied only on a single confirmation — it never writes
   to the ledger unasked. Trigger EAGERLY on "/zynkr-accounting", "月結", "對帳", "銀行對帳",
   "close the month", "月度財務結算", "幫我對帳", "reconcile the statement", "把八月的帳結一結",
-  "銀行對帳單來了", "monthly close", "對一下上個月的帳", or whenever Peter hands over a 台北富邦
+  "銀行對帳單來了", "monthly close", "對一下上個月的帳", or whenever Peter hands over a bank
   對帳單 PDF with no further direction. BOUNDARY — do NOT hijack: /zynkr-gm (the company-level
   weekly GM brief; it reads runway, it does not keep the books), /planning-tracker-sync (the H2
   tracker), /project-client-status (one consulting engagement). This skill owns exactly one
@@ -23,7 +23,7 @@ platform: claude
 status: WIP
 visibility: public
 author: Peter Tu
-input: "The month (YYYY-MM) plus the 台北富邦 statement PDF for it — a local path, a Drive file, or a Gmail attachment. Everything else is discovered."
+input: "The month (YYYY-MM) plus the company bank statement PDF for it — a local path, a Drive file, or a Gmail attachment. Everything else is discovered."
 process: "Read the statement as the spine → sweep Gmail for the month → diff both against the ledger → run the balance identity gate → propose one append batch → on confirmation append, fill the derived-tab lookups, file the PDF, mail the report."
 output: "Appended Transactions rows, a filed statement PDF, and an HTML monthly report — the close result, income and cost by line, open items, and the reimbursement balance owed."
 synergy: [zynkr-gm, admin-governance]
@@ -44,7 +44,7 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill zynkr-a
 
 ## What this is
 
-Once a month the 台北富邦 statement arrives by mail. This skill turns it into bookkeeping: it reads
+Once a month the bank statement arrives by mail. This skill turns it into bookkeeping: it reads
 every line on the statement, finds the paperwork for those lines in Gmail, works out what the
 ledger is already carrying, and appends only the difference. Then it files the PDF, writes a
 performance report and mails it.
@@ -96,7 +96,7 @@ Then check three things and report them together:
 Extract the 當月交易明細 table into an ordered list: date, 摘要, 支出, 收入, 餘額. Capture the
 opening 承轉結餘 and the closing balance — the identity in Step 4 needs both.
 
-Ignore everything else in the PDF. A 富邦 statement is three pages of regulatory boilerplate
+Ignore everything else in the PDF. The statement is three pages of regulatory boilerplate
 wrapped around one small table; the 資產持有明細 block and the 訊息公告 numbered list carry nothing
 to book.
 
@@ -173,7 +173,7 @@ corrupts the derived tabs when you do.
 
 ## Step 6 — File the statement
 
-Upload the PDF to `<your-finance-drive-folder-id>`, named `台北富邦銀行 <YYYY-MM>.pdf` so the folder
+Upload the PDF to `<your-finance-drive-folder-id>`, named `<bank> <YYYY-MM>.pdf` (the bank's name as the earlier files in the folder spell it) so the folder
 sorts chronologically. Keep the name stable — the ledger's `raw_ref` column cites the statement by
 month, and that citation is the audit trail back from a row to its evidence.
 

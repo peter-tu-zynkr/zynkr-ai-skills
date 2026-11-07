@@ -1,7 +1,7 @@
 # 年度計畫 — Doc skeleton + slide block (contract for `planning-1on1-annual-digest`)
 
 This file is the exact shape of the two artefacts the skill produces. The section
-titles are **verbatim** — the exemplar 「年度計畫＿Peggy」 (sources §A) uses them, and
+titles are **verbatim** — the exemplar 「年度計畫＿〈姓名〉」 (sources §A) uses them, and
 `planning-prework-pack` / the founder read them by name. Fill every `{{…}}`; where a
 value has no source, write `（待補）` (proof / evidence) or `待定` (targets), never a
 guess (pack §9).

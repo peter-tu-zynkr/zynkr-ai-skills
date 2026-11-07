@@ -41,7 +41,7 @@ Read fileId `{{sources.okr_kpi_tracker.id}}` by the SHEET READ RULE. Parse the O
 
 === STEP 4b — READ THE FINANCE LEDGER (runway + burn) ===
 Read fileId `{{sources.finance_ledger.id}}` by the SHEET READ RULE. Find the `Monthly Summary` table: header `month | income | operating-cost | payroll | misc | total_expenses | net | total`. Take the last row whose values are not all zero — that is the last CLOSED month, and its `month` is books-as-of (end of that month).
-- CASH = that row's `total` (the cumulative column). ⚠ Do NOT use a bank balance; the cumulative is already net of the personal-card float the company owes Peter.
+- CASH = that row's `total` (the cumulative column). ⚠ Do NOT use a bank balance; the cumulative is the cash figure the books stand behind.
 - BURN = the mean of the `net` column over the last 6 closed months, with the GM's one-off rows backed out. The ruled window is `{{constraints.burn_window}}`; the one-off rows are these `Transactions` ids: {{sources.finance_ledger.runway_read.one_off_ids}}. For each id, find the row in the `Transactions` table (column `id`), take its `amount`, and remove it from its own month's `net`: subtract an income row, add a cost row back. Report ONE burn figure and ONE runway figure. If an id cannot be found, keep going, say so in block 08, and print the as-booked figure beside the adjusted one. Notes live on `Transactions` (column `notes`); `Income` and `Costs` are QUERY views of it — when the brief links a ledger row, link the `Transactions` row.
 - RUNWAY = CASH / |BURN| in months, per window.
 Also read the `Income` table for cash-basis revenue. Non-operating rows — `subcategory` in (transfer, interest, refund) — are NOT revenue; exclude them from any run-rate reasoning.

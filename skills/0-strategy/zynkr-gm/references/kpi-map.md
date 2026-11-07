@@ -23,47 +23,43 @@ Class: **AUTO** = the skill can compute it from a system of record · **SEMI** =
 | 6.03 | 分潤系統 build | SEMI | platform repo CHANGELOG / GitHub | `gh` on the platform repo: commits / spec IDs touching 分潤 | no (no gh) → unfilled · ask owner |
 | 7.01 | 公司 KPI 制度 | HUMAN | the metric-set design itself — the `Ops Metrics v0` tab | `read_sheet_values` on that tab; Q3「designed」closed 2026-09-07 (tracker 7.01 → 完成) | Q3 filled; Q4「operating」(≥90% of weeks the review actually ran) unfilled · ask owner |
 | — | Net monthly burn (NT$/mo) | **AUTO** | `sources.finance_ledger` (Zynkr Finance Ledger) tab `Monthly Summary` | `read_sheet_values` on `Monthly Summary!A1:H30`; the `net` column (G) per month, averaged over `constraints.burn_window`; books-as-of = the last non-zero month row, cross-checked against `max(Transactions!B)` | **yes** — the Drive connector reads this Sheet |
-| — | Runway (months) | **AUTO** | same ledger, tab `Monthly Summary` | cash ÷ the burn above, where cash = the cumulative `total` column (H) at the last closed month. ⚠ **Cash is that cumulative figure, never the 富邦 bank balance** — the gap between them is the personal-card float the company owes Peter, which is a payable, not spendable cash | **yes** |
+| — | Runway (months) | **AUTO** | same ledger, tab `Monthly Summary` | cash ÷ the burn above, where cash = the cumulative `total` column (H) at the last closed month. ⚠ **Cash is that cumulative figure, never a bank balance** — money the company still owes back can sit in the bank balance, and it is a payable, not spendable cash | **yes** |
 
 Permanently HUMAN (no MCP exists): 1.08 · 1.09 · 3.01 · 3.02 · 7.01. Say so in the brief instead of re-asking weekly; batch HUMAN asks monthly.
 
-⚠ The Tracker # for 公司 KPI 制度 is **7.01** (7.0 People & Talent / 7.1 目標與績效), never 6.01 — 6.01 is 課程平台 (暫停, 繼續和 Hahow 配合). The `KPI Dashboard` tab has always carried 7.01; this file and the `Ops Metrics v0` header row said 6.01 until 2026-09-07. `kpi_locate.py` matches rows by normalised Tracker #, so a wrong id misses silently rather than erroring.
+⚠ The Tracker # for 公司 KPI 制度 is **7.01** (7.0 People & Talent / 7.1 目標與績效), never 6.01 — 6.01 is 課程平台 (暫停, 繼續和合作平台配合). The `KPI Dashboard` tab has always carried 7.01; this file and the `Ops Metrics v0` header row said 6.01 until 2026-09-07. `kpi_locate.py` matches rows by normalised Tracker #, so a wrong id misses silently rather than erroring.
 
 ## Runway rule (C1 · O5)
 
 - The **first line of every brief** is the runway line: `Runway ≈ N.N mo · burn NT$X/mo (cap NT$C) · books as of YYYY-MM-DD (source)`, where C is `constraints.burn_cap_ntd_per_month` from the private config.
-- **RED** when runway < 4 months (guardrail: no spend that pushes runway below 4 months) **or** books-as-of is > 30 days old **or** the value cannot be fetched (unattended cloud runs: print `RED · unfilled — books not readable in this environment`). RED is never silent.
+- **RED** when runway < `constraints.runway_floor_months` (the guardrail floor, set in the private config) **or** books-as-of is older than `constraints.books_stale_days` **or** the value cannot be fetched (unattended cloud runs: print `RED · unfilled — books not readable in this environment`). RED is never silent.
 - Two clocks under the runway line: cash clock (months) and calendar clock (days to Q3 close 09-30 / H2 close 12-31).
 
 ### How to compute it (wired 2026-09-13)
 
-Runway is no longer un-metered. `sources.finance_ledger` is the books — bank-reconciled to the
-富邦 statement every month — and the Drive connector can read it, so the **cloud routine computes
+Runway is no longer un-metered. `sources.finance_ledger` is the books — reconciled to the bank
+statement every month — and the Drive connector can read it, so the **cloud routine computes
 this too**. Three reads, in order:
 
 1. `Monthly Summary!A1:H30` — one row per month: `month · income · operating-cost · payroll · misc · total_expenses · net · total`.
-2. **Cash** = column `total` (H) at the last closed month. That column is the running cumulative,
-   and per the ledger's validating identity `cumulative + outstanding personal-card float = 富邦 balance`.
-   Use the cumulative. The float is money owed to Peter.
+2. **Cash** = column `total` (H) at the last closed month. That column is the running cumulative.
+   Use the cumulative, never a bank balance: money the company still owes back sits in the bank
+   balance but is not the company's cash.
 3. **Burn** = the mean of column `net` (G) over the window in `constraints.burn_window`, after
    backing out every row listed in `sources.finance_ledger.runway_read.one_off_ids` (subtract an
    income row from its month's `net`, add a cost row back).
 
-**Ruled 2026-09-21: `trailing_6_ex_oneoff`, with two one-offs.** Answering the W39 brief, the GM
-ruled that the July income windfall does not recur, and that a one-time cost in the same month is
-backed out too, so both sides of July are normalised rather than only the income side. Both rows
-sit in `one_off_ids` in the private config, and the resulting figures live there, not here.
+**The window is the GM's ruling.** `constraints.burn_window` and the rows in `one_off_ids` are
+set by the GM in the private config, with the reason, and the resulting figures live there, not
+here. Example (fictional): a one-time sponsorship lands in one month and a one-time equipment cost
+in the same month; the GM rules both out, so that month is normalised on both sides rather than
+only on the income side.
 
-Rejected along the way: `trailing_3` (July alone swings it net-positive, so there is no finite
-runway) and `trailing_6` as booked (it counts the windfall as run-rate). Stripping only the income
-one-off was the interim reading from 09-13 to 09-21. It was superseded because it left the matching
-one-time cost in, which made July the worst month on the books.
-
-From 09-13 to 09-21 the brief printed both candidates and took the worse state. Keep that behaviour
-for any future unruled window: print every candidate, never pick one silently.
+For any window that is not ruled yet, print every candidate runway and take the worse state;
+never pick one silently.
 
 **One-off / non-operating filter.** Never treat these as operating revenue when reasoning about
-run-rate: `income/transfer` (e.g. a one-time capital injection),
+run-rate: `income/transfer` (money in that was not earned, e.g. a shareholder loan),
 `income/interest`, `misc/refund`, and every id in `one_off_ids`. Key the exclusion by **id**, not
 by note text: the two ruled rows no longer carry 待確認. Row notes live on `Transactions` (column
 K); `Income` and `Costs` are `QUERY` views of it, so link and edit the `Transactions` row — typing

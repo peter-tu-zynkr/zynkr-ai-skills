@@ -43,5 +43,5 @@ ________________
 - No Q&A section, no tools list, no resources table
 - Use 👉 sparingly (once per section at most) for the key takeaway line
 - Time references: use **昨晚** (not 今晚) — the recap is posted the day after the event
-- Opening message: if there is a guest speaker, refer to them by name (e.g. "我跟 Ernie 都走過..."), NOT by the host's own name
+- Opening message: if there is a guest speaker, refer to them by name (e.g. "我跟〈講者名〉都走過..."), NOT by the host's own name
 - Each numbered section should have a subtitle after the number (e.g. 一、這次講座的主題)

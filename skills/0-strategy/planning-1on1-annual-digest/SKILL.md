@@ -4,7 +4,7 @@ sheetId: "0.04"
 description: >-
   Turn ONE teammate's shared 1:1 Doc (weekly WB entries), their LOB plan Doc
   and the tracker rows they own into a zh-TW 「年度計畫＿<name>」 Google Doc in
-  the planning hub folder — six fixed sections (過去一年成果總覽 · 策略透鏡
+  their own locked folder in [7.4] 1^1 — six fixed sections (過去一年成果總覽 · 策略透鏡
   C1–C4 · 復盤 放大／收割／停止或改造 · 年度計劃 3–5 主軸 · OKR · 接下來) with
   every claim tagged to its WB date, plus a 12-line slide summary block for
   that person's session one-pager. Trigger on /planning-1on1-annual-digest or
@@ -25,7 +25,7 @@ visibility: public
 author: Peter Tu
 input: "One person's name (→ 1:1 Doc via sources §B, or a Doc ID) · optional cycle H1/H2/YE (default YE) · optional window (default last 12 months) · optional LOB / plan Doc override"
 process: "Step 0 resolve cycle + sources → parse WB entries into a dated ledger → read LOB plan Doc + owned tracker rows → build 一~六 (timeline · C1–C4 lens · 放大/收割/停止 · 主軸 · OKR · 接下來) → show outline + 待補 list → create Doc in hub → 12-line slide block"
-output: "「年度計畫＿<name>」 Doc in the planning hub folder (zh-TW, six exact sections, WB-dated claims, 待定/（待補） where no source) + a 12-line slide block in chat + a wrote / did-not-touch report"
+output: "「年度計畫＿<name>」 Doc in their [7.4] folder (zh-TW, six exact sections, WB-dated claims, 待定/（待補） where no source) + a 12-line slide block in chat + a wrote / did-not-touch report"
 synergy:
   - "planning-prework-pack"
   - "planning-evidence-pack"
@@ -45,7 +45,7 @@ Before a planning session every owner needs a one-page answer to "what did I
 ship, what does the strategy want from my line, what do I commit to next?" — and
 the raw material sits in fifty weekly 1:1 entries, a LOB plan Doc and a few
 tracker rows. This skill digests those three sources for ONE person into the
-zh-TW 「年度計畫＿<name>」 Doc the team already uses (exemplar 「年度計畫＿Peggy」,
+zh-TW 「年度計畫＿<name>」 Doc the team already uses (exemplar 「年度計畫＿〈姓名〉」,
 sources §A): a WB-dated timeline, the C1–C4 lens, a 放大／收割／停止或改造 retro,
 3–5 ordered 主軸 with 關鍵路徑, an OKR block and three things to do this month.
 Unlike "summarise my notes", every claim carries its WB date, every number
@@ -72,7 +72,7 @@ Docs rather than opined, and the 1:1 Doc itself is never touched.
 
 - **IDs never live in this file.** Hub folder, Main Tracker + SOR tab, per-LOB
   plan Docs, integrated plan Doc, OKR & KPI Tracker and the exemplar
-  「年度計畫＿Peggy」 are in `./references/planning-sources.md` §A; the per-person
+  「年度計畫＿〈姓名〉」 are in `./references/planning-sources.md` §A; the per-person
   1:1 Docs are in §B. A new cycle edits the sources file, not this skill.
 - **Google account + MCP server** for every Docs/Drive/Sheets call: as stated in
   the sources file header (`google-workspace`; override only if the user says so).
@@ -86,14 +86,20 @@ Docs rather than opined, and the 1:1 Doc itself is never touched.
 - **Retro filter** 放大／收割／停止或改造 = pack §6 (last paragraph) · **C1–C4 +
   sequencing** = pack §4 · **taxonomy** = pack §2 · **tracker layout + status
   vocabulary** = pack §6 + §3 · **never-do list** = pack §9.
+- **Where the Doc goes** — the person's own folder inside `[7.4] 1^1`, which only Peter and
+  that person can open. The Doc is built from 1:1 notes, so it never goes into the planning hub:
+  the hub is readable across the domain. The per-person folder IDs are private, like the 1:1
+  Docs (sources §B): take the person's folder ID from the user, and if none is given, stop and
+  ask; never fall back to the hub. planning-prework-pack finds the Doc by name and quotes only its
+  slide block, so it needs no shortcut in the hub.
 - **Doc creation path** — write the filled template to a local `.md`, then
-  `import_to_google_doc(file_name, file_path, folder_id=<hub folder>)`: it accepts
+  `import_to_google_doc(file_name, file_path, folder_id=<person folder>)`: it accepts
   the folder directly and converts `#`/`##` headings + `-` lists to native Docs
   styles (tables / checkboxes do NOT survive — hence the no-table rule). Fallback
   only if the import errors: `create_doc(content=…)` (plain text, lands in My Drive
-  root) → `update_drive_file(add_parents=<hub folder>)`. `create_drive_file` inside
-  a folder returns HTTP 400. Either way the new Doc is **private to the account
-  until shared** — sharing is a separate, confirmed step (Step 8).
+  root) → `update_drive_file(add_parents=<person folder>)`. `create_drive_file` inside
+  a folder returns HTTP 400. Either way the new Doc takes **only its folder's access** (Peter and the person);
+  any further sharing is a separate, confirmed step (Step 8).
 
 ## Hard rules
 
@@ -104,8 +110,8 @@ Docs rather than opined, and the 1:1 Doc itself is never touched.
    wrote it), a tracker cell, the OKR tracker, a plan Doc or the user — else
    `（待補）` for evidence and `待定` for a KR target (pack §9).
 3. **The 1:1 Doc is read-only — so are the tracker, the OKR tracker and every
-   plan Doc.** The only writes are ONE new Doc in the hub folder and the chat
-   output. Never append to, comment on, or reformat the 1:1 Doc.
+   plan Doc.** The only writes are ONE new Doc in the person's [7.4] folder and the
+   chat output. Never append to, comment on, or reformat the 1:1 Doc.
 4. **Ignore the Read me / template block** at the bottom of the 1:1 Doc; a
    template line is never evidence. **Attribute the two voices**: bullets under
    an entry's 「Peter」 sub-block (and the template's "What's on my mind (Peter)"
@@ -133,11 +139,11 @@ Docs rather than opined, and the 1:1 Doc itself is never touched.
 
 Read `./references/planning-sources.md`. Take from the user: `cycle` (`H1` / `H2`
 / `YE`; default `YE` — a half-year run is legal), the window (default the 12
-months ending on the session date or today), and any ID overrides (hub folder,
-tracker, plan Doc, 1:1 Doc). Print one line before doing anything else:
+months ending on the session date or today), the person's [7.4] folder ID, and any ID overrides
+(hub folder, tracker, plan Doc, 1:1 Doc). Print one line before doing anything else:
 
 ```
-Cycle: YE 2026 · window 2025-12-01 → 2026-11-30 · hub folder <id, sources §A> · tracker <id> (SOR tab per pack §6) · 1:1 Doc <id, sources §B or user>
+Cycle: YE 2026 · window 2025-12-01 → 2026-11-30 · hub folder <id, sources §A> · tracker <id> (SOR tab per pack §6) · 1:1 Doc <id, sources §B or user> · output folder <the person's [7.4] folder, from the user>
 ```
 
 Anything unresolved ⇒ stop and ask; never proceed on a guessed ID.
@@ -251,15 +257,15 @@ sections 一–六 verbatim; teammate-facing wording — no pack §／skill／to
 the body), save it as a local `.md` (`#` H1 · `##` 一–六 · `-` bullets), then:
 
 ```
-## preferred: import (folder_id lands it in the hub directly; #/## → native headings)
+## preferred: import (folder_id lands it in the person's [7.4] folder directly; #/## → native headings)
 mcp__google-workspace__import_to_google_doc(user_google_email="<account from sources header>",
   file_name="年度計畫＿<name>", file_path="<local .md>", source_format="md",
-  folder_id="<hub folder id from sources §A>")
+  folder_id="<the person's [7.4] folder id, from the user>")
 ## fallback only if the import errors: plain text, then move
 mcp__google-workspace__create_doc(user_google_email="<same>", title="年度計畫＿<name>",
   content="<filled template>")
 mcp__google-workspace__update_drive_file(user_google_email="<same>",
-  file_id="<doc id>", add_parents="<hub folder id>")
+  file_id="<doc id>", add_parents="<the person's [7.4] folder id>")
 ```
 
 Tables and checkboxes do not survive the import — the template is headings +
@@ -275,17 +281,18 @@ Source · 待補 count) for planning-prework-pack — this block is team-visible
 the block below is illustrative):
 
 ```
-已寫入：年度計畫＿王小明 — <doc url>（hub folder：<folder url>）· 未分享（目前僅 <account> 可見）
+已寫入：年度計畫＿王小明 — <doc url>（[7.4] 個人資料夾：<folder url>）· 只有 <account> 與本人看得到（資料夾的權限）
 Slide block：見上（12 行，可貼給 planning-prework-pack）
 待補／待定：5 處（一、×2 · 五、KR3 · KR4 · 二、C1）
 判讀：日期推定 1 筆（WB 2026/5/6？）· 別名合併 1 組（客服 SOP／客服流程）· Peter 子區塊排除 6 條
 私下備註（僅供主管）：我的感覺 4 週 ≤ 5 分（2026/3–4）— 未寫入 Doc／slide
 未做：未動 1:1 Doc · 未動 tracker／OKR tracker／計畫 Doc · 未分享 Doc · 未寄任何信 · 未建 GM Knowledge Directory 目錄項（如需，人工加）
-要分享給 王小明 嗎？（確認後 manage_drive_access grant → 該員 email，commenter，不寄通知；hub folder 既有權限不變）
+（本人已透過 [7.4] 個人資料夾看得到時省略這行）要分享給 王小明 嗎？（確認後 manage_drive_access grant → 該員 email，commenter，不寄通知；資料夾既有權限不變）
 ```
 
-**Share (only after a second confirmation)** — the Doc is private to the account
-until shared. If Peter says yes, `manage_drive_access(file_id=<doc id>,
+**Share (only after a second confirmation)** — the person's [7.4] folder usually
+admits them already: check the Doc's permissions first and offer this only when it
+does not. If Peter says yes, `manage_drive_access(file_id=<doc id>,
 action="grant", share_with=<the person's work address, from the user>,
 role="commenter", send_notification=false)` (or `role="writer"` if he says so) —
 `send_notification=false` is mandatory: this skill never sends mail, so the
@@ -297,7 +304,7 @@ never share with anyone but the person named.
 
 ## Outputs
 
-- **`年度計畫＿<name>` Google Doc** in the planning hub folder — zh-TW; H1
+- **`年度計畫＿<name>` Google Doc** in the person's own locked [7.4] 1^1 folder — zh-TW; H1
   `<line>・年度計畫（<cycle>）`; header lines 主體／策略依據／協作主管／整理範圍;
   sections 一、過去一年成果總覽 · 二、策略透鏡 · 三、復盤 · 四、年度計劃 ·
   五、年度目標（OKR）· 六、接下來, shaped exactly as `./references/annual-plan-template.md` §A.

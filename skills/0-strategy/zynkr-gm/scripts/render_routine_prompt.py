@@ -106,7 +106,7 @@ SAMPLE_CONFIG = {
     "sources": {"main_tracker": {"id": "<tracker-sheet-id>", "tab": "H2 專案項目"}},
     "owners": [{"name": "Peter"}, {"name": "Bea"}],
     "guardrails": ["never edit tracker", "draft-only when unattended"],
-    "kpi": {"runway_floor_months": 4},
+    "kpi": {"runway_floor_months": 6},
     "routine": {"draft_only": True},
 }
 
@@ -117,7 +117,7 @@ def selftest():
     assert "Account: gm@example.com" in text and "tab H2 專案項目" in text, text
     assert "First owner: Peter / Bea" in text, text
     assert 'Guardrails: ["never edit tracker", "draft-only when unattended"]' in text, text
-    assert "Runway floor: 4 months; draft_only=true" in text, text
+    assert "Runway floor: 6 months; draft_only=true" in text, text
     assert re.search(r"brief — \d{4}-\d{2}-\d{2} \(\d{4}-W\d{2}\)", text), text
     text2, missing2 = render("{{a.b}} {{ nope.x }} {{owners.5.name}} {{today}} {{nullish}}",
                              {"a": {"b": 1}, "nullish": None, "owners": []})

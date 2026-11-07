@@ -279,7 +279,7 @@ header text (`Tracker #`, `Q3 target`, `Q4 target`, `Actual`, and — if present
   evidence. In the cloud routine the CRM is unavailable — the brief marks those lines
   `（排程執行無法讀取 · 待本地補）` rather than guessing.
 - Runway: computed from the ledger per `references/kpi-map.md` § *How to compute it* — cash =
-  cumulative `total` at the last closed month (**not** the 富邦 bank balance), burn = mean `net`
+  cumulative `total` at the last closed month (**not** a bank balance), burn = mean `net`
   over `constraints.burn_window`. The KPI Dashboard's runway/burn `Actual` cells are a **mirror**,
   not the source: if they disagree with the ledger, the ledger wins and block 05 asks Peter to
   refresh them. The one-off rows the GM has ruled are listed by `Transactions` id in

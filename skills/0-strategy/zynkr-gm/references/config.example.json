@@ -51,7 +51,8 @@
     "model": "<model-id>"
   },
   "constraints": {
-    "runway_floor_months": 4,
+    "runway_floor_months": 6,
+    "$runway_floor_note": "Example value. Set your own floor in your private config; it is not published.",
     "books_stale_days": 30,
     "burn_cap_ntd_per_month": 100000,
     "burn_window": null,

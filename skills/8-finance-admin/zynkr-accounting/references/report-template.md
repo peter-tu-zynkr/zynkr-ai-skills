@@ -15,11 +15,11 @@ this month, and what do I owe or need to decide.**
 
 One line, before anything else:
 
-> **對帳結果**：identity held to the dollar (582,599 → 535,183，net −47,416)
+> **對帳結果**：identity held to the dollar (120,000 → 98,500，net −21,500)
 
 or
 
-> **對帳結果**：3 findings — 2 rows appended, 1 unresolved (NT$1,050)
+> **對帳結果**：3 findings — 2 rows appended, 1 unresolved (NT$300)
 
 If the identity did not hold, the reader needs to know that before they read a single figure
 below. Never bury it under a summary table.
