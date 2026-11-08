@@ -65,7 +65,7 @@ from datetime import date
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
-LEDGER_API = 2   # the ledger.py this script was written against (SKB-091); not the Snapshot's LAYOUT marker
+LEDGER_API = 3   # the ledger.py this script was written against (SKB-091; 3 = SKB-118's check_saved); not the Snapshot's LAYOUT marker
 
 
 def core_dir():
@@ -567,7 +567,7 @@ def render_mail(run, rows):
           % (len(rows), esc(run["account"]), esc(GRAMMAR)),
           "<p>回覆只寫核准、退回和編號，後面加句謝謝沒關係；要排除幾件就寫「核准 1 3」，不要寫「除了 2 都核准」。"
          "核准的回覆裡有問句或其他的話，我會請你重寫。記下後我會在這封信下面回信確認；確認前可以再回一封完整的"
-         "取代前一封，確認後就不再改。週日晚上 10 點前回覆都來得及；沒寫到的編號不會套用，週一的週報會列出來。</p>"]
+         "取代前一封，確認後就不再改。週日晚上 10 點（台北時間）前回覆都來得及；沒寫到的編號不會套用，週一的週報會列出來。</p>"]
     if run["mode"] == "shadow":
         o.append("<p><b>試行中</b>：這幾週核准的不會寫進總表，只記錄下來，週一的週報會列出「如果套用會改什麼」。</p>")
     o.append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse\">"
@@ -685,13 +685,17 @@ def load_thread(path):
     include_analysis the tool answers {"content", "analysis"}; the analysis counts drafts."""
     if not os.path.exists(path):
         raise L.Refuse(3, "missing saved result: %s" % path)
+    L.check_saved(path)
     raw = open(path, encoding="utf-8").read().strip()
     obj = None
     if raw.startswith("{"):
         try:
             obj = json.loads(raw)
-        except ValueError:
-            obj = None
+        except ValueError as e:
+            # SKB-118: on 7 Nov a hand copy cut an 18 KB thread at 2 KB, and the step said only "not a
+            # get_gmail_thread_content result"
+            raise L.Refuse(3, "the saved thread %s is not whole JSON (%s): it was cut off when it was saved. "
+                              "Make the thread call again exactly as printed, then run this step again" % (path, e))
     for _ in range(3):
         if isinstance(obj, dict) and isinstance(obj.get("content"), str):
             return obj["content"], obj.get("analysis") if isinstance(obj.get("analysis"), dict) else None
@@ -805,27 +809,46 @@ def polite(s, names=()):
     return bool(POLITE.match(s))
 
 
+# SKB-118: Gmail sets an HTML signature above the quote with no "-- " line, and its plain text opens
+# with the logo's `[image: <alt>]`. On 7 Nov the owner's 全部核准 came back as a question: the
+# signature's tracking link (`…/?utm_source=…`) held the only "?".
+SIG_IMAGE = re.compile(r"^\s*\[image:", re.I)
+# a link's characters are ASCII, and its "?" is followed by more of them: `…/a?` and `…/a？` still ask
+LINK = re.compile(r"<?(?:https?://|www\.)(?:[^\s<>?\u0080-\uffff]|\?(?=[^\s<>\u0080-\uffff]))+>?", re.I)
+
+
 def norm_reply(text):
+    """The reply's own lines, its digits made ASCII. They end at the signature: RFC 3676's "-- " line,
+    or the first `[image:` line when no 核准 or 退回 comes after it (an image the owner set between
+    two instructions cuts nothing, so the reply is asked about, never half read)."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").translate(DIGITS).split("\n")
     out = []
-    for line in text.translate(DIGITS).split("\n"):
+    for i, line in enumerate(lines):
         if line == "-- ":
             break       # RFC 3676's signature line, exactly as Gmail writes it; a typed "--" is the owner's own text
+        if SIG_IMAGE.match(line) and not KEYWORD.search("\n".join(lines[i:])):
+            break
         out.append(line)
     return "\n".join(out)
+
+
+def asks(t):
+    """A question mark outside a link. A link stays talk all the same."""
+    return bool(QUESTION.search(LINK.sub(" ", t)))
 
 
 def has_instruction(text, names=()):
     """Thanks and greetings alone are no answer; anything else is read, and asked about once if it
     cannot be read."""
     t = norm_reply(text)
-    return bool(QUESTION.search(t)) or any(c.strip() and not polite(c.strip(), names) for c in CLAUSE.split(t))
+    return asks(t) or any(c.strip() and not polite(c.strip(), names) for c in CLAUSE.split(t))
 
 
 def parse_reply(text, count, names=()):
     """The owner's reply -> (approve, reject) as sorted lists of row numbers, or Unreadable with the
     reason in zh-TW."""
     t = norm_reply(text)
-    if QUESTION.search(t):
+    if asks(t):
         raise Unreadable("回覆裡有問句，我分不出這是決定還是問題")
     approve, reject, all_ok, all_no, said, talk = set(), set(), False, False, False, None
     for clause in CLAUSE.split(t):
@@ -894,7 +917,7 @@ def confirm_body(ok, no, pending, when, live=False):
 
 def draft_body():
     return ("%s 這封信下面有一份回覆草稿還沒寄出。草稿寄出或刪掉之前，我不會記下任何決定；"
-            "週日晚上 10 點前處理都來得及。" % MARKER)
+            "週日晚上 10 點（台北時間）前處理都來得及。" % MARKER)
 
 
 def reply_call(run, tid, subject, body, msgs, target):
@@ -1280,6 +1303,14 @@ def live_check(d, now=None):
             "write": [updates_write(d, rows)]}
 
 
+def stamp_decided(run, key, ok, no, now):
+    """Tells the schedule that the owner's reply is read and decided (SKB-118): from here nothing about
+    the reply waits on the owner, and a run that fails after it is a failure, not a wait. The runner
+    rewrites `<week>.apply.waiting` at every look that waits, so a later wait outranks this stamp."""
+    write_state(state_file(run["week"], "apply.decided"), "%s reply=%s approved=%s rejected=%s\n" % (
+        L.stamp(L.parse_now(now)), key, ",".join(map(str, ok)), ",".join(map(str, no))))
+
+
 def a_decide(d, now=None):
     run = L.load_run(d)
     live = run["mode"] == "live"
@@ -1350,6 +1381,7 @@ def a_decide(d, now=None):
         ok, no = confirmed_lists(confirms[-1])
         if ([int(c[2]) for c in rows if c[12] == "核准"], [int(c[2]) for c in rows if c[12] == "退回"]) != (ok, no):
             return {"status": "failed", "delivered": "confirmation-disagrees-with-the-Proposals-block"}
+        stamp_decided(run, "confirmed", ok, no, now)
         if live:
             # confirmed in an earlier look: the write is what is left (cells already written read back)
             return {"status": "live", "delivered": "confirmed;writing",
@@ -1408,6 +1440,7 @@ def a_decide(d, now=None):
     nsfx = "-%d" % (look + 1)
     run.update(look=look + 1, decided=decision, decided_cells=[c[12:15] for c in out])
     L.save_run(run)
+    stamp_decided(run, key, ok, no, now)
     return {"status": "recheck", "mode": run["mode"], "approved": ok, "rejected": no, "pending": pending,
             "delivered": delivered,
             "write": [{"tab": "Proposals", "rows_path": write_rows(os.path.join(d, "decided-proposals.json"), out)}],
@@ -1525,6 +1558,28 @@ def selftest():
     reads("全部退回 核准 1", "全部退回 核准 1", 3, ([1], [2, 3]))
     reads("核准第1項和第3項", "核准第1項和第3項", 3, ([1, 3], []))
     reads("the signature is cut", "全部核准\n-- \nPeter Tu\n0912 345 678", 2, ([1, 2], []))
+    # SKB-118: the 7 Nov reply, in shape. Gmail set the HTML signature under the decision with no "-- "
+    # line, and its tracking link held the only "?"
+    sig = ("\n\n[image: Example Co]\n<https://example.com/?utm_source=email-signature&utm_medium=email>\n"
+           "Founder · CEO\nPeter Tu\n+1 555 0100 <+15550100> | peter@example.com | example.com\n"
+           "<https://example.com/?utm_source=email-signature&utm_medium=email>\nMaking things work.\n"
+           "[image: LinkedIn] <https://www.linkedin.com/in/example/>   [image:\nInstagram] <https://www.instagram.com/example/>")
+    reads("a Gmail signature under the decision (7 Nov)", "全部核准" + sig, 1, ([1], []), me)
+    reads("a Gmail signature, CRLF", ("核准 1 3" + sig).replace("\n", "\r\n"), 3, ([1, 3], []), me)
+    reads("CRLF: the -- line still cuts", "全部核准\r\n-- \r\nPeter Tu\r\n0912 345 678", 2, ([1, 2], []))
+    unreadable("an image between two instructions cuts nothing", "核准 1\n[image: screenshot.png]\n退回 2", 3, me)
+    unreadable("a decision under an image is not lost", "[image: logo]\n全部核准", 3, me)
+    unreadable("a question above a Gmail signature", "核准 1？" + sig, 3, me)
+    try:
+        parse_reply("全部核准\n\nPeter Tu\n<https://example.com/?utm_source=x>", 2, me)
+        fails.append("a text signature with a link: was read")
+    except Unreadable as e:
+        check("a link's ? is no question: the reason quotes the link", "問句" not in str(e) and "https://" in str(e), True)
+    check("a link asks nothing", asks("<https://example.com/?utm_source=x&utm_medium=email>"), False)
+    check("a ? ending a link asks", asks("是這個 https://example.com/a?"), True)
+    check("a full-width ？ after a link asks", asks("是這個 https://example.com/a？"), True)
+    check("a ? after a link asks", asks("見 https://example.com/a?b=1 好嗎?"), True)
+    check("instruction: thanks above a Gmail signature is not", has_instruction("謝謝！" + sig, me), False)
     unreadable("no keyword", "我週末再看", 3)
     unreadable("核准 with no number", "核准", 3)
     unreadable("a number out of range", "核准 4", 3)
@@ -1644,6 +1699,28 @@ def selftest():
             open(lp, "w").write(raw)
             got = load_thread(lp)
             check("load_thread: " + name, (got[0], got[1] is not None), ("Thread ID: x", "analysis" in name))
+        # SKB-118: a thread cut off where it was saved says so, not "not a thread"
+        whole = json.dumps({"result": json.dumps({"content": "Thread ID: x\nSubject: s\nMessages: 1\n" + "y" * 400,
+                                                  "analysis": {"excluded_drafts": 0}})})
+        open(lp, "w").write(whole[:200])
+        try:
+            load_thread(lp)
+            fails.append("load_thread: a cut-off thread was read")
+        except L.Refuse as e:
+            check("load_thread: a cut-off thread is refused as cut off", (e.code, "cut off" in str(e)), (3, True))
+        # SKB-118: under the runner, a thread at the printed save path that the runner never saved is
+        # refused here, before anything reads it
+        cap = os.path.join(tmp, "capture-thread")
+        os.makedirs(cap)
+        L.register_calls({"calls": [{"tool": "mcp__google-workspace__get_gmail_thread_content", "args": {}, "save": lp}]}, cap)
+        os.environ[L.CAPTURE_ENV] = cap
+        try:
+            load_thread(lp)
+            fails.append("load_thread: a thread the runner never saved was read")
+        except L.Refuse as e:
+            check("load_thread: a thread the runner never saved is refused", (e.code, "never saved" in str(e)), (3, True))
+        finally:
+            os.environ.pop(L.CAPTURE_ENV, None)
 
         def fmt(sid, rng, rows):
             if not rows:
@@ -2000,7 +2077,9 @@ def selftest():
             out["dir"] = res["dir"]
             return out
 
+        dec = state_file("2026-W42", "apply.decided")
         check("no reply yet waits", apply_with(thread())["delivered"], "no-reply-yet")
+        check("a wait leaves no decided stamp", os.path.exists(dec), False)
         # a draft is open: wait; still open two hours on: one note, remembered once it went out
         drafted = thread(R("核准 1", "(unknown date)"))
         d1 = apply_with(drafted, analysis={"excluded_drafts": 1})
@@ -2042,7 +2121,12 @@ def selftest():
               ("recheck", [1, 3, 4, 5], [2]))
         # the decision: write the Proposals block, read it and the thread again, confirm, then write Updates
         th = thread(R("全部核准 退回 2\n\nOn Fri, Oct 16, 2026 Peter Tu wrote:\n> 提案"))
+        if os.path.exists(dec):
+            os.remove(dec)
         ok = apply_with(th)
+        check("deciding a reply stamps it for the schedule",
+              open(dec, encoding="utf-8").read().split()[2:] if os.path.exists(dec) else None,
+              ["approved=1,3,4,5", "rejected=2"])
         check("decided: the Proposals block is written first, and only it",
               (ok["status"], ok["approved"], ok["rejected"], ok["pending"], [w["tab"] for w in ok["write"]]),
               ("recheck", [1, 3, 4, 5], [2], [], ["Proposals"]))
@@ -2171,7 +2255,11 @@ def selftest():
         check("live: the confirmation says it writes now", "現在寫進總表" in confl["send"]["args"]["body"], True)
         check("live: our confirmation reads back", confirmed_lists(confl["send"]["args"]["body"]), [[1, 3, 4, 5], [2]])
         conf_live = R(confirm_body([1, 3, 4, 5], [2], [], None, True), "Sat, 17 Oct 2026 09:10:00 +0800", owner)
+        os.remove(dec)
         again_l = apply_with(thread(R("全部核准 退回 2"), conf_live), props=out)
+        check("a confirmed reply is stamped decided too",
+              open(dec, encoding="utf-8").read().split()[1:] if os.path.exists(dec) else None,
+              ["reply=confirmed", "approved=1,3,4,5", "rejected=2"])
         check("live, confirmed in an earlier look: the write is what is left",
               (again_l["status"], again_l["delivered"], len(L.load_run(again_l["dir"])["live"]["rows"])),
               ("live", "confirmed;writing", 4))
@@ -2367,6 +2455,8 @@ def selftest():
 
 
 MUTATIONS = [
+    ("a decision not stamped", [("    L.save_run(run)\n    stamp_decided(run, key, ok, no, now)\n", "    L.save_run(run)\n")]),
+    ("a confirmation not stamped", [('        stamp_decided(run, "confirmed", ok, no, now)\n', "")]),
     # (name, [(old, new), ...]) — every pair is applied; each old text must occur exactly once
     ("self-report treated as a meeting", [('meeting = [e for e in rows if e["ref"].startswith("Decisions!")]',
                                            'meeting = list(rows)')]),
@@ -2391,12 +2481,25 @@ MUTATIONS = [
     ("talk beside an approval ignored", [("if talk is not None and (approve or all_ok):", "if False:")]),
     ("a phone line takes any words", [('從我的\\s*[A-Za-z][A-Za-z0-9]*\\s*傳送', '從我的\\s*\\S+\\s*傳送'),
                                       ('sent from my [A-Za-z][A-Za-z0-9]*', 'sent from my \\S+')]),
-    ("a question read as an answer", [("if QUESTION.search(t):\n        raise Unreadable", "if False:\n        raise Unreadable")]),
+    ("a question read as an answer", [("if asks(t):\n        raise Unreadable", "if False:\n        raise Unreadable")]),
     ("text after the numbers ignored", [("if pos == 0 or not polite(c[pos:], names):", "if pos == 0:")]),
     ("numbers without a keyword skipped", [('if not (KEYWORD.search(c) or re.search(r"\\d", c) or CN_NUM.search(c)):',
                                             "if not KEYWORD.search(c):")]),
     ("the signature read", [('if line == "-- ":', "if False:")]),
     ("any dash line taken for a signature", [('if line == "-- ":', 'if line.strip() in ("--", "—"):')]),
+    ("a thread read unchecked", [('        raise L.Refuse(3, "missing saved result: %s" % path)\n    L.check_saved(path)\n    raw = open(path',
+                                 '        raise L.Refuse(3, "missing saved result: %s" % path)\n    raw = open(path')]),
+    ("a cut-off thread passed on", [('        except ValueError as e:\n            # SKB-118: on 7 Nov a hand copy cut',
+                                     '        except ValueError as e:\n            obj = None\n        if False:\n            # SKB-118: on 7 Nov a hand copy cut')]),
+    ("a Gmail signature read", [('        if SIG_IMAGE.match(line) and not KEYWORD.search("\\n".join(lines[i:])):\n            break',
+                                 '        if False:\n            break')]),
+    ("an image cuts whatever follows", [('if SIG_IMAGE.match(line) and not KEYWORD.search("\\n".join(lines[i:])):',
+                                         'if SIG_IMAGE.match(line):')]),
+    ("a link's ? asks", [('    return bool(QUESTION.search(LINK.sub(" ", t)))', '    return bool(QUESTION.search(t))')]),
+    ("a link eats the ? that ends it", [("|\\?(?=[^\\s<>\\u0080-\\uffff]))+", "|\\?)+")]),
+    ("a link eats a full-width ？", [("(?:[^\\s<>?\\u0080-\\uffff]|", "(?:[^\\s<>?]|")]),
+    ("CR kept in a reply", [('    lines = text.replace("\\r\\n", "\\n").replace("\\r", "\\n").translate(DIGITS).split("\\n")',
+                             '    lines = text.translate(DIGITS).split("\\n")')]),
     ("a wrapped zh attribution kept", [("while j > 0 and i - j < 3 and ATTRIB_PART.search(lines[j - 1].strip()):",
                                         "while False:")]),
     ("quoted text parsed", [('body = strip_quote(m["body"])', 'body = m["body"]')]),

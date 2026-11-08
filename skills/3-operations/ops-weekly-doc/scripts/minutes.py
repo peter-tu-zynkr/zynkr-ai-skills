@@ -40,7 +40,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta
 
-LEDGER_API = 2
+LEDGER_API = 3   # SKB-118: check_saved
 
 
 def core_dir():
@@ -166,6 +166,7 @@ def m_find(d):
     p = os.path.join(d, "listing.json")
     if not os.path.exists(p):
         raise L.Refuse(3, "missing saved result: %s" % p)
+    L.check_saved(p)
     try:
         listing = json.load(open(p, encoding="utf-8"))
     except ValueError as e:
@@ -484,6 +485,26 @@ def selftest():
                                           "dateString": "2026-10-22T13:00:00.000Z"}])},
                   open(os.path.join(d, "listing.json"), "w"))
         ok("find: a wrapped result reads too", m_find(d).get("id") == "A")
+        # SKB-118: under the runner, a listing at the printed save path that the runner never saved is
+        # refused here, and one it saved reads
+        import hashlib
+        lp, cap = os.path.join(d, "listing.json"), os.path.join(tmp, "capture-find")
+        os.makedirs(cap)
+        L.register_calls({"calls": [{"tool": "mcp__fireflies__fireflies_get_transcripts", "args": {}, "save": lp}]}, cap)
+        os.environ[L.CAPTURE_ENV] = cap
+        try:
+            try:
+                m_find(d)
+                ok("find: a listing the runner never saved is refused", False)
+            except L.Refuse as e:
+                ok("find: a listing the runner never saved is refused", e.code == 3 and "never saved" in str(e), str(e))
+            rec = L.saved_record(cap, lp)
+            os.makedirs(os.path.dirname(rec))
+            with open(rec, "w", encoding="utf-8") as f:
+                json.dump({"path": lp, "sha256": hashlib.sha256(open(lp, "rb").read()).hexdigest(), "tool": "x"}, f)
+            ok("find: a listing the runner saved reads", m_find(d).get("id") == "A")
+        finally:
+            os.environ.pop(L.CAPTURE_ENV, None)
 
         rows = [["#", "主類別", "子類別", "項目（正規化）"], ["1.0", "1.0 Marketing", "", ""],
                 ["1.08", "1.0 Marketing", "1.3 名單", "電子報"], ["2.01", "2.0 Sales", "2.1", "業務流程"],
@@ -660,6 +681,7 @@ MUTATIONS = [
     ("future blockers accepted", [("        if since and since > thu:", "        if False:")]),
     ("the heading zero-padded", [("    return \"%s %d, %d\" % (d.strftime(\"%b\"), d.day, d.year)", "    return d.strftime(\"%b %d, %Y\")")]),
     ("an undated entry is today's", [("    if not s:\n        return None", "    if False:\n        return None")]),
+    ("the listing read unchecked", [("    L.check_saved(p)\n    try:\n        listing = json.load", "    try:\n        listing = json.load")]),
 ]
 
 if __name__ == "__main__":

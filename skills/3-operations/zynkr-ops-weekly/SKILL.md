@@ -144,6 +144,15 @@ receipts `status=ok` with `already-…`.
 
 ## The modes
 
+**Saved by the runner (`SKB-118`).** Under the runner each call a script prints also carries
+`"saved_by": "runner"`: the runner saves its result itself, exactly as the tool returned it, the moment
+the call returns, and says so. Make the call with `args` copied exactly, and do not save it: the guard
+refuses a Write to that path. Wherever a step below says to save a printed call's result, a call marked
+so is already saved. Never edit or rewrite a saved result, with any tool: every step refuses one that
+changed after the runner saved it. When a step says a result is missing, does not parse or changed, make
+that call again exactly as printed and run the step again; if it still refuses, receipt `status=failed`
+with its message.
+
 ### `collect` (Wed 14:30 → 21:00)
 
 Each person's week, from the Wednesday harvest routine's files (`SKB-094`) into the Ledger's

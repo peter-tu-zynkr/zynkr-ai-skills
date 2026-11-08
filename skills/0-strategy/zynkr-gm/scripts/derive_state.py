@@ -23,14 +23,15 @@ Rules (today = --today):
   CHANGED       any of 狀態/開始/結束/負責人 differs from the --prev snapshot (new rows count as CHANGED)
   PROPOSE_DONE  狀態 == 進行中 and 備註 says the whole item is done: 完成|結案|上線|shipped|done
                 preceded by 已/已經/already or opening a segment (「完成 2026-09-21」); not 「快完成」,
-                「WBS 10/12 完成」, 「完成度」 or a future date (「上線 11/20」)
+                「WBS 10/12 完成」, 「完成度」 or a future date (「上線 11/20」); and before 已 the clause
+                names nothing, 全部, or the item itself (「drip 已上線」), never a part (「銷售頁已上線」)
   DONE          狀態 == 完成 (terminal; excluded from load and from every deadline/date flag)
   PAUSED        狀態 == 暫停 (no schedule; check the weekly log — a "paused" row that is actually
                 running is a real SOR divergence and belongs in the brief)
   UNKNOWN_STATUS 狀態 outside the vocabulary above
 Placeholder dates ("YYYY-MM-DD", "MM-DD", "TBD", blank) are treated as undated.
 
-Output (--json): {today, rows:[{id,item,priority,owner,status,start,end,states,evidence}],
+Output (--json): {today, rows:[{id,item,priority,owner,status,start,end,note,done_clause,states,evidence}],
                   summary:{...counts + id lists}, by_owner:{owner:{p0,p1,undated,overdue,ends_soon}}}
 Default output is a compact text report of the same.
 
@@ -53,6 +54,21 @@ DONE_ALREADY = re.compile(r"(?:已經|已经|已|already)\s*$", re.IGNORECASE)
 DONE_SEGMENT_START = re.compile(r"(?:^|[｜|：:；;。\n]|(?:^|[｜|：:；;。\n])\s*(?:\d+[.、)）]|[-•*]))\s*$")
 DONE_MEASURE_AFTER = re.compile(r"^(?:度|率|前|後|后|日|時間|时间|目標|目标)")
 DONE_DATE_AFTER = re.compile(r"^\s*[:：]?\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}/\d{1,2})")
+# 「X 已上線」 counts only when X is the item itself: the clause before 已 names nothing (「已經完成」), says
+# all of it in whole-item words (「全部已完成」「整個專案已完成」「狀態：完成」), or names the item, an alias in its
+# parentheses, or at least half of its name, with such words or without (「drip 已上線」「Drip 全部已上線」 on
+# 電子報 Drip). A clause that names something else is a step of the item: 「一頁式銷售頁已上線」 on a course,
+# 「MCP server 9/27 已上線」 on a platform. Both were flagged for the recap of 9 Nov (SKB-118). When nothing but a
+# date stands between a colon and the done-word, X is the label before the colon: 「銷售頁：完成」「銷售頁：已上線」.
+# After ｜ a done-word opens a new statement, as the tracker marks a finished item: 「KPI list ｜ 完成 2026-09-21」.
+# A separator inside parentheses, and a clock time's colon (14:00), split nothing.
+DONE_CLAUSE_SEP = re.compile(r"[｜|；;。，,、\n]|(?<!\d)[:：]|[:：](?!\d)")
+DONE_LABEL_SEP = "：:"
+DONE_QUOTE_END = re.compile(r"[｜|；;。，,、\n]")
+DONE_WHOLE = re.compile(r"全部|全案|本案|此案|專案|本專案|整個|整體|都|狀態|進度|目前|現況|備註|all|everything|status|progress",
+                        re.IGNORECASE)
+DONE_PARENS = re.compile(r"（[^）]*）|\([^)]*\)")
+DONE_NOISE = re.compile(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}/\d{1,2}|\d{1,2}[:：]\d{2}|\d+[.、)）](?!\d)|[-•*]|\s+")
 STATUS_NOT_STARTED, STATUS_ACTIVE, STATUS_DROPPED, STATUS_DONE, STATUS_PAUSED = "未開始", "進行中", "放棄", "完成", "暫停"
 KNOWN_STATUSES = frozenset({STATUS_NOT_STARTED, STATUS_ACTIVE, STATUS_DROPPED, STATUS_DONE, STATUS_PAUSED})
 TERMINAL_STATUSES = frozenset({STATUS_DROPPED, STATUS_DONE})      # no owner load, no flags
@@ -101,19 +117,83 @@ def parse_date(text, today):
     return None, "placeholder"
 
 
-def done_word(note, today):
-    """The done-word that says the whole item is finished, or None (see DONE_ALREADY / DONE_SEGMENT_START)."""
+def squash(text):
+    return DONE_NOISE.sub("", text).lower()
+
+
+def masked(text):
+    """The text with each parenthesized span blanked, same length: a separator inside one splits nothing."""
+    return DONE_PARENS.sub(lambda m: " " * len(m.group(0)), text)
+
+
+def clause_start(note, upto):
+    """Where the clause that runs up to `upto` begins: just after the last separator before it."""
+    return max((s.end() for s in DONE_CLAUSE_SEP.finditer(masked(note), 0, upto)), default=0)
+
+
+def names_item(text, names):
+    """The text is the item: its name, an alias in its parentheses, or at least half of its name."""
+    return any(text in n and 2 * len(text) >= len(n) for n in names)
+
+
+def about_item(clause, item):
+    """Whether the clause a done-word is about names the whole item: it names nothing, says all of it in
+    whole-item words alone (DONE_WHOLE: 「全部都」「整個專案」), or names the item (names_item), with such
+    words or without (「線上課 全部」). Without an item to compare, none or a blank 項目, every clause is."""
+    item = item or ""
+    subject = squash(DONE_PARENS.sub("", clause))
+    names = [n for n in [squash(DONE_PARENS.sub("", item))] + [squash(p[1:-1]) for p in DONE_PARENS.findall(item)] if n]
+    if not names or not subject or names_item(subject, names):
+        return True
+    rest = DONE_WHOLE.sub("", subject)
+    return not rest or names_item(rest, names)
+
+
+def quote(note, lo, end):
+    """The clause a done-word stands in, from `lo` to the end of its clause, as the recap quotes it."""
+    nxt = DONE_QUOTE_END.search(masked(note), end)
+    text = " ".join(note[lo:nxt.start() if nxt else len(note)].split())
+    return text if len(text) <= 40 else text[:39] + "…"
+
+
+def done_match(note, today, item=None):
+    """(the done-word, the clause it stands in) when the note says the whole item is finished, else None
+    (see DONE_ALREADY / DONE_SEGMENT_START / DONE_WHOLE)."""
     for m in DONE_WORDS.finditer(note):
         before, after = note[:m.start()], note[m.end():]
         if DONE_MEASURE_AFTER.match(after):            # 完成度 · 完成率 · 上線日 · 上線前 — a measure, not a fact
             continue
-        if not (DONE_ALREADY.search(before) or DONE_SEGMENT_START.search(before)):
+        already = DONE_ALREADY.search(before)
+        seg = None if already else DONE_SEGMENT_START.search(before)
+        if already:
+            lo = clause_start(note, already.start())
+            subject = note[lo:already.start()]
+            if lo and note[lo - 1] in DONE_LABEL_SEP and not squash(DONE_PARENS.sub("", subject)):
+                colon = lo - 1                          # 「銷售頁：已上線」: the label is what is done
+                lo = clause_start(note, colon)
+                subject = note[lo:colon]
+        elif seg:
+            sep = before[seg.start()] if seg.start() < len(before) else ""
+            if sep and sep in DONE_LABEL_SEP:           # 「銷售頁：完成」: the label is what is done
+                lo = clause_start(note, seg.start())
+                subject = note[lo:seg.start()]
+            else:                                       # 「完成 2026-09-21」「1. x\n2. 結案」: a new statement
+                lo, subject = clause_start(note, m.start()), ""
+        else:
             continue
+        if not about_item(subject, item):
+            continue                                    # 「銷售頁已上線」 — a step of the item
         d = DONE_DATE_AFTER.match(after)
         if d and (parse_date(d.group(1), today)[0] or today) > today:   # 「上線 11/20」 is a plan
             continue
-        return m.group(0)
+        return m.group(0), quote(note, lo, m.end())
     return None
+
+
+def done_word(note, today, item=None):
+    """The done-word that says the whole item is finished, or None (see done_match)."""
+    found = done_match(note, today, item)
+    return found[0] if found else None
 
 
 def is_header(row):
@@ -178,10 +258,10 @@ def derive(rows, today, prev_rows=None):
                 if diffs:
                     states.append("CHANGED")
                     evidence.extend(diffs)
-        done = done_word(note, today) if status == "進行中" and note else None
+        done = done_match(note, today, item) if status == "進行中" and note else None
         if done:
             states.append("PROPOSE_DONE")
-            evidence.append(f"備註 matches done-word: {done!r} (status still 進行中)")
+            evidence.append(f"備註 matches done-word: {done[0]!r} in 「{done[1]}」 (status still 進行中)")
         if status == STATUS_DONE:
             states.append("DONE")
             evidence.append(f"狀態 {STATUS_DONE} — terminal; dropped from owner load and from deadline/date flags")
@@ -197,6 +277,7 @@ def derive(rows, today, prev_rows=None):
             "status": status, "start": start.isoformat() if start else None,
             "end": end.isoformat() if end else None,
             "start_raw": start_raw, "end_raw": end_raw, "note": note,
+            "done_clause": done[1] if done else "",
             "states": states, "evidence": evidence,
         })
     return out
@@ -358,6 +439,38 @@ def selftest():
                        ("完成度 80%", None), ("上線日 8/20", None), ("上線 9/20", None), ("完成 8/10", "完成"),
                        ("abandoned", None), ("not done yet", None), ("", None)):
         assert done_word(note, t) == want, (note, done_word(note, t), want)
+    # ... and before 已 the note names nothing, all of it, or the item itself: never a part (recap 9 Nov)
+    for note, item, want in (("drip 已上線", "電子報 Drip", "上線"), ("drip（第二版）已上線", "電子報 Drip", "上線"),
+                             ("控制台已上線", "知識平台（控制台）", "上線"), ("全部已完成", "線上課", "完成"),
+                             ("11/3 已上線", "線上課", "上線"), ("完成 2026-08-10｜名單：x", "線上課", "完成"),
+                             ("2026-11-03（A/B 1:1）：一頁式銷售頁已上線、見證已放上", "線上課", None),
+                             ("搜尋 API（X-010）9/27 已上線；索引改善中", "知識平台（控制台）", None),
+                             ("MCP server already shipped", "Knowledge platform", None),
+                             # code review of #131: a label before a colon is the subject, while ｜ starts a new
+                             # statement (the tracker's 「…｜完成 <date>」); a clock time and a colon in parentheses
+                             # split nothing; and one word of the name is a part of it
+                             ("銷售頁：完成", "線上課", None), ("KPI list ｜ 完成 2026-08-01", "KPI", "完成"),
+                             ("主要用於公司內部營運｜完成 2026-08-01", "使用 Zynkr", "完成"),
+                             ("線上課：完成", "線上課", "完成"), ("狀態：完成", "線上課", "完成"), ("11/3｜完成", "線上課", "完成"),
+                             ("11/3 14:00 已上線", "線上課", "上線"), ("drip（v2: final）已上線", "電子報 Drip", "上線"),
+                             ("頁已上線", "線上課程銷售頁", None), ("廣告已上線", "線上課程銷售頁與廣告", None),
+                             # round 2: a label before 「：已」 too; whole-item words together, or beside the
+                             # item's name; and a blank 項目 compares nothing
+                             ("銷售頁：已上線", "線上課", None), ("銷售頁:已完成", "線上課", None),
+                             ("銷售頁：11/3 已上線", "線上課", None), ("狀態：銷售頁已上線", "線上課", None),
+                             ("線上課：已完成", "線上課", "完成"), ("狀態：已完成", "線上課", "完成"),
+                             ("全部都已完成", "線上課", "完成"), ("整個專案已完成", "線上課", "完成"),
+                             ("目前都已上線", "線上課", "上線"), ("線上課 全部已完成", "線上課", "完成"),
+                             ("Drip 全部已上線", "電子報 Drip", "上線"), ("銷售頁全部已上線", "線上課", None),
+                             ("銷售頁已上線", "", "上線")):
+        assert done_word(note, t, item) == want, (note, item, done_word(note, t, item), want)
+    assert done_match("線上課：完成", t, "線上課") == ("完成", "線上課：完成")
+    assert done_match("11/3 14:00 已上線", t, "線上課") == ("上線", "11/3 14:00 已上線")
+    assert done_match("線上課：已完成", t, "線上課") == ("完成", "線上課：已完成")
+    assert done_match("章程 8/8｜drip 已上線，等驗收", t, "電子報 Drip") == ("上線", "drip 已上線")
+    step = derive([_row("9.01", "9.0", "線上課", "P1", "Ann", "2026-08-01", "2026-12-30", "進行中", "銷售頁已上線")], t)[0]
+    assert "PROPOSE_DONE" not in step["states"] and step["done_clause"] == "", step
+    assert by_id["1.08"]["done_clause"] == "drip 已上線" and "「drip 已上線」" in by_id["1.08"]["evidence"][-1], by_id["1.08"]
     render_text(res)
     print("derive_state selftest OK")
     return 0

@@ -26,7 +26,7 @@ import os
 import re
 import sys
 
-LEDGER_API = 2
+LEDGER_API = 3   # SKB-118: load_result refuses a result changed after the runner saved it
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 

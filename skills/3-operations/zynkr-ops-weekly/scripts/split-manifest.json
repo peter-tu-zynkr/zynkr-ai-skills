@@ -15,6 +15,7 @@
         "references/routing.md",
         "references/wording.md",
         "scripts/README.md",
+        "scripts/capture.py",
         "scripts/check_manifest.py",
         "scripts/harvest.py",
         "scripts/ledger.py",

@@ -42,10 +42,12 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 LAYOUT = "layout v1"
-API = 2               # what ops-weekly-tracker and ops-weekly-doc check before importing this file (SKB-091)
+API = 3               # what ops-weekly-tracker and ops-weekly-doc check before importing this file (SKB-091;
+                      # 3 = SKB-118: check_saved, and load_result refuses a result changed after the runner saved it)
 SLOT = 100            # rows per week in Snapshot; changing it moves every later week's block
 PAGE = 50             # read_sheet_values shows at most 50 rows
 TPE = timezone(timedelta(hours=8))   # Asia/Taipei has no DST; a fixed offset needs no tz database
@@ -157,6 +159,7 @@ def stamp(now):
 def load_result(path):
     if not os.path.exists(path):
         raise Refuse(3, "missing saved result: %s" % path)
+    check_saved(path)
     text = open(path, encoding="utf-8").read().strip()
     if text.startswith("{"):
         try:
@@ -353,8 +356,178 @@ def save_run(run):
         json.dump(run, f, ensure_ascii=False, indent=1)
 
 
+# ── the runner saves what each printed call returns (SKB-118) ───────────────
+# Under the runner the model no longer copies a tool's result into its save file by hand. On 7 Nov the
+# hand copies drifted three ways: a narrow no-break space (U+202F, Gmail's "2:01 PM") came out as a
+# space, an 18 KB thread was cut at 2 KB, and a sheet read's escaped line breaks came out as real ones,
+# which the run then "repaired" with inline Python before the checks. Now `emit` registers each printed
+# call that has a save path, in the folder the runner names, and marks it saved_by runner; capture.py,
+# the runner's PostToolUse hook, writes the result of a call made exactly as printed (the same tool, the
+# same args) to that path, byte for byte. Without the folder (any run outside the runner) nothing
+# changes: the model saves each result, as before.
+CAPTURE_ENV = "ZYNKR_OPS_WEEKLY_CAPTURE"
+SAVED_BY = "runner"
+# Each folder the runner saves results into holds this note, naming the capture folder. A step that reads
+# such a folder without that capture folder in view (its env var dropped or pointed elsewhere) is refused:
+# what the runner saved is never read unchecked (the security review of 7 Nov).
+RUN_MARK = ".runner-saves"
+
+
+def capture_dir():
+    d = os.environ.get(CAPTURE_ENV, "").strip()
+    return d if d and os.path.isdir(d) else None
+
+
+def call_key(tool, args):
+    """One name per call: the tool and its args, keys sorted. A call made with any arg changed is
+    another call: the runner does not save it, and the step that reads its file says it is missing."""
+    text = tool + "\n" + json.dumps(args, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+
+
+def printed_calls(obj):
+    """Every {"tool", "args", "save"} dict anywhere in a step's output."""
+    if isinstance(obj, dict):
+        if isinstance(obj.get("tool"), str) and isinstance(obj.get("args"), dict) and isinstance(obj.get("save"), str):
+            yield obj
+        for value in obj.values():
+            yield from printed_calls(value)
+    elif isinstance(obj, list):
+        for value in obj:
+            yield from printed_calls(value)
+
+
+def write_atomic(path, data):
+    """Write bytes to `path` through a temp file made fresh beside it (never one a link already sits at),
+    then renamed over `path`: a link at `path` itself is replaced, not followed."""
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=os.path.dirname(os.path.abspath(path)))
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def mark_folder(folder, cap):
+    """Note in `folder` that the runner saves printed calls' results there, through this capture folder."""
+    write_atomic(os.path.join(folder, RUN_MARK), (os.path.realpath(cap) + "\n").encode("utf-8"))
+
+
+def printed_saves(record):
+    """Every path a call's record in the capture folder names: where the runner saves its result now
+    ("save"), and every path a step printed for it before ("printed")."""
+    out = []
+    for key in ("save", "printed"):
+        v = record.get(key) if isinstance(record, dict) else None
+        out += [p for p in (v if isinstance(v, list) else [v]) if isinstance(p, str)]
+    return out
+
+
+def register_calls(obj, cap):
+    """Name each printed call's save path in the capture folder and mark the call saved_by runner. A
+    later step that prints the same call again names its own path, which replaces the earlier one as
+    where the runner saves it (a re-read goes to thread-2.txt, and thread.txt keeps what the first read
+    returned); the same call printed twice in one step is saved to both paths. Every path printed for a
+    call stays on its record ("printed"), so a path no result was saved to is refused however many steps
+    printed the call (check_saved)."""
+    paths = {}
+    for c in printed_calls(obj):
+        paths.setdefault(call_key(c["tool"], c["args"]), (c, []))[1].append(os.path.abspath(c["save"]))
+        c["saved_by"] = SAVED_BY
+    for key, (c, saves) in paths.items():
+        reg = os.path.join(cap, key + ".json")
+        try:
+            with open(reg, encoding="utf-8") as f:
+                before = printed_saves(json.load(f))
+        except (OSError, ValueError):
+            before = []
+        write_atomic(reg, json.dumps({"tool": c["tool"], "args": c["args"], "save": saves,
+                                      "printed": list(dict.fromkeys(before + saves))},
+                                     ensure_ascii=False).encode("utf-8"))
+    # Only a real folder inside the run folders, as capture.py saves only there: never through a link out
+    # of them. A folder that does not exist yet is marked when capture.py saves into it.
+    runs = os.path.realpath(os.path.join(state_dir(), "runs"))
+    for folder in sorted({os.path.realpath(os.path.dirname(p)) for _c, saves in paths.values() for p in saves}):
+        if folder.startswith(runs + os.sep) and os.path.isdir(folder):
+            mark_folder(folder, cap)
+
+
 def emit(obj):
+    cap = capture_dir()
+    if cap:
+        register_calls(obj, cap)
     print(json.dumps(obj, ensure_ascii=False, indent=1))
+
+
+def path_key(path):
+    """The capture folder's name for what the runner saved at a path, however the path is spelled
+    (resolved, so a run folder reached through a link names the same file)."""
+    return hashlib.sha256(os.path.realpath(path).encode("utf-8")).hexdigest()[:32]
+
+
+def saved_record(cap, path):
+    """Where capture.py notes the sha256 of what it saved at `path`."""
+    return os.path.join(cap, "saved", path_key(path) + ".json")
+
+
+def run_mark(path):
+    """The capture folder named in the folder that holds `path`, or None when the runner saves nothing
+    there ("" when the note does not read)."""
+    for d in dict.fromkeys((os.path.dirname(os.path.abspath(path)), os.path.dirname(os.path.realpath(path)))):
+        try:
+            with open(os.path.join(d, RUN_MARK), encoding="utf-8") as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            return ""
+    return None
+
+
+def check_saved(path):
+    """A printed call's result is read only as the runner saved it. In a folder the runner saves into, a
+    step that cannot see the runner's capture folder (its env var dropped, or pointed elsewhere) reads
+    nothing. With it, a file that changed after capture.py saved it, by whatever tool, or a file at a
+    printed save path the runner never saved, is refused. A folder the runner never saved into (every
+    run outside it), and a file no printed call names, are not checked."""
+    cap = capture_dir()
+    mark = run_mark(path)
+    if mark is not None and not (cap and os.path.realpath(cap) == mark):
+        raise Refuse(3, "%s is in a folder the runner saves results into, and this step cannot see the "
+                        "runner's record of them (SKB-118): run the printed command exactly as printed, with "
+                        "nothing added to it" % path)
+    if not cap:
+        return
+    p = os.path.realpath(path)
+    rec = saved_record(cap, p)
+    if os.path.exists(rec):
+        try:
+            with open(rec, encoding="utf-8") as f:
+                want = json.load(f)["sha256"]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise Refuse(3, "the runner's record of %s does not read (%s)" % (path, e))
+        with open(p, "rb") as f:
+            got = hashlib.sha256(f.read()).hexdigest()
+        if got != want:
+            raise Refuse(3, "%s changed after the runner saved it (SKB-118): a saved result is never edited. "
+                            "Make that call again exactly as printed, then run this step again" % path)
+        return
+    for name in os.listdir(cap):
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(cap, name), encoding="utf-8") as f:
+                saves = printed_saves(json.load(f))
+        except (OSError, ValueError):
+            continue
+        if p in {os.path.realpath(s) for s in saves}:
+            raise Refuse(3, "%s is a printed call's result, but the runner never saved it (SKB-118): make "
+                            "that call exactly as printed, then run this step again" % path)
 
 
 # ── snapshot steps ───────────────────────────────────────────────────────────

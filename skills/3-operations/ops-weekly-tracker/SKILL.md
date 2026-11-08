@@ -60,7 +60,9 @@ it the same way (`ZYNKR_OPS_WEEKLY_SCRIPTS` overrides) and refuses a core of ano
 
 The 【週結】 deadline is on the team's clock, Sunday 22:00 Taipei. The modes' windows are on the
 runner's clock (`SKB-114`), which need not be Taipei's; on it `apply` looks on every tick from an
-hour before the deadline until half an hour after it.
+hour before the deadline until half an hour after it. Once `apply-decide` has recorded the owner's
+decision, it stamps the week's `apply.decided` for the schedule: nothing waits on the owner after that
+(`SKB-118`). Once the week's snapshot is taken, `apply` runs no more that week.
 
 ## Configuration
 
@@ -89,6 +91,15 @@ Every printed call is `{"tool", "args", "save"}`: call `tool` with `args` copied
 tool's whole result, unchanged, to the `save` path with the Write tool. Never retype, trim, reformat or
 summarise a result. The next step parses it and refuses anything that does not match, and that
 refusal is the point: a copied cell that drifted is how `1.10` becomes `1.1`.
+
+**Saved by the runner (`SKB-118`).** Under the runner each printed call also carries
+`"saved_by": "runner"`: the runner saves its result itself, exactly as the tool returned it, the moment
+the call returns, and says so. Make the call with `args` copied exactly, and do not save it: the guard
+refuses a Write to that path. Wherever a step below says to save a result, a call marked so is already
+saved. Never edit or rewrite a saved result, with any tool: every step refuses one that changed after
+the runner saved it. When a step says a result is missing, does not parse or changed, make that call
+again exactly as printed and run the step again; if it still refuses, receipt `status=failed` with its
+message.
 
 A **block write** below is always the same four steps: `python3 <core>/scripts/ledger.py block start
 --tab <tab> --week <W> --rows <rows_path>`, then `block plan`, `block check` and `block confirm`,
@@ -258,6 +269,7 @@ Each printed call is `{"tool", "args", "save"}`: call `tool` with `args` copied 
 the tool's whole result, unchanged, to the `save` path with the Write tool. Never retype, trim,
 reformat or summarise a result. The next step parses it and refuses anything that does not
 match, and that refusal is the point: a copied cell that drifted is how `1.10` becomes `1.1`.
+A call marked `"saved_by": "runner"` is saved for you, as above: make it, and never save or edit it.
 
 1. **The week.** Use the `week=` argument the runner passes (`week=2026-W40`). Without one (an
    interactive backfill), run `python3 <core>/scripts/ledger.py week` and ask the person which week to

@@ -96,7 +96,7 @@ Body sections, in order:
    這封信寄出前沒有收到 Sales Pulse」.
 3. **上週改了什麼** — every changed cell in the Main Tracker between the last two Friday snapshots,
    `#1.03 SEO 文章 — 狀態：進行中 → 完成`, plus items added and removed.
-4. **要注意的** — 逾期 · 兩週內到期 · P0/P1 還沒排日期 · 備註說做完了但狀態沒改, each with its evidence,
+4. **要注意的** — 逾期 · 兩週內到期 · P0/P1 還沒排日期 · 備註看起來做完了但狀態沒改, each with its evidence,
    from zynkr-gm's state rules.
 5. **上週談定的事** — 決議 and 放棄 (`放棄：…`) with 負責人 and 期限, then 還沒定案 (卡關 · 風險 ·
    待討論). Not recorded → say so and point to the Doc.

@@ -173,8 +173,13 @@ def why(state, row, today):
     if state == "ENDS_SOON":
         return ("%s 到期，還有 %d 天" % (md(end), (end - today).days)) if end else "快到期"
     if state == "PROPOSE_DONE":
-        note = " ".join(str(row.get("note") or "").split())
-        return "備註寫「%s」，狀態還是%s" % (note[:40] + ("…" if len(note) > 40 else ""), row.get("status") or "")
+        # the clause that says it is done, as derive_state quotes it (SKB-118); state rules from before
+        # then give none, and the note's start stands in
+        said = " ".join(str(row.get("done_clause") or "").split())
+        if not said:
+            note = " ".join(str(row.get("note") or "").split())
+            said = note[:40] + ("…" if len(note) > 40 else "")
+        return "備註寫「%s」，狀態還是%s" % (said, row.get("status") or "")
     if state == "UNKNOWN_STATUS":
         return "狀態寫成「%s」，不在清單裡" % (row.get("status") or "")
     return ""
@@ -682,7 +687,7 @@ def render_html(facts, tldr):
     o.append("<h3>要注意的</h3>")
     groups = []
     for key, title in (("overdue", "逾期"), ("ends_soon", "兩週內到期"), ("undated", "P0/P1 還沒排日期"),
-                       ("propose_done", "備註說做完了，狀態還沒改"), ("unknown_status", "狀態寫法不在清單裡")):
+                       ("propose_done", "備註看起來做完了，狀態還沒改"), ("unknown_status", "狀態寫法不在清單裡")):
         if facts[key]:
             items = "".join(li("#%s %s（%s）— %s" % (esc(x["#"]), esc(x["項目"]), esc(x["負責人"] or "沒有負責人"),
                                                      esc(x["why"]))) for x in facts[key])
@@ -1285,6 +1290,12 @@ def selftest():
         check("why: end missing", why("UNDATED", {"start": "2026-09-07", "end": None}, date(2026, 10, 5)), "結束還沒排")
         check("why: ends soon", why("ENDS_SOON", {"end": "2026-10-10"}, date(2026, 10, 5)), "10/10 到期，還有 5 天")
         check("why: not started", why("OVERDUE", {"status": "未開始", "start": "2026-07-01"}, date(2026, 10, 5)), "原訂 7/1 開始，還沒開始")
+        done_row = {"status": "進行中", "note": "Folder：規劃稿・簡報｜2026-10-19 同步｜drip 已上線，等驗收", "done_clause": "drip 已上線"}
+        check("why: done quotes the clause that says so", why("PROPOSE_DONE", done_row, date(2026, 10, 5)),
+              "備註寫「drip 已上線」，狀態還是進行中")
+        done_row.pop("done_clause")
+        check("why: done, from older state rules, quotes the note's start", why("PROPOSE_DONE", done_row, date(2026, 10, 5)),
+              "備註寫「Folder：規劃稿・簡報｜2026-10-19 同步｜drip 已上線，等驗收」，狀態還是進行中")
 
         # without recap_audience = team, the recap goes to the owner alone
         cfg_owner = os.path.join(tmp, "cfg-owner.json")
@@ -1418,6 +1429,7 @@ def selftest():
 
 # ── mutation check: each breakage must turn the selftest red ────────────────
 MUTATIONS = [
+    ("the done clause not quoted", [('        said = " ".join(str(row.get("done_clause") or "").split())\n', '        said = ""\n')]),
     ("the 技能更新 block is dropped", [('    sk = (facts.get("skills") or {}).get("lines") or []', '    sk = []')]),
     ("the Skills read stops at its first page", [('                for a in range(first, last + 1, ledger.PAGE):\n                    name, prng = "%s%d"',
                                                   '                for a in range(first, first + 1, ledger.PAGE):\n                    name, prng = "%s%d"')]),
