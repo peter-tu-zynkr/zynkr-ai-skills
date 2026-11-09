@@ -3,7 +3,7 @@ name: sales-discovery-prep
 category: sales-consultant
 project: sales-discovery-prep
 platform: claude
-status: WIP
+status: Done
 visibility: public
 author: Peter Tu
 sheetId: "2.17"
@@ -25,12 +25,13 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-d
 
 Turn what we already know about a client into a plan for the 30-minute discovery call: two hypotheses worth
 testing, the questions to ask (each with why we ask it, what the client will probably say, and how to respond),
-and the agenda mail that goes out the day before. Everything is saved on the deal, so after the call
-`/sales-discovery` and `/sales-follow-up` can set "what we guessed" against "what we heard".
+and the agenda mail that goes out the day before. The plan is saved as one note on the deal for the deal owner, who
+runs the call. Each hypothesis is tested in the call by its own question; nothing reads the note back afterwards,
+because no CRM tool reads a deal's timeline.
 
 > **Where this fits:** `/sales-outbound` (the reply that books the call) → `/sales-research` (the company brief) →
-> **`/sales-discovery-prep`** → the call → `/sales-discovery` (needs summary) or `/sales-follow-up` (the follow-up
-> mail). `/sales-manager` calls this skill when a deal has a call booked and no `[會前準備]` note yet.
+> **`/sales-discovery-prep`** → the call → `/sales-follow-up` (the follow-up mail), with `/sales-discovery` first when
+> the needs summary is wanted. `/sales-manager` hands a deal here when someone asks to prep its call.
 
 **What it never does:** send a mail, write the deal's `notes` field, move a deal stage, or invent a fact about the
 client. Expected answers are guesses and are labelled as guesses.
@@ -45,7 +46,10 @@ client. Expected answers are guesses and are labelled as guesses.
    `qualified` or later, say so and ask whether this is a second discovery call before going on.
 3. `mcp__zynkr__get_company(id=<company_id>)` and `mcp__zynkr__get_contact(id=<contact_id>)`. Address the contact by
    the name **they write** (their mail signature or the CRM record). Never derive a name from a meeting transcript.
-4. `mcp__zynkr__whoami` for the person running the call (the agenda mail is signed by them).
+4. Compare the runner with the deal's owner: `mcp__zynkr__whoami` gives the runner's id as `owner_id`, and `get_deal`
+   gives the deal's. The deal owner runs the call and signs the agenda mail. When the two differ, Step 6 drafts no
+   mail and the report says 「請交易負責人在自己的對話跑」; the note in Step 7 is still written. A deal with no
+   owner has nobody to sign the mail: ask who runs the call before Step 6.
 
 ## Step 2 — Gather what we already know
 
@@ -81,7 +85,7 @@ From the industry, the contact's role and what they wrote, guess the two things 
 
 | Rule | Why |
 |---|---|
-| Each hypothesis cites its evidence (a line from the brief or their mail) | A guess with no source cannot be checked after the call |
+| Each hypothesis cites its evidence (a line from the brief or their mail) | A guess with no source cannot be weighed before you test it |
 | Each one gets **one** question that would confirm or kill it | Hypotheses are for asking, not for telling the client |
 | Write them as guesses: 「可能」「推測」 | They go on the deal; nobody should read them as facts |
 
@@ -114,8 +118,8 @@ Add the opening line from the bank. If the contact is the owner or the boss, add
 
 ## Step 6 — Draft the agenda mail
 
-Draft it only when the call is **at least a day away** and no agenda has gone out yet (search the sent mail for the
-meeting date). Otherwise skip, and say why.
+Draft it only when the runner is the deal owner (Step 1), the call is **at least a day away** and no agenda has gone
+out yet (search the sent mail for the meeting date). Otherwise skip, and say why.
 
 - Fill the bank's agenda template: the contact's name as they write it, the date and time (台北時間) and the link
   from the calendar event, the sender's name from Step 1. Unknown values stay as ＜＞ placeholders, named in the report.
@@ -166,7 +170,7 @@ Note body (zh-TW):
 開場：<開場詞>
 議程信：<已擬草稿，未寄出 | 未擬：原因>
 
-預想回答是會前的推測。會後用 /sales-discovery 或 /sales-follow-up 對照實際聽到的。
+預想回答是會前的推測。兩個假設在會中用各自那一題驗證。
 ```
 
 Never write the deal's `notes` field and never move the stage: the stage moves after the call, when the four facts
@@ -176,7 +180,7 @@ are known (`/sales-follow-up` or the deal owner).
 
 Three lines: the deal and the call time; the note written (or not) and the question count; the agenda draft
 (drafted, skipped and why, or placeholders left). Then name the next step: after the call, give the transcript to
-`/sales-discovery` for the needs summary or to `/sales-follow-up` for the follow-up mail.
+`/sales-follow-up` for the follow-up mail, and to `/sales-discovery` first when the needs summary is wanted.
 
 ## House style
 

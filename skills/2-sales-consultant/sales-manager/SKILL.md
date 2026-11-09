@@ -137,7 +137,7 @@ Say which mode you picked in one sentence before acting.
 | A completed demo / discovery-call transcript on an existing deal | `/sales-follow-up` |
 | A company name, or a deal lacking background | `/sales-research` |
 | A deal with a discovery call booked and no [會前準備] note, or "prep my call with <company>" | `/sales-discovery-prep` |
-| A discovery conversation to run with the client — pain points, then vision — and log as a needs summary on the deal | `/sales-discovery` (not one of the seven children: it is handed the conversation, and nothing here chains it) |
+| A discovery conversation to run with the client — pain points, then vision — or, when the needs summary is asked for, the transcript, Doc or notes of one already held, to log on the deal | `/sales-discovery` (not one of the seven children: it is handed the conversation, and nothing here chains it). A transcript with no such ask is the `/sales-follow-up` row; when both are wanted, this one runs first |
 | A WHOLE survey sheet of many people | `/sales-client-sourcing` |
 | A client's requirement list / ask sheet, or "write the proposal", or comments on an existing proposal | `/sales-proposal-writer` |
 

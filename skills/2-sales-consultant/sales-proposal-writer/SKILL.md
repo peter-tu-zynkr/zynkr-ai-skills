@@ -7,7 +7,7 @@ description: >-
   it alive through the revision rounds. It does four things in one pass: ranks the
   client's asks by an openly-stated criterion and presents them as 第一順位／額外項目
   (never colour codes, never our internal IDs); splits them into a recurring lane
-  and a one-off build lane; prices every line from the B2B pricing sheet anchored at
+  and a one-off build lane; prices every line from the two Atlas price cards, anchored at
   the hourly rate Atlas holds as a company fact, shown to the client as a fixed amount per deliverable, never as hours; and writes an honest-boundaries section saying
   what we will not do and why. On later rounds it reads the review comments on the
   document, applies them, resolves them, verifies the published body by checksum,
@@ -29,10 +29,10 @@ visibility: public
 author: Peter Tu
 sheetId: "2.47"
 input: "A CRM deal id or name, plus the client's own material — a requirement sheet, discovery/meeting notes, a transcript, or a prior proposal version to revise."
-process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into recurring and build lanes → price each line at the hourly rate → publish as 交付文件 → CRM note + chase task. Revisions: comment → apply → resolve → checksum → sync."
+process: "Deal timeline first → normalise asks → rank into 第一順位／額外項目 by a stated criterion → split into recurring and build lanes → price each line from the Atlas cards → publish as 交付文件 → CRM note + chase task. Revisions: comment → apply → resolve → checksum → sync."
 output: "A published 交付文件 at platform.zynkr.ai/d/<token>, a CRM note with the pricing rationale, a chase task on the deal, and a handoff line for the outbound owner's covering email."
 synergy: ["sales-follow-up", "sales-manager", "consult-solution-planning", "project-init"]
-reads: ["company.pricing-hourly-rate", "b2b-enterprise-pricing", "company.sales-pipeline-rules", "company.crm-tag-rules"]
+reads: ["company.pricing-hourly-rate", "b2b-enterprise-pricing", "zynkr-service-offerings", "sales.quote-proposal-policy", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 type: agent
 ---
@@ -62,11 +62,17 @@ new one. The revision loop below is the half that earns its keep.
 
 ## Fixed facts
 
-- **Pricing source of truth** — 《[2.1] Zynkr B2B Pricing Sheet (企業報價準則)》. Every number
+- **Pricing source of truth** — Atlas: `zynkr-service-offerings` (the product lines, plans and list prices) and
+  `b2b-enterprise-pricing` (the enterprise packages and quoting rules), read at run time with
+  `mcp__zynkr-atlas__get_knowledge`. The Drive docs 《[2.1] Product line》 and 《[2.1] Zynkr B2B Pricing Sheet》 are their
+  mirrors, so never price from them. A plan or package those cards list takes its listed price. Every other number
   traces to the hourly-rate anchor, **`<your-pricing-hourly-rate>`**. Never invent a tier; if the shape does not fit, price it
   as hours × anchor, show the client only the amount, and keep the hours in the CRM note.
 
   > **`<your-pricing-hourly-rate>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, stop and ask the user to make the fact readable: switch the `zynkr-atlas` server back on or renew its token, or ask an owner or admin of the Atlas workspace to publish the fact with its `value:` line. The figure stays out of the chat: never ask anyone to type it there, and never write it in your own replies. Never price a line with the blank still in it.
+- **Quote rules** — `sales.quote-proposal-policy`, read from Atlas before you price: who may decide a discount (§2),
+  when to talk before quoting (§4) and what every proposal states (§5). The figures it holds (how long a quote lasts,
+  the default payment split) are read there each run and never written into this file.
 - **Delivery surface** — the 交付文件 module on the Zynkr platform. Published with
   `visibility: link` unless the content warrants a password. The renderer is a **sandboxed
   iframe: scripts do not run**, so inline all CSS and never rely on JS for content to appear.
@@ -88,6 +94,12 @@ note the proposal depends on. Never guess at what was said.
 
 Record: who the contact is, what was already promised, which proposal versions exist and
 **whether the client already holds a link to one**.
+
+Read `stage` and `notes` from `get_deal`. On a first version, find the `資格：` line (rule 8 of
+`company.sales-pipeline-rules`). If it is missing, or one of its four parts is blank or `…`, say which before anything
+else: that part is the next question to ask the client, and the proposal SOP asks it first. Write the proposal only if
+the user still wants it, and put the gap in the CRM note. A `折扣待決定：` line in `notes` means a request for a lower
+price is still open: say so before you price.
 
 ### 2 · Gather the asks, from the client's own artifact
 
@@ -139,13 +151,29 @@ The judgement, in one line the client can check: **買了之後你會的，走�
   (09:30–12:30), a timed agenda. A one-off event names its format (半天 / 全天); a recurring session
   gives its cadence (每週一次), never its length. A session's length and a week count together give
   the rate away when the page has one priced line.
-- **Discounts and credits follow the 知識庫 card `b2b-enterprise-pricing`** — read it from Atlas
-  before you price (`mcp__zynkr-atlas__get_knowledge`, key `b2b-enterprise-pricing`): which
-  reductions exist, when an entry price credits against later fees, and what we
-  never offer. It is internal policy — apply it, never quote it to the client. If the card cannot
-  be read but the rate was, price at the anchor with no reduction and flag it for Peter. If the
+- **Price at list, and apply only a reduction someone has decided.** Read the 知識庫 card
+  `b2b-enterprise-pricing` and §2 of `sales.quote-proposal-policy` from Atlas before you price
+  (`mcp__zynkr-atlas__get_knowledge`). The card says which reductions exist, when an entry price credits against later
+  fees, and what we never offer. §2 says who may decide a reduction and within what limits. Apply one only when the
+  user names one of those people as having decided it and it fits §2. Write who decided it in the CRM note, and take
+  any `折扣待決定：` line off the deal.
+  A client asking for less changes nothing in the quote. Add `折扣待決定：<what they asked for>` as the last line of the
+  deal's `notes`, where the next run can read it: take `notes` from `get_deal` and keep every other line verbatim,
+  because `mcp__zynkr__update_deal(id=…, notes=<the whole field>)` replaces the whole field. Preview, then
+  `confirm:true`. Tell the deal owner to take the scope and amount to one of the people §2 names. All of this is
+  internal policy, never quoted to the client. If either price card cannot
+  be read but the rate was, price what is custom at the anchor with no reduction, leave a listed plan or package as an
+  unpriced line, and flag it for Peter. If the
   rate itself cannot be read, nothing can be priced: stop, as its lookup line says. Never apply a
   rule from memory or from an older copy of this file.
+- **Write the terms in** (§5 of `sales.quote-proposal-policy`):
+  - `報價有效期限：<YYYY-MM-DD>`, counted from the day the proposal will be sent. Ask the deal owner for that day
+    first. A new version gets its own date.
+  - The payment terms: §5's default, unless the deal owner says the client agreed otherwise.
+  - Tax: 含稅 or 未稅, and what the client pays directly.
+
+  If the policy cannot be read, do not publish: these terms and §2's names cannot come from memory, and a client must
+  never receive a blank. Say what could not be read, and ask the user to make it readable.
 - **Do not quote what is not scoped.** An unpriced line with a stated reason
   (「範圍要先確認」) beats a number that will move. Say where the answer will come from.
 - Offer a paid scoping step when the sequence genuinely depends on seeing their current process.
@@ -170,8 +198,9 @@ criterion, any internal→external mapping, and the share URL.
 skill follows up a call from its transcript and has no proposal mode. Whoever picks up the outbound with this client writes the
 email, in their own thread with the client. Give them a handoff line instead: the share URL and
 password, which version is current, and the two or three points the email should land (the
-ranking criterion, the 第一順位 total, and what is deliberately left out). Never draft or send
-that email from here.
+ranking criterion, the 第一順位 total, and what is deliberately left out). When the written amount
+is clearly above what was said on the call, the line also says the email must name the gap and the reason in one
+sentence (`sales.sop-proposal-quote` §四). Never draft or send that email from here.
 
 If the client **already holds a link** to an earlier version, do not overwrite it — publish the
 new version separately and say which is current. Otherwise update in place so the URL they were
@@ -220,18 +249,23 @@ Beyond House style, three rules this surface gets wrong most:
 Proposals are not written once. When comments come back:
 
 1. **Read every comment** on the document, including ones anchored to text that has since moved.
-2. **Apply them against the local source file**, not by retyping the document — with one
+2. **A comment asking for a lower amount changes nothing by itself**, whoever wrote it. Step 5's rule decides: change
+   the amount only when one of the people §2 names decided it. Otherwise leave the line, add the `折扣待決定：` line,
+   and show the comment as not applied in the comment→change table.
+3. **Count 報價有效期限 again** from the day this version will be sent, as step 5 says. Ask the deal owner for that day
+   when it may have moved.
+4. **Apply them against the local source file**, not by retyping the document — with one
    assertion per edit that the target string was found exactly as expected. A silent miss in a
    30-edit pass is invisible otherwise.
-3. **Apply a word-level change everywhere it occurs**, not only at the anchor. Fixing one of two
+5. **Apply a word-level change everywhere it occurs**, not only at the anchor. Fixing one of two
    identical phrases reads as a typo.
-4. **Delete means delete.** A comment saying `remove` removes the passage; it is not an
+6. **Delete means delete.** A comment saying `remove` removes the passage; it is not an
    invitation to rewrite it.
-5. **Re-check the residue** — assert none of the replaced phrasings survive anywhere.
-6. **Publish, then verify the published body by checksum against the local file.** Same length is
+7. **Re-check the residue** — assert none of the replaced phrasings survive anywhere.
+8. **Publish, then verify the published body by checksum against the local file.** Same length is
    not the same content.
-7. **Resolve each comment** once its change is live.
-8. **Sync every downstream copy in the same pass**: the CRM note (amounts and hours) and the
+9. **Resolve each comment** once its change is live. A comment left unapplied under item 2 stays open.
+10. **Sync every downstream copy in the same pass**: the CRM note (amounts and hours) and the
    kickoff doc (amounts only: hours never leave the CRM note). If an unsent
    covering email already sits in Gmail, it belongs to whoever picks up the outbound. Tell them
    which totals and lines changed, and do not rewrite their email. A stale total in an unsent
@@ -242,9 +276,9 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
 
 ## Output contract
 
-- A published 交付文件 with a share URL
+- A published 交付文件 with a share URL, stating its 報價有效期限, payment terms and tax treatment
 - A CRM note (internal, the only place hours are written): ranking criterion · lane split ·
-  per-line pricing with hours · internal→external
+  per-line pricing with hours · any reduction and who decided it · internal→external
   module mapping · anything deliberately unquoted and why
 - A handoff line for whoever picks up the outbound with this client: the share URL and
   password, the current version, the points the covering email should land (amounts, never hours), and the chase

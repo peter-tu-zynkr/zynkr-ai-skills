@@ -33,7 +33,7 @@ input: "A demo transcript — a Fireflies meeting (id/URL/name; preferred), a Go
 process: "Parse the transcript (pains / what was shown / feedback / next steps) → map pains to solution-page capabilities → draft a threaded Gmail follow-up (never send) → sync the existing deal (demo note, refreshed summary, stage nudge, follow-up task) → report."
 output: "A threaded Gmail follow-up draft in Peter's inbox + an updated CRM deal (demo note, refreshed summary, follow-up task). Doesn't log the email — Gmail sync captures it on send."
 synergy: ["sales-outbound", "project-init", "sales-specialist"]
-reads: ["company.sales-pipeline-rules", "doc-style"]
+reads: ["company.sales-pipeline-rules", "doc-style", "sales-kit", "zynkr-service-offerings"]
 house-style: bound
 
 ---
@@ -93,8 +93,8 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
   `#` heading. Use only `# 最終產出`; ignore `# 指令工程`. If the Doc read fails, fall back
   to the condensed copy in step 4 and say so in the report. **If the two disagree, the Doc
   wins** — and flag that the condensed copy needs re-syncing.
-- **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 知識庫, 工作指南, 名單拓展, 情境工程 engine, pricing). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it.
-- **Pricing page**: `https://zynkr.ai/crm-pricing` — the source of truth for plan prices (Plus, team). Fetch it before a mail names a price; never quote one from memory or from an older copy of this file.
+- **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 知識庫, 工作指南, 名單拓展, 情境工程 engine). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it.
+- **Plan prices**: Atlas `zynkr-service-offerings` (`mcp__zynkr-atlas__get_knowledge`) is the source of truth. Read it when the call discussed a plan, so the mail describes the plan correctly. `https://zynkr.ai/crm-pricing` is the page to link the client to, not a source. Whether a mail names a number follows Atlas `sales-kit`: a number goes through `/sales-proposal-writer`, never straight into a mail.
 - **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
 - Never hardcode a user id (`auth.uid()` is NULL over MCP/SQL). The Zynkr MCP resolves the author itself — an activity written through it is authored by **the token's own user**, which for Peter's token is Peter.
 - **Do NOT log the follow-up email as a CRM activity.** Peter's Gmail is synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row. The **demo** is different — it isn't in Gmail, so the demo `note` is legitimately yours to write.
@@ -142,8 +142,8 @@ Pull these out (infer logically, never fabricate — leave blank if absent):
 
 ### 3 · Ground the pitch in the solution page
 
-`WebFetch https://zynkr.ai/crm` and pull the current capability names +
-pricing. Map **each pain point → the capability that answers it** (e.g. "資料散在
+`WebFetch https://zynkr.ai/crm` and pull the current capability names.
+Map **each pain point → the capability that answers it** (e.g. "資料散在
 雲端、翻找耗時" → 知識庫 + 資料 CSV 匯入 搬遷; "報價無固定邏輯" → 知識庫 報價
 criteria; "業務在外面跑沒空 key 資料" → Zynkr 執行模式). This mapping is what makes
 the follow-up *convert* instead of just recap.
@@ -193,8 +193,8 @@ Follow-up-specific beats, in order:
 - **Say one thing we cannot do**, with the reason, before they ask — §八 requires this in every
   long mail. Pair it with one pressure-release line (「不用急著決定」).
 - **Convert** — one prose line naming Zynkr CRM and carrying `https://zynkr.ai/crm` + 免費開始 · 免綁信用卡.
-  Name Plus or team pricing only as the level-up, never as the ask, and only at the price
-  `https://zynkr.ai/crm-pricing` shows that day — never one from memory. Never paste a
+  Name Plus or team only as the level-up, never as the ask, and write no number in the mail (Atlas `sales-kit`): a
+  client who asked what it costs gets the link `https://zynkr.ai/crm-pricing`. Never paste a
   feature table into the mail — link it instead.
 - **Success-page line** — end with 「先附上 Zynkr 的成功案例給你參考：https://crm.zynkr.ai/d/ce18a6456fbb4e8c95c7b85828dc1ddb2760ae5cfb704f98aad4d37c41a9ca83」
   (the CRM 交付文件「Zynkr 成功案例」), or the same sentence in the mail's language when the prospect
@@ -238,8 +238,8 @@ Then, in order:
    Attach to **exactly one parent** (the deal) — the deal timeline already widens to
    its contact's activities, so also passing `contact_id` would render the same note
    twice. `body` is required; `subject` is the short title on the timeline.
-2. **Refresh the deal summary** — `mcp__zynkr__update_deal(id=…, notes=<new notes>)` (preview → `confirm:true`). Rewrite the summary paragraph from the pre-demo state to a post-demo recap: what happened, pains, that the follow-up mail is drafted, and the next step. **Replace only that paragraph and keep every other line verbatim, in order.** The summary is the field's first paragraph, up to the first blank line; if the field starts with a link line instead of prose, put the new paragraph before it. Other skills append lines below it: the `專案資料夾：<url>` line (`/project-init`; `/sales-inbound` until 2026-10-05), `部署紀錄（<SPEC_ID>）：<url>`, transcript, BRD, session and UAT links. Readers find the client's folder and deployment record only through those lines, and `update_deal` replaces the whole field, so a line left out is deleted. Read back with `get_deal`: the new paragraph is there and every other line survived.
-3. **Nudge the stage** *only if the call earned it* — `mcp__zynkr__move_deal_stage(id=…, stage=…)`. See *Inference defaults*. Don't force `proposal` unless an actual quote/proposal was discussed; a soft pre-sales follow-up leaves a `qualified` deal at `qualified`.
+2. **Refresh the deal summary** — `mcp__zynkr__update_deal(id=…, notes=<new notes>)` (preview → `confirm:true`). Rewrite the summary paragraph from the pre-demo state to a post-demo recap: what happened, pains, that the follow-up mail is drafted, and the next step. **Replace only that paragraph and keep every other line verbatim, in order.** The summary is the field's first paragraph, up to the first blank line; if the field starts with a link line or a `資格：` line instead of prose, put the new paragraph before it. A `資格：` line is never part of the summary, even with no blank line above it. Other skills append lines below it: the `專案資料夾：<url>` line (`/project-init`; `/sales-inbound` until 2026-10-05), `部署紀錄（<SPEC_ID>）：<url>`, the `資格：` line (`/sales-discovery` or the deal owner), transcript, BRD, session and UAT links. Readers find the client's folder and deployment record only through those lines, and `update_deal` replaces the whole field, so a line left out is deleted. Read back with `get_deal`: the new paragraph is there and every other line survived.
+3. **Nudge the stage** *only if the call earned it* — `mcp__zynkr__move_deal_stage(id=…, stage=…)`. See *Inference defaults*. Before a move to `qualified`, read the `資格：` line in `notes` (rule 8 of `company.sales-pipeline-rules`): with the line missing, or any of its four parts blank or `…`, leave the stage alone and say which part is missing. Don't force `proposal` unless an actual quote/proposal was discussed; a soft pre-sales follow-up leaves a `qualified` deal at `qualified`.
 4. **Close the stale scheduling task** — `mcp__zynkr__list_tasks(filter="open")`, find the open task on THIS deal about scheduling/chasing the demo (subject mentions demo / 安排 / 追蹤…回覆), and `mcp__zynkr__set_task_status(ids=[…], status="done", confirm:true)`. The demo happened, so it's complete. If no clear match, skip and say so.
 5. **Create the follow-up task** — `mcp__zynkr__create_task(subject=…, body=…, deal_id=…, due_at=<+task_due_days, ISO 8601>, confirm:true)`, with `task_due_days` from the policy's rhythm (*Inference defaults*); say in the task body which rhythm it is (fast · normal · slow · 客戶時限). Attach to **exactly one parent** (the deal — don't also pass contact_id, it errors). `due_at` is ISO 8601 with a zone: UTC `Z` (`2026-07-06T01:00:00Z`) or an offset (`2026-07-06T09:00:00+08:00`).
 
@@ -266,7 +266,7 @@ Call out anything you left for Peter's judgement (a stage you did NOT auto-advan
 
 ## Inference defaults (Peter overrides by just saying so)
 
-- **stage** (`new|contacted|qualified|proposal|won|lost`) — advance a `new`/`contacted` deal to **`qualified`** after a real demo with engagement. Move to **`proposal`** only if a concrete quote/proposal was actually put on the table. A deal already at `qualified`+ with only a soft follow-up **stays put** — don't inflate the pipeline.
+- **stage** (`new|contacted|qualified|proposal|won|lost`) — advance a `new`/`contacted` deal to **`qualified`** after a real demo with engagement, once the `資格：` line is filled (step 5.3). Until it is, a `new` deal moves to `contacted` and a `contacted` deal stays. Move to **`proposal`** only if a concrete quote/proposal was actually put on the table. A deal already at `qualified`+ with only a soft follow-up **stays put** — don't inflate the pipeline.
 - **task_due_days** — from the follow-up rhythm in `company.sales-pipeline-rules` (read it with the line below). Measure this client's reply lag in Gmail (median days between our mail and their reply, last 90 days) and take `followup-fast-days`, `followup-normal-days` or `followup-slow-days` as the policy says; no history yet is fast. An interval Peter promised on the call wins ("我三天後跟進" → 3).
 - **客戶時限** — when the client named a deadline on the call ("年底前要上線", "下個月董事會"), add or replace one line `客戶時限：YYYY-MM-DD（原話）` in the deal's notes in step 5.2 (below the summary paragraph, every other line kept), and make the follow-up task due on the earlier of the rhythm's date and that deadline.
 

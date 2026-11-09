@@ -28,8 +28,9 @@ author: Peter Tu
 sheetId: "2.11"
 input: "A company name/domain (and optionally a contact name), or an existing Zynkr CRM company_id / contact_id."
 process: "Resolve the CRM company record and our past dealings → web research + 統編 registry lookups (business model, size/HQ, industry risks, sales-fit angle) → dated zh-TW brief flagged unverified → CRM note via create_note → optional contact note → report."
-output: "A dated 🔎 AI 背景研究 note on the company's CRM timeline (crm_activities, kind='note'), plus an optional note on a named contact — additive, never overwriting prior records."
+output: "A dated 🔎 AI 背景研究 note on the company's CRM timeline, plus an optional note on a named contact (a person with no company: a short note on the contact alone). Additive."
 synergy: []
+reads: ["zynkr-service-offerings"]
 house-style: bound
 
 ---
@@ -49,7 +50,7 @@ company or contact tied to the CRM.
 
 ## Why this exists
 
-Zynkr CRM itself (`platform.zynkr.ai`) has an "AI 背景研究" button on the
+Zynkr CRM itself (`crm.zynkr.ai`) has an "AI 背景研究" button on the
 company/contact/deal detail page that runs a Claude tool-use loop
 (`app/lib/ai/research.ts`, `generateBrief`: up to 8 web searches, `RESEARCH_MODEL`)
 and saves a zh-TW markdown brief as a CRM note. Its MCP twin,
@@ -89,23 +90,36 @@ what's described below; that's the calling skill's (or Peter's) job.
 
 ### 1 · Resolve the CRM company record
 
-You need a `company_id` before you can write anything. Figure out which case
-you're in:
+You need a `company_id` before you can write a company brief. A person with no
+company is the one exception. Figure out which case you're in:
 
-- **Given an id directly** (e.g. from earlier in the conversation) → skip to
+- **Given a `company_id` directly** (e.g. from earlier in the conversation) → skip to
   step 2, no lookup needed.
+- **Given a `contact_id` alone** → `mcp__zynkr__get_contact`. A `company_id` on the
+  contact → use it. None → if their email domain is a company's, use it as the
+  domain in the next case; otherwise it is the person case below.
 - **Given a name/domain, record likely exists** → `mcp__zynkr__list_companies`
   and match by name/domain (case-insensitive, tolerate spacing/casing
   differences). Found → use that id.
-- **No match, or Peter is asking you to create the company right now** →
+- **A person or a one-person business, with no company to file it on** → search
+  the registry once by name (Track A). A registration turns up → it is a company,
+  and the next case applies. None, and no 統一編號 → skip the rest of Track A. Read
+  only their public site and social profiles, and write two or three lines on the
+  contact with
+  `mcp__zynkr__create_note(contact_id=<id>, subject="AI 背景研究 · <name> <YYYY-MM-DD>", body=…)`,
+  opening with `🔎 AI 背景研究` and ending with the ⚠️ line of step 3. Preview, then
+  `confirm: true`, then go to step 6: a short note needs none of the sections.
+  Never create a company just to hold the note. With no contact in the CRM either,
+  ask.
+- **No match for a company, or Peter is asking you to create the company right now** →
   do the research first (step 2), then `mcp__zynkr__create_company` with the
   real structured fields you found (name, domain, industry, address, tax_id,
   employee_count), and land the brief itself as a note in step 4. Do **not**
   stuff the brief into `description` — see step 4 for why. Preview (`confirm`
   omitted/false), show Peter what would be created, then re-call with
   `confirm: true`.
-- **Owner** — default to Peter (`mcp__zynkr__whoami` → `owner_id`) unless told
-  otherwise.
+- **Owner** — the person running this skill (`mcp__zynkr__whoami` → `owner_id`)
+  unless told otherwise.
 
 A contact may be named alongside the company (e.g. "research this company for
 王 at 範例科技"). If so, resolve or note the `contact_id` too — you'll use
@@ -179,10 +193,13 @@ A handful of targeted searches, not an open-ended crawl:
 4. One search on the **industry**, not the company: a risk or shift it faces now
    (tariffs, a new regulation, a labour shortage, a price swing). Keep it only
    with a dated source; it often explains why the timing is right.
-5. Think about the **sales-fit angle**: given what Zynkr sells (Zynkr CRM, the
-   AI CRM for solo founders and small teams, plus AI-adoption consulting
-   and training), why might *this* company plausibly be interested? Ground it in
-   what the research actually surfaced. The registry is especially good for this:
+5. Think about the **sales-fit angle**. Read what we sell from Atlas
+   (`mcp__zynkr-atlas__get_knowledge`, key `zynkr-service-offerings`): its four
+   product lines and the stages of the enterprise AI Enablement line. Then match by
+   the company's size: why might *this* company plausibly be interested, and in
+   which line? Ground it in what the research actually surfaced, and put no price
+   in the brief. If Atlas cannot be read, write the angle without naming a line or
+   a plan, and say so under 本次未能查證. The registry is especially good for this:
    a tiny headcount next to a self-built software product is a structural
    capability gap, and that gap is the opening.
 
@@ -230,7 +247,7 @@ timeline, not read a report.
 
 **The write target is a note**, for these reasons:
 
-- On `platform.zynkr.ai`, **備註 is the note tab** — `crm_activities` rows with
+- On `crm.zynkr.ai`, **備註 is the note tab** — `crm_activities` rows with
   `kind='note'`. That is what Peter sees on a record.
 - `crm_companies.description` is a different thing. The company detail page
   selects it and then never renders it; the only place it surfaces in the whole
