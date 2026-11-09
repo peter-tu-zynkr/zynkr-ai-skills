@@ -116,7 +116,8 @@ example with blanks only: `./references/bug-routing-config.example.md`):
 
 | Surface | Default repo |
 |---|---|
-| platform / CRM / KB | `peter-tu-zynkr/zynkr-ai-platform` |
+| platform / CRM | `peter-tu-zynkr/zynkr-ai-platform` |
+| Atlas / 知識庫 | `peter-tu-zynkr/zynkr-atlas` |
 | marketplace / skills | `peter-tu-zynkr/zynkr-skill-builder` |
 | website | `peter-tu-zynkr/zynkr-website` |
 | CMS / blog | `peter-tu-zynkr/zynkr-cms` |

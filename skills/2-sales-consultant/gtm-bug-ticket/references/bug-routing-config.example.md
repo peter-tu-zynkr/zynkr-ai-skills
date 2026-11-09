@@ -18,6 +18,6 @@ Only to override the skill's default table. Leave this section out to keep the d
 
 | surface | repo |
 |---|---|
-| `<product surface, e.g. platform / CRM / KB>` | `<owner>/<repo>` |
+| `<product surface, e.g. platform / CRM>` | `<owner>/<repo>` |
 
 With no record and no matching row, or with no file at all, the skill does not guess: its approval step asks you to pick a repository and proposes the exact line for you to add here.

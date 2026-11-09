@@ -93,7 +93,7 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
   `#` heading. Use only `# 最終產出`; ignore `# 指令工程`. If the Doc read fails, fall back
   to the condensed copy in step 4 and say so in the report. **If the two disagree, the Doc
   wins** — and flag that the condensed copy needs re-syncing.
-- **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 知識庫, 工作指南, 名單拓展, 情境工程 engine). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it.
+- **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 工作指南, 名單拓展, 情境工程 engine). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it. The same goes for 知識庫, which left the CRM on 2026-11-07: never pitch it as a CRM capability.
 - **Plan prices**: Atlas `zynkr-service-offerings` (`mcp__zynkr-atlas__get_knowledge`) is the source of truth. Read it when the call discussed a plan, so the mail describes the plan correctly. `https://zynkr.ai/crm-pricing` is the page to link the client to, not a source. Whether a mail names a number follows Atlas `sales-kit`: a number goes through `/sales-proposal-writer`, never straight into a mail.
 - **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
 - Never hardcode a user id (`auth.uid()` is NULL over MCP/SQL). The Zynkr MCP resolves the author itself — an activity written through it is authored by **the token's own user**, which for Peter's token is Peter.
@@ -144,7 +144,7 @@ Pull these out (infer logically, never fabricate — leave blank if absent):
 
 `WebFetch https://zynkr.ai/crm` and pull the current capability names.
 Map **each pain point → the capability that answers it** (e.g. "資料散在
-雲端、翻找耗時" → 知識庫 + 資料 CSV 匯入 搬遷; "報價無固定邏輯" → 知識庫 報價
+雲端、翻找耗時" → CSV 匯入 · 去重合併 搬遷 + 活動時間軸; "報價無固定邏輯" → 工作指南 報價
 criteria; "業務在外面跑沒空 key 資料" → Zynkr 執行模式). This mapping is what makes
 the follow-up *convert* instead of just recap.
 
