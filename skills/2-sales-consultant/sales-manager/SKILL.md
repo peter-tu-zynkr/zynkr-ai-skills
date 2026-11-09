@@ -32,7 +32,7 @@ output: "Whatever the delegated children produced (CRM records · Gmail drafts �
 synergy: []
 type: agent
 skills: ["sales-client-sourcing", "sales-specialist", "sales-outbound", "sales-follow-up", "sales-research", "sales-discovery-prep", "sales-proposal-writer"]
-reads: ["sales.crm-data-standards", "company.sales-pipeline-rules", "company.crm-tag-rules"]
+reads: ["sales.crm-data-standards", "company.sales-pipeline-rules", "company.crm-tag-rules", "company.project-tracking-folder", "company.project-archive-folder"]
 house-style: bound
 
 ---
@@ -100,6 +100,8 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
   the pipeline side-effects must fire; with `stage: lost` it also takes `loss_reason`, one of
   `price`, `competitor`, `no_decision`, `poor_fit`, `timing`, `other`), `update_deal`,
   `set_task_status`, `create_task`, `create_note`, `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag`.
+  The one Drive write is moving a closed deal's project folder to the archive
+  (`mcp__google-workspace__update_drive_file` with `add_parents` and `remove_parents`), step 5.
   `update_deal` with `notes` replaces the whole field: to add a line, read the field with
   `get_deal`, then write it back with a line break and the new line at the end, never dropping one.
   Every `zynkr` write tool is a two-call handshake: `confirm:false` previews,
@@ -285,6 +287,20 @@ added to its `notes`, closed in the order step 5 gives for every close.
 
 > **The pick-up rule is written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server). This check runs as written even when Atlas cannot be reached.
 
+**Mode C companies waiting for a reply.** A company-list mail (`/sales-outbound` Mode C) makes no
+deal until the company answers, so no bucket above sees it. Its trace is one open task on the
+**company**, subject `Mode C 14 天未回 → 接觸紀錄改暫時沒需求`, due 14 days after the mail was sent.
+Read `list_tasks(filter="open", limit=200)` (exactly 200 rows means the list may be cut: say so) and
+keep the rows with `parent_kind="company"` whose `subject` starts with `Mode C 14 天未回`:
+- **not yet due** → count them per assignee under the bucket table: 「Mode C 等回覆：<name> <N> 家」.
+  The send date is `task_due_at` minus 14 days; those sent this week are that person's Mode C mails
+  for the week (the pipeline policy counts Mode C from these tasks, since unanswered companies have
+  no deal).
+- **past due** → one batch row, 「Mode C 未回」: the task is set `done`, and the report lists each
+  company with its assignee, who changes its 接觸紀錄 row to `暫時沒需求` (the sheet is theirs; REVIEW
+  does not write it). A company that has replied has an open deal and no such task: `/sales-outbound`
+  step 6 closes it.
+
 **資格行 missing.** The policy's rule 8: a deal is `qualified` only once its notes carry one line
 `資格：痛點＝…；決策者＝…；預算＝…；時程＝…` with all four filled (a blank or `…` is not filled). For
 every `qualified` deal, read its `notes` field with `get_deal` and list each one without that line,
@@ -317,6 +333,8 @@ only after a single explicit confirmation:
 移到 lost（no_decision）· 3 個 deal — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
 交接或結案     · 1 個 deal   — 超過上限：<owner> 開著 <M> 個，上限 <max-open-deals>。請逐筆說「交接給 <名字>」或「結案」，沒說的不動
 移到 lost（other）· 1 個 deal       — 重複認領：兩位 owner 已同意保留 <交易 number>
+關掉 Mode C 提醒 · 3 家公司  — 寄出 14 天沒回：認領人把接觸紀錄改暫時沒需求
+專案資料夾封存 · 1 個 deal   — 結案的 deal 還有 [N] 資料夾：移到結案專案資料夾
 關掉過期 task  · 8 個        — 早已完成或已無意義
 建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度；沒有到期日的舊任務一併 drop）
 加／移除標籤   · 4 位聯絡人 — 待確認已補齊的移除；沒有來源、lead_source 對得上的補上
@@ -343,6 +361,14 @@ Every close runs in this order, each write previewed, then repeated with `confir
    lines still there. A server older than `PLAT-078` drops an unknown `loss_reason` without an error,
    so a quiet success proves nothing. When `loss_reason` is not the reason sent, the line is the only
    record of it, and the report says the server did not record the loss reason (`PLAT-078` not live).
+4. **A project folder goes to the archive** (owner, 2026-11-09). When the deal's `notes` carry a
+   `專案資料夾：<url>` line and that folder's parent is `company.project-tracking-folder`, the batch
+   names it beside the close, and after the close `update_drive_file(file_id=<folder>,
+   add_parents=<company.project-archive-folder>, remove_parents=<company.project-tracking-folder>)`
+   moves it; `list_drive_items` on the archive reads it back. The folder keeps its `[N]` (numbers are
+   never reused) and the deal keeps its line. Read both ids from Atlas (`get_knowledge`, the
+   `value:` line); when either cannot be read, or the folder sits anywhere else, leave the folder,
+   and the report names it. A `won` deal's folder stays: the project goes on.
 
 A stale deal the owner keeps stays out of the batch, and its `notes` get the line
 `保留：YYYY-MM-DD（<their reason>）`, written as in steps 2 and 3. While it stays stale, the next

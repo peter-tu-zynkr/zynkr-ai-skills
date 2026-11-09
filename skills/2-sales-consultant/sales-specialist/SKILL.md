@@ -169,6 +169,23 @@ For every remaining card with an email, on the `zynkr` MCP:
    (`[OK]` in Step 6), the claim runs **before** the draft is saved (Step 6, *Claim*). A card you
    `[SKIP]` is not picked up: no deal.
 
+**Then check the company — a warning, never a stop** (owner, 2026-11-09). A teammate may already be
+talking to this person's company: an open deal on a colleague's address, or a company-list mail
+(`/sales-outbound` Mode C) that has no contact yet. Skip this check when the email is on a personal
+mail service (gmail.com, yahoo.com, yahoo.com.tw, hotmail.com, outlook.com, icloud.com, msn.com and
+the like) and the signal names no company. Otherwise:
+
+- `mcp__zynkr__list_companies(search=<the email's domain>)`, and once more by the company's name when
+  the signal names one; keep rows whose `domain` equals the email's domain, or whose name matches
+  ignoring case and the legal suffix.
+- For each kept company: its open deals are the rows of the four `list_deals` calls above whose
+  `company_id` is that company (no new calls), and `mcp__zynkr__get_company` shows any `description`
+  line `公司名單冷開發（Mode C，YYYY-MM-DD，認領人 <名字>）`.
+- Report each hit in one line and carry on: `<公司> 已有人在跟：<deal_number> · <stage> · 負責人 <member
+  name>` or `<公司> 在 <YYYY-MM-DD> 由 <認領人> 用 Mode C 寫過`. The claimer talks to that teammate
+  before sending anything; the claim itself goes ahead, because one open deal is per person, not per
+  company.
+
 ---
 
 ## Step 3.5 — Website Lookup (auto-fill if missing)

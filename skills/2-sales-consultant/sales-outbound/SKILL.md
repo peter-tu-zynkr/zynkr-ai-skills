@@ -15,7 +15,11 @@ description: >-
   five-touch outbound SEQUENCE for someone who has NEVER replied: trigger on "一週五封", "連續開發信",
   "跑一整套序列", "同一個人五次", "五封序列", or when Peter points at the 陌開名單 roster; it claims each person
   first (contact + a deal owned by the claimer), then drafts all five mails (see
-  references/sequence-5touch.md). Distinct from sales-client-sourcing (BATCH-enriches a WHOLE
+  references/sequence-5touch.md). Mode C — ONE mail to a COMPANY's shared inbox from the company
+  directory list: trigger on "Mode C", "公司名單", "工商名錄", "對公司窗口開發"; it claims the row,
+  researches the company, drafts one mail and files only a CRM company with a research note and a
+  14-day reminder; the contact and the deal come only once the company replies ("{公司} 回信了")
+  (see references/sequence-company.md). Distinct from sales-client-sourcing (BATCH-enriches a WHOLE
   survey Sheet), sales-inbound (the weekly sweep of inbound website consult EMAILS) and
   sales-follow-up (ONE completed demo transcript on an EXISTING deal).
 category: sales-consultant
@@ -29,7 +33,7 @@ input: "ONE person's interest signal carrying an email — a pasted DM/chat thre
 process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → slots from the calendar if a meeting is the ask → Gmail draft → report."
 output: "A CRM lead (company + contact + a deal owned by the runner + note + task) and a Gmail draft, with three 台北時間 slots for a meeting; an open deal on the email stops it instead."
 synergy: []
-reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules", "doc-style"]
+reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules", "doc-style", "company.company-directory-sheet", "company.workflow-library-folder"]
 house-style: bound
 
 ---
@@ -72,12 +76,15 @@ draft email → report. No mid-run confirmation — the email lands as a *draft*
 before sending) and the CRM write is one atomic statement. Tagging the new contact comes after
 that statement, as its own small step (step 4): a failed tag never undoes the lead.
 
-## Two modes
+## Three modes
 
 | | 前提 | 輸入 | 產出 |
 |---|---|---|---|
 | **Mode A** | 對方**已經回過話**，談到 demo／通話 | 一段貼上的 DM／對話 | 1 個 lead ＋ 1 封回覆草稿 |
 | **Mode B** | 對方**完全沒講過話** | 陌開名單裡的一個人 | CRM 認領（聯絡人 ＋ deal）＋ 5 封序列草稿 ＋ 接觸紀錄 |
+| **Mode C** | 公司**完全沒講過話**，只有窗口信箱 | 公司名單裡的一家公司 | 認領 ＋ 研究卡 ＋ 1 封開發信草稿 ＋ 接觸紀錄 ＋ CRM 公司（含研究卡備註、14 天提醒）；**對方回覆後**才建聯絡人 ＋ 交易 |
+
+**Mode C 的完整做法在 `references/sequence-company.md`**（文末「Mode C · 公司窗口一封開發信」有不能忘的幾條）。
 
 **Mode B 的完整做法在 `references/sequence-5touch.md`**，信的長相（節奏、主旨、第 2–5 封骨架、交付文件格式）在 `references/sequence-template.md`，頁尾在 `references/email-format.md`。走之前三份都讀。
 不要把 Mode A 的推論預設（`stage=qualified`、`lifecycle=sql`）套到 Mode B——
@@ -125,7 +132,9 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
   the deal comes from here, from sales-inbound or from a demo.
 - **sales-outbound** (this one) — takes ONE person's **interest signal**
   (pre-meeting) and produces a lead record + a drafted reply. No Drive folder, no
-  meeting parsing, no Weekly Update.
+  meeting parsing, no Weekly Update. Mode C included: it creates the company's deal once the
+  company replies, and the `[N]` project folder still waits for project-init at `qualified`
+  (owner, 2026-11-09).
 
 ## Fixed facts (don't re-derive these)
 
@@ -237,6 +246,23 @@ and their member id is the `mcp__zynkr__list_workspace_members` row with that em
    claim, count the claimer's open deals (the cap line in *Inference defaults*): over the cap is a
    warning in the report, never a refusal.
 
+**Then check the company — a warning, never a stop** (owner, 2026-11-09). A teammate may already be
+talking to this person's company: an open deal on a colleague's address, or a company-list mail
+(`/sales-outbound` Mode C) that has no contact yet. Skip this check when the email is on a personal
+mail service (gmail.com, yahoo.com, yahoo.com.tw, hotmail.com, outlook.com, icloud.com, msn.com and
+the like) and the signal names no company. Otherwise:
+
+- `mcp__zynkr__list_companies(search=<the email's domain>)`, and once more by the company's name when
+  the signal names one; keep rows whose `domain` equals the email's domain, or whose name matches
+  ignoring case and the legal suffix.
+- For each kept company: its open deals are the rows of the four `list_deals` calls above whose
+  `company_id` is that company (no new calls), and `mcp__zynkr__get_company` shows any `description`
+  line `公司名單冷開發（Mode C，YYYY-MM-DD，認領人 <名字>）`.
+- Report each hit in one line and carry on: `<公司> 已有人在跟：<deal_number> · <stage> · 負責人 <member
+  name>` or `<公司> 在 <YYYY-MM-DD> 由 <認領人> 用 Mode C 寫過`. The claimer talks to that teammate
+  before sending anything; the claim itself goes ahead, because one open deal is per person, not per
+  company.
+
 #### 4b · Write the lead
 
 Read `references/lead-insert.sql`, fill the placeholders, run it via
@@ -327,8 +353,21 @@ read the calendar first — a guessed window is usually already booked.
    titled **`Available`** (and **`Not available`** for the inverse). Take each
    `Available` block and subtract every real meeting overlapping it. A leftover
    shorter than 30 minutes is not a slot.
-3. **Pick three**, spread across different days. Express each as the whole remaining
-   window (`15:30–18:00`), not one fixed time — let the prospect choose inside it.
+3. **Pick three, Taipei afternoon first**, spread across different days. Peter is in
+   Amsterdam, so his morning is the prospect's afternoon. Sort the windows by the
+   Amsterdam clock:
+   - **First choice:** a window before 12:00 Amsterdam. That is the Taipei afternoon,
+     about 15:00–19:00 台北時間. Fill all three from these when there are enough.
+   - **Fallback:** a window from 12:00 Amsterdam on. That is the Taipei evening, 19:00 or
+     later. Use one only when the first-choice windows in range give fewer than three.
+   - **Never** a window that lands before 12:00 台北時間. That is Peter's night.
+
+   A window that crosses 12:00 Amsterdam counts as first choice for its morning part.
+   When the prospect has said which days they cannot do, drop those days before you
+   sort. If the days left give fewer than three windows, offer the ones there are and
+   keep the escape line. Never make up a slot from an hour that is not marked
+   `Available`. Express each as the whole remaining window (`15:30–18:00`), not one
+   fixed time — let the prospect choose inside it.
 4. **Convert to Taipei and say so.** Peter's calendar is `Europe/Amsterdam`; almost
    every prospect is in Taiwan (+886), 6–7 hours ahead, so an unlabelled 「下午」 means
    two different things. Label the block **「（台北時間）」**. Keep the Amsterdam
@@ -390,7 +429,7 @@ Rules for the draft:
   ```
   不曉得以下有沒有方便的時間（台北時間）？
 
-  1. 9/8（二）20:00–22:00
+  1. 9/8（二）16:00–18:00
   2. 9/9（三）15:30–18:00
   3. 9/10（四）15:00–16:00
   4. 或其他你方便的時間
@@ -421,7 +460,8 @@ Show the client card, then a compact artifact table:
 
 When the mail carries slots, also show them with their Amsterdam equivalents and the
 `Available` block each came from — that is what lets Peter sanity-check you did read
-the calendar rather than guess.
+the calendar rather than guess. Mark each one Taipei afternoon or Taipei evening. If an
+evening slot is in the mail, say why: the afternoon windows in range gave fewer than three.
 
 If the contact already existed, say so: every deal they had was `won` or `lost`, so the gate
 let you attach a new deal to the same person rather than duplicating them. A run the gate
@@ -514,6 +554,7 @@ unchecked. Never re-implement either list inside this file.
 五封骨架與交付文件格式在 **`references/sequence-template.md`**。這裡只放不能忘的幾條：
 
 1. **時段一律取自 Peter 日曆名為 `Available` 的事件**，並扣掉壓在上面的既有會議。沒標就問人，不要編。
+   先排台北下午（Peter 的阿姆斯特丹上午），不夠三格才用台北晚上；台北中午以前是 Peter 的半夜，不給。
 2. **階梯是 ask → ask → 長相 → 純給 → 放手。** 第 4 封必須零 ask，否則第 5 封還沒寄就被封鎖。
 3. **`[2.7] 政府補助 knowledge` 絕對不可外發**（它自己第 5 節標了「內部資訊，勿外流」）。
    顧問姓名、拆帳、加價機制、盤點數字、難度分級一律不得進信裡。
@@ -533,3 +574,24 @@ unchecked. Never re-implement either list inside this file.
 
 > 這批人是付過錢、上過 9–17 場的學員，`zynkr.ai` 網域信譽與《彼得的外商隨筆》電子報共用。
 > 被檢舉成垃圾郵件是整個網域一起遭殃，不是這一封的事。
+
+---
+
+## Mode C · 公司窗口一封開發信
+
+完整步驟在 **`references/sequence-company.md`**；信的長相、外洩防線、建草稿的地雷沿用 Mode B 的三份 reference。這裡只放不能忘的幾條：
+
+1. **認領時先問認領人「這家主要要賣什麼」**，答案寫進公司 description，回覆後用在交易名稱，不要自己推。
+2. **研究卡只寫查得到的**，推論要標明是推論；信裡講不出具體事就講到產業層級為止。
+3. **只寄一封**：研究開場 → 三個痛點畫面 → 兩三句工作流 → 一句補助 → 30 分鐘 discovery call＋三個時段＋第四個逃生口，不提價格；寫時數是對 Mode B「時數不進客戶看得到的東西」的例外，owner 2026-11-09 核准、只限 Mode C。時段取法同 Mode B。不補寄第二封。
+4. **工作流取自內部工作流資料夾，不附檔、不貼連結**，難度分級、階段與工作流編號不進信。
+5. **認領是名單那一列；寄出時 CRM 只建公司**（研究卡與信的內容寫成一筆公司 note，description 一行 `公司名單冷開發（Mode C，YYYY-MM-DD，認領人 <名字>）`）＋一個掛在公司的任務 `Mode C 14 天未回 → 接觸紀錄改暫時沒需求`（到期＝寄出日＋14 天）。不建聯絡人、交易、專案資料夾；`create_company` 預設 `opportunity`，建完改 `lead`。`來源` 標籤只能貼聯絡人，所以公司只貼 規模／待確認，規模只看員工數證據。
+6. **對方回覆後才建**：先用回信人的 email 過認領關卡，再對四個未結案階段逐一 `list_deals(stage=…)`，留下聯絡人或公司對得上的（剛好 100 筆就停）；已有交易就把回信人掛上去、不新建，沒有才建交易（名稱照 `sales.crm-data-standards` §1、`stage=contacted`、notes 第一行以 `Mode C` 開頭、不寫 `專案資料夾：`）→ 關掉 14 天提醒 → 追蹤任務。專案資料夾等 `qualified` 由 `/project-init` 開。退信、自動回覆不算回覆；「不需要」或 14 天沒回，接觸紀錄改 `暫時沒需求`、關掉提醒。
+
+> **下表的空白是公司事實——逐一從 Atlas 讀**（`get_knowledge`，值在 `value:` 那一行）。Atlas 連不上、沒有這個 key、或沒有 `value:` 那一行，就停下來問；絕不帶著空白直接執行。
+
+| 空白 | 在 `sequence-company.md` 哪裡用 | Atlas key |
+|---|---|---|
+| `<your-company-directory-sheet-id>` | 名單、步驟 1 認領 | `company.company-directory-sheet` |
+| `<your-workflow-library-folder-id>` | 步驟 3 信裡的工作流來源 | `company.workflow-library-folder` |
+| `<your-outbound-touches-sheet-id>` · `<your-company-contact-email>` | 步驟 5 接觸紀錄 · 步驟 3 信裡的時段 | 同 Mode B |
