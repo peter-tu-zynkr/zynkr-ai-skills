@@ -29,7 +29,7 @@ The skill calls the zynkr-content-writer agents directly, through the Agent tool
 **Needs:**
 - the zynkr-content-writer agents: `content-hook`, `content-title`, `content-draft`, `content-editor` and `content-reader`
 - the google-workspace and Notion MCP servers
-- for steps 0, 8 and 9, a checkout of the `zynkr-newsletter-drip` repo with its Kit key, at SKB-113 or later: its `kit_build.py` has `stats` and `newsletter --proof`, `--schedule` and `--unschedule`
+- for steps 0, 8 and 9, a checkout of the `zynkr-newsletter-drip` repo with its Kit key, at SKB-113 or later: its `kit_build.py` has `stats` and `newsletter --proof`, `--schedule` and `--unschedule`, and its README lists the `〔廣告〕` box among the copy file's markers. An older renderer doesn't know that marker: pull the checkout before step 8.
 
 Peter is asked at four points only:
 - facts content-hook lacks (step 3)
@@ -142,7 +142,7 @@ Run `content-draft` with `mode: newsletter`. Give it:
 - for each callback, the earlier issue's subject as readers saw it (its card's Email subject, or the subject `stats` prints), the month it went out, and its Web URL, or "no web page"
 
 Check its reply with a script, not by eye:
-- Tab 1 is 1,200–1,500 字 and Tab 2 1,200–1,400 字, counting every character except whitespace.
+- Tab 1 is 1,200–1,500 字 and Tab 2 1,200–2,000 字, counting every character except whitespace. Tab 2's count leaves out its ad boxes.
 - Tab 1 begins with the chosen opening exactly.
 - Tab 2 begins with the same sentences: with all whitespace removed from both, Tab 2 starts with the opening.
 
@@ -187,6 +187,7 @@ Run `content-reader` with `mode: newsletter`. Give it both tabs, the chosen open
    - It holds Tab 1 word for word, laid out in the copy-file format the drip README describes (headings become its heading markers; bold becomes plain).
    - 收件對象 is `newsletter-test`.
    - The CTA replaces 【CTA 待 Peter 確認】; ask Peter if he hasn't named one. The copy check refuses any 【…】, so no tag can reach Kit.
+   - Each ad goes between a `〔廣告〕` line and a `〔/廣告〕` line, with its link or button row inside (House format → Ads). The copy check refuses a box that never closes, a box inside a box, and a box with no paragraph.
    - Every text is plain: the copy check stops at a link inside a sentence (`[text](url)`, an `<a>` tag or a bare `https://` address), any other HTML tag, and `**`. A link goes on its own `〔連結〕` row.
    - Every link to an earlier issue must load: `curl -s -o /dev/null -w '%{http_code}' <url>` gives 200. Kit keeps an address for an issue taken off the web, and it returns 404. A link that doesn't load comes out of both tabs and the copy file: keep the words that name the issue, drop its link, and tell Peter which issue it was.
 
@@ -240,7 +241,7 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 - At most 1–2 bold sentences in the whole piece.
 - The ending is 《[2.2]》 §七 結尾固定. The CTA goes on the line above the question; until Peter names it, that line is `【CTA 待 Peter 確認】`.
 
-**Tab 2 筆友書信體版本: 1,200–1,400 字**
+**Tab 2 筆友書信體版本: 1,200–2,000 字, not counting the ad boxes** (Peter raised it from 1,400 on 2026-11-09: the lower cap made every pass cut his spoken words)
 1. Open with the chosen opening's sentences, word for word, one per line. A reader's question in it is the reader's own words, never an invented 「很多人問我」 (《[3.2]》 K).
 2. Address the reader as 「你」 throughout. Anticipate at most one objection, and only a real one (《[3.2]》 J).
 3. No headings. **No separator lines between paragraphs: never insert `–` / `—` / `---` lines; a blank line separates paragraphs** (Peter's rule, 2026-08-17).
@@ -250,8 +251,13 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 7. End per 《[2.2]》 §七, with 「下禮拜見 ·」 as the last line.
 8. Warm but not cutesy.
 
+**Ads (both tabs)**
+- An ad (an event, a course, any promotion) is a block of its own, never woven into the letter's sentences. In both tabs it is its own paragraphs, ending with its link. The copy file puts it between a `〔廣告〕` line and a `〔/廣告〕` line, so Kit shows it in a box, as every letter from July to September 2026 did (Peter, 2026-11-09).
+- One ad per box. The one orange `〔按鈕〕` goes in the box of the ad that matters most; any other ad ends with a `〔連結〕` row.
+
 **Language and voice**
 - zh-TW. Chinese headings and taglines carry no ending 句號; use 「·」 for series.
+- Peter's spoken register stays (《[2.2]》 §四 保留講話的連接詞, 2026-11-09). His connectives (但、可是、所以、其實、就、也、反而、結果、我以為) are not filler, and sentences are never merged or trimmed to save words. It reads less polished and less like a machine. Read it aloud: it should sound like his livestream, not a press release.
 - Voice and structure: 《[2.2] 內文風格指南》 §三–§七 (開場四環節 · 開場怎麼寫 · 帶收據 · 語言使用 · 資訊節奏 · 電子報格式). It is Doc `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M`; use its `# 最終產出` section.
 - Forbidden patterns and their per-issue caps: 《[3.2] 禁用詞清單》 A–W. X is for sales mail only.
 - The facts match across the tabs. Only 【CTA 待 Peter 確認】 may remain as a placeholder, and only until Ship.
