@@ -151,13 +151,17 @@ Run the children in order, feeding each the previous one's output. The three est
 
 1. **Event survey → funnel.** `/sales-client-sourcing` enriches the whole sheet and flags
    Hot Leads, then `/sales-outbound` runs **per Hot Lead row** to create the CRM lead and
-   the draft. Confirm the row count with Peter before fanning out — this creates one deal
-   and one Gmail draft each, and ten rows means ten drafts.
-2. **Card → informed draft.** `/sales-specialist` lands the contact, then `/sales-research`
-   fills the company background, and only then is the follow-up draft written — so it
-   opens with something true about their business rather than a generic line.
+   the draft. Confirm the row count with Peter before fanning out — this creates one deal,
+   one `/sales-research` brief and one Gmail draft each, and ten rows means ten drafts. Hand each
+   row's website and background columns to `/sales-outbound` with the signal, so its research
+   step starts from them instead of searching for the same facts again.
+2. **Card → informed draft.** `/sales-specialist` lands the contact and hands the company to
+   `/sales-research` itself (its Step 5) before the follow-up draft is written — so it opens
+   with something true about their business rather than a generic line. Do not run
+   `/sales-research` again around it.
 3. **Booked call → prepared call.** When a reply books a discovery call, `/sales-research`
-   writes the company brief, then `/sales-discovery-prep` turns it into hypotheses, the
+   writes the company brief (unless this conversation already holds one on that company, from
+   `/sales-outbound`, `/sales-inbound` or `/sales-specialist`), then `/sales-discovery-prep` turns it into hypotheses, the
    question list and the agenda-mail draft. Run them in the same conversation: no CRM tool
    reads the research note back, so the brief has to still be in context.
 
@@ -289,13 +293,16 @@ added to its `notes`, closed in the order step 5 gives for every close.
 
 **Mode C companies waiting for a reply.** A company-list mail (`/sales-outbound` Mode C) makes no
 deal until the company answers, so no bucket above sees it. Its trace is one open task on the
-**company**, subject `Mode C 14 天未回 → 接觸紀錄改暫時沒需求`, due 14 days after the mail was sent.
+**company**, subject `Mode C <n> 天未回 → 接觸紀錄改暫時沒需求`, due `<n>` days after the mail was sent;
+`<n>` is the policy's `mode-c-reply-days` on the day the task was made.
 Read `list_tasks(filter="open", limit=200)` (exactly 200 rows means the list may be cut: say so) and
-keep the rows with `parent_kind="company"` whose `subject` starts with `Mode C 14 天未回`:
+keep the rows with `parent_kind="company"` whose `subject` starts with `Mode C `, then a number, then
+` 天未回`, whatever the number:
 - **not yet due** → count them per assignee under the bucket table: 「Mode C 等回覆：<name> <N> 家」.
-  The send date is `task_due_at` minus 14 days; those sent this week are that person's Mode C mails
-  for the week (the pipeline policy counts Mode C from these tasks, since unanswered companies have
-  no deal).
+  The send date is `task_due_at` minus the `<n>` in that task's own subject, not the policy's value
+  today (it may have changed since the task was made); those sent this week are that person's Mode C
+  mails for the week (the pipeline policy counts Mode C from these tasks, since unanswered companies
+  have no deal).
 - **past due** → one batch row, 「Mode C 未回」: the task is set `done`, and the report lists each
   company with its assignee, who changes its 接觸紀錄 row to `暫時沒需求` (the sheet is theirs; REVIEW
   does not write it). A company that has replied has an open deal and no such task: `/sales-outbound`
@@ -333,7 +340,7 @@ only after a single explicit confirmation:
 移到 lost（no_decision）· 3 個 deal — 放掉 · stale：客戶 <stale-days> 天以上沒有回應（各附最後一次往來日期）
 交接或結案     · 1 個 deal   — 超過上限：<owner> 開著 <M> 個，上限 <max-open-deals>。請逐筆說「交接給 <名字>」或「結案」，沒說的不動
 移到 lost（other）· 1 個 deal       — 重複認領：兩位 owner 已同意保留 <交易 number>
-關掉 Mode C 提醒 · 3 家公司  — 寄出 14 天沒回：認領人把接觸紀錄改暫時沒需求
+關掉 Mode C 提醒 · 3 家公司  — 寄出 <n> 天沒回：認領人把接觸紀錄改暫時沒需求
 專案資料夾封存 · 1 個 deal   — 結案的 deal 還有 [N] 資料夾：移到結案專案資料夾
 關掉過期 task  · 8 個        — 早已完成或已無意義
 建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度；沒有到期日的舊任務一併 drop）
@@ -342,7 +349,8 @@ only after a single explicit confirmation:
 要我執行嗎？想留下哪一筆，說一聲原因就好
 ```
 
-Fill `<stale-days>` with the policy's number when you write the batch. Each tag change in it is
+Fill `<stale-days>` with the policy's number when you write the batch, and the Mode C row's `<n>`
+with the number in those tasks' subjects (when they differ, give each). Each tag change in it is
 `apply_tag` or `remove_tag` (`entity_type="contact"`), previewed, then repeated with `confirm:true`
 after the one confirmation, then read back with `list_tags`.
 A stale deal goes to `lost` with `loss_reason="no_decision"`, and its `notes` field gets the line

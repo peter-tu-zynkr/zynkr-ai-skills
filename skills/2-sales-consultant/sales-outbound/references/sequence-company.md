@@ -2,7 +2,7 @@
 
 > `sales-outbound` 的 Mode C 完整做法。Mode A、Mode B 不受影響。
 >
-> `SKB-119` 把 `SKB-106` 的五封序列改成**一封開發信；寄出時 CRM 只建公司（加研究卡 note 與 14 天提醒任務），
+> `SKB-119` 把 `SKB-106` 的五封序列改成**一封開發信；寄出時 CRM 只建公司（加研究卡 note 與未回提醒任務），
 > 不建聯絡人、交易，對方回覆後才建**。專案資料夾一律等交易到 `qualified` 由 `/project-init` 開（owner，2026-11-09）。
 >
 > **認領是名單那一列，不是 deal**（owner，2026-11-09，`sales.crm-data-standards` §5 的 Mode C 段）：冷開發的公司
@@ -13,6 +13,11 @@
 >
 > 信的長相沿用 Mode B 的規矩：`sequence-5touch.md` 步驟 3.5 去 AI 感六條、步驟 4 外洩防線、
 > 步驟 5 建草稿的地雷；頁尾照 `email-format.md`。**這份只寫跟 Mode B 不一樣的地方**。
+>
+> **政策的三個數字不寫在這裡。** 一批幾家（`outbound-batch-max`）、每週時段下限（`outbound-min-slots-per-week`）、
+> 等回信幾天（`mode-c-reply-days`，下面寫成 `<n>`）都是 Atlas `company.sales-pipeline-rules` 開頭的行，
+> 讀法見 SKILL.md 的 Inference defaults 最後那一行；讀不到或少了那一行，就停下來問。只寄一封、一天一批
+> 是 Mode C 本身的形狀，寫在這裡。
 
 ## 何時用 Mode C
 
@@ -28,7 +33,7 @@
 | ask | 一對一諮詢（這次免費） | **30 分鐘 discovery call** 一起發想 AI 應用痛點 |
 | 稱呼 | 「Hi {名}」「你」 | 不知道收信人是誰：「您好，」「您」「貴公司」 |
 | 認領紀錄 | `認領人` 欄寫帳號 | A 欄寫**認領人名字**、B 欄寫 `已認領` |
-| CRM（寄出時） | 寫信前先認領：聯絡人＋認領人的 deal＋「五封未回」任務（`SKB-105`） | **只建公司**＋研究卡 note＋掛在公司的 14 天提醒任務；不建聯絡人、不建交易 |
+| CRM（寄出時） | 寫信前先認領：聯絡人＋認領人的 deal＋「五封未回」任務（`SKB-105`） | **只建公司**＋研究卡 note＋掛在公司的未回提醒任務；不建聯絡人、不建交易 |
 | 有回覆後 | 照 Mode A 跟進 | 建聯絡人（回信的人）＋交易（或把回信人掛到既有交易）；專案資料夾等 `qualified` |
 
 ## 名單
@@ -53,7 +58,7 @@
 - 走瀏覽器，網址加 `?authuser=<your-sales-account>` 確保是公司帳號。用名稱方塊（左上角）輸入 `A{列號}` 跳格；寫前先看該列 A 欄是空的、G 欄公司名對得上。
 - 中文格一律「名稱方塊跳格 → 點公式列 → 輸入 → Enter」，一格一格做（見步驟 5 的地雷）。
 - 寫完重新下載讀回，A、B 兩格是寫進去的值才算認領完成。.xlsx 在 Office 編輯模式下，Drive 下載到的版本會比畫面慢幾十秒到十分鐘；讀回沒看到就等一下再下載，不要重寫。
-- 一批最多 5 家，一天一批（同 Mode B）。
+- 一批最多 `outbound-batch-max` 家，一天一批（同 Mode B）。
 
 ## 步驟 2 · Company research
 
@@ -166,9 +171,9 @@ Best regards,
    - 待確認：名單 `電話` 空白 → `電話缺漏`。
    - 關係、產品不貼（對方還沒回話，沒有證據）。
    - 全部 `source:"rule"`，`apply_tag` 先預覽再 `confirm:true`，寫完 `list_tags(entity_type="company", entity_id)` 讀回。貼不上照 Mode B 7.4 的降級規則記 `標籤建議` note。
-6. **14 天提醒任務**：`mcp__zynkr__create_task(company_id=…)` 先預覽再 `confirm:true`：
-   - `subject`：`Mode C 14 天未回 → 接觸紀錄改暫時沒需求`（**照抄**；`/sales-manager` REVIEW 靠這個標題找 Mode C 公司，`company.sales-pipeline-rules` 也用它數 Mode C 寄出量）
-   - `due_at`：寄出日＋14 天，台北 09:00（`T01:00:00Z`）；`assignee_id`：認領人
+6. **未回提醒任務**：`mcp__zynkr__create_task(company_id=…)` 先預覽再 `confirm:true`：
+   - `subject`：`Mode C <n> 天未回 → 接觸紀錄改暫時沒需求`，`<n>` 換成 `mode-c-reply-days` 的值，其餘**照抄**（`/sales-manager` REVIEW 靠這個標題找 Mode C 公司，並從標題讀回 `<n>` 算寄出日；`company.sales-pipeline-rules` 也用它數 Mode C 寄出量）
+   - `due_at`：寄出日＋`<n>` 天，台北 09:00（`T01:00:00Z`）；`assignee_id`：認領人
    - `body`：寄出日、窗口信箱、名單列號、接觸紀錄列號
    - 寄出日改了就把舊任務 `set_task_status` 關掉、照新日期重建（同 Mode B 0.3）。
 
@@ -188,7 +193,7 @@ Remark 開頭寫「陌開一封信（Mode C，公司窗口）」，接名單列�
 
 觸發：Gmail 收到這家公司（窗口信箱或同網域）的回信，或使用者說「{公司} 回信了」。
 先 `search_gmail_messages(query="from:<窗口信箱> OR from:@<網域>")` 讀回信內容；**退信、自動回覆不算回覆**。
-「不需要」：接觸紀錄改 `暫時沒需求`，把步驟 4 的 14 天提醒任務關掉（第 5 點的找法），結束，不建交易。
+「不需要」：接觸紀錄改 `暫時沒需求`，把步驟 4 的未回提醒任務關掉（第 5 點的找法），結束，不建交易。
 
 1. **認領關卡，用回信人的 email**（`sales.crm-data-standards` §5 的六步，加上公司）：
    - email 去空白、轉小寫；`list_contacts(search=<email>, limit=100)`，只留 `email` 或 `secondary_email` 完全相等的。
@@ -214,15 +219,15 @@ Remark 開頭寫「陌開一封信（Mode C，公司窗口）」，接名單列�
    - `notes`：**第一行以 `Mode C` 開頭**（`company.sales-pipeline-rules` 靠這個把交易歸到 Mode C 那一組），寫名單列號、主推項目、開發信寄出日、回信日與回信重點（對方原話一兩句）。**不寫 `專案資料夾：`**——那一行只由 `/project-init` 在 `qualified` 時寫。
    - `get_deal(id)` 讀回核對 name、stage、lead_source、company_id、contact_id、owner_id、notes 第一行。
 5. **任務**：
-   - 關掉 14 天提醒：`list_tasks(filter="open", limit=200)`，找 `parent_kind="company"`、`parent_id`＝這家公司、`subject` 以 `Mode C 14 天未回` 開頭的，`set_task_status` 設為完成。找不到就回報，不要重建。
+   - 關掉未回提醒：`list_tasks(filter="open", limit=200)`，找 `parent_kind="company"`、`parent_id`＝這家公司、`subject` 以 `Mode C <數字> 天未回` 開頭的（不論數字多少：政策改過天數，舊任務還是建的那天的數字），`set_task_status` 設為完成。找不到就回報，不要重建。
    - 追蹤任務：`create_task(deal_id=…)`，下一步照回信內容（約時段、回答問題）；到期日依 `company.sales-pipeline-rules` 規則 4（新回覆、沒有歷史 → `followup-fast-days`）。
 6. 接觸紀錄那一列的狀態改成表示「對方已回覆」的值：先讀該欄現有的值（已知有「已聯絡，待回覆」「暫時沒需求」），沒有對應的值就問認領人，不要自己發明；Remark 補回信日與交易編號。
 7. 之後的跟進交給 `/sales-follow-up`（會議後）或 `/sales-discovery-prep`（約到 discovery call）；交易到 `qualified` 時 `/project-init` 開專案資料夾。
 
 ## 停止條件
 
-- 一封就停，**不補寄第二封**。**寄出後 14 天內沒有回覆就算不成立**：接觸紀錄狀態改 `暫時沒需求`，關掉 14 天提醒任務。14 天是 Mode C 自己的回覆期限，不是 `company.sales-pipeline-rules` 的 `stale-days`，兩者不要混用（owner 2026-11-09：之後跟序列數字一起搬進那份政策，搬之前照這裡）；CRM 沒有交易所以不用結案，公司留著（之後查重會擋掉重複開發）。
+- 一封就停，**不補寄第二封**。**寄出後 `<n>` 天內沒有回覆就算不成立**：接觸紀錄狀態改 `暫時沒需求`，關掉未回提醒任務。`mode-c-reply-days` 是 Mode C 自己的回覆期限，跟同一份政策的 `stale-days` 是兩回事，不要混用（owner 2026-11-09 定的，`SKB-126` 把它跟序列數字一起搬進政策）；CRM 沒有交易所以不用結案，公司留著（之後查重會擋掉重複開發）。
 - 管線指標：寄出時不建交易，所以不佔 `max-open-deals`、不算 cooking；有回覆建了交易之後才算進去。
-- 一天一批、一批不超過 5 家。
-- 公司聯絡人日曆該週 `Available` 少於 3 格，就不開新批次（同 Mode B）。
-- `/sales-manager` REVIEW 讀步驟 4 的 14 天提醒任務：沒交易的 Mode C 公司靠它出現在每週盤點，過期就提請「接觸紀錄改暫時沒需求＋關任務」。回覆有沒有來，仍以步驟 6 的 Gmail 查詢為準。
+- 一天一批、一批不超過 `outbound-batch-max` 家。
+- 公司聯絡人日曆該週 `Available` 少於 `outbound-min-slots-per-week` 格，就不開新批次（同 Mode B）。
+- `/sales-manager` REVIEW 讀步驟 4 的未回提醒任務：沒交易的 Mode C 公司靠它出現在每週盤點，過期就提請「接觸紀錄改暫時沒需求＋關任務」。回覆有沒有來，仍以步驟 6 的 Gmail 查詢為準。

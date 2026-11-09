@@ -37,7 +37,7 @@
 --   Only NEW contacts get this — the existing_contact branch returns matched rows
 --   untouched, so the 231 pre-existing NULLs need a separate backfill decision.
 --   {{DEAL_NAME}}        e.g. '小明 — Zynkr CRM Beta'
---   {{STAGE}}            e.g. 'qualified'                 (deal_stage enum)
+--   {{STAGE}}            e.g. 'contacted'                 (deal_stage enum; never 'qualified', see Inference defaults)
 --   {{LEAD_SOURCE}}      e.g. 'outbound'                  (lead_source enum)
 --   {{PRIORITY}}         e.g. 'medium'                    (deal_priority enum)
 --   {{DEAL_NOTES}}       e.g. 'Threads DM 邀請加入 Beta…'  (or NULL)

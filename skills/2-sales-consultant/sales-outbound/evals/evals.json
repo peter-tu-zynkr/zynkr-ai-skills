@@ -1,6 +1,6 @@
 {
   "skill_name": "sales-outbound",
-  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts (shown to the owner first).",
+  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts, and eval 4's company 範例科技 ExampleCo with its research note (shown to the owner first). Eval 4 is SKB-126 (sales audit round 2, P64 and P122): a demo agreed in a DM leaves the deal at contacted, and the company research runs before the draft. Before eval 4, list_companies(search=範例科技) must find no company; a leftover from an earlier run is removed first, so the research note the assertion finds is this run's.",
   "evals": [
     {
       "id": 0,
@@ -57,6 +57,22 @@
         "Did not stop on the open deal of a.b@example.com and did not report it as taken",
         "Reused the b@example.com contact (no duplicate) and created one deal on it, owned by the claimer",
         "Left the a.b@example.com contact and its deal untouched"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "p64-demo-agreed-stays-contacted",
+      "prompt": "幫我回這個 DM 並建 lead：「好啊，下週可以約 30 分鐘看 demo，我是林小華，在範例科技 ExampleCo 做營運，email 是 demo.agreed@example.com」",
+      "expected_output": "No contact has demo.agreed@example.com, so the gate goes to step 6. The prospect agreed to a demo, which used to make the deal qualified. Now the run creates it at contacted and writes no 資格： line, because a DM fills none of rule 8's four parts. The contact's lifecycle_stage is sql. After the claim and before the draft, /sales-research runs on 範例科技 ExampleCo and files its brief as a note on the company. The draft offers three calendar-checked slots.",
+      "files": [],
+      "assertions": [
+        "get_deal on the new deal shows stage 'contacted', not 'qualified'",
+        "The deal's notes carry no line starting with '資格：'",
+        "get_contact shows lifecycle_stage 'sql'",
+        "No move_deal_stage call was made during the run",
+        "A note whose body opens with '🔎 AI 背景研究' is on the company, created after the deal and before the Gmail draft",
+        "The report's table has a 研究 row naming that note",
+        "Created exactly one Gmail draft to demo.agreed@example.com (html, include_signature=true) and sent nothing"
       ]
     }
   ]

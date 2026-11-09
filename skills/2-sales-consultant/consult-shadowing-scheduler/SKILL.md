@@ -289,7 +289,13 @@ to what comes back, then `mcp__zynkr__update_deal(id="<deal_id>",
 notes="<combined>", confirm=true)`.
 
 Finally, **offer (ask-only)** a stage nudge: if the deal is still
-`new`/`contacted`, ask whether to move it to `qualified`. On yes, use
+`new`/`contacted`, first read the `資格：` line in the `notes` you just fetched
+(rule 8 of the sales pipeline policy, Atlas `company.sales-pipeline-rules`: a deal
+is `qualified` only once one line `資格：痛點＝…；決策者＝…；預算＝…；時程＝…`
+has all four parts filled, and a blank or `…` is not filled). With the line
+missing or a part unfilled, do not offer the move: say which parts are missing,
+so the deal owner can ask them on the shadowing day. With all four filled, ask
+whether to move it to `qualified`. On yes, use
 `mcp__zynkr__move_deal_stage(id="<deal_id>", stage="qualified", confirm=true)`
 — **only that tool.** Writing the column directly moves the stage but skips the
 `stage_change` timeline entry. Never nudge unasked.

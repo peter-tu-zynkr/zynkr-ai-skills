@@ -114,6 +114,13 @@ documents, never from its stage.
    folder is listed once (it may not be a client project at all), with
    `/project-init 客戶案` as the way to open one; a `new` or `contacted` deal
    needs no folder. This skill never creates a folder under any circumstances.
+   At `qualified`, `/project-init` opens a project only once the deal's notes
+   carry `資格：痛點＝…；決策者＝…；預算＝…；時程＝…` with all four parts filled
+   (rule 8 of `company.sales-pipeline-rules`; `proposal` and `won` open either
+   way). The notes come from the `get_deal` read step 3 already makes. So
+   every 建議動作 that runs `/project-init` on a `qualified` deal whose line is
+   missing, or has a blank or `…` part, reads
+   「先補齊資格行（缺 <哪幾項>），再跑 /project-init 客戶案 <交易編號>」.
 3. **Every finding carries a 建議動作** naming the owning skill (or the exact
    one-line manual edit) that can actually do it. A problem without a routed
    fix is not a finding, it's noise.
@@ -274,7 +281,7 @@ orphan) gets its own `## [N]` section the same way. Shape:
 | 發現（依 invariant）| I1×1 · I2×0 · I3×1 · I4×0 · I5×0 · I6×1 |
 
 未列入：
-- 已到 qualified 以後但沒有專案資料夾：活動合辦（交易-202607-003）· Beta 席位（https://platform.zynkr.ai/deals/…）— 是客戶案的話跑 /project-init 客戶案 開案
+- 已到 qualified 以後但沒有專案資料夾：活動合辦（交易-202607-003）· Beta 席位（https://platform.zynkr.ai/deals/…）— 是客戶案的話跑 /project-init 客戶案 開案（Beta 席位在 qualified、資格行缺 預算：先補齊資格行再開）
 - 12 筆還在 new／contacted、也沒有資料夾的交易（Sales 的 pipeline）
 
 本次未檢查：

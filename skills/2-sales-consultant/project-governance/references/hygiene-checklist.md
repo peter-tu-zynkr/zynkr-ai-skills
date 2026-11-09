@@ -28,7 +28,10 @@ Every violation becomes exactly one finding line pair under its engagement:
 Rules: one finding per violation (no bundling); the 問題 line quotes evidence
 (the stale date, the missing title, the duplicate number); the 建議動作 line
 names the owning skill with a leading `/` when one exists. A deal without a
-交易編號 is named by its URL.
+交易編號 is named by its URL. A 建議動作 below that runs `/project-init` on a
+`qualified` deal whose `資格：` line is missing, or has a blank or `…` part,
+starts 「先補齊資格行（缺 <哪幾項>），再」: `/project-init` stops on that deal
+(SKILL.md hard rule 2).
 
 ---
 

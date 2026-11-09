@@ -258,7 +258,7 @@ Demo 跟進已就緒：王小明（範例科技 ExampleCo）
 | 開案 | 交易已到 qualified：還沒開案的話，跑 /project-init 客戶案 <交易編號> |
 ```
 
-Add the 開案 row whenever, after step 5.3, the deal is at `qualified` or later: a client project opens at qualified (`SKB-045` D2), and this skill never opens it itself. Don't judge from the `專案資料夾：` line whether the project is open: `/sales-inbound` wrote that line for inbound leads until 2026-10-05, before any project existed. Running `/project-init` again is safe, since it stops when the folder already holds the project set.
+Add the 開案 row whenever, after step 5.3, the deal is at `qualified` or later: a client project opens at qualified (`SKB-045` D2), and this skill never opens it itself. At `qualified` the row depends on the deal's `資格：` line, read from the `notes` step 5.2 read back: step 5.3 reads the line only before a move, and a deal that was already `qualified` makes none. All four parts filled → the row as shown. The line missing, or a part blank or `…` → 「開案 | 資格行缺 <哪幾項>：補齊後再跑 /project-init 客戶案 <交易編號>」, because `/project-init` stops on that deal. At `proposal` or `won` the row is as shown, with or without the line: those deals open either way (owner ruling A6, sales audit round 2). Don't judge from the `專案資料夾：` line whether the project is open: `/sales-inbound` wrote that line for inbound leads until 2026-10-05, before any project existed. Running `/project-init` again is safe, since it stops when the folder already holds the project set.
 
 Call out anything you left for Peter's judgement (a stage you did NOT auto-advance, a recording link you didn't have, a task match you weren't sure about).
 

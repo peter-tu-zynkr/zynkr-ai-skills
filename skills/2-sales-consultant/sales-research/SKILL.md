@@ -16,9 +16,11 @@ description: >-
   the Zynkr CRM — even if he only names the company and doesn't spell out
   "research." Also fire immediately after a company/contact gets created in
   this conversation if he asks for research on it in the same breath (e.g.
-  "create a company for X, also trigger company research"). Do NOT fire
-  automatically after every company/contact creation on your own initiative —
-  only when asked, in this call or the next.
+  "create a company for X, also trigger company research"). /sales-outbound,
+  /sales-inbound and /sales-specialist run it as their own step on a new lead,
+  before the first draft. Otherwise do NOT fire automatically after every
+  company/contact creation on your own initiative — only when asked, in this
+  call or the next.
 category: sales-consultant
 project: sales-research
 platform: claude
@@ -71,11 +73,16 @@ feature takes (an aid to the salesperson, not a source of truth).
 
 ## How this differs from its neighbours
 
-- **sales-outbound** — enriches a contact from a *profile URL the prospect
-  handed over* (LinkedIn/IG/Threads bio) as one step inside logging a whole DM
-  conversation as a lead. It doesn't do open-ended company research.
+- **sales-outbound** — logs one person's interest signal as a lead and drafts
+  the reply. It enriches the contact from a *profile URL the prospect handed
+  over* (LinkedIn/IG/Threads bio), and hands the company to this skill after the
+  claim and before the draft (its step 4c), unless the conversation already
+  holds a brief. Its Mode C writes its own research card instead.
 - **sales-inbound** — a weekly batch sweep of inbound consulting-inquiry
-  emails into deals; doesn't research anything.
+  emails into deals. It hands each new lead's company to this skill before the
+  first reply (its step 4b); a lead it cannot research is listed as 待研究.
+- **sales-specialist** — the business-card pipeline; its Step 5 hands each
+  card's company to this skill.
 - **sales-research** (this one) — takes a company (± contact) already in, or
   about to enter, the CRM and does dedicated background research on it, on
   demand, independent of any particular conversation thread.
@@ -87,6 +94,29 @@ what's described below; that's the calling skill's (or Peter's) job.
 ---
 
 ## Workflow
+
+**Run by a lead skill.** `/sales-outbound` (step 4c), `/sales-inbound` (step 4b) and
+`/sales-specialist` (Step 5) run this skill as their own step, on a lead they have just filed. Then
+these rules hold over the steps below:
+
+- **Which company.** The `company_id` the caller passed, or else the company on the contact
+  (`get_contact`, step 1). With neither, the note goes on the contact (step 1's person case), even
+  when the email domain or the registry points to a company: add two or three lines on that company
+  and end the note with 「公司尚未建檔：<公司名>」, so the deal owner can file it. Never
+  `create_company`: the caller left the company out on purpose (none was named, the address is free
+  mail, or its duplicate check could not be trusted).
+- **Notes only.** No `update_company` either. A value the research found for a field (統編, address,
+  headcount) goes in the note, for the deal owner to set.
+- **The registry by name, only on an exact match.** A 統編 found by name counts only when one
+  registered company, and only one, carries that name (its 有限公司 or 股份有限公司 ending aside), or
+  when the lead gave the 統編 itself. Otherwise leave Track A out, and the note says the registry
+  was not matched.
+- **It asks nothing.** Each `create_note` previews and then confirms, as the caller's own writes do.
+  Anything it would have asked goes into its report: `/sales-specialist` puts it to the user at its
+  own review of the research, and the other two list it in theirs.
+
+What the caller hands over with the ids (a sourcing row's website and background, a card's notes)
+counts as what we already know: check it, rather than search for the same facts again.
 
 ### 1 · Resolve the CRM company record
 
@@ -111,7 +141,8 @@ company is the one exception. Figure out which case you're in:
   `confirm: true`, then go to step 6: a short note needs none of the sections.
   Never create a company just to hold the note. With no contact in the CRM either,
   ask.
-- **No match for a company, or Peter is asking you to create the company right now** →
+- **No match for a company, or Peter is asking you to create the company right now** (never when
+  a lead skill runs this one) →
   do the research first (step 2), then `mcp__zynkr__create_company` with the
   real structured fields you found (name, domain, industry, address, tax_id,
   employee_count), and land the brief itself as a note in step 4. Do **not**
@@ -272,8 +303,12 @@ Three mechanics that bite:
 
 **Structured fields are a separate and welcome write.** When the research yields
 a hard value for a column the CRM actually has — `employee_count`, `industry`,
-`tax_id`, `address`, `domain` — set it with `update_company`, passing only the
-fields you mean to change. That is how a fact becomes filterable instead of prose.
+`tax_id`, `address`, `domain` — set it with `update_company`, passing only fields
+that are empty on the record (`get_company` shows them). A value already there
+stays, even when the research disagrees: a person may have curated it, so the note
+names the difference instead, and only Peter's word changes that field. That is how
+a fact becomes filterable instead of prose. A lead skill's run writes no field at
+all (*Run by a lead skill*, above).
 
 ### 5 · Contact-level note (only if a contact was named)
 
@@ -333,7 +368,8 @@ under a success line that papers over them.
   created, since that's a bigger commitment than adding a note.
 - **Don't create deals, contacts, or companies you weren't asked to create.**
   If the company/contact doesn't exist and Peter only asked for "research,"
-  ask whether he wants it created too rather than assuming.
+  ask whether he wants it created too rather than assuming. When a lead skill
+  runs this one, it creates none and asks nothing (*Run by a lead skill*, above).
 - **Scope stays research + write-back.** If the findings suggest a real sales
   or consulting opportunity, flag it in the report — don't spin up a deal or
   hand off to another skill unprompted.

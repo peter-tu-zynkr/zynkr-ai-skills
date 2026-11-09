@@ -24,11 +24,12 @@ visibility: public
 author: Peter Tu
 sheetId: "2.04"
 input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 and 團隊訓練 inquiries and the [2.1] Inbound Sales label"
-process: "Sweep both inboxes → filter real leads → pick-up gate (an open deal on the email, any owner, keeps the mail for that deal) → a CRM deal owned by the inbox owner → first-reply draft (never sent) → report; the folder waits for /project-init"
+process: "Sweep both inboxes → filter real leads → pick-up gate (an open deal on the email, any owner, keeps it for that deal) → a CRM deal owned by the inbox owner → /sales-research brief → first-reply draft (never sent) → report; the folder waits for /project-init"
 output: "Per new lead: a CRM deal owned by the inbox owner and a first-reply Gmail draft; a lead with an open deal reported with its owner; proposals listed for Peter"
 synergy:
   - "sales-outbound"
   - "zynkr-support"
+  - "sales-research"
 reads:
   - "kb"
   - "sales.crm-data-standards"
@@ -50,7 +51,7 @@ The client folder and its kickoff doc are not this skill's. A lead is not a proj
 yet: `/project-init` opens the numbered folder, the kickoff documents and the deal's
 `專案資料夾：` line once the deal reaches **qualified**, after the discovery call.
 
-It runs **fully autonomously**: parse → filter → create → draft → report. No mid-run
+It runs **fully autonomously**: parse → filter → create → research → draft → report. No mid-run
 confirmation. The whole point is that Peter runs it (or a cron does) and comes
 back to a finished pipeline. Because it writes real CRM records and Gmail drafts,
 the safety comes from being *idempotent* — it skips tests and skips any lead whose
@@ -350,6 +351,32 @@ deal reaches qualified, after the discovery call, and the skills that need the
 folder (`/consult-shadowing-scheduler`, `/gtm-uat-writer`, `/project-governance`)
 read that line. A lead that never qualifies leaves no orphan folder behind.
 
+### 4b · Research the company before the reply
+
+The first reply is written knowing who they are. For each lead step 4 just logged, before its
+draft in step 5:
+
+1. **This conversation already holds a `/sales-research` brief on the company**, run earlier in it
+   or pasted by the user from the company page → use that brief, and run nothing.
+2. **Otherwise run `/sales-research`** with the `company_id` and `contact_id` step 4 kept (no
+   `company_id` when step 4 made no company). It runs under its *Run by a lead skill* rule, so the
+   sweep still asks nothing midway: it files notes only, with no company created and no field
+   written. Never look for an earlier brief in the CRM instead: no CRM tool reads a record's timeline, so a note
+   filed there cannot be seen from here (`/sales-discovery-prep` step 2 works the same way).
+3. **A person, or a one-person business** (step 4 made no company, or the company is the person
+   themselves) → `/sales-research` takes its person case: two or three lines on the contact, never
+   a full brief.
+
+**A scheduled run researches too.** `/sales-research` asks nothing when a lead skill runs it, so a
+run a routine or a cron started takes the same three cases. Only when it cannot run there (no web
+search, or the skill is not installed), draft from the inquiry alone and list each of those leads
+under the report's table as 「待研究：<公司或姓名>（<交易 number>）」: the deal owner runs
+`/sales-research` and reworks the draft before sending it.
+
+The draft (step 5) may use what the brief found, and nothing it did not find; a claim the brief
+marks unverified stays out of the reply. When the research cannot run or fails, draft anyway and
+give the reason in the report's 研究 column.
+
 ### 5 · Draft the first reply (Gmail draft — never send)
 
 One draft per new lead, unless one already exists: first search
@@ -401,16 +428,17 @@ inquiry, including the skipped ones so nothing is silently dropped:
 ```
 本週進件：官網 N 封 · Inbound Sales K 封，建立 M 筆
 
-| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 跟進任務 | 標籤 | 回覆草稿 |
-|---|------|------|------|------|------|----------|------|----------|
-| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | 10/28 到期 | 來源 · 主題 ×2 · 待確認 ×1（已讀回） | ✅ 已擬 |
-| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — | — |
-| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 已有進行中的 deal（負責人 <member name>） | [deal](url) | — | — | ⏭️ 歸那筆 deal |
+| # | 來源 | 姓名 | 公司 | 結果 | 交易 | 跟進任務 | 標籤 | 研究 | 回覆草稿 |
+|---|------|------|------|------|------|----------|------|------|----------|
+| 1 | 官網 | Jane | 轉職計劃中 | ✅ 已建立 | [deal](url) | 10/28 到期 | 來源 · 主題 ×2 · 待確認 ×1（已讀回） | ✅ 公司 note | ✅ 已擬 |
+| 2 | 官網 | GA4 Test | Zynkr Test | ⏭️ 跳過（測試） | — | — | — | — | — |
+| 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 已有進行中的 deal（負責人 <member name>） | [deal](url) | — | — | — | ⏭️ 歸那筆 deal |
 ```
 
 Under the table, the gate's one line for every lead an open deal already holds (step 3.5), so the
 owner can be told. In the 標籤 column name the values applied; a lead whose tags were not applied says
-`標籤建議已記在 note` and why. Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
+`標籤建議已記在 note` and why. In the 研究 column write 公司 note, 聯絡人兩三行, 沿用本次對話的研究,
+待研究 (research could not run here, step 4b) or 沒跑 and why. Then the 待研究 lines, any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
 each lead whose price question goes on to the proposal (`報價交 /sales-proposal-writer`),
 any `[[NEEDS PETER]]` drafts (and, when the 知識庫 walk failed, that it did, so every price
 answer waited), and state the headline in prose (e.g. "Created 2 deals +

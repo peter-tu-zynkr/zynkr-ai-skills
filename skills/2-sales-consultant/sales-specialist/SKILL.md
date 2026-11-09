@@ -9,9 +9,9 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "Business card image(s) — single or batch"
-process: "OCR via Claude Vision → schema review → pick-up gate (an open deal stops the card before any write) → Zynkr platform write (contact + company + 名片 note + tags) → company research → follow-up draft → claim (a deal owned by the runner) → Gmail save"
+process: "OCR via Claude Vision → schema review → pick-up gate (an open deal stops the card before any write) → Zynkr platform write (contact + company + 名片 note + tags) → /sales-research brief → follow-up draft → claim (a deal owned by the runner) → Gmail save"
 output: "Contact + company + 名片 note on the Zynkr platform, a deal owned by the runner, and a follow-up email in Gmail Drafts; a card whose email has an open deal gets neither"
-synergy: []
+synergy: ["sales-research"]
 type: agent
 skills: ["sales-follow-up-mail"]
 reads: ["sales.crm-data-standards", "company.sales-pipeline-rules", "company.crm-tag-rules"]
@@ -370,26 +370,39 @@ Never infer a tag from a job title or an industry. Read the result back with
 
 ## Step 5 — Company Research
 
-For each contact the gate did not stop, run 3 WebSearch queries in sequence:
+For each contact the gate did not stop, the research comes from `/sales-research`, the same way
+`/sales-discovery-prep` step 2 gets it:
 
-1. **Company overview**: `"[company name]" company overview products services`
-2. **Recent news**: `"[company name]" news <this year> OR <last year>` (years from today's date)
-3. **Industry context**: `[industry] Taiwan market trends <this year>` (or adjust region based on company location)
+1. **This conversation already holds a `/sales-research` brief on the card's company**, run earlier
+   in it or pasted by the user from the company page → use that brief, and run nothing.
+2. **Otherwise run `/sales-research`** with the ids Step 6's claim uses: the contact Step 4 created
+   (its `contact_id`) or the one the gate matched, and the company from
+   `mcp__zynkr__list_companies(search=<the term Step 4 cuts the name to>, limit=100)`, the row whose
+   name equals the card's full name, ignoring case (none → no `company_id`; the SQL path returns the
+   contact's id only). Hand it the card's own notes too. It runs under its *Run by a lead skill*
+   rule: it files notes only, never creating the company Step 4 left out or writing a field, and
+   what it would have asked comes back in its report, for the review below. It reads
+   the government registry by 統編 as well as the web, and files the brief as a note on the company,
+   where the next skill and the deal owner find it. Never look for an earlier brief in the CRM
+   instead: no CRM tool reads a record's timeline.
+3. **A person, or a one-person business** (no company on the card, or the company is the person
+   themselves) → `/sales-research` takes its person case: two or three lines on the contact.
 
-Synthesize the search results into a `RESEARCH_SUMMARY` for each contact:
+Keep what the brief found as the contact's `RESEARCH_SUMMARY` for Step 6, in this shape. Write only
+what the brief says; a claim it marks unverified stays out of the summary:
 
 ```
 ## Company: [Company Name]
 
 ### Overview
-[2–3 sentences: what they do, business model, size/stage]
+[2–3 sentences from the brief: what they do, business model, size/stage]
 
 ### Recent News
-- [key item 1]
-- [key item 2]
+- [a dated item from the brief]
+- [another, or "No recent news found"]
 
 ### Personalization Hook
-[The single most relevant/interesting detail to reference in the follow-up email]
+[The single detail from the brief most worth referencing in the follow-up email]
 ```
 
 Display the research summary to the user. Ask:
@@ -518,7 +531,7 @@ the platform write — a failed card exists nowhere but the image it came from. 
 
 - If OCR fails to extract a field: mark it `?` and flag it in the review table
 - If the platform write fails: surface the error and continue the pipeline, but keep the card flagged. It is the only destination, so a failed card is recorded nowhere — always offer to retry at the end, and never report it as processed.
-- If WebSearch returns no results: note "No recent news found" and proceed to email with overview only
+- If `/sales-research` cannot run, or its brief finds nothing recent: note "No recent news found" (and why there is no brief, when there is none) and proceed to the email with what the card and the brief do say
 - If saving the Gmail draft fails: display the error; offer to copy email text to clipboard instead
 - Never silently skip a step — always surface errors clearly
 

@@ -108,7 +108,7 @@ shasum -a 256 references/pm-knowledge-pack.md | cut -c1-12   # 或 scripts/check
 `客戶案` 在**交易標為 `qualified` 的那一刻**開案：探索會議（discovery call）後確認是值得投入的潛在客戶，就在 Zynkr 把交易標成 `qualified`。開案只由本技能做（`SKB-045` D2：簽約前的來回討論、workshop 準備、提案與客戶素材都需要一個家）。交易本身由 Sales 建立（`/sales-inbound`、`/sales-outbound`），本技能**只讀交易、絕不建交易**，也不建公司或聯絡人。
 
 1. **找到交易。** 交易網址 `…/deals/<id>` ⇒ `mcp__zynkr__get_deal(id)`。交易編號或公司名 ⇒ `mcp__zynkr__list_deals(search="<編號或公司名>")`，留下編號或公司相符的列，再 `get_deal`。找到不只一筆就列出來問，不要自己挑；一筆都沒有就停，並說「交易要先由 Sales 建立」。CRM 連不上就停並照實回報，不要退回去用公司名猜資料夾。
-2. **確認交易階段。** `qualified`、`proposal`、`won` ⇒ 開案。`new` 或 `contacted` ⇒ 停，回報「客戶案在交易標為 qualified（探索會議後）時開案；這筆交易目前在 `<stage>`」；只有 Peter 明說要提前開，才照做，並在交付清單第一行標明「交易尚未 qualified」。`lost` ⇒ 停，不開案。
+2. **確認交易階段與資格行。** `proposal`、`won` ⇒ 開案，有沒有資格行都開（owner 裁定，業務稽核第二輪 A6）。`qualified` ⇒ 先讀交易 `notes` 裡的 `資格：痛點＝…；決策者＝…；預算＝…；時程＝…` 那一行（`company.sales-pipeline-rules` 規則 8：四項都填了才算 qualified，空白或 `…` 不算填）：四項齊了 ⇒ 開案；沒有這一行或缺項 ⇒ 停，回報「這筆交易在 qualified，但資格行缺 <哪幾項>：先補齊再開案」。`new` 或 `contacted` ⇒ 停，回報「客戶案在交易標為 qualified（探索會議後）時開案；這筆交易目前在 `<stage>`」。兩種停，都只有 Peter 明說要提前開才照做，並在交付清單第一行標明「交易尚未 qualified」或「資格行缺 <哪幾項>」。`lost` ⇒ 停，不開案。
 3. **先找既有的資料夾，再考慮編號。** 舊流程在 inbound 時就替每個詢問開了 `[N]` 資料夾，所以很多交易早已有資料夾：
    - 交易的 `notes` 欄裡有 Drive 資料夾連結（2026-10-05 前 `/sales-inbound` 寫的舊回連）⇒ 確認它在歸檔家 `[3.1]` 底下，就用它。它在封存資料夾（`filing_home.archive_folder_id`）裡 ⇒ 這是結案過的專案：停，請 Peter 先把資料夾移回歸檔家再開。
    - 沒有連結 ⇒ 列出歸檔家**一次**，找名稱含交易公司名的 `[N]` 資料夾。恰好一個 ⇒ 用它並說出來；不只一個 ⇒ 列出來問。

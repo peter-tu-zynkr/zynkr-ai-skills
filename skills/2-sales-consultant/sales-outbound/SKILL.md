@@ -18,7 +18,7 @@ description: >-
   references/sequence-5touch.md). Mode C — ONE mail to a COMPANY's shared inbox from the company
   directory list: trigger on "Mode C", "公司名單", "工商名錄", "對公司窗口開發"; it claims the row,
   researches the company, drafts one mail and files only a CRM company with a research note and a
-  14-day reminder; the contact and the deal come only once the company replies ("{公司} 回信了")
+  no-reply reminder; the contact and the deal come only once the company replies ("{公司} 回信了")
   (see references/sequence-company.md). Distinct from sales-client-sourcing (BATCH-enriches a WHOLE
   survey Sheet), sales-inbound (the weekly sweep of inbound website consult EMAILS) and
   sales-follow-up (ONE completed demo transcript on an EXISTING deal).
@@ -30,9 +30,9 @@ visibility: public
 author: Peter Tu
 sheetId: "2.09"
 input: "ONE person's interest signal carrying an email — a pasted DM/chat thread, an event feedback or form row, a website enquiry, or business-card text; optionally their profile URL."
-process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → slots from the calendar if a meeting is the ask → Gmail draft → report."
+process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → /sales-research brief → calendar slots for a meeting → Gmail draft → report."
 output: "A CRM lead (company + contact + a deal owned by the runner + note + task) and a Gmail draft, with three 台北時間 slots for a meeting; an open deal on the email stops it instead."
-synergy: []
+synergy: ["sales-research"]
 reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules", "doc-style", "company.company-directory-sheet", "company.workflow-library-folder"]
 house-style: bound
 
@@ -71,8 +71,8 @@ is that it names a person, carries an email, and shows what they want. It is NOT
 whole spreadsheet of people (that is `sales-client-sourcing`) and NOT a meeting
 transcript (that is `sales-follow-up`).
 
-It runs **autonomously**: parse → enrich → pick-up gate → write CRM → check calendar →
-draft email → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
+It runs **autonomously**: parse → enrich → pick-up gate → write CRM → research the company →
+check calendar → draft email → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
 before sending) and the CRM write is one atomic statement. Tagging the new contact comes after
 that statement, as its own small step (step 4): a failed tag never undoes the lead.
 
@@ -80,21 +80,21 @@ that statement, as its own small step (step 4): a failed tag never undoes the le
 
 | | 前提 | 輸入 | 產出 |
 |---|---|---|---|
-| **Mode A** | 對方**已經回過話**，談到 demo／通話 | 一段貼上的 DM／對話 | 1 個 lead ＋ 1 封回覆草稿 |
+| **Mode A** | 對方**已經回過話**，談到 demo／通話 | 一段貼上的 DM／對話 | 1 個 lead ＋ 公司研究 ＋ 1 封回覆草稿 |
 | **Mode B** | 對方**完全沒講過話** | 陌開名單裡的一個人 | CRM 認領（聯絡人 ＋ deal）＋ 5 封序列草稿 ＋ 接觸紀錄 |
-| **Mode C** | 公司**完全沒講過話**，只有窗口信箱 | 公司名單裡的一家公司 | 認領 ＋ 研究卡 ＋ 1 封開發信草稿 ＋ 接觸紀錄 ＋ CRM 公司（含研究卡備註、14 天提醒）；**對方回覆後**才建聯絡人 ＋ 交易 |
+| **Mode C** | 公司**完全沒講過話**，只有窗口信箱 | 公司名單裡的一家公司 | 認領 ＋ 研究卡 ＋ 1 封開發信草稿 ＋ 接觸紀錄 ＋ CRM 公司（含研究卡備註、未回提醒）；**對方回覆後**才建聯絡人 ＋ 交易 |
 
 **Mode C 的完整做法在 `references/sequence-company.md`**（文末「Mode C · 公司窗口一封開發信」有不能忘的幾條）。
 
 **Mode B 的完整做法在 `references/sequence-5touch.md`**，信的長相（節奏、主旨、第 2–5 封骨架、交付文件格式）在 `references/sequence-template.md`，頁尾在 `references/email-format.md`。走之前三份都讀。
-不要把 Mode A 的推論預設（`stage=qualified`、`lifecycle=sql`）套到 Mode B——
+不要把 Mode A 的推論預設（`stage=contacted`、`lifecycle=sql`）套到 Mode B——
 那些是給「已經有回應」的人用的；Mode B 的人一律 `還沒接觸過 → 已聯絡，待回覆`。
 
 **Mode B 的認領是 CRM 裡的一筆 deal，在寫任何一封信之前**（`sequence-5touch.md` 步驟 0）：
 每一位先過認領關卡（跟 Mode A 第 4 步同樣六步），已經有進行中 deal 的人退出這一批、回報是誰在跟；
 其餘的人建好聯絡人（`lifecycle_stage=lead`），再建一筆負責人＝認領人的 deal，然後才開始寫信。
 對方一回信，Gmail 同步就有聯絡人和 deal 可掛，也看得到該找誰；下一個人再挑到同一個 email，關卡就會擋下來。
-每筆 deal 掛一個任務「五封未回 → 結案 lost（no_decision）」，到期日是第 5 封寄出日（T+12）再加 7 天，第 1 封改期就關掉舊任務、照新日期重建（`sequence-5touch.md` 0.3）；
+每筆 deal 掛一個任務「五封未回 → 結案 lost（no_decision）」，到期日是第 5 封寄出日再加 7 天（五封的寄出日照管線規則的間隔與星期算，見文末 Mode B 段第 6 點），第 1 封改期就關掉舊任務、照新日期重建（`sequence-5touch.md` 0.3）；
 五封都沒回，就由 `/sales-manager` REVIEW 把它結成 lost、結案原因 `no_decision`，pipeline 不會堆著冷掉的 deal。
 `Outbound touches` 試算表照寫：`AI名單` 分頁的認領人給陌開名單 app 用，`接觸紀錄` 分頁記接觸，但關卡只看 CRM。
 步驟 0 新建的聯絡人在步驟 7 貼標籤：來源取政策的 `outbound-mode-b-source`，加上看到的缺漏對應的 待確認，依 `company.crm-tag-rules`（`sequence-5touch.md` 7.1）。
@@ -339,6 +339,29 @@ refused after the insert goes into that same kind of note.
 
 > **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `relationship`, `product`, `size`, `interest`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input` (an archived value, a group that does not fit the record): write each tag you would have applied as one line `標籤建議：<group>=<value>` in a CRM note on the record, say so in the report, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：主題=<what they asked about, in brief>`, `標籤建議：來源=<the channel they came through>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the record back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
 
+#### 4c · Research the company before the draft
+
+The reply is the first thing the client reads from us, so it is written knowing who they are.
+After the claim and before step 5, in Mode A (Mode B makes no company, and Mode C writes its own
+research card in `references/sequence-company.md` step 2):
+
+1. **This conversation already holds a `/sales-research` brief on this company**, run earlier in
+   it or pasted by the user from the company page → use that brief, and run nothing.
+2. **Otherwise run `/sales-research` now** with the `company_id` and `contact_id` the claim
+   returned, and what the signal already says about the company, then go on to step 5. It runs
+   under its *Run by a lead skill* rule: notes only, with no company created and no field written,
+   and nothing asked. Never look for an earlier brief in the CRM instead: no CRM tool
+   reads a record's timeline, so a note filed there cannot be seen from here
+   (`/sales-discovery-prep` step 2 works the same way).
+3. **A person, or a one-person business** (the claim made no company, or the company is the person
+   themselves) → `/sales-research` takes its person case: two or three lines on the contact, never
+   a full brief.
+
+The draft's point of view (step 6) may use what the brief found, and nothing it did not find; a
+claim the brief marks unverified stays out of the mail. When the research cannot run or fails
+(no web search, a refused write), draft anyway: the mail is a draft, and the report's 研究 row
+says why there is no brief.
+
 ### 5 · If the ask is a meeting, derive three REAL slots
 
 **Never invent availability.** Whenever the draft will propose a call / demo / meeting,
@@ -455,6 +478,7 @@ Show the client card, then a compact artifact table:
 | 公司 | <company url>（新建 / 既有） |
 | 活動 | note · 1 task |
 | 標籤 | 來源=… · 待確認=…（已讀回）／ 未貼，標籤建議已記在 note（原因） |
+| 研究 | /sales-research 寫在公司的 note ／ 聯絡人兩三行 ／ 沿用本次對話的研究 ／ 沒跑（原因） |
 | Gmail 草稿 | 已放進收件匣，待你過目後寄出（已確認未寄出） |
 ```
 
@@ -474,10 +498,15 @@ the cap line from *Inference defaults*.
 
 Pick the closest enum from the conversation; use the fallback when there's no signal.
 
-- **stage** (`new|contacted|qualified|proposal|won|lost`) — they engaged and **agreed
-  to a demo / call / clear next step** → **`qualified`**; softer "sounds interesting,
-  maybe" → `contacted`; bare first reply → `new`. A **feedback / form row is `new`** —
+- **stage** (`new|contacted|qualified|proposal|won|lost`) — they engaged, whether they
+  **agreed to a demo / call / clear next step** or said a softer "sounds interesting,
+  maybe" → **`contacted`**; bare first reply → `new`. A **feedback / form row is `new`** —
   they described a need, but nothing has been agreed and Peter has not replied yet.
+  **This skill never sets `qualified`.** Rule 8 of `company.sales-pipeline-rules` lets a deal into
+  `qualified` only once its notes carry one line `資格：痛點＝…；決策者＝…；預算＝…；時程＝…` with all
+  four parts filled, and a DM does not fill them. The move comes after the discovery call:
+  `/sales-discovery` writes that line, and `/sales-follow-up` or `/consult-shadowing-scheduler`
+  moves the deal once all four parts are filled.
 - **lead_source** (`content|workshop|referral|outbound|other`) — **Peter messaged them
   first** → **`outbound`**; they came via a post/content → `content`; **they name an
   event or livestream they attended → `workshop`**; warm intro → `referral`; unclear
@@ -563,8 +592,9 @@ unchecked. Never re-implement either list inside this file.
 
    > **第 4 封的補助判斷點是知識庫卡片——從 Atlas 讀**（`mcp__zynkr-atlas__get_knowledge`，key `gov-subsidy-mechanics`，只用 `---` 以上的正文）。Atlas 連不上或沒有這張卡，就停下來問；絕不憑記憶或舊版檔案寫補助內容。
 4. **草稿建好 ≠ 已寄出。** 接觸紀錄的 Remark 要註明「尚未寄出」，寄出後才拿掉。
-5. **五封就停。** 沒回的改 `暫時沒需求`，那筆 deal 結成 lost、結案原因 `no_decision`（`/sales-manager` REVIEW 依步驟 0 掛的任務批次處理）。一天一批、一批不超過 5 人。
-6. **三天一封、第 1 封一律禮拜二**（二、五、一、四、日），時段只放第 1 封，三格落在 T+2 到 T+8。
+5. **五封就停。** 沒回的改 `暫時沒需求`，那筆 deal 結成 lost、結案原因 `no_decision`（`/sales-manager` REVIEW 依步驟 0 掛的任務批次處理）。一天一批、一批不超過 `outbound-batch-max` 人。
+6. **每 `sequence-gap-days` 天一封、第 1 封寄在 `sequence-first-weekday` 那天**，時段只放第 1 封，三格落在 T+2 到 T+8，而且早於第 4 封（T+3g）。
+   序列的數字（一批幾人、間隔、第 1 封的星期、停損人數、每週時段下限、多久後再聯絡）都是 `company.sales-pipeline-rules` 開頭的行，讀法見 *Inference defaults* 最後那一行；這份檔案和 reference 不寫這六個值。五封、一天一批、第 5 封之後再等 7 天才結案、第 1 封的時段落在 T+2 到 T+8 而且早於第 4 封，是序列本身的形狀，寫在這裡。
 7. **先認領、後寫信**（`sequence-5touch.md` 步驟 0）。每一位先過認領關卡（Mode A 第 4 步 4a 的六步，email 精確比對、只看進行中的四個階段），
    同一個 email 在同一批只留第一位（後面的標「同批重複」），已經有進行中 deal 的人**退出這一批**，回報「<email> 已有進行中的 deal：<交易> · <stage> · 負責人 <成員名> · 最後活動 <日期>」。
    其餘的人建聯絡人（既有就沿用，`lifecycle_stage` 一定要帶 `lead`，工具預設是 `opportunity`）＋一筆 deal ＋一個「五封未回 → 結案 lost（no_decision）」任務，
@@ -585,8 +615,8 @@ unchecked. Never re-implement either list inside this file.
 2. **研究卡只寫查得到的**，推論要標明是推論；信裡講不出具體事就講到產業層級為止。
 3. **只寄一封**：研究開場 → 三個痛點畫面 → 兩三句工作流 → 一句補助 → 30 分鐘 discovery call＋三個時段＋第四個逃生口，不提價格；寫時數是對 Mode B「時數不進客戶看得到的東西」的例外，owner 2026-11-09 核准、只限 Mode C。時段取法同 Mode B。不補寄第二封。
 4. **工作流取自內部工作流資料夾，不附檔、不貼連結**，難度分級、階段與工作流編號不進信。
-5. **認領是名單那一列；寄出時 CRM 只建公司**（研究卡與信的內容寫成一筆公司 note，description 一行 `公司名單冷開發（Mode C，YYYY-MM-DD，認領人 <名字>）`）＋一個掛在公司的任務 `Mode C 14 天未回 → 接觸紀錄改暫時沒需求`（到期＝寄出日＋14 天）。不建聯絡人、交易、專案資料夾；`create_company` 預設 `opportunity`，建完改 `lead`。`來源` 標籤只能貼聯絡人，所以公司只貼 規模／待確認，規模只看員工數證據。
-6. **對方回覆後才建**：先用回信人的 email 過認領關卡，再對四個未結案階段逐一 `list_deals(stage=…)`，留下聯絡人或公司對得上的（剛好 100 筆就停）；已有交易就把回信人掛上去、不新建，沒有才建交易（名稱照 `sales.crm-data-standards` §1、`stage=contacted`、notes 第一行以 `Mode C` 開頭、不寫 `專案資料夾：`）→ 關掉 14 天提醒 → 追蹤任務。專案資料夾等 `qualified` 由 `/project-init` 開。退信、自動回覆不算回覆；「不需要」或 14 天沒回，接觸紀錄改 `暫時沒需求`、關掉提醒。
+5. **認領是名單那一列；寄出時 CRM 只建公司**（研究卡與信的內容寫成一筆公司 note，description 一行 `公司名單冷開發（Mode C，YYYY-MM-DD，認領人 <名字>）`）＋一個掛在公司的任務 `Mode C <n> 天未回 → 接觸紀錄改暫時沒需求`（`<n>` 是 `company.sales-pipeline-rules` 的 `mode-c-reply-days`，到期＝寄出日＋`<n>` 天）。不建聯絡人、交易、專案資料夾；`create_company` 預設 `opportunity`，建完改 `lead`。`來源` 標籤只能貼聯絡人，所以公司只貼 規模／待確認，規模只看員工數證據。
+6. **對方回覆後才建**：先用回信人的 email 過認領關卡，再對四個未結案階段逐一 `list_deals(stage=…)`，留下聯絡人或公司對得上的（剛好 100 筆就停）；已有交易就把回信人掛上去、不新建，沒有才建交易（名稱照 `sales.crm-data-standards` §1、`stage=contacted`、notes 第一行以 `Mode C` 開頭、不寫 `專案資料夾：`）→ 關掉未回提醒 → 追蹤任務。專案資料夾等 `qualified` 由 `/project-init` 開。退信、自動回覆不算回覆；「不需要」或過了 `mode-c-reply-days` 還沒回，接觸紀錄改 `暫時沒需求`、關掉提醒。
 
 > **下表的空白是公司事實——逐一從 Atlas 讀**（`get_knowledge`，值在 `value:` 那一行）。Atlas 連不上、沒有這個 key、或沒有 `value:` 那一行，就停下來問；絕不帶著空白直接執行。
 
