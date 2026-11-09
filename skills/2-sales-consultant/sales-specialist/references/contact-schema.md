@@ -42,6 +42,5 @@ Every field has a home on the Zynkr platform — see the mapping table in
 to `crm_companies`, and the three with no column of their own — linkedin, notes,
 card_date — into the `名片` note attached to the contact.
 
-The 12-field order above is still the schema the OCR step normalizes to; it was
-also the A–L column order of the retired `B2B Customer List` Sheet, which is kept
-read-only as the pre-2026-08-17 record.
+The 12-field order above is still the schema the OCR step normalizes to. The
+`B2B Customer List` Sheet that once used the same order was deleted in November 2026.

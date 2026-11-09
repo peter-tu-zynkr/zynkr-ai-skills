@@ -11,7 +11,7 @@ description: "Configuration for the business card pipeline skill — Zynkr platf
 |---------|-------|
 | **Project ID** | `uomieoqlkazknjgmfdda` (shared `Zynkr` Supabase project; platform tables are `crm_*`) |
 | **Tables** | `crm_contacts` · `crm_companies` · `crm_activities` (the 名片 note) |
-| **Contacts page** | `https://platform.zynkr.ai/contacts` |
+| **Contacts page** | `https://crm.zynkr.ai/contacts` |
 | **Owner** | The claimer — the person running the skill, whose email and `workspace_id` `mcp__zynkr__whoami` gives (`{{OWNER_EMAIL}}`, `{{WORKSPACE_ID}}`; `SKILL.md` Step 4 says how) → looked up to `owner_id` in the SQL, only inside that workspace. The deal made at the draft (`SKILL.md` Step 6) is theirs too |
 | **Insert template** | `./references/contact-insert.sql` (find-or-create company, enrich blanks, dedup by email or secondary email, attach note; no deal) |
 
@@ -19,7 +19,7 @@ description: "Configuration for the business card pipeline skill — Zynkr platf
 
 | Card field | Lands in |
 |------------|----------|
-| name | `crm_contacts.last_name` (whole name as printed; `first_name` left blank so it renders exactly) |
+| name | `crm_contacts.first_name` (whole name as printed; `last_name` left blank) |
 | title | `crm_contacts.title` |
 | email | `crm_contacts.email` (dedup key) |
 | mobile | `crm_contacts.phone` |
@@ -44,14 +44,8 @@ can never overwrite something curated by hand.
 
 ## Retired: the B2B Customer List Sheet
 
-Until 2026-08-17 each card was **also** appended to a Google Sheet
-(`1Y4ImMHewm3BXRj-msTD8Y-nZtRBPWcDRBt6CfczLZ5A`, tab `Sheet2`, columns A–L =
-the 12 fields in schema order), because `crm_contacts` had no column for 7 of them.
-`crm_companies` has since grown `domain` / `industry` / `address` / `phone`, so the
-platform holds the entire card and the dual-write was dropped.
-
-**Do not append to that Sheet.** It stays readable as the historical record of
-cards captured before the cutover; anything newer lives on the platform.
+Deleted in November 2026. The platform holds the whole card, so there is no Sheet to append to or
+read from.
 
 ## Google Account
 
@@ -67,7 +61,7 @@ user_google_email: <your-google-workspace-account>
 | **Default action** | Save as Draft (never auto-send) |
 | **Language** | Match the contact's card language (Chinese card → Traditional Chinese email; English card → English email) |
 | **Tone** | Professional, warm, brief — reference one specific detail from company research |
-| **Style guide** | TBD — outbound reference examples to be added in v2 |
+| **Style guide** | `SKILL.md` → *House style* |
 
 ## Email Sign-off
 

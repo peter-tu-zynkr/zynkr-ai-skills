@@ -95,7 +95,7 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
   wins** — and flag that the condensed copy needs re-syncing.
 - **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 知識庫, 工作指南, 名單拓展, 情境工程 engine). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it.
 - **Plan prices**: Atlas `zynkr-service-offerings` (`mcp__zynkr-atlas__get_knowledge`) is the source of truth. Read it when the call discussed a plan, so the mail describes the plan correctly. `https://zynkr.ai/crm-pricing` is the page to link the client to, not a source. Whether a mail names a number follows Atlas `sales-kit`: a number goes through `/sales-proposal-writer`, never straight into a mail.
-- **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
+- **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
 - Never hardcode a user id (`auth.uid()` is NULL over MCP/SQL). The Zynkr MCP resolves the author itself — an activity written through it is authored by **the token's own user**, which for Peter's token is Peter.
 - **Do NOT log the follow-up email as a CRM activity.** Peter's Gmail is synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row. The **demo** is different — it isn't in Gmail, so the demo `note` is legitimately yours to write.
 

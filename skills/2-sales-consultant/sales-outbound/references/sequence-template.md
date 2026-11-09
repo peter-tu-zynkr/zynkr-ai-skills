@@ -25,8 +25,8 @@
 | AI 類型 | {AI類型} |
 | 認領人 | {認領人帳號}（{認領日} 認領） |
 | 接觸狀態 | 已聯絡，待回覆（Remark 已註明「尚未寄出」） |
-| CRM 聯絡人 | {platform.zynkr.ai/contacts/{id}}（新建／沿用既有） |
-| CRM deal | {交易編號} · {platform.zynkr.ai/deals/{id}} · 負責人 {成員名} · 寫信前已認領（步驟 0）；「五封未回」任務 {T+19 的日期} 到期 |
+| CRM 聯絡人 | {crm.zynkr.ai/contacts/{id}}（新建／沿用既有） |
+| CRM deal | {交易編號} · {crm.zynkr.ai/deals/{id}} · 負責人 {成員名} · 寫信前已認領（步驟 0）；「五封未回」任務 {T+19 的日期} 到期 |
 
 ── 三個時段（來源：行事曆 Available 扣掉既有會議）──
 | 時段 | 備註 |

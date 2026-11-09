@@ -180,7 +180,7 @@ For each unique company name in the `searchable` set, in **parallel batches of 8
 4. **Move on within one search attempt if nothing useful** — push `{company_name, reason}` to `UNKNOWNS[]` and leave `website` as `""`.
 5. Store `ENRICHMENT_CACHE[company_name] = {website, background}`.
 
-This caches duplicates (e.g. 程曦資訊 appearing in 4 rows hits WebSearch only once).
+This caches duplicates (e.g. 範例科技 appearing in 4 rows hits WebSearch only once).
 
 For well-known brands the assistant recognizes confidently, the WebSearch step can be skipped and the URL written directly — but only for unambiguous cases (stock-listed Taiwan firms, major government bodies, household-name international brands).
 
@@ -206,7 +206,7 @@ For each `searchable` row, generate `陌生開發策略` (~120–180 chars) by c
    - `Prompt 指令設計` → Prompt 模板庫
    - `Persona 設定` → 客戶/員工 Persona 應用
    - `AI 內容生成` / `AI 視覺` → 文案生成 / 廣告素材
-4. **Hot Lead emphasis** — if the row's Hot Lead flag would fire (check `attend_motivation_col` against `HOT_LEAD_SIGNALS`), append "建議主動聯繫" + 內訓提案 / 公開班報名邀請.
+4. **Hot Lead emphasis** — if the row's Hot Lead flag would fire (check `attend_motivation_col` against `HOT_LEAD_SIGNALS`), append "建議主動聯繫" + 約探索會議（內訓）/ 公開班報名邀請. Never suggest sending a quote or a proposal first: quotes always go through `/sales-proposal-writer`.
 
 Reference template library at `./references/strategy-templates.md` for industry-specific phrasings.
 

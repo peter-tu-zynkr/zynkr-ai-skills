@@ -99,7 +99,6 @@ generic_patterns:
   - "不便透露"
   - "暫無"
   - "no"
-  - "Johnny"
   - ""
 ```
 

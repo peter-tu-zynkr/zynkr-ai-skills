@@ -9,12 +9,12 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "Business card image(s) — single or batch"
-process: "OCR via Claude Vision → schema review → pick-up gate (an open deal stops the card before any write) → Zynkr platform write (contact + company + 名片 note) → company research → follow-up draft → claim (a deal owned by the runner) → Gmail save"
+process: "OCR via Claude Vision → schema review → pick-up gate (an open deal stops the card before any write) → Zynkr platform write (contact + company + 名片 note + tags) → company research → follow-up draft → claim (a deal owned by the runner) → Gmail save"
 output: "Contact + company + 名片 note on the Zynkr platform, a deal owned by the runner, and a follow-up email in Gmail Drafts; a card whose email has an open deal gets neither"
 synergy: []
 type: agent
 skills: ["sales-follow-up-mail"]
-reads: ["sales.crm-data-standards", "company.sales-pipeline-rules"]
+reads: ["sales.crm-data-standards", "company.sales-pipeline-rules", "company.crm-tag-rules"]
 house-style: bound
 
 ---
@@ -198,12 +198,12 @@ Update `CONTACTS[]` with the resolved website before proceeding to the platform 
 ## Step 4 — Zynkr Platform Write
 
 The **Zynkr platform is the only destination** for a card. Everything lands at
-`https://platform.zynkr.ai/contacts`, where the funnel is actually worked — there
+`https://crm.zynkr.ai/contacts`, where the funnel is actually worked — there
 is no spreadsheet copy to keep in sync, and no field is dropped on the way:
 
 | Card field | Lands in |
 |---|---|
-| name | `crm_contacts.last_name` (whole, as printed) |
+| name | `crm_contacts.first_name` (whole, as printed) |
 | title | `crm_contacts.title` |
 | email | `crm_contacts.email` (the dedup key) |
 | mobile | `crm_contacts.phone` — the number you'd actually use |
@@ -214,7 +214,7 @@ is no spreadsheet copy to keep in sync, and no field is dropped on the way:
 | phone (office) | `crm_companies.phone` — belongs to the company, not the person |
 | linkedin · notes · card_date | a `名片` note on the contact (`crm_activities`) |
 
-> Never append to the retired `B2B Customer List` Google Sheet: the platform holds the whole
+> The old `B2B Customer List` Google Sheet is gone (deleted 2026-11): the platform holds the whole
 > card.
 
 Run this **autonomously** for every confirmed card the gate did not stop (no extra approval gate —
@@ -225,10 +225,9 @@ For each of those contacts in `CONTACTS[]`:
 **1. Clean the values.** Translate the `—` sentinel (and any blank) to an empty
 string for every field before using it. The platform should never store a literal `—`.
 
-**2. Use the name as printed.** The contacts page renders a contact as
-`last_name + first_name`, so to show the name exactly as it appears on the card,
-put the **whole** name in `{{FULL_NAME}}` (it maps to `last_name`) and leave
-`first_name` empty — don't split it into 姓/名. If the card prints both a Chinese
+**2. Use the name as printed.** The whole name goes in `first_name` and `last_name` stays empty
+(`sales.crm-data-standards` §3), so put the **whole** name in `{{FULL_NAME}}` (it maps to
+`first_name`) — don't split it into 姓/名. If the card prints both a Chinese
 and a romanized name (e.g. `王大明 / David Wang`), use the Chinese name if present,
 otherwise the romanized one — and store it whole (`王大明`, or `David Wang`).
 
@@ -274,10 +273,44 @@ email) with the baked-in defaults (`lifecycle_stage=lead`, `legal_basis=consent`
 `lead_status=other`, owner = the claimer), and attach the 名片 note. It creates no deal: the
 claim waits for the draft (Step 6).
 
+**If `mcp__supabase__execute_sql` is not among your tools** (a teammate's session connects only
+`zynkr` and `zynkr-atlas`), write the card through the `zynkr` MCP instead of stopping, in the
+order the SQL does it. Each write is the two-call handshake: `confirm:false` previews, then the
+identical call with `confirm:true`. The claimer's member id is the
+`mcp__zynkr__list_workspace_members` row with the `whoami` email, as in Step 3.2; look it up here
+if no card went through that gate.
+
+- **Company**, when the card has one: `mcp__zynkr__list_companies(search=<search term>, limit=100)`,
+  the search term being the name cut before its first comma, parenthesis, `%`, `*` or backslash, at
+  most 60 characters (the tool turns those characters into spaces and keeps only the first 60, so a
+  whole name like `範例科技 Co., Ltd.` finds nothing). Take the row whose `name` equals the card's
+  full company name, ignoring case. None among fewer than 100 rows →
+  `mcp__zynkr__create_company(name=…, domain=…, industry=…, address=…, phone=<the office line>,
+  owner_id=<claimer's member id>)`, with `domain` the website, lower-cased, without its scheme,
+  `www.` or path. None among exactly 100 rows → the check is not sound: create no company, file the
+  contact without one, and say so in the summary. A row found →
+  `mcp__zynkr__get_company(id=…)`, then `mcp__zynkr__update_company(id=…, …)` with only the fields
+  that are empty there and that the card has (`domain`, `industry`, `address`, `phone`), so a value
+  a person curated is never overwritten. If none qualifies, make no call.
+- **Contact**, only when Step 3.2 matched no contact or the card has no email (with no key to match
+  on, it always inserts). Right before creating, repeat Step 3.2's exact email match with
+  `mcp__zynkr__list_contacts`: a match now is the zero-rows case. Otherwise
+  `mcp__zynkr__create_contact(first_name=<the whole name as printed>,
+  email=…, title=…, phone=<the mobile, else the office line>, company_id=…,
+  owner_id=<claimer's member id>, lifecycle_stage="lead", legal_basis="consent")`. Pass
+  `lifecycle_stage` every time: the tool defaults to `opportunity`. It has no `lead_status`, so that
+  stays empty on this path. Leave out whatever the card lacks, `last_name` always. Keep the
+  `contact_id` the moment the tool returns it: a retry of this card goes on from the step that
+  failed and never creates a second contact.
+- **名片 note**, only on a contact created here, when the card has a LinkedIn, notes or a card date:
+  `mcp__zynkr__create_note(contact_id=…, subject="名片 · <card_date>", body=…)`, the body being the
+  SQL's lines: `LinkedIn: …`, `名片日期: …`, `公司電話: …` (only when the card has both numbers),
+  `備註: …`. The tool takes one parent, so on this path the note sits on the contact only.
+
 **5. Read the result and report.**
 - One row back (a `contact_id`) → created. Display:
   ```
-  ✓ [Contact Name] @ [Company] — added → https://platform.zynkr.ai/contacts/[contact_id]
+  ✓ [Contact Name] @ [Company] — added → https://crm.zynkr.ai/contacts/[contact_id]
   ```
 - Zero rows back → a contact with this email already exists (de-duped). Display:
   ```
@@ -285,12 +318,36 @@ claim waits for the draft (Step 6).
   ```
   Note this also means **no note was written** for that card — the note is attached
   to a newly created contact only, so a re-scan never stacks duplicate notes.
+- On the `zynkr` MCP path, `create_contact`'s `id` is the `contact_id` and reports as created. A
+  card Step 3.2 matched to a contact is the zero-rows case: already on the platform, no note.
+- A card with no email cannot be checked for a duplicate on either path: add
+  `(no email: not checked for a duplicate)` to its line.
 
 If the insert errors, surface it, keep the card in `CONTACTS[]` so it can be
 retried at the end, and continue with the rest of the pipeline — the follow-up
 email shouldn't be blocked by a platform hiccup. Because the platform is the only
 destination, an unretried failure means the card is **not recorded anywhere**: say
 so explicitly in the Step 8 summary rather than reporting the contact as processed.
+
+**6. Tag the contact this run created.** An existing contact keeps its tags: a missing 來源 there is
+`/sales-manager` REVIEW's to find. Use the `zynkr` MCP on both paths. This is the tool's own
+handshake, not a question to the user: each tag is
+`mcp__zynkr__apply_tag(group=…, name=…, entity_type="contact", entity_id=<contact_id>, source="rule")`
+to preview, then the same call with `confirm:true`. Both groups come from fixed rules, so `source`
+is `rule`.
+
+- **來源** (`group="source"`) — 名片交換, when the policy's `source-values` line lists it and its
+  entry in `source-to-lead-source` is `other`, the `lead_source` of the deal in Step 6. Otherwise
+  apply none and write `標籤建議：來源=名片交換`.
+- **待確認** (`group="review"`) — one value from `review-values` per gap in what was written: no
+  phone → 電話缺漏, no title → 待補職稱, a company email or a company name but no company record →
+  未關聯公司. Both paths set `legal_basis`, so 同意權未確認 does not arise. A card with no email
+  stays blank: `review-values` has no value for it, and none is invented.
+
+Never infer a tag from a job title or an industry. Read the result back with
+`mcp__zynkr__list_tags(entity_type="contact", entity_id=<contact_id>)` and report what it shows.
+
+> **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input`: write each tag you would have applied as one line `標籤建議：<group>=<value>` in one `mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)` on the contact (no note when that tool is missing too), say so in the summary, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：來源=名片`, `標籤建議：缺=<電話、職稱、公司>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the contact back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
 
 ---
 
@@ -366,8 +423,9 @@ Each write is a two-call handshake: `confirm:false` previews, then the identical
 1. **Contact** — the contact Step 4 created (its `contact_id`), or the one the gate matched.
    If neither exists (the platform write failed and was not retried), there is nothing to claim
    on: no deal and no draft for this card, and the summary says so.
-2. **Company** — when the card has one, `mcp__zynkr__list_companies(search=<company>)` and take
-   the row whose name equals it (case-insensitive); none → no `company_id`.
+2. **Company** — when the card has one, `mcp__zynkr__list_companies(search=<the term Step 4 cuts
+   the name to>, limit=100)` and take the row whose name equals the full name (case-insensitive);
+   none → no `company_id`.
 3. **Deal** — `mcp__zynkr__create_deal(name=<§1's deal name>, contact_id=…, company_id=…,
    owner_id=<claimer's member id>, stage="new", lead_source="other", priority="medium")`.
    A business-card exchange is `other`. Always pass `owner_id`.
@@ -419,6 +477,7 @@ Processed: [N] contact(s)
 [Contact 1 Name] @ [Company]
   ✓ Added to the Zynkr platform (or ⏭️ already existed / ✗ FAILED — not recorded)
   ✓ 名片 note attached
+  ✓ 標籤：來源=[value] · 待確認=[values]（已讀回）(or ⚠️ 未貼，標籤建議已記在 note（原因） / ⏭️ existing contact, tags left alone)
   ✓ Claimed — deal [交易 number], owner [claimer] (or ⏭️ skipped / no email)
   ✓ Email saved to Drafts
 
@@ -428,7 +487,7 @@ Processed: [N] contact(s)
   ↳ 同批重複: [the later card(s) with the same email], nothing written for them
   ...
 
-Contacts: https://platform.zynkr.ai/contacts
+Contacts: https://crm.zynkr.ai/contacts
 =============================================
 ```
 

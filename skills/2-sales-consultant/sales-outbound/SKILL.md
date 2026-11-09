@@ -140,7 +140,7 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
   reached or has no `doc-style`, say so in the report and draft on 《[2.0]》 + 《[3.2]》 alone) and
   《[3.2] 禁用詞清單》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg` **category X**
   (sales-email forbidden patterns). The Doc wins over the rules restated below.
-- **CRM record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid the SQL returns.
+- **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid the SQL returns.
 - **The owner is the claimer** — the person running the skill, whose email and `workspace_id` `mcp__zynkr__whoami` gives (`{{OWNER_EMAIL}}` and `{{WORKSPACE_ID}}` in the SQL). Their member id and the default pipeline (`銷售流程`) are resolved **live** (inside the SQL, or by `mcp__zynkr__list_workspace_members` on the MCP path) — never hardcode an id, and never default the owner to `company.contact-email` when the claimer is someone else.
 - **Do NOT log the drafted email as a CRM activity.** Peter's Gmail is already synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft, it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row.
 
@@ -276,10 +276,10 @@ dedupe. Then `create_contact` (only when the gate matched none) → `create_deal
 `create_note` → `create_task`. Each is a two-call handshake (`confirm:false` to preview, then
 the identical call with `confirm:true`). They resolve workspace + pipeline natively, but three
 things the SQL did for free you must now pass explicitly: **`legal_basis`**
-(`legitimate_interest` — the same house value baked into the SQL), **`lifecycle_stage`** (the
+(`consent` — the same house value baked into the SQL), **`lifecycle_stage`** (the
 tool defaults to `opportunity`), and **`owner_id`** = the claimer's member id on both
 `create_contact` and `create_deal` — never omitted: `create_contact` leaves the owner empty
-without it. `create_task` takes `deal_id`, `due_at` (ISO 8601 with `+08:00`) and
+without it. The whole name goes in `first_name`, and `last_name` stays empty (`sales.crm-data-standards` §3). `create_task` takes `deal_id`, `due_at` (ISO 8601 with `+08:00`) and
 `assignee_id` = the claimer. On either path, write
 the phone and title the signal gave (`{{PHONE}}` / `{{TITLE}}`, or `phone` / `title` on
 `create_contact`); the 待確認 gaps below are judged on what was written, not on the signal.

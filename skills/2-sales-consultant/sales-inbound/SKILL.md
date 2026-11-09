@@ -2,7 +2,7 @@
 name: sales-inbound
 description: >-
   Turn this week's inbound sales mail into tracked work and first replies. It
-  owns two inboxes: the website's "AI 顧問服務" consulting inquiries (the
+  owns two inboxes: the website's "AI 顧問服務" and "團隊訓練" inquiries (the
   discovery-call emails from website@zynkr.ai) and the [2.1] Inbound Sales Gmail
   label. For each real lead it creates a CRM deal in Supabase and drafts the
   first reply as a Gmail draft (never sent); the client folder and kickoff doc
@@ -11,7 +11,7 @@ description: >-
   "處理本週顧問諮詢", "有沒有新的顧問諮詢", "check for new consulting leads",
   "turn the discovery-call inquiries into deals", "intake the consult requests",
   "回覆 inbound sales", "清 sales inbox", "處理詢價信", or otherwise asks to triage /
-  log inbound AI-consulting requests or inbound sales mail — even if he doesn't
+  log inbound AI-consulting or team-training requests or inbound sales mail — even if he doesn't
   name the CRM or the exact phrase. It is also the skill a
   scheduled weekly sales-inbound run should invoke. The Support label and the
   other website forms belong to /zynkr-support; one pasted signal belongs to
@@ -23,7 +23,7 @@ status: Done
 visibility: public
 author: Peter Tu
 sheetId: "2.04"
-input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 inquiries and the [2.1] Inbound Sales label"
+input: "Inbound sales mail: website@zynkr.ai AI 顧問服務 and 團隊訓練 inquiries and the [2.1] Inbound Sales label"
 process: "Sweep both inboxes → filter real leads → pick-up gate (an open deal on the email, any owner, keeps the mail for that deal) → a CRM deal owned by the inbox owner → first-reply draft (never sent) → report; the folder waits for /project-init"
 output: "Per new lead: a CRM deal owned by the inbox owner and a first-reply Gmail draft; a lead with an open deal reported with its owner; proposals listed for Peter"
 synergy:
@@ -40,8 +40,8 @@ house-style: bound
 
 # Sales Inbound
 
-Peter gets inbound sales mail two ways: consulting inquiries through the Zynkr
-website's consult page, and mail that lands under the `[2.1] Inbound Sales` Gmail
+Peter gets inbound sales mail two ways: consulting and team-training inquiries through
+the Zynkr website's form, and mail that lands under the `[2.1] Inbound Sales` Gmail
 label. This skill clears both once a week: it reads the week's mail, and for every
 genuine lead it lays down what the sales motion needs — a **CRM deal** his team can
 track and a **first-reply draft** so the lead hears back.
@@ -83,11 +83,12 @@ A first reply may state a price or scope only from a **知識庫** this skill do
 
 Each inbox has exactly one owner, so a lead never gets two drafts:
 
-- **This skill** owns the website's `Interest: AI 顧問服務` inquiries and every thread
-  under `[2] Sales & consultant/[2.1] Inbound Sales`: it logs the lead and drafts the
-  first reply.
+- **This skill** owns the website's `Interest: AI 顧問服務` and `Interest: 團隊訓練`
+  inquiries (`AI consulting` and `Team training` when the visitor reads the site in English)
+  and every thread under `[2] Sales & consultant/[2.1] Inbound Sales`: it logs the lead and
+  drafts the first reply.
 - **/zynkr-support** owns `[3] Operation/[3.8] Support` and the website forms with any
-  other interest (e.g. 團隊訓練). It lists anything of this skill's it comes across
+  other interest (e.g. Zynkr CRM). It lists anything of this skill's it comes across
   and drafts nothing on it.
 - **/sales-outbound** takes one signal Peter pastes by hand (a DM, a card, a form
   row). This skill is the weekly sweep.
@@ -112,8 +113,10 @@ Brief context:
 我希望透過諮詢...
 ```
 
-The signal that an email is a consulting lead is the line **`Interest: AI 顧問服務`**.
-The five fields you parse are `Name`, `Email`, `Company`, `Interest`, and the
+The signal that an email is a lead for this skill is the line **`Interest: AI 顧問服務`**
+or **`Interest: 團隊訓練`**. A visitor reading the site in English sends the same two as
+**`Interest: AI consulting`** and **`Interest: Team training`**.
+The six fields you parse are `Name`, `Email`, `Company`, `Interest`, `Source page` and the
 free-text under `Brief context:`. (`Company` is often a real org, but sometimes a
 personal phrase like "轉職計劃中" or blank — that's fine, carry it through as-is.)
 
@@ -132,7 +135,7 @@ the latest message they sent. Three kinds turn up there:
 ## Fixed facts (don't re-derive these)
 
 - **Google account** for all Gmail/Drive tools: `<your-google-workspace-account>`
-- **CRM deal URL** for the report/doc: `https://platform.zynkr.ai/deals/{deal_id}`
+- **CRM deal URL** for the report/doc: `https://crm.zynkr.ai/deals/{deal_id}`
 - **The owner of a new lead is the inbox's owner** — the person running the skill: `mcp__zynkr__whoami`
   gives their email, and their member id is the `mcp__zynkr__list_workspace_members` row with that
   email. `create_deal` resolves the pipeline (`銷售流程`) itself. Resolve both live; never hardcode an id.
@@ -143,12 +146,12 @@ the latest message they sent. Three kinds turn up there:
 
 ### 1 · Pull the week's inquiries
 
-Search Gmail for the consult inbounds from the last 7 days:
+Search Gmail for the website's consulting and team-training inquiries from the last 7 days:
 
 ```
 mcp__google-workspace__search_gmail_messages(
   user_google_email = "<your-google-workspace-account>",
-  query = 'from:website@zynkr.ai "Interest: AI 顧問服務" newer_than:7d'
+  query = 'from:website@zynkr.ai ("Interest: AI 顧問服務" OR "Interest: 團隊訓練" OR "Interest: AI consulting" OR "Interest: Team training") newer_than:7d'
 )
 ```
 
@@ -163,6 +166,10 @@ mcp__google-workspace__search_gmail_messages(
 )
 ```
 
+Both searches look back 7 days because this is a weekly sweep. When the last run was longer ago,
+widen `newer_than` to cover the gap: the gate in step 3 and the draft check in step 5 keep a second
+look safe.
+
 Tag every result with its inbox (`website` or `inbound-sales`). Then fetch the bodies in one batch with
 `mcp__google-workspace__get_gmail_messages_content_batch(message_ids=[...])`.
 A thread can contain several messages (auto-reply, follow-ups) but they share a
@@ -176,7 +183,7 @@ That's a perfectly good outcome, not a failure.
 
 ### 2 · Parse and filter out the noise
 
-For each inquiry, extract `Name`, `Email`, `Company`, and `Brief context`. For an
+For each inquiry, extract `Name`, `Email`, `Company`, `Interest`, `Source page` and `Brief context`. For an
 Inbound Sales thread, parse it as the shape section describes and sort it into lead,
 proposal or not a prospect; only leads go on to step 3.
 
@@ -245,7 +252,7 @@ Every write previews first — call it once without `confirm`, then again with
    `owner_id`: without it the tool leaves the contact with no owner. Leave out
    `phone` and `title` when the inquiry does not carry them.
 3. **Deal** — `mcp__zynkr__create_deal(name="<DEAL_NAME>", contact_id=…,
-   company_id=…, owner_id="<inbox owner's member id>", stage="new", service_tier="advisory",
+   company_id=…, owner_id="<inbox owner's member id>", stage="new", service_tier="<SERVICE_TIER>",
    priority="medium", lead_source="content", close_date="<today + 30 days>", notes="<NOTES>",
    confirm=true)`. The pipeline, the 交易 number and the `created` activity are handled for
    you; the owner is passed explicitly, so the deal is the inbox owner's claim.
@@ -296,13 +303,14 @@ Values:
 | `{{FIRST_NAME}}` | the lead's `Name` |
 | `{{EMAIL}}`      | the lead's `Email` |
 | `{{COMPANY}}`    | the lead's `Company` (empty string if blank) |
-| `{{DEAL_NAME}}`  | **`Name（Company）AI 顧問`** — e.g. `Jane（轉職計劃中）AI 顧問`. If `Company` is blank, use just `Name AI 顧問`. For an Inbound Sales lead, end with what they asked for instead (2–6 字, e.g. `王小明（範例科技）團隊培訓報價`). |
+| `{{DEAL_NAME}}`  | **`Name（Company）AI 顧問`** — e.g. `Jane（轉職計劃中）AI 顧問`. If `Company` is blank, use just `Name AI 顧問`. A 團隊訓練 or `Team training` inquiry ends with `團隊訓練` instead. For an Inbound Sales lead, end with what they asked for instead (2–6 字, e.g. `王小明（範例科技）團隊培訓報價`). |
+| `{{SERVICE_TIER}}` | `workshop` for a 團隊訓練 or `Team training` inquiry, or an Inbound Sales lead asking for in-house training (`product-to-service-tier` in `company.crm-tag-rules`: 企業培訓); otherwise `advisory` |
 | `{{NOTES}}`      | the `Brief context` text, prefixed with a source line (see below) |
 
 Suggested `{{NOTES}}` value:
 
 ```
-來源：官網 consult 頁面 · Interest: AI 顧問服務
+來源：官網 <Source page> 頁面 · Interest: <Interest>
 
 諮詢內容：
 <Brief context>
@@ -340,7 +348,12 @@ and say so in the report.
   call (the fixed slot block, house wording), mirror their own words, add one short
   paragraph of substance before the ask, match their language, and sign off as Peter.
   Run only those two steps: its step 4 inserts a new deal, and this lead already has one.
-- **What it may say about price or scope.** Only what the 知識庫 in Zynkr Atlas states,
+- **A company asking what in-house training or consulting costs gets no figure here** (a website
+  inquiry or an Inbound Sales lead): no price, no hourly rate and no hour count, whatever the 知識庫
+  says. Those prices are fixed packages that `/sales-proposal-writer` writes after the call, so the
+  reply offers the call and says the proposal follows it. An hour count they mention only tells
+  you whether they mean a half day or a full day.
+- **What else it may say about price or scope.** Only what the 知識庫 in Zynkr Atlas states,
   read on the `zynkr-atlas` MCP server the way /zynkr-support reads it:
   1. **Once per run, walk its keys:** `mcp__zynkr-atlas__list_knowledge(collection: "kb",
      max_chars: 60000)`, called again with `after` set to `next_after` while `truncated`
@@ -381,6 +394,7 @@ inquiry, including the skipped ones so nothing is silently dropped:
 Under the table, the gate's one line for every lead an open deal already holds (step 3.5), so the
 owner can be told. In the 標籤 column name the values applied; a lead whose tags were not applied says
 `標籤建議已記在 note` and why. Then any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),
+each lead whose price question goes on to the proposal (`報價交 /sales-proposal-writer`),
 any `[[NEEDS PETER]]` drafts (and, when the 知識庫 walk failed, that it did, so every price
 answer waited), and state the headline in prose (e.g. "Created 2 deals +
 2 reply drafts; skipped 1 test and 1 already-processed; 1 proposal waiting for you").
@@ -413,7 +427,7 @@ answer waited), and state the headline in prose (e.g. "Created 2 deals +
 
 ## Defaults you can safely assume (and Peter can override later)
 
-`stage=new` · `service_tier=advisory (顧問訂閱)` · `priority=medium` ·
+`stage=new` · `service_tier=advisory (顧問訂閱)`, or `workshop` (企業培訓) for a training lead (`{{SERVICE_TIER}}` above) · `priority=medium` ·
 `lead_source=content` for a website inquiry (the enum has no "website" value; `content` is the closest; an Inbound Sales lead follows step 4)
 · `value=NULL` (unknown at intake) · `close_date=today+30`. They are passed
 explicitly on the `create_deal` call in step 4 — if Peter asks to change one,

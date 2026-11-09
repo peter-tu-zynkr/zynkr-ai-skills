@@ -64,9 +64,11 @@ Reference library for Step 6 strategy synthesis. Compose by picking one **Indust
 
 If `attend_motivation` includes 評估內訓 OR 評估公開班, append one of:
 
-- "Hot Lead — 建議主動聯繫 HR L&D 提案內訓藍圖。"
+- "Hot Lead — 建議主動聯繫 HR L&D，約探索會議。"
 - "Hot Lead — 雙重意願（內訓 + 公開班），優先排序。"
-- "已標記評估內訓 — 可主動發 1-pager 報價。"
+- "已標記評估內訓 — 建議約探索會議，不寄報價、不先提案。"
+
+A nudge never suggests a quote, a price sheet or a proposal: quotes always go through `/sales-proposal-writer`.
 
 ---
 
@@ -91,5 +93,5 @@ Same company appearing in 2 rows can have 2 different strategies — always synt
 - **Generic company name (`無`, `個人`, etc.)** → leave the 策略 field empty. The participant still goes into Hot Lead detection but no outbound strategy is drafted.
 - **Unidentified company (搜尋無結果)** → write a short note in 公司背景 like "搜尋無明確結果" and use J/K only in the 策略 field (e.g. "建議下次活動補確認公司名稱；J 列三項挑戰齊備，先納入電子報 nurture。").
 - **Duplicate company across rows** → cache the website + background, but synthesize the strategy fresh per row using THIS row's J/K. Reference the earlier row as "同 No.XX [公司名]" when appropriate.
-- **Competitor / Same industry as Zynkr** (e.g. WePredict, NSECURED, 程曦) → frame as 同業合作 / 互推 rather than top-down selling.
-- **NGO / NPO / Education** → frame as pro-bono, 公益價, 補助申請合作, or strategic partnership rather than commercial BD.
+- **Competitor / Same industry as Zynkr** (AI 導入顧問、AI 培訓、企業 AI 方案商等同業) → frame as 同業合作 / 互推 rather than top-down selling.
+- **NGO / NPO / Education** → frame as 補助申請合作 or strategic partnership rather than commercial BD.

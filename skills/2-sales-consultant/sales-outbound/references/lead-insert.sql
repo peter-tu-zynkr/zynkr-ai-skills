@@ -20,23 +20,20 @@
 --   {{COMPANY_INDUSTRY}} e.g. '品牌策略 / 行銷顧問'        (or NULL)
 --   {{COMPANY_COUNTRY}}  e.g. '台灣'                      (or NULL)
 --   {{COMPANY_DESC}}     e.g. '個人品牌與行銷策略顧問…'     (or NULL)
---   {{FIRST_NAME}}       e.g. '小明'                      (or NULL)
---   {{LAST_NAME}}        e.g. NULL
+--   {{FIRST_NAME}}       e.g. '王小明'                    (the whole name as they write it, or NULL;
+--                        last_name stays empty, sales.crm-data-standards §3)
 --   {{EMAIL}}            e.g. 'prospect@example.com'    (find-or-create key; matched trimmed, case-insensitive)
 --   {{TITLE}}            e.g. '品牌策略行銷顧問'           (or NULL)
 --   {{PHONE}}            e.g. '0912-345-678'              (as the signal gave it, or NULL)
 --   {{CONTACT_LIFECYCLE}} e.g. 'sql'                      (lifecycle_stage enum)
 --
--- BAKED IN (not a placeholder): legal_basis = 'legitimate_interest'.
+-- BAKED IN (not a placeholder): legal_basis = 'consent'.
 --   PDPA requires a lawful basis for holding a person's data, and the MCP
 --   create_contact tool makes it a REQUIRED field for exactly that reason — but
 --   the column is nullable at the DB level, so raw SQL that omits it silently
 --   writes NULL (231 of 410 contacts are NULL today, all from this path).
---   'legitimate_interest' is the house value for AGENT-created contacts —
---   app/lib/ai/zynkr/tools.ts:810 ("預設正當利益；內部營運建立") and
---   app/lib/line/process.ts:283 both hardcode it. Do NOT copy 'consent' from
---   sales-specialist's contact-insert.sql: consent is right for a business card
---   somebody handed you, and wrong for a cold outbound DM, where nobody consented.
+--   Every contact a skill or a person files is 'consent': forms, replies and
+--   outbound lists alike (sales.crm-data-standards §3, owner, 2026-11-07).
 --   Only NEW contacts get this — the existing_contact branch returns matched rows
 --   untouched, so the 231 pre-existing NULLs need a separate backfill decision.
 --   {{DEAL_NAME}}        e.g. '小明 — Zynkr CRM Beta'
@@ -122,11 +119,11 @@ existing_contact AS (
   LIMIT 1
 ),
 new_contact AS (
-  INSERT INTO crm_contacts (first_name, last_name, email, title, phone, company_id, owner_id, workspace_id, lifecycle_stage, legal_basis, last_contacted_at)
-  SELECT {{FIRST_NAME}}, {{LAST_NAME}}, trim({{EMAIL}}), {{TITLE}}, {{PHONE}},
+  INSERT INTO crm_contacts (first_name, email, title, phone, company_id, owner_id, workspace_id, lifecycle_stage, legal_basis, last_contacted_at)
+  SELECT {{FIRST_NAME}}, trim({{EMAIL}}), {{TITLE}}, {{PHONE}},
          (SELECT id FROM company LIMIT 1),
          (SELECT uid FROM claimer), (SELECT ws FROM claimer), {{CONTACT_LIFECYCLE}}::lifecycle_stage,
-         'legitimate_interest'::legal_basis, now()
+         'consent'::legal_basis, now()
   WHERE NOT EXISTS (SELECT 1 FROM existing_contact)
     AND NOT EXISTS (SELECT 1 FROM open_deal)
   RETURNING id

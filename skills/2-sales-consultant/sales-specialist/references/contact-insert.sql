@@ -15,7 +15,7 @@
 -- The Zynkr platform is the ONLY destination — every one of the 12 card fields
 -- lands somewhere here, so nothing needs a spreadsheet to fall back on:
 --
---   name      -> crm_contacts.last_name      title    -> crm_contacts.title
+--   name      -> crm_contacts.first_name     title    -> crm_contacts.title
 --   email     -> crm_contacts.email          mobile   -> crm_contacts.phone
 --   company   -> crm_companies.name          website  -> crm_companies.domain
 --   industry  -> crm_companies.industry      address  -> crm_companies.address
@@ -29,9 +29,8 @@
 -- Cards with NO email can't be de-duped (there's no stable key), so they always
 -- insert — that's intentional; the skill reports them so a dup is never silent.
 --
--- NAME: the contacts page renders a contact as last_name + first_name. To show
--- the name exactly as printed on the card, the whole name goes in last_name and
--- first_name is left empty. So {{FULL_NAME}} is the name as printed (the Chinese
+-- NAME: the whole name goes in first_name and last_name stays empty
+-- (sales.crm-data-standards §3). So {{FULL_NAME}} is the name as printed (the Chinese
 -- side if the card is bilingual). Don't split it.
 --
 -- Substitute the {{...}} placeholders. Pass already-cleaned values: translate the
@@ -127,12 +126,12 @@ enrich_co AS (
 ),
 
 -- 3. contact: the de-dup guard lives here so re-scanning a card never doubles it.
---    Whole name -> last_name; first_name stays NULL (renders the name as printed).
+--    Whole name -> first_name; last_name stays NULL.
 --    phone = the mobile (the number you'd actually use); the office line sits on
 --    the company, so both survive instead of one being dropped.
 new_ct AS (
   INSERT INTO crm_contacts
-    (last_name, email, title, phone, company_id, owner_id, workspace_id,
+    (first_name, email, title, phone, company_id, owner_id, workspace_id,
      lifecycle_stage, lead_status, legal_basis, deal_status, last_activity_at)
   SELECT n.full_name, n.email, n.title, COALESCE(n.mobile, n.office_phone),
          (SELECT id FROM co_id LIMIT 1), (SELECT id FROM own), (SELECT ws FROM own),

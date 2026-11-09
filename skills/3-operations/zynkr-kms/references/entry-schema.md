@@ -4,7 +4,7 @@ The 知識庫 holds **two kinds of cards**, and keeping them distinct is the who
 
 1. **`fact` cards** — canonical, reusable truths that many answers depend on: the pricing
    table, refund policy, standard durations. **The numbers live here, once.** A fact card's key
-   is a stable kebab-case id (e.g. `pricing-rates`), unique in the workspace.
+   is a stable kebab-case id (e.g. `b2b-enterprise-pricing`), unique in the workspace.
 2. **`reference` cards** — one per resolved question. They map an inquiry to the facts and
    **cite** them instead of restating the numbers. A new one's key is `qa.<english-slug>`; the
    cards ATL-114 carried over from the CRM keep keys of the form `qa.<hex>`.
@@ -36,10 +36,10 @@ section and linked to what it cites, which serves nobody until a person publishe
 
 ```jsonc
 {
-  "key": "pricing-rates",            // stable, kebab-case — reference cards cite it verbatim
+  "key": "b2b-enterprise-pricing",   // stable, kebab-case — reference cards cite it verbatim
   "kind": "fact",
-  "title": "授課費率表",               // short human title
-  "body": "<the canonical fact — a short markdown table and/or bullets; the actual numbers/terms>\n\n---\n\nKeywords: 報價 · 費用 · 鐘點 · pricing · rate · per hour\n\nsource_type: core_fact · <YYYY-MM-DD> · <provenance> · <gmail thread permalink>",
+  "title": "企業內訓套裝價",            // short human title
+  "body": "<the canonical fact — a short markdown table and/or bullets; the actual numbers/terms>\n\n---\n\nKeywords: 報價 · 費用 · 套裝 · 半天 · 全天 · pricing · package\n\nsource_type: core_fact · <YYYY-MM-DD> · <provenance> · <gmail thread permalink>",
   "collection": "kb.core-facts",     // the two style cards live in kb.tone-style
   "cites": []                        // a fact may cite another, a company fact included, by key
 }
@@ -51,10 +51,10 @@ section and linked to what it cites, which serves nobody until a person publishe
 {
   "key": "qa.day-course-quote",
   "kind": "reference",
-  "title": "一天 N 小時的 AI 課程怎麼報價？人數會影響價格嗎？",  // canonical, normalized question
-  "body": "依 FACT:pricing-rates 報價 — 依實際時數計價、線上／實體費率不同、人數不加價；用客戶需要的時數 × 對應費率即為報價。\n\n---\n\nKeywords: 報價 · 費用 · 一天幾小時 · 人數 · quote · day rate · headcount\n\nsource_type: peter_answer · <YYYY-MM-DD> · inbound 詢價 · <gmail thread permalink>",
+  "title": "半天或一天的 AI 內訓怎麼報價？",  // canonical, normalized question
+  "body": "依 FACT:b2b-enterprise-pricing 報價 — 企業內訓是套裝固定價，客戶說的時數只用來對應半天或全天，不寫時數 × 費率；正式報價交 /sales-proposal-writer。\n\n---\n\nKeywords: 報價 · 費用 · 半天 · 全天 · quote · package · half day\n\nsource_type: peter_answer · <YYYY-MM-DD> · inbound 詢價 · <gmail thread permalink>",
   "collection": "kb.pricing-quoting",
-  "cites": ["pricing-rates"]         // published keys only
+  "cites": ["b2b-enterprise-pricing"]  // published keys only
 }
 ```
 
@@ -96,7 +96,7 @@ Flags: NEEDS_PETER
   archived note — is refused (`key_taken`): a duplicate to find, never a reason to invent a
   second key.
 - **`title`** (reference) — Normalize to how a *future* inquirer would ask, not this one's exact
-  words. Strip names, pleasantries, one-off specifics. Good: `一天 N 小時的 AI 課程如何報價？`.
+  words. Strip names, pleasantries, one-off specifics. Good: `半天或一天的 AI 內訓如何報價？`.
   Bad: `回覆<某某>：你問的報價`.
 - **`collection`** — the section's key, `kb.<slug>` (the taxonomy is in `intent-taxonomy.md`),
   exactly one per card. It must be **published**: a section still waiting in 審核 holds the card.
@@ -106,7 +106,7 @@ Flags: NEEDS_PETER
   is published. In the body's prose keep the `依 FACT:<key>` convention every card uses — the
   drafter reads it naturally.
 - **`body`** (reference) — the *mapping/logic*: how this inquiry resolves against the cited facts
-  ("依 FACT:pricing-rates，依時數計價、人數不加價"). Only inline a hard number when it is
+  ("依 FACT:b2b-enterprise-pricing，套裝固定價，時數只用來對應半天或全天"). Only inline a hard number when it is
   **specific to this ticket and not in any fact** (then preserve it verbatim — never round or
   extrapolate). If Peter answered only part of the question, cover only that part and flag the
   gap.
@@ -137,12 +137,11 @@ Evidence: <Gmail thread permalink> · <YYYY-MM-DD> · Peter: 「<his words>」
 
 ## Worked example — a change and a new card from one thread
 
-A resolved thread confirms a new rate and asks something new:
+A resolved thread confirms a new package price and asks something new:
 
-1. `get_knowledge(key: "pricing-rates")` — say its 「Cites」 line names
-   `company.pricing-hourly-rate`: the rate lives in that company fact, not in the card. → a
-   **correction packet for the company fact**, ⚠ price change. Once the owner applies it, every
-   card that cites the fact is current.
+1. `get_knowledge(key: "b2b-enterprise-pricing")` — say its 「Cites」 line names a company fact:
+   the price lives in that fact, not in the card. → a **correction packet for the company fact**,
+   ⚠ price change. Once the owner applies it, every card that cites the fact is current.
 2. The thread also asked 「可以拆成兩個半天嗎？」 → a **new reference draft** in
-   `kb.scheduling-logistics`, `cites: ["pricing-rates", "standard-durations"]` (both published),
-   its body carrying the logic only.
+   `kb.scheduling-logistics`, `cites: ["b2b-enterprise-pricing", "standard-durations"]` (both
+   published), its body carrying the logic only.

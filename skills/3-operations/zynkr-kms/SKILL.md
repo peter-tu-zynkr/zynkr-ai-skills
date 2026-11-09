@@ -330,31 +330,31 @@ saying so.
 The 知識庫 has **two kinds of card** (full spec in `references/entry-schema.md`):
 
 - **`fact` card** — canonical, reusable truths whose *numbers/terms live once*: the pricing table,
-  refund policy, standard durations. Its key is a stable kebab-case id (e.g. `pricing-rates`),
+  refund policy, standard durations. Its key is a stable kebab-case id (e.g. `b2b-enterprise-pricing`),
   never one starting `company.`.
 - **`reference` card** — maps one inquiry to the facts and **cites** them (`cites`, by key) rather
   than restating the numbers. Its key is `qa.<english-slug>`.
 
 **Decide which you're drafting.** If the answer rests on a fact that could appear in other answers
-or changes over time (price, rate, policy, lead time):
+or changes over time (price, policy, lead time):
 1. Is there already a published fact for it? Check with `get_knowledge(key: "<fact-key>")` and the
    set. → the reference card just lists it in `cites` and describes the *mapping/logic*, **no
    restated numbers**.
 2. No fact yet? → propose a **NEW fact draft** (the numbers go there). The reference card that
    cites it **waits for the next run**: a draft can cite only published notes, so it is drafted
    once Peter has published the fact.
-3. The fact exists but Peter's reply changes it (new rate)? → a **correction packet** for the fact
+3. The fact exists but Peter's reply changes it (new price)? → a **correction packet** for the fact
    — one edit in Atlas, and every citing card is current.
 
 Draft each proposed card with these fields (they map 1:1 onto `draft_note`):
 
 ```
 kind:        fact | reference
-key:         fact → stable kebab-case id (e.g. pricing-rates) · reference → qa.<english-slug>
-title:       fact → short human title (e.g. 授課費率表)
-             reference → the canonical, normalized question (e.g. 一天 N 小時的 AI 課程如何報價？)
+key:         fact → stable kebab-case id (e.g. b2b-enterprise-pricing) · reference → qa.<english-slug>
+title:       fact → short human title (e.g. 企業內訓套裝價)
+             reference → the canonical, normalized question (e.g. 半天或一天的 AI 內訓如何報價？)
 body:        fact → the canonical numbers/terms (table/bullets), incl. explicit 未定範圍 caveats
-             reference → the mapping/logic ("依 FACT:pricing-rates …"), NOT the restated numbers
+             reference → the mapping/logic ("依 FACT:b2b-enterprise-pricing …"), NOT the restated numbers
              then `---` and the footer: Keywords · source_type (references/entry-schema.md)
 collection:  the section key, e.g. kb.pricing-quoting (facts: kb.core-facts)
 cites:       the published keys the answer rests on (a company fact by key, never its value)
@@ -374,8 +374,8 @@ Proposed 知識庫 changes from N resolved threads:
 
 | # | Action            | Section            | Key              | Preview                        | Flag             |
 |---|-------------------|--------------------|------------------|--------------------------------|------------------|
-| 1 | CORRECTION packet | kb.core-facts      | pricing-rates    | 實體 rate → new line           | ⚠ pricing change |
-| 2 | NEW reference     | kb.pricing-quoting | qa.half-day-quote | Q: … · cites pricing-rates    | —                |
+| 1 | CORRECTION packet | kb.core-facts      | b2b-enterprise-pricing | 半天套裝價 → new line    | ⚠ pricing change |
+| 2 | NEW reference     | kb.pricing-quoting | qa.half-day-quote | Q: … · cites b2b-enterprise-pricing | —           |
 | 3 | NEW fact          | kb.core-facts      | refund-window    | (canonical fact)               | ⚠ new fact       |
 | 4 | HELD reference    | kb.refund-policy   | qa.refund-window | waits for refund-window        | next run         |
 | 5 | NEW SECTION       | kb (new)           | kb.logistics-overseas | collection draft          | ⚠ new category   |

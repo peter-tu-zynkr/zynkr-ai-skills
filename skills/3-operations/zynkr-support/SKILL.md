@@ -1,7 +1,7 @@
 ---
 name: zynkr-support
 sheetId: "3.01"
-description: "The READ half of Peter's support loop (formerly support-reply-drafter). Parses Peter's Gmail support queue and the website-form notifications that are not AI-consulting inquiries, detects unreplied inquiries, identifies each inquirer's intent, and matches it against the **知識庫 in Zynkr Atlas** (the published `kb` collection — the single source of truth — read through the `zynkr-atlas` MCP server's search_knowledge / get_knowledge) to draft a safe reply on the thread. Drafts match the inbound language (zh-TW or EN). When the KB has no confident answer, or Atlas cannot be reached, it does NOT guess — it leaves a holding reply with an inline `[[NEEDS PETER: ...]]` block flagging exactly what's missing and notifies Peter. Once Peter supplies the real answer, this skill hands the resolved thread off to /zynkr-kms, which drafts it into the 知識庫 for Peter to publish, so the next identical question resolves automatically. Trigger whenever Peter says '/zynkr-support', 'draft support replies', 'process support inbox', '回覆 support 信箱', '清 support queue', '幫我回 support 信', or otherwise asks to handle the support inbox. The [2.1] Inbound Sales label and the website's AI 顧問服務 inquiries belong to /sales-inbound, which logs the lead and drafts the first reply; this skill lists them and drafts nothing on them."
+description: "The READ half of Peter's support loop (formerly support-reply-drafter). Parses Peter's Gmail support queue and the website-form notifications that are not AI-consulting or team-training inquiries, detects unreplied inquiries, identifies each inquirer's intent, and matches it against the **知識庫 in Zynkr Atlas** (the published `kb` collection — the single source of truth — read through the `zynkr-atlas` MCP server's search_knowledge / get_knowledge) to draft a safe reply on the thread. Drafts match the inbound language (zh-TW or EN). When the KB has no confident answer, or Atlas cannot be reached, it does NOT guess — it leaves a holding reply with an inline `[[NEEDS PETER: ...]]` block flagging exactly what's missing and notifies Peter. Once Peter supplies the real answer, this skill hands the resolved thread off to /zynkr-kms, which drafts it into the 知識庫 for Peter to publish, so the next identical question resolves automatically. Trigger whenever Peter says '/zynkr-support', 'draft support replies', 'process support inbox', '回覆 support 信箱', '清 support queue', '幫我回 support 信', or otherwise asks to handle the support inbox. The [2.1] Inbound Sales label and the website's AI 顧問服務 and 團隊訓練 inquiries belong to /sales-inbound, which logs the lead and drafts the first reply; this skill lists them and drafts nothing on them."
 category: operations
 project: zynkr-support
 platform: claude
@@ -37,9 +37,10 @@ Atlas — never read it for answers.
 
 The drafts must be **safe to send** — never invent product behavior, pricing, dates, or
 commitments. When the KB doesn't cover something, say so and surface it rather than guessing.
-**Price and quote questions are the highest-risk category**: unless an exact rate/quote is in the KB
+**Price and quote questions are the highest-risk category**: unless an exact price is in the KB
 *or* Peter supplied it in the current conversation, treat any pricing ask as low-confidence and
-write a holding reply with a `[[NEEDS PETER]]` block.
+write a holding reply with a `[[NEEDS PETER]]` block. A company asking what training or consulting
+costs gets no figure from this skill at all (Step 6).
 
 ---
 
@@ -69,7 +70,7 @@ This skill answers from a **知識庫** it does not ship.
 
 ## The 9-step scope (what this skill is, end to end)
 
-1. **Parse mail** — pull the unreplied Support / website-form queue (the Inbound-Sales label and AI 顧問服務 inquiries are /sales-inbound's).
+1. **Parse mail** — pull the unreplied Support / website-form queue (the Inbound-Sales label and the AI 顧問服務 and 團隊訓練 inquiries are /sales-inbound's).
 2. **Detect the unanswered inquiry** — the thread's last message is from the inquirer, not Peter.
 3. **Identify the inquirer's intent** — walk the 知識庫 once, then classify against its sections.
 4. **Match intent → find the answer** — `search_knowledge` + `get_knowledge`, then the facts each card cites.
@@ -116,7 +117,7 @@ The walk in Step 4 lists all of it:
   section. A section's own note (`get_knowledge(key: "kb.<slug>")`) holds its description and an
   `Aliases:` line.
 - **`fact` cards** (kind `fact`) — canonical numbers/policies (pricing table, refund policy,
-  durations), each keyed by a stable id (e.g. `pricing-rates`). The numbers live here, once.
+  durations), each keyed by a stable id (e.g. `b2b-enterprise-pricing`). The numbers live here, once.
 - **qa cards** (kind `reference`, keys `qa.…`) — one per past resolved inquiry; the body carries
   the *logic*, and its 「Cites」 line names the fact(s) it rests on. **The numbers are in the
   cited facts, not in the qa card**: read each cited key with `get_knowledge`.
@@ -147,15 +148,15 @@ label:[3]-operation-[3.8]-support -from:me newer_than:30d
 ```
 
 Then the **sender fallback** (for a website form the label missed), scoped to recent website forms and
-leaving out the AI-consulting inquiries:
+leaving out the AI-consulting and team-training inquiries:
 
 ```
-from:website@zynkr.ai -from:me newer_than:14d -"Interest: AI 顧問服務"
+from:website@zynkr.ai -from:me newer_than:14d -"Interest: AI 顧問服務" -"Interest: 團隊訓練" -"Interest: AI consulting" -"Interest: Team training"
 ```
 
-**One owner per inbox.** The `[2.1] Inbound Sales` label and every `Interest: AI 顧問服務` inquiry
-belong to **/sales-inbound**, which logs the lead and drafts the first reply. Never draft on them
-here: two drafts on one thread is what this rule prevents. If one turns up anyway (a label on the
+**One owner per inbox.** The `[2.1] Inbound Sales` label and every `Interest: AI 顧問服務` or
+`Interest: 團隊訓練` inquiry (`AI consulting` or `Team training` when the visitor reads the site in
+English) belong to **/sales-inbound**, which logs the lead and drafts the first reply. Never draft on them here: two drafts on one thread is what this rule prevents. If one turns up anyway (a label on the
 wrong thread), list it under *Owned by /sales-inbound* in the report.
 
 The label search looks back 30 days: an inquiry left unanswered for longer drops out of the queue.
@@ -187,7 +188,7 @@ New discovery call inquiry
 Name: 王小明
 Email: inquirer@example.com
 Company: ...
-Interest: 團隊訓練
+Interest: Zynkr CRM
 Source page: consult
 Brief context: <the actual question>
 ```
@@ -200,9 +201,9 @@ For these:
 - Check if already handled: search sent/drafts to that customer (`to:<email> from:me`). If a reply
   or draft exists, skip and list as already-handled.
 
-> An `Interest: AI 顧問服務` inquiry is **/sales-inbound**'s: it logs the lead and drafts the first
-> reply, so this skill leaves it alone (the Step 1 fallback query already excludes it). Website
-> forms with any other interest (e.g. 團隊訓練) stay here.
+> An `Interest: AI 顧問服務` or `Interest: 團隊訓練` inquiry (`AI consulting` or `Team training`
+> in English) is **/sales-inbound**'s: it logs the lead and drafts the first reply, so this skill leaves it alone (the Step 1 fallback query already
+> excludes it). Website forms with any other interest (e.g. Zynkr CRM) stay here.
 
 For each thread needing a draft, extract: sender name + email · subject · the inquirer's actual
 question(s) (there may be several) · inbound language (Step 3).
@@ -238,8 +239,8 @@ Then, for each question the inquirer asked, classify it into **exactly one secti
 set's `collection` rows, by key and title. Pick the **most specific** fit, and judge by what the
 *answer* would be (when the fit is unclear, read the section's note for its aliases):
 
-- "How much for in-house team training?" → `kb.pricing-quoting` if the answer is a rate;
-  `kb.team-training-enterprise` if the answer is program scope.
+- "What does in-house team training cover?" → `kb.team-training-enterprise`; "How much is the
+  public course?" → `kb.pricing-quoting`. A company asking for a price is Step 6's first case.
 - One thread can yield **multiple** intents (e.g. a pricing Q + a scheduling Q) — split them; each
   gets its own retrieval pass.
 - If nothing fits, tag `kb.other` — but flag it in the summary so /zynkr-kms can consider a new section.
@@ -277,10 +278,16 @@ isn't in the KB — Peter wants drafts that sound like *him*, not a generic supp
 
 Ask: *Does the KB answer each question the inquirer asked?*
 
-> **Pricing supplied in conversation:** if the KB has no rate but **Peter gave the exact
-> pricing/quote in the current conversation**, treat that as authoritative and draft the real
-> quote. Still add a light `[[NEEDS PETER]]` note for anything you had to *infer* (currency, whether
-> in-person includes travel/venue/materials, validity period).
+> **A company's quote is not this skill's.** When a company asks what in-house training or
+> consulting costs, draft nothing and write no figure, whatever the KB or this conversation says:
+> those prices come from `/sales-proposal-writer` after a call, as fixed packages with no hourly
+> rate and no hour count. List the thread under ➡️ in the report, so the lead is logged and offered
+> the call. A holding draft here would stop /sales-inbound drafting its first reply.
+>
+> **Other prices supplied in conversation:** if the KB has no price for a public course or a plan
+> but **Peter gave the exact price in the current conversation**, treat that as authoritative and
+> draft it. Still add a light `[[NEEDS PETER]]` note for anything you had to *infer* (currency,
+> validity period).
 
 ### High confidence (KB covers it, or Peter supplied it in-conversation) → write the reply
 
@@ -344,7 +351,7 @@ Peter
 **Website-form notifications (from `website@zynkr.ai`):**
 `mcp__google-workspace__draft_gmail_message` with:
 - `to`: the **customer email parsed from the body** (`Email:` line) — never `website@zynkr.ai`
-- `subject`: a clean customer-facing subject (e.g. `AI 課程報價｜團隊訓練（Zynkr）`)
+- `subject`: a clean customer-facing subject (e.g. `Zynkr CRM 方案說明（Zynkr）`)
 - `body`: your draft
 - **Do NOT set `thread_id`** — fresh outbound email to the customer.
 
@@ -374,7 +381,7 @@ Processed N threads (Support + website forms):
   - [Subject] — [sender] — [reason]
 
 ➡️  Owned by /sales-inbound, not drafted (L):
-  - [Subject] — [sender] — [Inbound Sales label | AI 顧問服務 inquiry]
+  - [Subject] — [sender] — [Inbound Sales label | AI 顧問服務 inquiry | 團隊訓練 inquiry | company price question]
 ```
 
 Link each card used as `https://atlas.zynkr.ai/w/<workspace>/knowledge/<key>` (Resources). If
@@ -382,7 +389,7 @@ the walk failed or Atlas could not be reached, say so on the first line, before 
 
 If everything was confident with no NEEDS PETER items, just say so plainly. Also surface when
 relevant: **labels not applied** (label searches empty, fallback found threads → suggest a Gmail
-filter); **sales leads** (a website form under another interest that reads like a consulting lead → mention /sales-inbound).
+filter); **sales leads** (a website form under another interest that reads like a consulting lead → mention /sales-inbound; a company price question → say how it reaches the sales skills: a Support thread gets the Inbound Sales label for /sales-inbound's next sweep, a website form goes to /sales-outbound by hand).
 
 **Crucially, list the `⚠️ NEEDS PETER` threads explicitly** — these are the open loop that Step 9
 closes once Peter answers them.
@@ -425,9 +432,10 @@ curating the KB is /zynkr-kms's job.
 - **Never commit Peter to a delivery date, refund, discount, pricing, or feature** not explicitly in
   the KB *or* supplied by Peter in this conversation. Any such ask with no authoritative source is
   automatically low-confidence → holding reply.
-- **Price quotes:** even with an authoritative rate, don't invent the *scope* around it —
-  travel fees, materials, minimum hours, multi-day discounts, validity windows. Quote only the rate
-  you were given; flag the rest in `[[NEEDS PETER]]`.
+- **Prices:** even with an authoritative price, don't invent the *scope* around it —
+  travel fees, materials, multi-day discounts, validity windows. State only the price you were
+  given; flag the rest in `[[NEEDS PETER]]`. Never write a price as an hourly rate or as hours × a rate.
+  How long a course runs is not a price: a durations card may answer that.
 - **Cite, don't restate-and-drift:** the canonical numbers live in fact cards. Resolve a cited
   fact into the reply, but if a qa card's body and its cited fact ever disagree, **trust the fact
   card** and flag the mismatch for /zynkr-kms.

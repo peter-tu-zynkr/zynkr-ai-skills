@@ -16,7 +16,7 @@ Class: **AUTO** = the skill can compute it from a system of record · **SEMI** =
 | 3.04 | 線下場次 + funnel | SEMI | [3.1] `#Operation` event list (Accupass link + 報名人數) + Calendar | parse newest [3.1] block Operation section (`extract_newest_block.py`); count events + 報名人數; Calendar via cloud connector only | yes (weekly log readable) — funnel conversion stays HUMAN |
 | 3.01 | LINE 群 rhythm + conversion | HUMAN | LINE OA (connector beta only) | none | unfilled · ask owner |
 | 3.02 | 內部講師 developed | HUMAN | — | none | unfilled · ask owner |
-| 4.01 | 企業 AI 診斷 engagements | SEMI | CRM consult deals + Notion Kanban | `mcp__zynkr__list_deals` (consult pipeline stages) + `notion-search` on the consultancy Kanban | no → unfilled · ask owner |
+| 4.01 | 企業 AI 診斷 engagements | SEMI | Zynkr CRM `crm_deals` with `service_tier = 'transformation'` | `execute_sql` on `crm_deals`: `workspace_id` from `mcp__zynkr__whoami`, `service_tier = 'transformation'`, `stage = 'won'`, created ≥ H2 start (`mcp__zynkr__list_deals` does not return `service_tier`); the owner confirms the count | no (CRM not reachable) → unfilled · ask owner |
 | 4.05 | 陪跑課 | SEMI → HUMAN | course tracker 專案管理總表 | `read_sheet_values` on `sources.course_tracker` tab; % complete from task status | yes (sheet readable) |
 | 4.07 | Vibe Coding | SEMI → HUMAN | course tracker 專案管理總表 | same as 4.05 | yes (sheet readable) |
 | 6.02 | 內部導入 Zynkr adoption | AUTO | Zynkr Supabase `crm_*` activity + AI usage metering | `execute_sql`: distinct active internal users / AI calls last 7d & 28d from the platform's usage tables | no → unfilled · ask owner |

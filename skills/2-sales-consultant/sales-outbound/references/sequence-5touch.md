@@ -92,11 +92,11 @@ Mode B 的人一律 `還沒接觸過 → 已聯絡，待回覆`。
 | CRM 欄位 | 取自 | 備註 |
 |---|---|---|
 | `email` | 名單 `Email` | |
-| `last_name` | 名單 `姓名`（整串） | 複姓拆不準，**不要拆**；`first_name` 不填 |
+| `first_name` | 名單 `姓名`（整串） | 複姓拆不準，**不要拆**；`last_name` 不填（`sales.crm-data-standards` §3） |
 | `phone` | 名單 `電話` | 空白就不帶 |
 | `title` | 名單 `職業` | 空白或「其它」就不帶 |
 | `lifecycle_stage` | 固定 `lead` | **一定要明帶**——工具預設是 `opportunity`，沒回過話的人不是 opportunity |
-| `legal_basis` | 固定 `legitimate_interest` | 必填（PDPA）；依據是既有學員關係，與 Mode A 的 house value 相同 |
+| `legal_basis` | 固定 `consent` | 必填（PDPA）；表單、回覆和開發名單都記 consent（`sales.crm-data-standards` §3） |
 | `owner_id` | 0.1 的認領人 | **一定要帶**——不帶的話工具會留空 |
 
 **deal**：`mcp__zynkr__create_deal(name=…, contact_id=…, owner_id=<認領人>, stage="new", lead_source="outbound", priority="medium")`。
@@ -441,7 +441,7 @@ Best regards,
 
 ```
 | 姓名 | Email | CRM | 交易 | 負責人 | 標籤 | 結果 |
-| 某某 | x@example.com | https://platform.zynkr.ai/contacts/{id} | 交易-YYYYMM-NNN | {成員名} | 來源 · 電話缺漏（已讀回）／標籤建議（原因） | 新建／沿用既有聯絡人／已有人在跟（退出）／對不到成員／同批重複／認領沒走完（已建：…；未建：…） |
+| 某某 | x@example.com | https://crm.zynkr.ai/contacts/{id} | 交易-YYYYMM-NNN | {成員名} | 來源 · 電話缺漏（已讀回）／標籤建議（原因） | 新建／沿用既有聯絡人／已有人在跟（退出）／對不到成員／同批重複／認領沒走完（已建：…；未建：…） |
 ```
 
 「已有人在跟」「對不到成員」「認領沒走完」的列放最上面，那些人這一輪沒有信；「已有人在跟」那列附上關卡回報的那一行。「同批重複」的列緊接在第一位那列下面。

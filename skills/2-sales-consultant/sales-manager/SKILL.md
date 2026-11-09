@@ -43,7 +43,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-manager
 ```
 
-The sales family has six good single-step skills and nobody holding them together.
+The sales family has seven good single-step skills and nobody holding them together.
 Each one takes one input shape and does one job well; none of them knows what happened
 before it, what should happen next, or that a deal has been sitting untouched for three
 weeks. `sales-manager` is that missing layer — the same relationship `/zynkr-slide` has
@@ -104,7 +104,7 @@ output is routing decisions, sequencing, the attention list, and the batch gate.
   `get_deal`, then write it back with a line break and the new line at the end, never dropping one.
   Every `zynkr` write tool is a two-call handshake: `confirm:false` previews,
   `confirm:true` applies.
-- **Record URLs** for the report: `https://platform.zynkr.ai/deals/{id}` · `.../contacts/{id}`.
+- **Record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}`.
 - **Google account** for anything Gmail/Calendar: `<your-google-workspace-account>`.
 - Peter's calendar is `Europe/Amsterdam`; prospects are almost always `Asia/Taipei`.
 - **Pipeline rules** — the cap, the floor, the outreach target, the follow-up rhythm and when a
