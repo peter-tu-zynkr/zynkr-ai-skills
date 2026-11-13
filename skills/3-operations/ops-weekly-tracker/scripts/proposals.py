@@ -65,7 +65,7 @@ from datetime import date
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
-LEDGER_API = 3   # the ledger.py this script was written against (SKB-091; 3 = SKB-118's check_saved); not the Snapshot's LAYOUT marker
+LEDGER_API = 4   # the ledger.py this script was written against (SKB-091; 3 = SKB-118's check_saved; 4 = SKB-128's Harvest `item`); not the Snapshot's LAYOUT marker
 
 
 def core_dir():
@@ -101,6 +101,14 @@ TERMINAL = ("完成", "放棄")
 CONFIDENCE = ("高", "中", "低")
 MAX_ROWS = L.BLOCKS["Proposals"][0]
 MAX_REFS = 3
+# SKB-128: the week's harvest is evidence too. A line counts for the item `collect` tied it to, and only
+# when it is work done; on its own it can show that an item moves or that it is done, nothing else.
+HARVEST_WORK = ("shipped", "moving")
+HARVEST_ALONE = ("進行中", "完成")
+HARVEST_SOURCE = "收成"
+HARVEST_MARK = "只有收成佐證"
+KIND_ZH = {"shipped": "完成", "moving": "進行中", "waiting": "在等"}
+WEEKS_READ = "Weeks!A%d:T%d"        # through the harvest beat's cells (S–T)
 # The approval mail as the Gmail tools hand it back (its text/plain part). Every reply quotes it,
 # and the thread apply reads has to fit one tool result, so the mail stays small.
 MAIL_TEXT_MAX = 8500
@@ -185,8 +193,8 @@ def read_block(run, tab, name):
 
 def weeks_cells(run, name="wr"):
     r = run["weeks_row"]
-    wr = L.parse_values(L.load_result(os.path.join(run["dir"], name + ".txt")), run["ledger"], "Weeks!A%d:R%d" % (r, r))
-    row = L.pad(wr[0], 18) if wr else [""] * 18
+    wr = L.parse_values(L.load_result(os.path.join(run["dir"], name + ".txt")), run["ledger"], WEEKS_READ % (r, r))
+    row = L.pad(wr[0], 20) if wr else [""] * 20
     if row[0] not in ("", run["week"]):
         raise L.Refuse(4, "Weeks row %d belongs to %s, not %s" % (r, row[0], run["week"]))
     return dict(zip(L.WEEKS_FULL, row))
@@ -261,10 +269,10 @@ def p_start(week, config=None, now=None, base=None):
     L.save_run(run)
     r = run["weeks_row"]
     calls = [L.info_call(run, cfg["tracker"], "ti"), L.info_call(run, cfg["ledger"], "li"),
-             L.read_call(run, cfg["ledger"], "Weeks!A%d:R%d" % (r, r), "wr"),
-             L.read_call(run, cfg["ledger"], block_range("Decisions", run["k"])[2], "dc"),
-             L.read_call(run, cfg["ledger"], block_range("Reports", run["k"])[2], "rp"),
-             L.read_call(run, cfg["ledger"], block_range("Proposals", run["k"])[2], "pp")]
+             L.read_call(run, cfg["ledger"], WEEKS_READ % (r, r), "wr"),
+             L.read_call(run, cfg["ledger"], block_range("Decisions", run["k"])[2], "dc")]
+    calls += [L.read_call(run, cfg["ledger"], rng, name) for name, rng in harvest_pages(run["k"])]
+    calls.append(L.read_call(run, cfg["ledger"], block_range("Proposals", run["k"])[2], "pp"))
     return {"dir": run["dir"], "week": week, "mode": run["mode"], "calls": calls}
 
 
@@ -276,6 +284,11 @@ def p_pages(d):
         raise L.Refuse(4, "the tracker has no tab %r" % run["tab"])
     if "Proposals" not in li:
         raise L.Refuse(4, "the Ledger has no Proposals tab; run the Phase 3 setup")
+    if li.get("Harvest", (0, 0))[1] < len(L.HARVEST_HEADER):
+        # the Harvest reads `start` printed ask for column I: on a tab that stops short they came back as
+        # errors, and saying so here beats a refusal about a result that does not parse
+        raise L.Refuse(4, "the Ledger's Harvest tab is missing or narrower than %d columns; run the SKB-128 setup "
+                          "(zynkr-ops-weekly, references/ledger.md)" % len(L.HARVEST_HEADER))
     for name in li:
         if name in ti and name in ("Weeks", "Proposals", "Updates"):
             raise L.Refuse(4, "the tracker also has a tab named %s; a misdirected write could land there" % name)
@@ -291,9 +304,9 @@ def p_pages(d):
         return dict(out, already=False, resume=True)
     warnings = []
     if w["decisions"] != "ok":
-        warnings.append("this week's decisions were not recorded in the Ledger: propose from the reports alone")
-    if w["reports"] != "ok":
-        warnings.append("this week's #週報 posts were not recorded in the Ledger")
+        warnings.append("this week's decisions were not recorded in the Ledger: propose from the harvest alone")
+    if w["harvest"] != "ok":
+        warnings.append("this week's harvest was not recorded in the Ledger")
     grid_rows, grid_cols = ti[run["tab"]]
     if grid_cols < 13:
         raise L.Refuse(4, "tracker tab is only %d columns wide" % grid_cols)
@@ -304,12 +317,38 @@ def p_pages(d):
     return {"already": False, "week": run["week"], "calls": calls, "warnings": warnings}
 
 
+def harvest_pages(k):
+    """[(name, range)] of the week's Harvest block: 80 rows, and one read shows at most 50."""
+    first, last = L.block_slot("Harvest", k)
+    out = []
+    for a in range(first, last + 1, L.PAGE):
+        out.append(("hv%d" % (len(out) + 1), "Harvest!A%d:%s%d" % (a, L.COLS["Harvest"], min(a + L.PAGE - 1, last))))
+    return out
+
+
+def read_harvest(run):
+    """[(row number, cells)] of the week's Harvest block, from its pages."""
+    out = []
+    for name, rng in harvest_pages(run["k"]):
+        first = int(re.match(r"^Harvest!A(\d+):", rng).group(1))
+        rows = L.parse_values(L.load_result(os.path.join(run["dir"], name + ".txt")), run["ledger"], rng)
+        for i, r in enumerate(rows):
+            r = L.pad(r, len(L.HARVEST_HEADER))
+            if any(c.strip() for c in r):
+                if r[0] != run["week"]:
+                    raise L.Refuse(3, "Harvest row %d belongs to %r, not %s" % (first + i, r[0], run["week"]))
+                out.append((first + i, r))
+    return out
+
+
 def evidence_rows(run):
+    """The week's rows a proposal may cite: the meeting's Decisions, and the Harvest's lines (SKB-128; the
+    `Reports` block until then). A totals row and a quiet week are no line."""
     return ([{"ref": "Decisions!A%d" % r, "會議日期": c[1], "類型": c[2], "內容": c[3], "負責人": c[4], "期限": c[5],
               "關聯 #": c[6], "狀態": c[8]}
              for r, c in read_block(run, "Decisions", "dc")]
-            + [{"ref": "Reports!A%d" % r, "owner": c[2], "部門": c[3], "上週": c[4], "本週": c[5], "卡關": c[7]}
-               for r, c in read_block(run, "Reports", "rp")])
+            + [{"ref": "Harvest!A%d" % r, "name": c[3], "workstream": c[4], "kind": c[5], "text": c[6], "item": c[8].strip()}
+               for r, c in read_harvest(run) if c[5] in L.HARVEST_KINDS])
 
 
 def item_dict(cells):
@@ -329,14 +368,15 @@ def p_context(d):
         by_num[it["#"]] = it
     ev = evidence_rows(run)
     decisions = [e for e in ev if e["ref"].startswith("Decisions!")]
-    reports = [e for e in ev if e["ref"].startswith("Reports!")]
+    harvest = [e for e in ev if e["ref"].startswith("Harvest!")]
     ctx = {"week": run["week"], "mode": run["mode"],
            "items": [{k: by_num[n][k] for k in ("#", "項目（正規化）", "Priority", "負責人", "開始", "結束", "狀態", "備註")}
                      for n in by_num],
-           "decisions": decisions, "reports": reports, "ambiguous_items": sorted(dup),
+           # only the lines `collect` tied to an item: a line tied to none is evidence about nothing
+           "decisions": decisions, "harvest": [e for e in harvest if e["item"]], "ambiguous_items": sorted(dup),
            "warnings": run.get("warnings", []) + warnings}
     json.dump(ctx, open(os.path.join(d, "context.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    run.update(items=by_num, ambiguous=sorted(dup), evidence={x["ref"]: x for x in decisions + reports},
+    run.update(items=by_num, ambiguous=sorted(dup), evidence={x["ref"]: x for x in decisions + harvest},
                digest=L.digest(items))
     L.save_run(run)
     return ctx
@@ -366,7 +406,7 @@ def cited(p, where, run):
     rows = []
     for ref in refs:
         if not isinstance(ref, str) or ref not in run["evidence"]:
-            raise L.Refuse(3, "%s: evidence %r is not one of this week's Decisions or Reports rows" % (where, ref))
+            raise L.Refuse(3, "%s: evidence %r is not one of this week's Decisions or Harvest rows" % (where, ref))
         rows.append(run["evidence"][ref])
     return why, conf, refs, rows
 
@@ -396,6 +436,9 @@ def check_new(p, where, run):
     if clash:
         raise L.Refuse(3, "%s: %r is already in the tracker as #%s" % (where, name, clash[0]))
     acts = [e for e in rows if e["ref"].startswith("Decisions!")]
+    if len(acts) != len(rows):
+        raise L.Refuse(3, "%s: a 新增 rests on the meeting's action alone; a harvest line is tied to an item "
+                          "the tracker already holds" % where)
     if not acts or any(e["類型"] != "行動" or e["關聯 #"] != "新" for e in acts):
         raise L.Refuse(3, "%s: a 新增 cites the meeting's action for a new item (類型 行動, 關聯 # 新), and only that"
                        % where)
@@ -440,17 +483,46 @@ def check_one(p, i, run):
             raise L.Refuse(3, "%s: %s is %s, not a resolution" % (where, e["ref"], e["類型"] or "untyped"))
         if e["關聯 #"] != num:
             raise L.Refuse(3, "%s: %s is about #%s, not #%s" % (where, e["ref"], e["關聯 #"] or "?", num))
-    if not meeting and conf != "低":
-        raise L.Refuse(3, "%s: a change argued from a self-report alone is 低" % where)
+    work = [e for e in rows if e["ref"].startswith("Harvest!")]
+    for e in work:
+        # a waiting line is an ask, not work done, and a line tied to another item, or to none, says
+        # nothing about this one (SKB-128)
+        if e["kind"] not in HARVEST_WORK:
+            raise L.Refuse(3, "%s: %s is a %s line, not work done" % (where, e["ref"], e["kind"]))
+        if e["item"] != num:
+            raise L.Refuse(3, "%s: %s is tied to %s, not #%s"
+                           % (where, e["ref"], "#" + e["item"] if e["item"] else "no item", num))
+    alone = not meeting                 # the change rests on the harvest alone
     cur = it[field]
     if field == "狀態":
         if new not in VOCAB:
             raise L.Refuse(3, "%s: %r is not a 狀態 value (%s)" % (where, new, " / ".join(VOCAB)))
+        # a line still moving says the opposite of 完成, whatever stands beside it
+        if new == "完成" and any(e["kind"] != "shipped" for e in work):
+            raise L.Refuse(3, "%s: 完成 cannot rest on a line that is still moving" % where)
         # a 行動 is a plan, not a delivery: 完成 needs a 決議, or the meeting's 進度 line saying 完成
         if new == "完成" and not any(e["類型"] == "決議" or (e["類型"] == "進度" and e["狀態"] == "完成")
                                     for e in meeting):
-            raise L.Refuse(3, "%s: 完成 needs a meeting record of the delivery (a 決議, or 進度 marked 完成), "
-                              "not a self-report or a plan" % where)
+            # Or, with no such record, the harvest (SKB-128 D8): a shipped line tied to the item, no line of
+            # the week still moving or waiting on it, whoever wrote it, and no word of the meeting about
+            # the item. The harvest closed the night before the meeting: where the meeting recorded a plan,
+            # a blocker or a status for the item, that is the newer word, and 完成 is the meeting's to say.
+            if not any(e["kind"] == "shipped" for e in work):
+                raise L.Refuse(3, "%s: 完成 needs a meeting record of the delivery (a 決議, or 進度 marked 完成) or a "
+                                  "shipped harvest line tied to #%s, not a plan or work still moving" % (where, num))
+            said = sorted(e["ref"] for e in run["evidence"].values()
+                          if e["ref"].startswith("Decisions!") and e["關聯 #"] == num)
+            if said:
+                raise L.Refuse(3, "%s: the meeting has rows about #%s this week (%s), so 完成 is its to record: cite "
+                                  "the 決議 or the 進度 marked 完成, or leave it" % (where, num, "、".join(said)))
+            still = sorted(e["ref"] for e in run["evidence"].values()
+                           if e["ref"].startswith("Harvest!") and e["item"] == num and e["kind"] != "shipped")
+            if still:
+                raise L.Refuse(3, "%s: #%s still has a line moving or waiting this week (%s); 完成 waits for it"
+                               % (where, num, "、".join(still)))
+        if alone and new not in HARVEST_ALONE:
+            raise L.Refuse(3, "%s: the harvest alone shows work, so it can say %s, not %s"
+                           % (where, " or ".join(HARVEST_ALONE), new))
         drops = [e for e in meeting if e["類型"] == "放棄"]
         if new == "放棄" and not drops:
             raise L.Refuse(3, "%s: 放棄 needs the meeting's 放棄 line for #%s" % (where, num))
@@ -479,7 +551,9 @@ def check_one(p, i, run):
         if DONE_WORDS.search(line):
             raise L.Refuse(3, "%s: the 放棄 line carries a done-word; say why it stops in other words" % where)
         new = new + SEP + line            # apply sets 狀態 and appends this line to 備註; the row stays
-    source = "會議" if meeting else "自述"
+    if alone and conf == "高":
+        raise L.Refuse(3, "%s: a change that rests on the harvest alone is 中 or 低" % where)
+    source = HARVEST_SOURCE if alone else "會議"
     return [num, it["項目（正規化）"], field, cur, new, why, "、".join(refs), source, conf]
 
 
@@ -491,7 +565,7 @@ def evidence_text(e, ref):
         if e.get("期限"):
             t += "（%s，%s）" % (e.get("負責人") or "沒有負責人", e["期限"])
     else:
-        t = "%s 的週報：%s" % (e.get("owner") or "?", (e.get("本週") or e.get("上週") or "").replace("\n", " · "))
+        t = "%s 的收成（%s）：%s" % (e.get("name") or "?", KIND_ZH.get(e.get("kind"), "?"), e.get("text") or "")
     return clip(t, 80)
 
 
@@ -570,16 +644,19 @@ def render_mail(run, rows):
          "取代前一封，確認後就不再改。週日晚上 10 點（台北時間）前回覆都來得及；沒寫到的編號不會套用，週一的週報會列出來。</p>"]
     if run["mode"] == "shadow":
         o.append("<p><b>試行中</b>：這幾週核准的不會寫進總表，只記錄下來，週一的週報會列出「如果套用會改什麼」。</p>")
+    if any(r[10] == HARVEST_SOURCE for r in rows):
+        o.append("<p>標「%s」的提案沒有會議紀錄，只依這週收成裡的工作紀錄，核准前請多看一眼。</p>" % esc(HARVEST_MARK))
     o.append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse\">"
              "<tr><th>編號</th><th>項目</th><th>欄位</th><th>現在 → 建議</th><th>為什麼</th><th>證據</th><th>把握</th></tr>")
     for r in rows:
         n, num, name, field, cur, new, why, refs, conf = r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[11]
         change = change_text(field, cur, new)
         ev = "<br>".join(esc(evidence_text(run["evidence"].get(x), x)) for x in refs.split("、"))
+        sure = esc(conf) + ("<br>%s" % esc(HARVEST_MARK) if r[10] == HARVEST_SOURCE else "")
         o.append("<tr><td>%s</td><td>#%s %s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-                 % (esc(n), esc(num), esc(clip(name, 30)), esc(field), change, esc(why), ev, esc(conf)))
+                 % (esc(n), esc(num), esc(clip(name, 30)), esc(field), change, esc(why), ev, sure))
     o.append("</table>")
-    o.append("<p style=\"color:#6F6B62\">%s 週結 %s · 提案是機器依本週的會議紀錄和週報整理的，"
+    o.append("<p style=\"color:#6F6B62\">%s 週結 %s · 提案是機器依本週的會議紀錄和收成整理的，"
              "寫進總表前一定會先等 %s 回覆。</p>" % (esc(MARKER), esc(run["week"]), esc(run["account"])))
     return "\n".join(o)
 
@@ -1026,10 +1103,10 @@ def a_start(week, config=None, now=None, base=None):
     run = new_run(cfg, week, "apply", now, base)
     run["mode"] = mode
     r = run["weeks_row"]
-    calls = [L.read_call(run, cfg["ledger"], "Weeks!A%d:R%d" % (r, r), "wr"),
+    calls = [L.read_call(run, cfg["ledger"], WEEKS_READ % (r, r), "wr"),
              L.read_call(run, cfg["ledger"], block_range("Proposals", run["k"])[2], "pp"),
-             L.read_call(run, cfg["ledger"], block_range("Decisions", run["k"])[2], "dc"),
-             L.read_call(run, cfg["ledger"], block_range("Reports", run["k"])[2], "rp")]
+             L.read_call(run, cfg["ledger"], block_range("Decisions", run["k"])[2], "dc")]
+    calls += [L.read_call(run, cfg["ledger"], rng, name) for name, rng in harvest_pages(run["k"])]
     rec_path = thread_state_path(week)
     if os.path.exists(rec_path):
         rec = json.load(open(rec_path, encoding="utf-8"))
@@ -1737,10 +1814,12 @@ def selftest():
 
         tracker = [L.TRACKER_HEADER, item("1.01", "進行中", "2026-10-31"), item("1.02", "未開始", "2026/10/30"),
                    item("1.03", "進行中", note="跟 Ann 確認"), item("1.04", "完成"),
-                   item("1.10", "未開始", name="訪談 <script>")]
+                   item("1.10", "未開始", name="訪談 <script>"),
+                   # the meeting has no row about these three (SKB-128)
+                   item("1.05", "進行中"), item("1.06", "進行中"), item("1.07", "進行中")]
         k = 2                                         # 2026-W42
         dfirst = L.block_slot("Decisions", k)[0]
-        rfirst = L.block_slot("Reports", k)[0]
+        hfirst = L.block_slot("Harvest", k)[0]
         decisions = [["2026-W42", "2026-10-15", "決議", "1.01 改到 11/15 交", "Ann", "2026-11-15", "1.01", "doc"],
                      ["2026-W42", "2026-10-15", "決議", "1.02 本週開工", "Ann", "2026-10-30", "1.02", "doc"],
                      ["2026-W42", "2026-10-15", "決議", "1.03 已交付給客戶", "Ann", "2026-10-15", "1.03", "doc"],
@@ -1755,9 +1834,35 @@ def selftest():
                      ["2026-W42", "2026-10-15", "進度", "訪談排好了", "", "", "1.10", "Fireflies A", "進行中"],
                      ["2026-W42", "2026-10-15", "行動", "整理名單", "All", "", "新", "Fireflies A", "待定"],
                      ["2026-W42", "2026-10-15", "進度", "1.03 交付了", "", "", "1.03", "Fireflies A", "完成"],
-                     ["2026-W42", "2026-10-15", "行動", "找講師", "Zed", "", "新", "Fireflies A", "待定"]]
-        reports = [["2026-W42", "2026-10-12T10:00:00+08:00", "bob@example.com", "Ops", "", "做 1.10 的訪談", "", "", "4-line"]]
-        weeks_row = ["2026-W42", "ok", "", "2026H2", "TRK", "5", "", "", "", L.LAYOUT, "ok", "x", "ok", "y", "", "", "", ""]
+                     ["2026-W42", "2026-10-15", "行動", "找講師", "Zed", "", "新", "Fireflies A", "待定"],
+                     ["2026-W42", "2026-10-15", "行動", "1.02 的頁面上線", "Bob Wu", "", "1.02", "Fireflies A", "已排定"]]
+
+        def hline(slug, name, kind, text, item="", ws="Ops"):
+            return ["2026-W42", "2026-10-14T21:00:00+08:00", slug, name, ws if kind in L.HARVEST_KINDS else "", kind, text,
+                    "harvest-%s.md" % slug, item]
+
+        # the week's harvest (SKB-128), by its place in the 80-row block: Bob moves 1.10 and waits on it, and
+        # ships 1.02; Cat ships 1.01 and still moves it, ships 1.03 and waits on it; Dee's line is on the
+        # block's second page
+        harvest = {0: hline("bob", "Bob Wu", "totals", "shipped 2 · moving 1 · waiting 1"),
+                   1: hline("bob", "Bob Wu", "moving", "做 1.10 的訪談", "1.10"),
+                   2: hline("bob", "Bob Wu", "shipped", "1.02 的頁面上線了", "1.02"),
+                   3: hline("bob", "Bob Wu", "waiting", "等 Ann 回覆訪談名單", "1.10"),
+                   4: hline("bob", "Bob Wu", "shipped", "整理了收件匣"),
+                   5: hline("ann", "Ann", "quiet", "本週無資料"),
+                   6: hline("cat", "Cat", "shipped", "1.01 的初稿交了", "1.01", "SEO"),
+                   7: hline("cat", "Cat", "moving", "1.01 的第二版", "1.01", "SEO"),
+                   8: hline("cat", "Cat", "shipped", "1.03 的報告寄出", "1.03", "SEO"),
+                   9: hline("cat", "Cat", "waiting", "1.03 等客戶簽收", "1.03", "SEO"),
+                   10: hline("cat", "Cat", "shipped", "1.05 的手冊定稿", "1.05", "SEO"),
+                   12: hline("cat", "Cat", "shipped", "1.06 的第一章", "1.06", "SEO"),
+                   13: hline("bob", "Bob Wu", "moving", "1.06 的第二章", "1.06"),
+                   14: hline("cat", "Cat", "shipped", "1.07 的報價單寄出", "1.07", "SEO"),
+                   15: hline("bob", "Bob Wu", "waiting", "1.07 等客戶回簽", "1.07"),
+                   60: hline("dee", "Dee", "moving", "1.10 的逐字稿", "1.10")}
+        href = {i: "Harvest!A%d" % (hfirst + i) for i in harvest}
+        weeks_row = ["2026-W42", "ok", "", "2026H2", "TRK", "5", "", "", "", L.LAYOUT, "", "", "ok", "y", "", "", "", "",
+                     "ok", "z"]
 
         def feed(calls, sources):
             for c in calls:
@@ -1766,7 +1871,7 @@ def selftest():
                     sid = a["spreadsheet_id"]
                     tabs = {"H2": (60, 13)} if sid == "TRK" else {"Weeks": (100, 26), "Proposals": (2100, 15),
                                                                    "Updates": (2100, 14), "Decisions": (1000, 8),
-                                                                   "Reports": (1000, 9)}
+                                                                   "Harvest": (4100, 9)}
                     open(c["save"], "w").write(info(sid, tabs))
                 elif c["tool"].endswith("read_sheet_values"):
                     rng = a["range_name"]
@@ -1777,8 +1882,12 @@ def selftest():
                 return [weeks or weeks_row]
             if rng.startswith("Decisions!"):
                 return decisions
-            if rng.startswith("Reports!"):
-                return reports
+            m = re.match(r"^Harvest!A(\d+):I(\d+)$", rng)
+            if m:                                          # a read shows the rows up to the last one that holds anything
+                page = [harvest.get(n - hfirst, [""] * 9) for n in range(int(m.group(1)), int(m.group(2)) + 1)]
+                while page and not any(page[-1]):
+                    page.pop()
+                return page
             if rng.startswith("Proposals!"):
                 return props or []
             m = re.match(r"^'?H2'?!A(\d+):M(\d+)$", rng)
@@ -1788,19 +1897,45 @@ def selftest():
         st = p_start("2026-W42", cfgp, "2026-10-16T10:05:00+08:00", os.path.join(tmp, "runs"))
         check("propose mode", st["mode"], "shadow")
         check("propose reads its own block too", st["calls"][-1]["args"]["range_name"], "Proposals!A82:O121")
+        check("propose reads the week's Harvest block in two pages, the Weeks row through the harvest beat, and no Reports",
+              [c["args"]["range_name"] for c in st["calls"] if c["args"].get("range_name", "")[:4] in ("Harv", "Repo", "Week")],
+              ["Weeks!A4:T4", "Harvest!A162:I211", "Harvest!A212:I241"])
         feed(st["calls"], ledger_rows)
         pg = p_pages(st["dir"])
         check("not yet proposed", pg["already"], False)
         feed(pg["calls"], ledger_rows)
         ctx = p_context(st["dir"])
-        check("context items", [x["#"] for x in ctx["items"]], ["1.01", "1.02", "1.03", "1.04", "1.10"])
+        check("context items", [x["#"] for x in ctx["items"]], ["1.01", "1.02", "1.03", "1.04", "1.10", "1.05", "1.06", "1.07"])
         dref = ["Decisions!A%d" % (dfirst + i) for i in range(len(decisions))]
         check("context decision refs", [x["ref"] for x in ctx["decisions"]], dref)
-        rref = "Reports!A%d" % rfirst
+        check("the context offers the harvest lines tied to an item, from both pages, and nothing else of the harvest",
+              ([x["ref"] for x in ctx["harvest"]], "reports" in ctx, ctx["harvest"][0]["kind"], ctx["harvest"][0]["item"]),
+              ([href[i] for i in (1, 2, 3, 6, 7, 8, 9, 10, 12, 13, 14, 15, 60)], False, "moving", "1.10"))
+        rref = href[1]                                # Bob's moving line, tied to 1.10
+        for tabs, what in (({"Weeks": (100, 26), "Proposals": (2100, 15), "Decisions": (1000, 8)}, "no Harvest tab"),
+                           ({"Weeks": (100, 26), "Proposals": (2100, 15), "Decisions": (1000, 8), "Harvest": (4100, 8)},
+                            "a Harvest tab that stops at column H")):
+            sn = p_start("2026-W42", cfgp, "2026-10-16T10:07:00+08:00", os.path.join(tmp, "runs-narrow"))
+            feed(sn["calls"], ledger_rows)
+            open(os.path.join(sn["dir"], "li.txt"), "w").write(info("LED", tabs))
+            try:
+                p_pages(sn["dir"])
+                check("a Ledger with %s is refused by name" % what, "not refused", "refused")
+            except L.Refuse as e:
+                check("a Ledger with %s is refused by name" % what, (e.code, "SKB-128 setup" in str(e)), (4, True))
+        harvest[11] = hline("eve", "Eve", "shipped", "a line of the week before", "1.01")
+        harvest[11][0] = "2026-W41"
+        try:
+            sx = p_start("2026-W42", cfgp, "2026-10-16T10:06:00+08:00", os.path.join(tmp, "runs-stray"))
+            feed(sx["calls"], ledger_rows)
+            feed(p_pages(sx["dir"])["calls"], ledger_rows)
+            refuses("a Harvest row of another week inside the block", 3, p_context, sx["dir"])
+        finally:
+            del harvest[11]
         good = [{"#": "1.01", "欄位": "結束", "建議值": "2026-11-15", "原因": "週四會議改了交期", "證據": [dref[0]], "信心": "高"},
                 {"#": "1.02", "欄位": "狀態", "建議值": "進行中", "原因": "會議決議本週開工", "證據": [dref[1]], "信心": "中"},
                 {"#": "1.03", "欄位": "狀態", "建議值": "完成", "原因": "會議記錄已交付給客戶", "證據": [dref[2]], "信心": "高"},
-                {"#": "1.10", "欄位": "狀態", "建議值": "進行中", "原因": "Bob 週報說已在做訪談", "證據": [rref], "信心": "低"},
+                {"#": "1.10", "欄位": "狀態", "建議值": "進行中", "原因": "Bob 的收成說已在做訪談", "證據": [rref], "信心": "低"},
                 {"#": "1.03", "欄位": "備註", "建議值": "跟 Ann 確認\n10/15 會議：交付給客戶", "原因": "記下交付",
                  "證據": [dref[2]], "信心": "高"}]
 
@@ -1813,8 +1948,59 @@ def selftest():
         try_one("a closed item", 3, {"#": "1.04", "欄位": "狀態", "建議值": "進行中", "原因": "x", "證據": [dref[3]], "信心": "高"})
         try_one("a field outside the three", 3, dict(good[1], **{"欄位": "負責人"}))
         try_one("a status outside the vocabulary", 3, dict(good[1], **{"建議值": "逾期"}))
-        try_one("done from a self-report", 3, {"#": "1.10", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [rref], "信心": "低"})
-        try_one("a self-report above 低", 3, dict(good[3], **{"信心": "中"}))
+        try_one("done from work still moving", 3, {"#": "1.10", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [rref], "信心": "低"})
+        try_one("the harvest alone at 高", 3, dict(good[3], **{"信心": "高"}))
+        # SKB-128: what a harvest line is evidence for
+        work = {"#": "1.10", "欄位": "狀態", "建議值": "進行中", "原因": "x", "信心": "低"}
+        try_one("a waiting line is no work done", 3, dict(work, 證據=[href[3]]))
+        try_one("a line tied to another item", 3, dict(work, 證據=[href[2]]))
+        try_one("a line tied to no item", 3, dict(work, 證據=[href[4]]))
+        try_one("a totals row is no line", 3, dict(work, 證據=[href[0]]))
+        try_one("a quiet week is no line", 3, dict(work, 證據=[href[5]]))
+        try_one("完成 while a line of the week still moves, in someone else's harvest", 3,
+                {"#": "1.06", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [href[12]], "信心": "中"})
+        try_one("完成 while a line of the week still waits", 3,
+                {"#": "1.07", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [href[14]], "信心": "中"})
+        try_one("完成 citing a line still moving, beside a shipped one", 3,
+                {"#": "1.06", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [href[12], href[13]], "信心": "中"})
+        try_one("完成 citing a line still moving, beside a 決議 about the item", 3,
+                {"#": "1.01", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [dref[0], href[7]], "信心": "高"})
+        try_one("完成 from a plan and a line still moving", 3,
+                {"#": "1.01", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [dref[8], href[7]], "信心": "中"})
+        # the harvest does not overrule the meeting: an item it has any row about this week is the meeting's
+        try_one("完成 on the harvest for an item the meeting planned an action on", 3,
+                {"#": "1.02", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [dref[14], href[2]], "信心": "中"})
+        try_one("完成 on the harvest for an item the meeting has rows about, none of them cited", 3,
+                {"#": "1.02", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [href[2]], "信心": "中"})
+        try_one("完成 on the harvest beside a 進度 row that says the item is still going", 3,
+                {"#": "1.10", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [dref[10]], "信心": "中"})
+        try_one("the harvest alone pauses nothing", 3,
+                {"#": "1.01", "欄位": "狀態", "建議值": "暫停", "原因": "x", "證據": [href[7]], "信心": "低"})
+        try_one("the harvest alone drops nothing", 3,
+                {"#": "1.02", "欄位": "狀態", "建議值": "放棄", "原因": "x", "證據": [href[2]], "信心": "低"})
+        try_one("the harvest alone moves no end date", 3,
+                {"#": "1.01", "欄位": "結束", "建議值": "2026-11-15", "原因": "x", "證據": [href[6]], "信心": "低"})
+        try_one("the harvest alone adds no note", 3,
+                {"#": "1.03", "欄位": "備註", "建議值": "跟 Ann 確認\n10/15 報告寄出", "原因": "x", "證據": [href[8]], "信心": "低"})
+
+        def one_ok(p):
+            pth = os.path.join(tmp, "one-harvest.json")
+            json.dump([p], open(pth, "w"), ensure_ascii=False)
+            return json.load(open(p_check(st["dir"], pth)["rows_path"], encoding="utf-8"))[0]
+
+        got = one_ok({"#": "1.05", "欄位": "狀態", "建議值": "完成", "原因": "手冊定稿了", "證據": [href[10]], "信心": "中"})
+        check("完成 on the harvest alone: a shipped line tied to the item, nothing of the week still open on it, "
+              "and no word of the meeting about it", (got[3], got[7], got[9], got[10], got[11]),
+              ("1.05", "完成", href[10], "收成", "中"))
+        try_one("…and never at 高", 3, {"#": "1.05", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [href[10]], "信心": "高"})
+        got = one_ok({"#": "1.10", "欄位": "狀態", "建議值": "進行中", "原因": "訪談在做", "證據": [href[1], href[60]], "信心": "中"})
+        check("進行中 on the harvest alone, from lines on both pages, at 中", (got[7], got[9], got[10]),
+              ("進行中", "%s、%s" % (href[1], href[60]), "收成"))
+        got = one_ok({"#": "1.03", "欄位": "狀態", "建議值": "完成", "原因": "會議記錄已交付", "證據": [dref[2], href[8]], "信心": "高"})
+        check("完成 the meeting recorded, with a shipped line beside it, is the meeting's: its own waiting line is older news",
+              (got[7], got[10], got[11]), ("完成", "會議", "高"))
+        got = one_ok({"#": "1.10", "欄位": "狀態", "建議值": "進行中", "原因": "會議說排好了", "證據": [dref[10], rref], "信心": "高"})
+        check("a meeting record with a harvest line beside it is the meeting's, at any confidence", got[10], "會議")
         try_one("a 待決 row is no evidence", 3, dict(good[1], **{"證據": [dref[4]]}))
         try_one("another item's decision is no evidence", 3, dict(good[1], **{"證據": [dref[0]]}))
         try_one("an end date no decision set", 3, dict(good[0], **{"建議值": "2026-11-21"}))
@@ -1847,7 +2033,8 @@ def selftest():
         try_one("新增 under a section the tracker lacks", 3, dict(add, 子類別="9.9 X"))
         try_one("新增 that names its own #", 3, dict(add, **{"#": "1.20"}))
         try_one("新增 citing an action on an existing item", 3, dict(add, 證據=[dref[8]]))
-        try_one("新增 from a self-report", 3, dict(add, 證據=[rref], 信心="低"))
+        try_one("新增 from the harvest", 3, dict(add, 證據=[rref], 信心="低"))
+        try_one("新增 with a harvest line beside its action", 3, dict(add, 證據=[dref[6], href[4]]))
         try_one("新增 at 低", 3, dict(add, 信心="低"))
         try_one("新增 of an item already there", 3, dict(add, 項目="Item 1.01"))
         drop = {"#": "1.02", "欄位": "狀態", "建議值": "放棄", "原因": "會議決定不做", "證據": [dref[7]], "信心": "高"}
@@ -1859,7 +2046,7 @@ def selftest():
         newp = os.path.join(tmp, "new.json")
         json.dump([add, dict(add, 項目="整理名單", 負責人="Bob Wu", 證據=[dref[11]]), drop,
                    {"#": "1.01", "欄位": "結束", "建議值": "2026-11-01", "原因": "會議排了交件日", "證據": [dref[8]], "信心": "高"},
-                   {"#": "1.10", "欄位": "狀態", "建議值": "完成", "原因": "x", "證據": [rref, dref[10]], "信心": "中"}][:4]
+                   ][:4]
                   + [{"#": "1.03", "欄位": "狀態", "建議值": "完成", "原因": "會議說交付了", "證據": [dref[12]], "信心": "高"}],
                   open(newp, "w"), ensure_ascii=False)
         nk = p_check(st["dir"], newp)
@@ -1914,12 +2101,16 @@ def selftest():
               [("1", "1.01", "結束"), ("2", "1.02", "狀態"), ("3", "1.03", "狀態"), ("4", "1.03", "備註"), ("5", "1.10", "狀態")])
         check("row width", len(rows[0]), len(L.PROPOSALS_HEADER))
         check("current value recorded", rows[0][6], "2026-10-31")
-        check("source from evidence", (rows[2][10], rows[4][10]), ("會議", "自述"))
+        check("source from evidence", (rows[2][10], rows[4][10]), ("會議", "收成"))
         check("mail subject", ck["mail"]["subject"], "【週結】WB 10/12 那週 · 5 件變更提案（2026-W42）")
         check("mail to the team", ck["mail"]["to"], "team@example.com")
         mail = open(ck["mail"]["body_path"], encoding="utf-8").read()
         flat = flat_text(mail)
         check("mail shows the shadow banner", "試行中" in mail, True)
+        check("the mail marks the one proposal that rests on the harvest alone, says what the mark means, and shows its line",
+              (flat.count("只有收成佐證"), "標「只有收成佐證」的提案沒有會議紀錄" in flat, "Bob Wu 的收成（進行中）：做 1.10 的訪談" in flat,
+               "低只有收成佐證" in flat.replace(" ", "").replace("\n", "")), (2, True, True, True))
+        check("a week of meeting-backed proposals carries no mark", "只有收成佐證" in nflat, False)
         check("mail escapes", ("<script>" in mail, "訪談 <script>" in flat), (False, True))
         check("mail carries the grammar", "全部核准 退回 2" in flat, True)
         check("a note shows only its new line", ("加一行：10/15 會議：交付給客戶" in flat, "跟 Ann 確認" in flat), (True, False))
@@ -2326,6 +2517,8 @@ def selftest():
                 ("1.03", "備註", "跟 Ann 確認", "跟 Ann 確認\n10/15 會議：交付給客戶"), ("1.10", "狀態", "未開始", "進行中")]))
         check("live: an Updates row is the full width, with the cycle and the proposal number",
               (len(ups[0]), ups[0][2], ups[0][13]), (len(L.UPDATES_HEADER), "2026H2", "1"))
+        check("live: an Updates row names where its change came from, the meeting or the harvest alone",
+              (ups[0][10], ups[3][10]), ("會議", "收成"))
         bad = [list(r) for r in landed]
         bad[1][10] = "2026-11-16"
         check("live: a cell that reads back differently stops it; nothing is recorded",
@@ -2458,8 +2651,39 @@ MUTATIONS = [
     ("a decision not stamped", [("    L.save_run(run)\n    stamp_decided(run, key, ok, no, now)\n", "    L.save_run(run)\n")]),
     ("a confirmation not stamped", [('        stamp_decided(run, "confirmed", ok, no, now)\n', "")]),
     # (name, [(old, new), ...]) — every pair is applied; each old text must occur exactly once
-    ("self-report treated as a meeting", [('meeting = [e for e in rows if e["ref"].startswith("Decisions!")]',
-                                           'meeting = list(rows)')]),
+    ("a harvest line treated as a meeting row", [
+        ('    meeting = [e for e in rows if e["ref"].startswith("Decisions!")]\n    for e in meeting:',
+         '    meeting = [dict(e, 類型="決議", **{"關聯 #": num}) for e in rows]\n    for e in meeting:')]),
+    # SKB-128: the harvest as evidence
+    ("a waiting line counts as work done", [("        if e[\"kind\"] not in HARVEST_WORK:", "        if False:")]),
+    ("a line tied to another item counts", [("        if e[\"item\"] != num:", "        if False:")]),
+    ("the harvest alone at 高", [('    if alone and conf == "高":', "    if False:")]),
+    ("完成 with work of the week still open", [("            if still:\n", "            if False:\n")]),
+    ("a waiting line does not hold 完成 back", [('e["item"] == num and e["kind"] != "shipped")', 'e["item"] == num and e["kind"] == "moving")')]),
+    ("only the cited lines hold 完成 back", [("            still = sorted(e[\"ref\"] for e in run[\"evidence\"].values()",
+                                              "            still = sorted(e[\"ref\"] for e in work")]),
+    ("the harvest alone pauses or reopens an item", [("        if alone and new not in HARVEST_ALONE:", "        if False:")]),
+    ("完成 rests on a cited line that is still moving", [
+        ('        if new == "完成" and any(e["kind"] != "shipped" for e in work):', "        if False:")]),
+    ("the harvest overrules an item the meeting has rows about", [("            if said:\n", "            if False:\n")]),
+    ("only the cited meeting rows count as the meeting's word", [
+        ("            said = sorted(e[\"ref\"] for e in run[\"evidence\"].values()\n"
+         "                          if e[\"ref\"].startswith(\"Decisions!\") and e[\"關聯 #\"] == num)",
+         "            said = sorted(e[\"ref\"] for e in meeting)")]),
+    ("a Ledger without the Harvest setup is read anyway", [
+        ("    if li.get(\"Harvest\", (0, 0))[1] < len(L.HARVEST_HEADER):", "    if False:")]),
+    ("the source never says 收成", [('    source = HARVEST_SOURCE if alone else "會議"', '    source = "會議"')]),
+    ("an applied change loses the harvest as its source", [("                     c[10], c[1], c[13] or",
+                                                            '                     "會議", c[1], c[13] or')]),
+    ("the mail leaves the mark off", [('("<br>%s" % esc(HARVEST_MARK) if r[10] == HARVEST_SOURCE else "")', '("")')]),
+    ("the mail never says what the mark means", [("    if any(r[10] == HARVEST_SOURCE for r in rows):\n", "    if False:\n")]),
+    ("a 新增 may cite a harvest line", [("    if len(acts) != len(rows):\n", "    if False:\n")]),
+    ("a line tied to no item is offered as evidence", [('"harvest": [e for e in harvest if e["item"]], "ambiguous_items"',
+                                                        '"harvest": harvest, "ambiguous_items"')]),
+    ("the Harvest read stops at its first page", [("    for a in range(first, last + 1, L.PAGE):\n        out.append((\"hv%d\"",
+                                                   "    for a in range(first, first + 1, L.PAGE):\n        out.append((\"hv%d\"")]),
+    ("a harvest row of another week is evidence", [("                if r[0] != run[\"week\"]:\n                    raise L.Refuse(3, \"Harvest row",
+                                                    "                if False:\n                    raise L.Refuse(3, \"Harvest row")]),
     ("a plan counts as a delivery", [('e["類型"] == "決議" or (e["類型"] == "進度" and e["狀態"] == "完成")', 'True')]),
     ("end date without its decision", [('if not any(L.norm_date(e["期限"]) == date_norm(new) for e in meeting):',
                                         'if False:')]),

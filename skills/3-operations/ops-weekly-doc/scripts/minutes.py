@@ -40,7 +40,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta
 
-LEDGER_API = 3   # SKB-118: check_saved
+LEDGER_API = 4   # SKB-128: the Harvest tab gained `item`; the three skills move together (3 = SKB-118: check_saved)
 
 
 def core_dir():

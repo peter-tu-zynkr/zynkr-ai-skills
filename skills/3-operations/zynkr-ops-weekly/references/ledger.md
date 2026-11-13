@@ -20,7 +20,7 @@ can never corrupt the history.
 | `Proposals` (Phase 3) | week · proposed_at · n · # · 項目 · 欄位 · 現值 · 建議值 · 原因 · 證據 · 來源 · 信心 · 決定 · 決定_at · 結果 | `propose` writes the rows, 40 a week; `apply` rewrites them with the owner's 決定 and the 結果 (would-apply in shadow mode · applied · skipped · 退回 · 未回覆). That rewrite is a block write too, so it re-stamps `Weeks` O–P: after `apply`, `proposals_at` is when the decisions were recorded, and each row's `proposed_at` keeps when it was proposed. A 決定 is provisional until `Weeks` Q reads `ok`: `apply` writes the `Updates` block (and with it Q) only after its confirmation is in the approval thread |
 | `Snapshot` | week · snapshot_at · cycle, then the tracker's 13 columns exactly as named | `snapshot` |
 | `Reports` (Phase 2) | week · posted_at · owner · 部門 · 上週 · 本週 · 數字 · 卡關 · format | `collect`, one row per person (until v4's `Harvest` tab replaces it, `SKB-091.9`; the Tuesday `rollup` wrote it until 2026-10-27) |
-| `Harvest` (SKB-091) | week · harvested_at · slug · name · workstream · kind · text · file | `collect`, 80 rows a week: one row per line of a person's harvest (kind `shipped` · `moving` · `waiting`, at most 15 per person, waiting first), or one `quiet` row for a 「本週無資料」 week. Replaces `Reports` from 2026-W45; `sections` reads it |
+| `Harvest` (SKB-091) | week · harvested_at · slug · name · workstream · kind · text · file · item (I, SKB-128) | `collect`, 80 rows a week: one row per line of a person's harvest (kind `shipped` · `moving` · `waiting`), or one `quiet` row for a 「本週無資料」 week. Since `SKB-128` a person's lines are kept by kind, at most 15 (4 waiting · 8 shipped · 3 moving, an unused share going to shipped first; fewer each when the roster would not fit the block), under one `totals` row whose text says what the harvest held (`shipped 27 · moving 7 · waiting 13`). Until then waiting lines came first. `item` is the number of the tracker item the line moves (`6.10`), as last week's snapshot held it, or empty: `collect` records it only for an item that is in that snapshot, still open and on one row. Rows written before `SKB-128` are eight cells wide and read as having no item. Replaces `Reports` from 2026-W45; `sections`, `propose` and Monday's `recap` read it |
 | `Skills` (SKB-110) | week · taken_at · slug · version · commit · folder · repo | `collect`, 200 rows a week, only with `routine.skills_block`: one row per workbench skill whose current version Atlas approved, from Atlas's `list_installs`. Monday's `recap` compares two weeks' blocks for its 技能更新 lines |
 | `Decisions` (Phase 2) | week · 會議日期 · 類型 · 內容 · 負責人 · 期限 · 關聯 # · 來源 · 狀態 (I, SKB-091) | `minutes`, 40 rows a week (until 2026-10-27 the Thursday `decisions`, 20 a week); 類型 is 決議, or 待決 when the owner or the date is missing |
 
@@ -132,6 +132,16 @@ epoch, not from this setup, so grow it to 1 + 200 × (weeks since the epoch + 53
 today. With the 2026-W40 epoch, a setup in 2026-W45 needs 11,601. Make sure `Weeks` reaches column V,
 then write `Weeks!U1:V1` (skills · skills_at). Write values only, never widths or formats. `ledger.py block` refuses the `Skills` block until the `Weeks` header reads A–V, and the
 recap leaves out 技能更新 until then.
+
+**SKB-128 setup (once, before installing the versions that tie lines to items).** Make sure the
+`Harvest` tab is at least nine columns wide (add one column at its end if it stops at H), then write
+`Harvest!I1` = `item`, RAW, values only. The versions installed before read `Harvest!A:H` and never see
+the new cell, so the setup can go first and nothing breaks in between. After it, `ledger.py block`
+refuses the `Harvest` block on a tab narrower than nine columns or under the eight-cell header, naming
+this setup, so the new `collect` fails loudly (and the owner gets 【排程沒跑完】) rather than write under
+a header that does not match. `ledger.py`'s `API` went to 4 with this header: `zynkr-ops-weekly`,
+`ops-weekly-doc` and `ops-weekly-tracker` are installed together, and each refuses the other's older
+copy.
 
 **Growing the grid.** `ledger.py` warns when fewer than eight weeks of rows remain (`snapshot`, and
 every `block plan`), and refuses a week whose block would not fit (exit 5). Add rows to the end of the

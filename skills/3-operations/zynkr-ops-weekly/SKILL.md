@@ -161,8 +161,9 @@ the `Reports` tab from 2026-W45. `scripts/harvest.py` works out every call. Make
 printed and save its result unchanged to the path it gives, as in `recap`. When a script exits
 non-zero, stop: receipt `status=failed delivered=<its message>`.
 
-1. `python3 scripts/harvest.py start --week <ISO week>`. Make its two calls: this week's `Weeks` row
-   and the search for the week folder, which is named after the Wednesday the routine closed.
+1. `python3 scripts/harvest.py start --week <ISO week>`. Make its calls: this week's `Weeks` row, the
+   search for the week folder, which is named after the Wednesday the routine closed, and last week's
+   `Weeks` row (`SKB-128`), which says whether the Ledger holds a snapshot of the tracker.
 2. `python3 scripts/harvest.py files --dir <dir>`:
    - `already` means the week is recorded. Receipt `status=ok` with its `delivered` and do nothing else.
    - `waiting` means the routine has not finished. Receipt `status=waiting` with its `delivered`. The
@@ -170,11 +171,45 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
      as one 【排程沒跑完】 (`no-harvest`), and `sections` goes ahead from 21:00 with 「本週無資料」.
    - Otherwise, make its one call, the listing of the week folder.
 3. `python3 scripts/harvest.py read --dir <dir>`. It returns `waiting` (as above), or calls to make:
-   the run file and each `harvest-<person>.md`.
-4. `python3 scripts/harvest.py check --dir <dir>`. It returns `waiting` while the run file is not
-   `ok`. Otherwise it writes `rows.json` (one row per line of a harvest, at most 15 per person,
-   waiting lines first) and names who had a 「本週無資料」 week.
-5. Record the block (`references/ledger.md`): `python3 scripts/ledger.py block start --tab Harvest
+   the run file, each `harvest-<person>.md`, and last week's snapshot block when the Ledger holds one.
+4. **Tie each line to the tracker item it moves (`SKB-128`).** Run `python3 scripts/harvest.py tags --dir
+   <dir>`. It returns `waiting` (as above), or `"tags": "none"` when there is no snapshot to read or no
+   line to tie (go to step 5 with no `--tags`), or `lines`, the lines `collect` keeps, and `items`, the
+   tracker's open items with their owner and status. For each line, decide which one item it is work on:
+   - the item whose deliverable the line names: the same product, page, course, client step or spec. The
+     line and the item's name share the thing itself, not just a word;
+   - a line can move an item that is someone else's. The owner is there to tell items apart, never to rule
+     one out;
+   - when two items fit, take the narrower one. When none plainly fits, leave it empty. An empty tag only
+     moves the line to 「不在 Tracker」 in the Doc. A wrong one puts a false claim before the meeting, and
+     before the owner on Friday.
+
+   Save `{"<line id>": "<item #>", …}` to the `save` path it prints: one entry per line, each id exactly as
+   listed, `""` for a line the tracker holds no item for. An id carries a hash of its line, so a tag from
+   another run never fits.
+5. `python3 scripts/harvest.py check --dir <dir> --tags <the save path>`. It returns `waiting` while the
+   run file is not `ok`. Otherwise it writes `rows.json` and names who had a 「本週無資料」 week.
+   - **What it keeps.** Per person, at most 15 lines by kind (`SKB-128`): 4 waiting, 8 shipped and 3
+     moving, a share a kind does not use going to shipped, then waiting, then moving. One `totals` row says
+     how many lines of each kind the harvest held, and `left_out` in the output how many lines were not
+     kept. Within a kind the workstreams take turns, so a long first workstream does not take the kind's
+     whole share. With a longer roster the cap comes down, only as far as the 80-row block needs: a person
+     who holds few lines leaves the rows they do not use to the others. Two harvest files are never
+     recorded under one name: the roster's own spelling keeps it, and a file whose name is only an alias
+     or a first word of someone who has their own keeps the name it was written with. A line that only
+     says nothing waits is not an item, and a harvest with no line of any kind is a quiet week.
+   - **What it will not read.** A harvest file that holds bullets but none under a kind marker is
+     refused (exit 3): its shape changed, and recording it as 「本週無資料」 would drop a whole week
+     without a word. The beat fails and the owner hears. The markers are read as the routine writes them
+     and in the shapes a model drifts to (a bullet before the marker, a colon or a count in it, another
+     case, a heading). `unread` in the output counts bullets that sat before a workstream's first marker.
+     A bullet set deeper than its list's first one is a detail of the line above it and joins that line.
+   - **What it ties.** A kept line's row carries the item its tag names when that item is in last week's
+     snapshot, still open (not 完成, not 放棄) and on one row of the tracker. Any other tag is left out, and
+     `tags` in the output says which and why (`rejected`, `missing`, `unknown`). Read it. A tag left out is
+     not an error: no snapshot, no tags file or one that does not parse only leaves every line without an
+     item, and never fails the beat.
+6. Record the block (`references/ledger.md`): `python3 scripts/ledger.py block start --tab Harvest
    --week <ISO week> --rows <rows_path>`, then `block plan`, `block check` and `block confirm`. Make
    each step's calls in turn, exactly as in `recap`'s Ledger reads; `block plan` reads the 80-row
    block back in two pages, and `block check` needs both.
@@ -184,14 +219,15 @@ non-zero, stop: receipt `status=failed delivered=<its message>`.
    then record it as above with `--tab Skills --rows <dir>/skills-rows.json`. Its `block plan` reads the
    200-row block back in four pages. A failure here skips the block and never fails the beat: Atlas
    not answering, or a script exiting non-zero. Note `skills-failed`, and Monday's recap leaves out 技能更新.
-6. **The chase.** Run `python3 scripts/harvest.py chase --dir <dir>`.
+7. **The chase.** Run `python3 scripts/harvest.py chase --dir <dir>`.
    - `send`: make its one `send_message` call exactly as printed, check the result names the message
      it posted, then run `harvest.py chased --dir <dir>`. The line @-mentions each quiet person once
      and asks whether it was a quiet week.
    - `none` or `already`: post nothing.
    - The chase never fails the beat, because the Ledger block is what `sections` and Monday's recap
      read. A post that fails adds `chase-failed` and is not tried again.
-7. Receipt `status=ok delivered=<block confirm's delivered>;chase-<send|none|already|failed>`, adding
+8. Receipt `status=ok delivered=<block confirm's delivered>;chase-<send|none|already|failed>;tags-<tagged>-of-<lines>`
+   (the two numbers from `check`'s `tags`; `tags-none` when it had no snapshot or no tags file), adding
    `;skills-<ok|failed>` when `routine.skills_block` is on, and `;grid-low-<tab>` for each tab a
    `block plan` warned has fewer than eight weeks of rows left.
 
@@ -206,7 +242,19 @@ from the meeting's open actions, items overdue or due within 14 days, P0/P1 item
 and that person's next steps from the Pulse. `recap.py` builds it; a line that cites no item # never
 reaches the mail, and a line from the Pulse is the Pulse's own step, so the Pulse is its source.
 From 2026-W45 the mail's 卡關 are the waiting lines of last week's harvest (`Harvest`, which `collect`
-records); before that they came from the `#週報` posts in `Reports`.
+records); before that they came from the `#週報` posts in `Reports`. `collect` keeps four waiting lines
+a person, so the mail also says how many more each harvest held (`另有沒列出的：Ann 2 件`, from the
+`totals` row, `SKB-128`).
+
+Since `SKB-128` the mail opens with **上週進度**, before the plan: the stretch last week's harvest
+covers, then per person what it held and the lines Thursday's block showed for it, by tracker item.
+`sections` keeps those lines on this Mac (`<state>/<week>.progress.json`); a person it kept none for
+gets the harvest's own text, cut at a space. It is the harvest that closed on Wednesday, the one the
+meeting saw: work from Thursday on shows a week later, and the section says so. The plan then takes
+what the harvest left open, after a person's actions and on top of the five lines: at most two items
+they still had in motion (`#6.10 … — 上週還在進行`) and two lines waiting on them (`在等你：…`). An
+item the plan already names for them, by an action or a due date, is not repeated. A week whose
+harvest was not recorded says so under 上週進度, and the rest of the mail is as it was.
 
 `scripts/recap.py` works out every range, fact and the subject; you make its printed calls exactly,
 save each result unchanged, and write the TL;DR.

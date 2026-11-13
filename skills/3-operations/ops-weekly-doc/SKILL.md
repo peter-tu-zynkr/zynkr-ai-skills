@@ -134,8 +134,8 @@ is still yours to save.
 One `〔自動彙整〕` block under each team heading of **this Thursday's** section, holding 進度 · 卡關 ·
 下一步 · 待討論 for that heading's owner. The inputs are the Ledger's `Harvest` rows (from
 `collect`, which runs just before) and Monday's recap facts: overdue items, last week's meeting actions, the Pulse,
-paused items, and items that look done but are not marked 完成. `scripts/sections.py` decides every
-line. The write path is the fixed one in `references/doc-write-rules.md`. If a script exits non-zero,
+paused items, and items that look done but are not marked 完成. `scripts/sections.py` decides what
+goes where and writes every line but the harvest items, which you say again short (step 4). The write path is the fixed one in `references/doc-write-rules.md`. If a script exits non-zero,
 stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
 
 1. `python3 scripts/sections.py start --week <ISO week>`. Make every Ledger read it prints (the
@@ -145,20 +145,61 @@ stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
 3. **Idempotency.** In the markdown you just read, find this Thursday's section and search it for
    `〔自動彙整 <label>`. If it is there, receipt `status=ok delivered=already-written` and stop. `tidy`'s
    fill writes into the *kept* block, which still carries last week's stamp, so it never matches.
-4. `python3 scripts/sections.py render --dir <dir> --routing routing.json --stamp "<MM-DD HH:MM>"`,
-   with the stamp's time from Step 0. Save what it prints as `blocks.json`.
+4. **Say each harvest item again, short, in zh-TW (`SKB-127`).** A harvest is English and runs to 300
+   characters; copied in and cut at 80, it stopped mid-word in a zh-TW Doc. Run `python3
+   scripts/sections.py items --dir <dir> --routing routing.json`. It lists only the items the blocks will
+   show. For every item, write one line of about 40 字 (a line over 60 characters is not used) that says
+   what the item says:
+   - zh-TW, as a teammate would say it to the room: `<core>/references/wording.md` and the House style
+     Docs below apply, so no 官腔 and no half-translated words;
+   - names, product names, spec ids, `repo#N`, commit SHAs and figures exactly as the item has them,
+     and nothing it does not say: shorten by leaving detail out, never by summing up;
+   - no label, since 完成 · 進行中 are added for you, and one line only;
+   - an entry with `lines` instead of `text` (`SKB-128`) is every line one person has on one tracker item.
+     Write one line for all of them: what shipped first, then what is still moving. Leave out the item's
+     number and name and how many lines there are, which are added for you.
+
+   Save `{"<id>": "<line>", …}` to the `save` path it prints, one entry per item, each id exactly as
+   listed: an id carries a hash of its item, so a line from another run never fits. An item you leave out
+   keeps its English text, cut at 80. With no items listed, save nothing.
+5. `python3 scripts/sections.py render --dir <dir> --routing routing.json --stamp "<MM-DD HH:MM>"
+   --short <the save path>`, with the stamp's time from Step 0. Save what it prints as `blocks.json`.
    - **What it writes:**
+     - each harvest item as your short line. One that is missing, over 60 characters, more than one
+       line or mostly English is not used: the item keeps its harvest text cut at 80, render still exits
+       0, and only `short` in the output says so (`missing`, `rejected` with the reason). Read it every
+       time; fix those lines and render again before you write;
+     - when `collect` recorded what the harvest held (its `totals` row, `SKB-128`), 進度 opens with the
+       stretch the harvest covers and its counts (`收成 11/4–11/11（週三 20:00 截止）：完成 27 · 進行中 7 ·
+       在等 13`), and 進度 and 卡關 each end with how many lines they do not list (`另有 21 件完成、7 件進行中
+       沒列出，見收成檔`). The block lists at most six progress lines and four waiting ones of the harvest;
+       the Pulse's 業務： lines and the overdue items come after those and are never cut by them;
+     - **by item, in a week `collect` tied its lines to tracker items (`SKB-128`; `by_item` in the output).**
+       進度 holds one line per tracker item the person moved: `#6.10 <item>｜完成 2、進行中 1：<your line>`,
+       with `（負責人 <name>）` after the item when the person is neither its owner nor a helper. Then each
+       line the tracker holds no open item for, as `不在 Tracker｜完成：<your line>`. Six lines at most,
+       then the count of what is not listed. A waiting line under 卡關 starts with its item's number;
+     - a week with no item list kept, or no line tied to an item, is written by kind as before, and
+       nothing in it says 「不在 Tracker」;
      - a person with no harvest, a quiet harvest, or no `collect` at all gets 「本週無資料」 under 進度;
-     - 待討論 offers at most three keep / hand over / drop choices, then the sure gaps;
+     - 待討論 opens, in a week written by item, with one question for every item the person shipped or
+       moved work on that the tracker still reads 未開始 or 暫停 (`…本週有進度，Tracker 還是「未開始」，
+       要改狀態嗎？`). Then at most three keep / hand over / drop choices, never for a paused item already
+       asked about; then the sure gaps; then at most two of the person's own items that read 進行中 and
+       that no harvest line was tied to in the last three recorded weeks, while they harvested in each
+       (`…三週沒有收成紀錄，還在進行嗎？`). Before three such weeks exist it asks nothing;
      - 下一步 is left out when last week's `tidy` already filled the meeting's actions into the kept block.
+   - **What it keeps:** the harvest lines it wrote, per person, in the loop's state folder
+     (`<week>.progress.json`), which Monday's recap repeats as 上週進度.
    - **What it never writes:** a person it cannot name, and a heading it cannot route.
-5. `inspect_doc_structure(tab_id, detailed=true)`. Write `{"<heading>": <end_index>}` to `at.json`
+6. `inspect_doc_structure(tab_id, detailed=true)`. Write `{"<heading>": <end_index>}` to `at.json`
    for each block's heading **inside this Thursday's section**; a heading repeats in every week, so
    match it between this section's date heading and the next. Run `python3 scripts/render_block.py ops
    --blocks blocks.json --at at.json --tab <tab_id>` and apply what it prints in **one**
    `batch_update_doc`, exactly as listed.
-6. Read the Doc again and confirm one `〔自動彙整 <label>` stamp per block heading in the section.
-7. Receipt `status=ok delivered=<n>-blocks;quiet-<n>;harvest-<recorded|not-recorded>;facts-<found|none>`.
+7. Read the Doc again and confirm one `〔自動彙整 <label>` stamp per block heading in the section.
+8. Receipt `status=ok delivered=<n>-blocks;quiet-<n>;harvest-<recorded|not-recorded>;facts-<found|none>;short-<used>-of-<items>;layout-<item|kind>`
+   (`layout` from render's `by_item`).
    The report names `owners_without_name` (an owner chip missing from `chat_ids`) and
    `harvest_without_heading` (a person with a harvest but no heading), so the owner can fix either.
 

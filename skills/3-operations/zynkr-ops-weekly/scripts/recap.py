@@ -33,6 +33,7 @@ Exit codes are ledger.py's: 2 config or arguments · 3 input refused · 4 struct
 6 a block does not match its Weeks row.
 """
 import argparse
+import collections
 import html
 import json
 import os
@@ -85,6 +86,14 @@ LIST_ITEM = re.compile(r"<li\b[^>]*>(.*?)</li>", re.S | re.I)
 # nothing writes Reports after 2026-W44).
 HARVEST_FROM = "2026-W45"
 PLAN_MAX = 5
+# SKB-128: what last week's harvest adds to the mail. 上週進度 lists a person's lines as Thursday's block
+# did, at most PROGRESS_MAX when it has to fall back on the harvest text. The plan gains, on top of
+# PLAN_MAX, at most HARVEST_PLAN items a person left in motion and as many lines waiting on them.
+PROGRESS_MAX = 6
+BRACKET_TAIL = re.compile(r"\s*[（(][^（()）]*[）)]\s*$")     # an item's closing note: a site, a date, who it is for
+HARVEST_PLAN = 2
+CUT = 80
+KIND_ZH = {"shipped": "完成", "moving": "進行中", "waiting": "在等"}
 SKILLS_LOOKBACK = 8         # weeks back the 技能更新 comparison looks for the last recorded Skills block
 DECIDED = ("決議", "放棄")                   # what the meeting settled; 行動 is a plan, 進度 a state
 OPEN = ("卡關", "風險", "待討論", "待決")      # 待決: weeks before SKB-091
@@ -268,7 +277,7 @@ def r_blocks(d):
         first, last = ledger.block_slot("Harvest", k)
         pages["Harvest"] = []
         for a in range(first, last + 1, ledger.PAGE):      # 80 rows: a read shows at most 50
-            name, rng = "harvest%d" % (len(pages["Harvest"]) + 1), "Harvest!A%d:H%d" % (a, min(a + ledger.PAGE - 1, last))
+            name, rng = "harvest%d" % (len(pages["Harvest"]) + 1), "Harvest!A%d:I%d" % (a, min(a + ledger.PAGE - 1, last))
             pages["Harvest"].append([name, rng])
             calls.append(read_call(run, run["ledger"], rng, name))
     # SKB-110: was the week's Skills block recorded, and which is the latest earlier week that was (up to
@@ -450,10 +459,106 @@ def owners_of(run, field):
     return [p for p in (person_of(run, x) for x in re.split(r"[、,，/]", str(field or ""))) if p] or ["負責人未定"]
 
 
-def build_plan(run, items, actions, flagged, pulse):
+def harvest_span(week):
+    """The stretch a week's harvest covers, `11/4–11/11`: it closes on the week's Wednesday at 20:00 and
+    opens where the one before it closed. Thursday's block prints the same span."""
+    end = ledger.monday(week) + timedelta(days=2)
+    return "%s–%s" % (md(end - timedelta(days=7)), md(end))
+
+
+def cut(text, n=CUT):
+    """A harvest line as the mail carries it when no shorter one was written: cut at a space when there is
+    one in its last quarter."""
+    text = " ".join(str(text or "").split())
+    if len(text) <= n:
+        return text
+    head = text[:n - 1]
+    sp = head.rfind(" ")
+    return (head[:sp] if sp >= n * 3 // 4 else head).rstrip(" ,;:—-") + "…"
+
+
+def progress_path(week):
+    """Where `sections` keeps the lines its blocks wrote for a week (ops-weekly-doc writes this path)."""
+    return os.path.join(ledger.state_dir(), "%s.progress.json" % week)
+
+
+def load_progress(week):
+    """{who: note} as `sections` kept it for `week`, or {}: no file, a file for another week, or one that
+    does not read. A note is used only when it has the shape `sections` writes."""
+    try:
+        got = json.load(open(progress_path(week), encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    people = got.get("people") if isinstance(got, dict) and got.get("week") == week else None
+    if not isinstance(people, dict):
+        return {}
+
+    def texts(v):
+        return isinstance(v, list) and all(isinstance(x, str) for x in v)
+
+    def counts(v):
+        return v is None or (isinstance(v, dict) and all(isinstance(n, int) and not isinstance(n, bool) for n in v.values()))
+
+    return {who: note for who, note in people.items()
+            if isinstance(note, dict) and texts(note.get("lines")) and texts(note.get("waiting", []))
+            and texts(note.get("moving", [])) and counts(note.get("left"))}
+
+
+def left_out(left):
+    """`另有 21 件完成、7 件進行中沒列出，見收成檔` for what a person's lines do not list, or ""."""
+    more = ["%d 件%s" % (left[k], KIND_ZH[k]) for k in ("shipped", "moving") if (left or {}).get(k, 0) > 0]
+    return "另有 %s沒列出，見收成檔" % "、".join(more) if more else ""
+
+
+def build_progress(run, rows, items):
+    """上週進度 (SKB-128 AC-22): per person with a harvest that held something, what it held and the lines
+    Thursday's block showed for it. `sections` keeps those lines; a person it kept none for (no block was
+    written, or the file is gone) gets the harvest's own text, cut at a space. Also what each harvest left
+    open, for the plan: the items still in motion and the lines waiting on the person."""
+    notes, people, order = load_progress(run["week"]), {}, []
+    for r in rows:
+        who = " ".join(r[3].split()) or r[2]
+        if who not in people:
+            people[who] = {"totals": None, "rows": []}
+            order.append(who)
+        tot = ledger.parse_totals(r[6]) if r[5] == ledger.HARVEST_TOTALS else None
+        if tot:
+            old = people[who]["totals"] or dict.fromkeys(ledger.HARVEST_KINDS, 0)
+            people[who]["totals"] = {k: old[k] + tot[k] for k in ledger.HARVEST_KINDS}
+        elif r[5] in ledger.HARVEST_KINDS and r[6].strip():
+            people[who]["rows"].append(r)
+    out = []
+    for who in order:
+        tot, mine = people[who]["totals"], people[who]["rows"]
+        if not mine and not tot:
+            continue                                       # a quiet week: named under 卡關, as before
+        note = notes.get(who)
+        if note:
+            entry = {"lines": list(note["lines"]), "more": left_out(note.get("left")), "waiting": list(note.get("waiting", [])),
+                     "moving": [n for n in dict.fromkeys(note.get("moving", [])) if n in items], "from": "doc"}
+        else:
+            work = [r for r in mine if r[5] == "shipped"] + [r for r in mine if r[5] == "moving"]
+            shown = work[:PROGRESS_MAX]
+            left = {k: tot[k] - sum(1 for r in shown if r[5] == k) for k in ("shipped", "moving")} if tot else {}
+            entry = {"lines": ["%s%s：%s" % ("#%s " % r[8] if r[8] in items else "", KIND_ZH[r[5]], cut(r[6])) for r in shown],
+                     "more": left_out(left), "waiting": [cut(r[6], 60) for r in mine if r[5] == "waiting"],
+                     "moving": list(dict.fromkeys(r[8] for r in mine if r[5] == "moving" and r[8] in items)),
+                     "from": "harvest"}
+        out.append(dict(entry, who=who, counts=tot))
+    roster = run.get("roster", [])
+    out.sort(key=lambda e: (roster.index(e["who"]) if e["who"] in roster else len(roster), e["who"]))
+    return out
+
+
+def build_plan(run, items, actions, flagged, pulse, progress=()):
     """[{"who", "lines"}] and how many lines were dropped for citing nothing. Order per person:
     the meeting's actions, overdue or due within 14 days, P0/P1 undated, the Pulse; an item already
-    listed for that person is not listed again; at most PLAN_MAX lines."""
+    listed for that person is not listed again; at most PLAN_MAX lines.
+
+    After a person's actions come what their harvest left open (SKB-128 AC-23, `progress`): at most
+    HARVEST_PLAN items they still had in motion, then as many lines waiting on them. These are on top of
+    PLAN_MAX, so a week of unfinished work never pushes a due date or a sales step out. An item the lists
+    below already name for that person is left to them: `10/30 到期` says more than `上週還在進行`."""
     plan, seen, dropped = {}, {}, 0
 
     def add(who, text, cite):
@@ -475,6 +580,22 @@ def build_plan(run, items, actions, flagged, pulse):
         text = "#%s %s%s" % (num, clip(a["內容"], 50), "（%s 前）" % md(due) if due else "")
         for who in owners_of(run, a["負責人"]):
             add(who, text, num)
+    acted = {who: len(lines) for who, lines in plan.items()}
+    due = {}
+    for key in ("overdue", "ends_soon", "undated"):
+        for x in flagged.get(key, []):
+            for who in owners_of(run, x["負責人"]):
+                due.setdefault(who, set()).add(x["#"])
+    open_ = {}
+    for e in progress:
+        who, mine = e["who"], seen.setdefault(e["who"], set())
+        still = [n for n in dict.fromkeys(e["moving"])
+                 if n in items and n not in mine and n not in due.get(who, set())][:HARVEST_PLAN]
+        mine.update(still)
+        lines = (["#%s %s — 上週還在進行" % (n, clip(BRACKET_TAIL.sub("", items[n]) or items[n], 30)) for n in still]
+                 + ["在等你：%s" % w for w in e["waiting"][:HARVEST_PLAN]])
+        if lines:
+            open_[who] = lines
     for key in ("overdue", "ends_soon", "undated"):
         for x in flagged.get(key, []):
             for who in owners_of(run, x["負責人"]):
@@ -483,8 +604,10 @@ def build_plan(run, items, actions, flagged, pulse):
         for s in steps:
             add(person_of(run, name), "業務：%s" % clip(s, 80), "deal")
     roster = run.get("roster", [])
-    order = sorted(plan, key=lambda w: (w in ("全體", "負責人未定"), roster.index(w) if w in roster else len(roster), w))
-    return [{"who": w, "lines": plan[w]} for w in order if plan[w]], dropped
+    everyone = set(plan) | set(open_)
+    order = sorted(everyone, key=lambda w: (w in ("全體", "負責人未定"), roster.index(w) if w in roster else len(roster), w))
+    full = {w: plan.get(w, [])[:acted.get(w, 0)] + open_.get(w, []) + plan.get(w, [])[acted.get(w, 0):] for w in order}
+    return [{"who": w, "lines": full[w]} for w in order if full[w]], dropped
 
 
 def clip(s, n):
@@ -567,17 +690,30 @@ def r_build(d, today):
                                             "部門": r[3], "卡關": r[7]})
         reports["posted"] = sorted(posters)
         reports["missing"] = [run["names"].get(e) or e.split("@")[0] for e in run["reporters"] if e not in posters]
-    harvest = {"recorded": "Harvest" in run["pages"], "blockers": [], "quiet": []}
+    harvest = {"recorded": "Harvest" in run["pages"], "blockers": [], "quiet": [], "more": []}
+    waiting = {}                 # per person, how many lines their harvest held waiting (its totals row, SKB-128)
+    hrows = []
     for name, rng in run["pages"].get("Harvest", []):
-        for r in (pad(x, 8) for x in parse_values(load_result(os.path.join(d, name + ".txt")), run["ledger"], rng)):
+        for r in (pad(x, 9) for x in parse_values(load_result(os.path.join(d, name + ".txt")), run["ledger"], rng)):
             if r[0] != run["week"]:
                 continue
-            who = person_of(run, r[3]) or r[2]
+            hrows.append(r)
+            # The name as `collect` recorded it. It resolved the file's name once, against every other
+            # file of the week; resolving it again by first word would merge two people it kept apart.
+            who = " ".join(r[3].split()) or r[2]
             if r[5] == "waiting":
-                harvest["blockers"].append({"who": who, "卡關": r[6]})
+                if r[6].strip():                       # a row with no text is no line, here as in the Doc's block
+                    harvest["blockers"].append({"who": who, "卡關": r[6]})
             elif r[5] == "quiet" and who not in harvest["quiet"]:
                 harvest["quiet"].append(who)
+            elif r[5] == ledger.HARVEST_TOTALS and ledger.parse_totals(r[6]):
+                waiting[who] = waiting.get(who, 0) + ledger.parse_totals(r[6])["waiting"]
+    # `collect` keeps four waiting lines a person: the mail names how many more each harvest held
+    listed = collections.Counter(b["who"] for b in harvest["blockers"])
+    harvest["more"] = [{"who": w, "n": n - listed[w]} for w, n in waiting.items() if n > listed[w]]
     v4 = ledger.monday(run["week"]) >= ledger.monday(HARVEST_FROM)
+    progress = {"recorded": harvest["recorded"], "span": harvest_span(run["week"]),
+                "people": build_progress(run, hrows, names) if v4 and harvest["recorded"] else []}
     proposals = {"recorded": "Proposals" in run["pages"], "applied_ran": bool(run.get("applied")), "rows": []}
     if proposals["recorded"]:
         prows = parse_values(load_result(os.path.join(d, "proposals.txt")), run["ledger"], run["pages"]["Proposals"])
@@ -605,14 +741,14 @@ def r_build(d, today):
              "undated": [x for x in flagged("UNDATED") if by_id[x["#"]]["priority"] in ("P0", "P1")],
              "propose_done": flagged("PROPOSE_DONE"), "paused": flagged("PAUSED"),
              "unknown_status": flagged("UNKNOWN_STATUS"),
-             "decisions": decisions, "reports": reports, "harvest": harvest, "v4": v4,
+             "decisions": decisions, "reports": reports, "harvest": harvest, "v4": v4, "progress": progress,
              "proposals": proposals, "pulse": pulse_state,
              "skills": {"state": run.get("skills", "off"),
                         "since": wb_label(run["skills_prev_week"]) if run.get("skills") == "diffed" else "",
                         "gap": run.get("skills") == "diffed" and run["skills_prev_week"] != previous_week(run["week"]),
                         "lines": skills.lines_for(run["skill_changes"], d) if run.get("skills") == "diffed" else []},
              "links": {"tracker": run["tracker_url"], "doc": run["doc_url"], "ledger": run["ledger_url"]}}
-    facts["plan"], facts["plan_dropped"] = build_plan(run, names, decisions["actions"], facts, pulse)
+    facts["plan"], facts["plan_dropped"] = build_plan(run, names, decisions["actions"], facts, pulse, progress["people"])
     json.dump(facts, open(os.path.join(d, "facts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     run.update(built=True)
     save_run(run)
@@ -623,6 +759,7 @@ def r_build(d, today):
             "decided": len(decisions["decided"]), "open_decisions": len(decisions["open"]),
             "blockers": len((harvest if v4 else reports)["blockers"]), "proposals": len(proposals["rows"]) if proposals["recorded"] else None,
             "plan": {p["who"]: len(p["lines"]) for p in facts["plan"]}, "plan_dropped": facts["plan_dropped"],
+            "progress": {e["who"]: e["from"] for e in progress["people"]},
             "pulse": pulse_state, "skills": facts["skills"]["state"], "skill_lines": len(facts["skills"]["lines"]),
             "facts": os.path.join(d, "facts.json"),
             "tldr": "write at most 3 lines to tldr.json (a JSON list); each must cite an item # from facts.items"}
@@ -664,6 +801,23 @@ def render_html(facts, tldr):
     o.append("<p>%s（%s）的週報，資料來自主追蹤表每週五的快照和週報帳本。</p>" % (esc(facts["label"]), esc(facts["range"])))
     if tldr:
         o.append("<h3>重點</h3><ul>%s</ul>" % "".join(li(esc(t)) for t in tldr))
+    pg = facts.get("progress")
+    if facts.get("v4") and pg:
+        o.append("<h3>上週進度</h3>")
+        if not pg["recorded"]:
+            o.append("<p>上週的收成沒有記到帳本，這裡沒有進度可列</p>")
+        elif not pg["people"]:
+            o.append("<p>上週沒有人的收成有紀錄</p>")
+        else:
+            o.append("<p>收成 %s（週三 20:00 截止），是週四會議看到的那一份。週四之後做的，下週一才會出現</p>" % esc(pg["span"]))
+            for e in pg["people"]:
+                c = e["counts"]
+                if not c and not e["lines"]:
+                    continue                               # only a waiting line, and no count: 卡關 has it
+                head = "<b>%s</b>%s" % (esc(e["who"]), "　完成 %d · 進行中 %d · 在等 %d"
+                                        % (c["shipped"], c["moving"], c["waiting"]) if c else "")
+                lines = [li(esc(x)) for x in e["lines"]] + ([li(esc(e["more"]))] if e["more"] else [])
+                o.append("<p>%s</p>%s" % (head, "<ul>%s</ul>" % "".join(lines) if lines else ""))
     o.append("<h3>這週的計畫</h3>")
     for p in facts.get("plan", []):
         o.append("<p><b>%s</b></p><ul>%s</ul>" % (esc(p["who"]), "".join(li(esc(x)) for x in p["lines"])))
@@ -746,6 +900,9 @@ def render_html(facts, tldr):
         else:
             o.append("<ul>%s</ul>" % "".join(li("%s：%s" % (esc(b["who"]), esc(b["卡關"]))) for b in hv["blockers"])
                      if hv["blockers"] else "<p>沒有人回報卡關</p>")
+            if hv.get("more"):
+                o.append("<p>另有沒列出的：%s（見各人的收成檔）</p>"
+                         % esc("、".join("%s %d 件" % (m["who"], m["n"]) for m in hv["more"])))
             if hv["quiet"]:
                 o.append("<p>上週 harvest 沒有資料：%s</p>" % esc("、".join(hv["quiet"])))
     elif not rep["recorded"]:
@@ -902,6 +1059,25 @@ def selftest():
           plan[0]["lines"], ["#1.01 交付（10/20 前）", "#1.03 一起做", "#1.04 x — 快到", "#1.05 x — 沒日期", "#1.06 x — 沒日期"])
     check("plan: the Pulse's steps come last, under the roster name", plan[1]["lines"], ["#1.03 一起做", "業務：claim 5 leads"])
     check("plan: an action for a new item cites nothing and is dropped", pdrop, 1)
+    # SKB-128: what last week's harvest left open joins the plan after a person's actions, on top of the five
+    popen = [{"who": "Ann Lee", "moving": ["1.02", "1.02", "1.04", "1.07", "1.03", "1.08", "1.09"], "waiting": ["w1", "w2", "w3"]},
+             {"who": "Cat Ho", "moving": [], "waiting": ["等報價"]}]
+    plan2, _ = build_plan(prun, dict(pitems, **{"1.08": "報告（清華分會，1/23）", "1.09": "y"}), pacts, pflag,
+                          {"Ann": (1, 5, ["s1", "s2"])}, popen)
+    check("plan: two items left in motion and two waiting lines follow the actions and take no place of the five; an "
+          "item already acted on, due anyway, named twice or not in the tracker is not repeated, and a name drops its closing note",
+          plan2[0]["lines"],
+          ["#1.01 交付（10/20 前）", "#1.03 一起做", "#1.02 x — 上週還在進行", "#1.08 報告 — 上週還在進行", "在等你：w1", "在等你：w2",
+           "#1.04 x — 快到", "#1.05 x — 沒日期", "#1.06 x — 沒日期"])
+    check("plan: someone with nothing but a harvest still gets their waiting line, after the roster and before 全體",
+          [(x["who"], x["lines"]) for x in plan2[1:]],
+          [("Bob Wu", ["#1.03 一起做"]), ("Cat Ho", ["在等你：等報價"]), ("全體", ["#1.02 全員看"])])
+    check("plan: with no harvest it is the plan it was", build_plan(prun, pitems, pacts, pflag, {"Ann": (1, 5, ["s1", "s2"])})[0][0]["lines"],
+          plan[0]["lines"])
+    check("the harvest's span runs Wednesday to Wednesday", harvest_span("2026-W46"), "11/4–11/11")
+    check("a long harvest line is cut at a space", cut("word " * 30, 40), "word word word word word word word…")
+    check("a short one is left alone, and a line with no space is cut where it must be", (cut("三篇文章上線"), cut("字" * 90, 10)),
+          ("三篇文章上線", "字" * 9 + "…"))
     pulse_text = ("Thread ID: t1\nSubject: Zynkr Sales Pulse - week of Oct 12 to Oct 18\nMessages: 2\n\n"
                   "=== Message 1 ===\nFrom: Owner <owner@example.com>\n\n3 of 7 KPIs met\nNext step this week\n"
                   "Ann - 2 of 5 cooking: follow up the Acme quote; drop the Beta deal; a third\n"
@@ -933,6 +1109,9 @@ def selftest():
     check("tldr drops uncited and unknown", dropped, ["大家辛苦了", "1.99 不存在", "4.10 延期", "第四行"])
 
     tmp = tempfile.mkdtemp(prefix="recap-selftest-")
+    saved_state = os.environ.get("ZYNKR_OPS_WEEKLY_STATE")
+    os.environ["ZYNKR_OPS_WEEKLY_STATE"] = os.path.join(tmp, "state")      # never the real loop's state
+    os.makedirs(os.environ["ZYNKR_OPS_WEEKLY_STATE"])
     try:
         rules = os.path.join(tmp, "derive_state.py")
         # a stand-in for zynkr-gm's script: flags every 進行中 row whose 結束 is before --today
@@ -1233,12 +1412,21 @@ def selftest():
         global HARVEST_FROM
         saved_from, HARVEST_FROM = HARVEST_FROM, "2026-W41"
         try:
-            hv = [["2026-W41", "t", "ann", "Ann", "SEO", "waiting", "needs the keyword list", "harvest-ann.md"],
+            # a totals row (SKB-128) is neither a blocker nor a quiet week. It says Ann's harvest held three
+            # waiting lines where the block lists one, so the mail names the rest. A waiting row with no text
+            # is no line. Ann Chen is not the roster's Ann: `collect` kept her name, and so does the mail
+            long_line = "drafting the FAQ page for the long-tail keywords, with the pricing table and the three customer quotes"
+            hv = [["2026-W41", "t", "ann", "Ann", "", "totals", "shipped 1 · moving 3 · waiting 3", "harvest-ann.md"],
+                  ["2026-W41", "t", "ann", "Ann", "SEO", "moving", long_line, "harvest-ann.md", "1.01"],
+                  ["2026-W41", "t", "ann", "Ann", "SEO", "waiting", "needs the keyword list", "harvest-ann.md"],
+                  ["2026-W41", "t", "ann", "Ann", "SEO", "waiting", "  ", "harvest-ann.md"],
+                  ["2026-W41", "t", "annc", "Ann Chen", "", "totals", "shipped 0 · moving 0 · waiting 1", "harvest-annc.md"],
+                  ["2026-W41", "t", "annc", "Ann Chen", "Ops", "waiting", "on Chen's desk", "harvest-annc.md"],
                   ["2026-W41", "t", "ann", "Ann", "SEO", "shipped", "three articles", "harvest-ann.md"],
                   ["2026-W41", "t", "b", "b", "", "quiet", "本週無資料", "harvest-b.md"]]
             w41h = wrow("2026-W41", w41, "", "ok") + ["", "", "", "", "ok", "2026-10-08T09:05:00+08:00"]
             sheet8 = ledger_sheet([wrow("2026-W40", w40), w41h], w40, w41, None, dec, None, ledger.WEEKS_FULL)
-            sheet8["Harvest"] = [ledger.HARVEST_HEADER] + [[""] * 8] * 170
+            sheet8["Harvest"] = [ledger.HARVEST_HEADER] + [[""] * 9] * 170
             for i, r in enumerate(hv):
                 sheet8["Harvest"][ledger.block_slot("Harvest", 1)[0] - 1 + i] = r
             sheet8["Harvest"][140] = ["2026-W41", "t", "cat", "Cat", "", "waiting", "on the second page", "harvest-cat.md"]
@@ -1247,15 +1435,74 @@ def selftest():
             b8 = r_blocks(st8["dir"])
             check("v4: the Harvest block in two pages",
                   [c["args"]["range_name"] for c in b8["calls"] if c["args"].get("range_name", "").startswith("Harvest!")],
-                  ["Harvest!A82:H131", "Harvest!A132:H161"])
+                  ["Harvest!A82:I131", "Harvest!A132:I161"])
             serve(b8["calls"], sheet8)
             r_pulse(st8["dir"])
             built8 = r_build(st8["dir"], "2026-10-12")
             body8 = open(r_render(st8["dir"], None)["body_path"], encoding="utf-8").read()
             check("v4: 卡關 are the harvest's waiting lines, from both pages",
-                  (built8["blockers"], "Ann：needs the keyword list" in body8, "Cat：on the second page" in body8), (2, True, True))
+                  (built8["blockers"], "Ann：needs the keyword list" in body8, "Cat：on the second page" in body8), (3, True, True))
+            check("v4: a name `collect` kept apart is not read as the roster's again, and a row with no text is no line",
+                  ("Ann Chen：on Chen&#x27;s desk" in body8 or "Ann Chen：on Chen's desk" in body8, "Ann：</li>" in body8,
+                   "Ann Chen " in body8.split("另有沒列出的")[1].split("</p>")[0]), (True, False, False))
+            check("v4: the waiting lines a harvest held beyond the ones listed are counted, per person",
+                  ("另有沒列出的：Ann 2 件（見各人的收成檔）" in body8, "Cat " in body8.split("另有沒列出的")[1].split("</p>")[0]), (True, False))
             check("v4: a quiet week is named, and Reports is never asked for",
                   ("上週 harvest 沒有資料：b" in body8, "週報沒有記到" in body8, "上週沒交週報" in body8), (True, False, False))
+            # SKB-128 AC-22: 上週進度, before the plan. No block's lines were kept for this week, so each
+            # person's lines are the harvest's own text, cut at a space; a quiet week is not listed
+            check("v4: 上週進度 comes before the plan, with the harvest's span and each person's counts",
+                  (0 < body8.find("<h3>上週進度</h3>") < body8.find("<h3>這週的計畫</h3>"),
+                   "收成 9/30–10/7（週三 20:00 截止）" in body8, "<b>Ann</b>　完成 1 · 進行中 3 · 在等 3" in body8,
+                   "<b>Ann Chen</b>　完成 0 · 進行中 0 · 在等 1" in body8),
+                  (True, True, True, True))
+            check("v4: with no block's lines kept, a person's lines are the harvest text, cut at a space, shipped first",
+                  (body8.find("<li>完成：three articles</li>") < body8.find("<li>#1.01 進行中：drafting the FAQ page for the long-tail keywords, with the pricing table and…</li>"),
+                   "<li>另有 2 件進行中沒列出，見收成檔</li>" in body8, built8["progress"]),
+                  (True, True, {"Ann": "harvest", "Ann Chen": "harvest", "Cat": "harvest"}))
+            check("v4: someone with only a waiting line and no count has no entry in 上週進度",
+                  "<b>Cat</b>" in body8.split("<h3>這週的計畫</h3>")[0], False)
+            plan8 = {x["who"]: x["lines"] for x in json.load(open(built8["facts"], encoding="utf-8"))["plan"]}
+            check("v4 AC-23: the item left in motion and the waiting line join the plan; Chen and Cat get theirs",
+                  ([x for x in plan8["Ann"] if "上週還在進行" in x or x.startswith("在等你")], plan8["Ann Chen"], plan8["Cat"]),
+                  (["#1.01 item 1.01 — 上週還在進行", "在等你：needs the keyword list"], ["在等你：on Chen's desk"],
+                   ["在等你：on the second page"]))
+            # the lines Thursday's block wrote, as `sections` keeps them: used for the people it has
+            json.dump({"week": "2026-W41", "label": "WB 10/5", "span": "9/30–10/7", "by_item": True,
+                       "people": {"Ann": {"totals": {"shipped": 1, "moving": 3, "waiting": 3},
+                                          "lines": ["#1.02 item 1.02｜完成 1、進行中 1：三篇文章上線，FAQ 頁草稿中"],
+                                          "waiting": ["#1.02 等關鍵字清單"], "left": {"shipped": 0, "moving": 2, "waiting": 2},
+                                          "moving": ["1.01", "1.10", "9.99"]},
+                                  "Zed": {"lines": "not a list"}}},
+                      open(progress_path("2026-W41"), "w", encoding="utf-8"), ensure_ascii=False)
+            built8b = r_build(st8["dir"], "2026-10-12")
+            body8b = open(r_render(st8["dir"], None)["body_path"], encoding="utf-8").read()
+            check("v4: the lines Thursday's block wrote are the ones the mail repeats, by item, with what they leave out",
+                  ("<li>#1.02 item 1.02｜完成 1、進行中 1：三篇文章上線，FAQ 頁草稿中</li>" in body8b,
+                   "<li>另有 2 件進行中沒列出，見收成檔</li>" in body8b, "完成：three articles" in body8b, built8b["progress"]),
+                  (True, True, False, {"Ann": "doc", "Ann Chen": "harvest", "Cat": "harvest"}))
+            plan8b = {x["who"]: x["lines"] for x in json.load(open(built8b["facts"], encoding="utf-8"))["plan"]}
+            mine8 = plan8b["Ann"]
+            check("v4 AC-23: from the block's own record: the item in motion, then the waiting line as the block said it; "
+                  "an overdue item keeps its due line and an unknown number is dropped",
+                  ([x for x in mine8 if "上週還在進行" in x or x.startswith("在等你")],
+                   [x[:5] for x in mine8 if x.startswith("#1.10")], any("9.99" in x for x in mine8)),
+                  (["#1.01 item 1.01 — 上週還在進行", "在等你：#1.02 等關鍵字清單"], ["#1.10"], False))
+            shutil.copy(progress_path("2026-W41"), progress_path("2026-W40"))     # W41's record under W40's name
+            for odd in ([1], {"shipped": "2"}, {"shipped": True}, "many"):
+                json.dump({"week": "2026-W37", "people": {"Ann": {"lines": ["x"], "left": odd}}}, open(progress_path("2026-W37"), "w"))
+                check("a record whose count of what is left out is not a count (%r) is not used" % (odd,), load_progress("2026-W37"), {})
+            json.dump({"week": "2026-W37", "people": {"Ann": {"lines": ["x"], "left": {"shipped": 2, "moving": 0}}}},
+                      open(progress_path("2026-W37"), "w"))
+            check("…and one whose counts are counts is", (list(load_progress("2026-W37")), left_out({"shipped": 2, "moving": 0})),
+                  (["Ann"], "另有 2 件完成沒列出，見收成檔"))
+            check("a record kept for another week, one that is not there, or a note of the wrong shape is not used",
+                  (list(load_progress("2026-W41")), load_progress("2026-W40"), load_progress("2026-W39")), (["Ann"], {}, {}))
+            open(progress_path("2026-W39"), "w").write("{broken")
+            json.dump({"week": "2026-W38", "people": ["Ann"]}, open(progress_path("2026-W38"), "w"))
+            check("…nor a file that does not parse or lists people as anything but names", (load_progress("2026-W39"), load_progress("2026-W38")),
+                  ({}, {}))
+            os.remove(progress_path("2026-W41"))
             sheet9 = ledger_sheet([wrow("2026-W40", w40), wrow("2026-W41", w41, "", "ok")], w40, w41, None, dec, None,
                                   ledger.WEEKS_FULL)
             st9 = r_start("2026-W42", cfgp, "2026-10-12T10:25:00+08:00", base=os.path.join(tmp, "runs"))
@@ -1263,8 +1510,12 @@ def selftest():
             serve(r_blocks(st9["dir"])["calls"], sheet9)
             r_pulse(st9["dir"])
             r_build(st9["dir"], "2026-10-12")
-            check("v4: no harvest recorded says so",
-                  "上週的 harvest 沒有記到帳本" in open(r_render(st9["dir"], None)["body_path"], encoding="utf-8").read(), True)
+            built9 = r_build(st9["dir"], "2026-10-12")
+            body9 = open(r_render(st9["dir"], None)["body_path"], encoding="utf-8").read()
+            check("v4: no harvest recorded says so", "上週的 harvest 沒有記到帳本" in body9, True)
+            check("v4 AC-24: 上週進度 says the harvest was not recorded, and the plan gains nothing",
+                  ("<h3>上週進度</h3><p>上週的收成沒有記到帳本" in body9, built9["progress"], "在等你" in body9 or "上週還在進行" in body9),
+                  (True, {}, False))
         finally:
             HARVEST_FROM = saved_from
 
@@ -1416,6 +1667,10 @@ def selftest():
         except Refuse as e:
             check("edited block refused", e.code, 6)
     finally:
+        if saved_state is None:
+            os.environ.pop("ZYNKR_OPS_WEEKLY_STATE", None)
+        else:
+            os.environ["ZYNKR_OPS_WEEKLY_STATE"] = saved_state
         shutil.rmtree(tmp, ignore_errors=True)
 
     if fails:
@@ -1439,6 +1694,44 @@ MUTATIONS = [
     ("a read not saved yet ends the block", [('        if missing:\n            return {"skills": True, "missing"', '        if False:\n            return {"skills": True, "missing"')]),
     ("an empty earlier block hides the changes", [('        if not cur and not prev:', '        if not cur or not prev:')]),
     ("v4 weeks read 卡關 from Reports", [('    if facts.get("v4"):\n        if not hv["recorded"]:', '    if False:\n        if not hv["recorded"]:')]),
+    ("the waiting lines the mail does not list go unnamed", [('            if hv.get("more"):\n', "            if False:\n")]),
+    # SKB-128 step 6: 上週進度 and the plan's harvest lines
+    ("上週進度 is left out of the mail", [('    if facts.get("v4") and pg:\n', "    if False:\n")]),
+    ("the lines Thursday's block wrote are not used", [("        if note:\n            entry = {\"lines\": list(note[\"lines\"])",
+                                                        "        if False:\n            entry = {\"lines\": list(note[\"lines\"])")]),
+    ("a record kept for another week is used", [('if isinstance(got, dict) and got.get("week") == week else None',
+                                                 "if isinstance(got, dict) else None")]),
+    ("a count that is not a count is used", [(" and counts(note.get(\"left\"))}", "}")]),
+    ("an item named twice by a harvest is listed twice", [("        still = [n for n in dict.fromkeys(e[\"moving\"])\n", "        still = [n for n in e[\"moving\"]\n")]),
+    ("an item's closing note stays in the plan's line", [('clip(BRACKET_TAIL.sub("", items[n]) or items[n], 30)', "clip(items[n], 30)")]),
+    ("a note of the wrong shape is used", [("if isinstance(note, dict) and texts(note.get(\"lines\")) and", "if isinstance(note, dict) and")]),
+    ("the harvest text is not cut", [('KIND_ZH[r[5]], cut(r[6])) for r in shown]', 'KIND_ZH[r[5]], r[6]) for r in shown]')]),
+    ("a quiet week has an entry in 上週進度", [("        if not mine and not tot:\n            continue", "        if False:\n            continue")]),
+    ("a bare name is listed in 上週進度", [('                if not c and not e["lines"]:\n                    continue', "")]),
+    ("an unrecorded harvest says nothing in 上週進度", [('        if not pg["recorded"]:\n            o.append("<p>上週的收成沒有記到帳本',
+                                                       '        if False:\n            o.append("<p>上週的收成沒有記到帳本')]),
+    ("the harvest's span is the calendar week", [("    end = ledger.monday(week) + timedelta(days=2)\n    return \"%s–%s\" % (md(end - timedelta(days=7)), md(end))",
+                                                  "    end = ledger.monday(week) + timedelta(days=6)\n    return \"%s–%s\" % (md(end - timedelta(days=7)), md(end))")]),
+    ("the plan's harvest lines count against the five", [
+        ("    full = {w: plan.get(w, [])[:acted.get(w, 0)] + open_.get(w, []) + plan.get(w, [])[acted.get(w, 0):] for w in order}",
+         "    full = {w: (plan.get(w, [])[:acted.get(w, 0)] + open_.get(w, []) + plan.get(w, [])[acted.get(w, 0):])[:PLAN_MAX] for w in order}")]),
+    ("what the harvest left open comes before the actions", [
+        ("    full = {w: plan.get(w, [])[:acted.get(w, 0)] + open_.get(w, []) + plan.get(w, [])[acted.get(w, 0):] for w in order}",
+         "    full = {w: open_.get(w, []) + plan.get(w, []) for w in order}")]),
+    ("every item left in motion joins the plan", [("and n not in due.get(who, set())][:HARVEST_PLAN]", "and n not in due.get(who, set())]")]),
+    ("every waiting line joins the plan", [('for w in e["waiting"][:HARVEST_PLAN]])', 'for w in e["waiting"]])')]),
+    ("an item due anyway is listed as still in motion", [("n not in mine and n not in due.get(who, set())][:HARVEST_PLAN]",
+                                                          "n not in mine][:HARVEST_PLAN]")]),
+    ("an item already acted on is listed again", [("if n in items and n not in mine and n not in due.get(who, set())]",
+                                                   "if n in items and n not in due.get(who, set())]")]),
+    ("someone with only a harvest is left out of the plan", [("    everyone = set(plan) | set(open_)", "    everyone = set(plan)")]),
+    ("a harvest's name is resolved again by first word", [('            who = " ".join(r[3].split()) or r[2]\n',
+                                                           "            who = person_of(run, r[3]) or r[2]\n")]),
+    ("a waiting row with no text is listed", [("                if r[6].strip():                       # a row with no text",
+                                               "                if True:                       # a row with no text")]),
+    ("the count of unlisted waiting lines is the harvest's total", [
+        ('[{"who": w, "n": n - listed[w]} for w, n in waiting.items() if n > listed[w]]',
+         '[{"who": w, "n": n} for w, n in waiting.items() if n > listed[w]]')]),
     ("the Harvest read stops at its first page", [("for a in range(first, last + 1, ledger.PAGE):      # 80 rows",
                                                    "for a in range(first, first + 1, ledger.PAGE):      # 80 rows")]),
     ("the sent check wants the exact subject", [('"sent_check": sent_check(to, "【週報】%s 那週 —" % facts["label"])}',

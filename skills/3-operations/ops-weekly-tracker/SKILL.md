@@ -3,7 +3,7 @@ name: ops-weekly-tracker
 sheetId: "3.26"
 description: >-
   The only writer of a small team's Main Tracker in the weekly loop. After the meeting it proposes the
-  week's tracker changes from the meeting's decisions, records them in the
+  week's tracker changes from the meeting's decisions and the team's harvest, records them in the
   machine-owned Weekly Ledger and mails them as one 【週結】 for the owner to answer (propose); it
   then writes exactly what the owner's reply approves, cell by cell (apply), and copies the tracker
   into the Ledger once per ISO week (snapshot). A script refuses any change without evidence or a
@@ -112,8 +112,9 @@ Suggests this week's changes to the Main Tracker and mails the week's **【週�
 `Decisions` block: what was decided and dropped, progress, and each person's blockers and next
 steps. Then come the proposed changes, which only the owner's reply approves. A change sets 結束,
 狀態 or 備註 on an item, drops one (放棄) or adds one (新增). It reads the tracker and this week's
-`Decisions` and `Reports` blocks in the Ledger — never the Doc — and writes **only the Ledger** and
-**that one mail**. It never writes the tracker: that is `apply`'s job, after the owner has said
+`Decisions` and `Harvest` blocks in the Ledger — never the Doc — and writes **only the Ledger** and
+**that one mail**. A change that rests on the harvest alone can only set 狀態 to 進行中 or 完成, and the
+mail marks it 「只有收成佐證」 (`SKB-128`). It never writes the tracker: that is `apply`'s job, after the owner has said
 yes. A week with nothing to propose still mails its summary. Read `references/proposal-rules.md`
 before writing a single proposal.
 
@@ -122,8 +123,8 @@ exactly and save each result unchanged, as in `snapshot`.
 
 1. **The week.** Use the `week=` argument the runner passes. If a `config=<path>` argument is
    present, add `--config <path>` to `start`.
-2. `python3 scripts/proposals.py start --week <W>` → make the six printed calls, save each result,
-   keep the `dir`.
+2. `python3 scripts/proposals.py start --week <W>` → make the printed calls (the `Harvest` block is
+   two reads), save each result, keep the `dir`.
 3. `python3 scripts/proposals.py pages --dir <dir>`.
    - `"already": true` → this week's proposals are recorded and mailed. Receipt `status=ok` with the
      `delivered` it prints.
@@ -131,7 +132,8 @@ exactly and save each result unchanged, as in `snapshot`.
      with the `mail` and `sent_search` it printed: never propose a second time.
    - Otherwise make the printed tracker reads and save each one.
 4. `python3 scripts/proposals.py context --dir <dir>` → the items and this week's evidence rows,
-   each with its Ledger cell (`Decisions!A42`), also saved as `context.json`.
+   each with its Ledger cell (`Decisions!A42`, `Harvest!A163`), also saved as `context.json`. The
+   harvest rows listed are the lines `collect` tied to an item; a line tied to none backs nothing.
 5. **Propose.** Following `references/proposal-rules.md`, write a JSON list to `proposals.json` in
    the run folder, one object per suggested change: `{"#", "欄位", "建議值", "原因", "證據", "信心"}`,
    or for a new item `{"欄位": "新增", "項目", "子類別", "負責人", "原因", "證據", "信心"}`.
@@ -363,9 +365,12 @@ ZYNKR-OPS-WEEKLY-RESULT: mode=snapshot week=2026-W45 status=failed delivered=non
   the first two, and an emoji's link offsets cannot be placed safely. `notes_append.py` refuses
   the cell and writes that down; the next look skips the line, names it, and the owner adds it by
   hand.
-- **The harvest is not evidence yet.** `propose` cites the `Decisions` block, and the `Reports`
-  block for the weeks that still had `#週報` posts (before 2026-W45). Proposals from the team's
-  `Harvest` rows are a later step of SKB-091.
+- **The harvest is evidence only as far as `collect` tied it (`SKB-128`).** A line backs the one item
+  it is tied to, and a line tied to none backs nothing. The tie is a model's reading of one line, which
+  is why a change resting on the harvest alone is never 高, is marked 「只有收成佐證」, and waits for
+  the owner's reply like every other. 放棄, a new 結束, a 備註 line and a new item still need the
+  meeting. A week whose lines were not tied (no snapshot the week before, or a `collect` from before
+  `SKB-128`) has no harvest evidence at all.
 
 ## House style
 

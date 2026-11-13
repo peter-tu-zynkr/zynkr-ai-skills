@@ -63,7 +63,8 @@ One file, read by all four skills of the loop: `zynkr-ops-weekly`, `ops-weekly-d
   setup (`references/ledger.md`). It is off when missing or anything but `true`.
 - `routine.name_aliases` (optional) maps a name the Sales Pulse writes to the roster's spelling,
   e.g. `{"Fish": "Ding Huan Wu"}`. A first name that matches one roster name (`Peter` →
-  `Peter Tu`) needs no alias.
+  `Peter Tu`) needs no alias. In `collect` it is read as that person only when no other harvest file
+  already is them (`SKB-128`).
 - `routine.recap_team_from` (`YYYY-MM-DD`, optional) sets that switch ahead of time: with
   `recap_audience: team`, recaps before that Monday still go to the owner alone, and the team gets
   the recap of that Monday onward. A date that cannot be read keeps the recap with the owner.

@@ -89,20 +89,28 @@ Body sections, in order:
 
 1. **重點** — at most three lines the run writes, each citing the item number it is about. A line
    without one is dropped before sending.
-2. **這週的計畫** — per person (roster order, 全體 last), at most five lines: the meeting's
+2. **上週進度** (`SKB-128`, from 2026-W45) — first the stretch the harvest covers,
+   `收成 11/4–11/11（週三 20:00 截止），是週四會議看到的那一份。週四之後做的，下週一才會出現`. Then per
+   person with a harvest that held something: their name and counts (`完成 27 · 進行中 7 · 在等 13`) and
+   the lines Thursday's block showed, by item (`#6.10 LMS｜完成 2：…`, `不在 Tracker｜完成：…`), then
+   `另有 19 件完成、4 件進行中沒列出，見收成檔`. A person whose block's lines were not kept gets the
+   harvest's own text, cut at a space. Not recorded: 「上週的收成沒有記到帳本，這裡沒有進度可列」.
+3. **這週的計畫** — per person (roster order, 全體 last), at most five lines: the meeting's
    actions (`#1.02 跟客戶確認（10/20 前）`), items overdue or due within 14 days, P0/P1 with no dates,
    then `業務：<step>` from the Sales Pulse. Every line cites an item # (the Pulse's steps name a
    deal); one that does not is dropped. Without a Pulse in the last day: 「業務的下一步沒有列：
-   這封信寄出前沒有收到 Sales Pulse」.
-3. **上週改了什麼** — every changed cell in the Main Tracker between the last two Friday snapshots,
+   這封信寄出前沒有收到 Sales Pulse」. After a person's actions, and on top of the five, come what last
+   week's harvest left open (`SKB-128`): at most two items still in motion
+   (`#6.10 LMS — 上週還在進行`) and two lines waiting on them (`在等你：…`).
+4. **上週改了什麼** — every changed cell in the Main Tracker between the last two Friday snapshots,
    `#1.03 SEO 文章 — 狀態：進行中 → 完成`, plus items added and removed.
-4. **要注意的** — 逾期 · 兩週內到期 · P0/P1 還沒排日期 · 備註看起來做完了但狀態沒改, each with its evidence,
+5. **要注意的** — 逾期 · 兩週內到期 · P0/P1 還沒排日期 · 備註看起來做完了但狀態沒改, each with its evidence,
    from zynkr-gm's state rules.
-5. **上週談定的事** — 決議 and 放棄 (`放棄：…`) with 負責人 and 期限, then 還沒定案 (卡關 · 風險 ·
+6. **上週談定的事** — 決議 and 放棄 (`放棄：…`) with 負責人 and 期限, then 還沒定案 (卡關 · 風險 ·
    待討論). Not recorded → say so and point to the Doc.
-6. **上週的變更提案** — what the 【週結】 decided: applied (live: 「核准了，已寫進總表」), would-apply
+7. **上週的變更提案** — what the 【週結】 decided: applied (live: 「核准了，已寫進總表」), would-apply
    (shadow), 退回, not named.
-7. **技能更新** (`SKB-110`, only with `routine.skills_block`). Each workbench skill whose approved version
+8. **技能更新** (`SKB-110`, only with `routine.skills_block`). Each workbench skill whose approved version
    moved since the latest earlier Thursday record (up to eight weeks back), linked to the pull request
    that carried it: `skill-qa 1.2.0 → 1.3.0 · <PR title> (#111)`. A skill that came in is shown as
    `（新技能）`, one that left as `（下架）`, and another commit at the same version as `（重新核准）`. When
@@ -110,8 +118,10 @@ Body sections, in order:
    「上一份技能紀錄是 WB 9/28 那週，以下是從那週到現在的變動」. At most 12 lines, then 「還有 N 個」, and
    last 「用 workbench 技能的人：在 Claude Code 打 /skill-sync」. If nothing moved, the week or every
    earlier one in reach was not recorded, or a read failed, the heading is left out.
-8. **卡關** — from the week's `#週報` posts, and who did not post.
-9. Links to the Main Tracker, the Doc and the Ledger.
+9. **卡關** — from 2026-W45 the waiting lines of last week's harvest, how many more each harvest held
+   than the mail lists (`另有沒列出的：…`), and who had no harvest. Before that, the week's `#週報` posts
+   and who did not post.
+10. Links to the Main Tracker, the Doc and the Ledger.
 
 The 1.2 notice (`【週報】WB 10/5 那週沒有產出：週五的快照沒有記到`) goes to the owner only: a recap
 built on a missing snapshot would be wrong, and a team that receives a "the robot broke" mail

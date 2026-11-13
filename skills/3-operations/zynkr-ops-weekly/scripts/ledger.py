@@ -46,8 +46,9 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 LAYOUT = "layout v1"
-API = 3               # what ops-weekly-tracker and ops-weekly-doc check before importing this file (SKB-091;
-                      # 3 = SKB-118: check_saved, and load_result refuses a result changed after the runner saved it)
+API = 4               # what ops-weekly-tracker and ops-weekly-doc check before importing this file (SKB-091;
+                      # 3 = SKB-118: check_saved, and load_result refuses a result changed after the runner saved it;
+                      # 4 = SKB-128: Harvest rows are nine cells wide, `item` in column I)
 SLOT = 100            # rows per week in Snapshot; changing it moves every later week's block
 PAGE = 50             # read_sheet_values shows at most 50 rows
 TPE = timezone(timedelta(hours=8))   # Asia/Taipei has no DST; a fixed offset needs no tz database
@@ -76,7 +77,14 @@ WEEKS_P3_HEADER = ["proposals", "proposals_at", "applied", "applied_at"]        
 # SKB-091: `collect` reads each person's harvest file into Harvest, which replaces Reports
 # (the Chat #週報 posts) from 2026-W45. One row per line of a harvest: its workstream, its kind
 # (shipped · moving · waiting, or quiet for a 本週無資料 week) and the line as written.
-HARVEST_HEADER = ["week", "harvested_at", "slug", "name", "workstream", "kind", "text", "file"]  # A–H
+HARVEST_HEADER = ["week", "harvested_at", "slug", "name", "workstream", "kind", "text", "file", "item"]  # A–I
+# SKB-128: `collect` keeps a person's lines by kind, and one `totals` row per person says how many
+# lines of each kind their harvest held, so a reader can name what it does not list. `item` (column I)
+# is the number of the tracker item a line moves (`6.10`), or empty when the tracker holds none: the
+# Doc's block is written by item from it, and `propose` cites a line only for its own item. Rows
+# written before it are eight cells wide and read as having no item.
+HARVEST_KINDS = ("shipped", "moving", "waiting")
+HARVEST_TOTALS = "totals"
 WEEKS_HARVEST_HEADER = ["harvest", "harvest_at"]                                       # S–T
 # SKB-110: `collect` also records which version of each workbench skill Atlas approved, one
 # row per skill (Atlas's list_installs), so Monday's recap can name the skills that moved that week.
@@ -89,7 +97,7 @@ TABS = [("Weeks", WEEKS_FULL), ("Updates", UPDATES_HEADER),
         ("Snapshot", SNAPSHOT_HEADER), ("Reports", REPORTS_HEADER), ("Decisions", DECISIONS_HEADER),
         ("Proposals", PROPOSALS_HEADER), ("Harvest", HARVEST_HEADER), ("Skills", SKILLS_HEADER)]
 COLS = {"Weeks": WEEKS_END, "Updates": "N", "Snapshot": "P", "Reports": "I", "Decisions": "I", "Proposals": "O",
-        "Harvest": "H", "Skills": "G"}
+        "Harvest": "I", "Skills": "G"}
 # tab -> (rows per week, header, its Weeks status column, its Weeks time column)
 BLOCKS = {"Reports": (20, REPORTS_HEADER, "K", "L"),
           "Decisions": (40, DECISIONS_HEADER, "M", "N"),
@@ -703,6 +711,20 @@ def block_slot(tab, k):
     return 2 + size * k, 1 + size * (k + 1)
 
 
+def totals_text(counts):
+    """A Harvest totals row's text: `shipped 27 · moving 7 · waiting 13`."""
+    return " · ".join("%s %d" % (k, int(counts.get(k, 0))) for k in HARVEST_KINDS)
+
+
+def parse_totals(text):
+    """{kind: n} from a totals row's text; None when the text does not name every kind once."""
+    got = re.findall(r"(?<![\w-])(shipped|moving|waiting) (\d+)(?![\w-])", str(text or ""))
+    counts = dict(got)
+    if len(got) != len(HARVEST_KINDS) or set(counts) != set(HARVEST_KINDS):
+        return None
+    return {k: int(counts[k]) for k in HARVEST_KINDS}
+
+
 def blk_start(tab, week, rows_path, config=None, now=None, base=None):
     if tab not in BLOCKS:
         raise Refuse(2, "no weekly block for tab %r (have %s)" % (tab, ", ".join(sorted(BLOCKS))))
@@ -753,9 +775,15 @@ def blk_plan(d):
         raise Refuse(4, "the Ledger has no %s tab (or no Weeks tab); run the Phase 2 setup" % tab)
     if li[tab][0] < run["last"]:
         raise Refuse(5, "%s has %d rows; week %s needs rows up to %d — grow the grid" % (tab, li[tab][0], run["week"], run["last"]))
+    # a tab narrower than its header (Harvest before the SKB-128 setup): say so before the header read,
+    # which a grid that stops short answers with an error, not a row
+    if li[tab][1] < len(header):
+        raise Refuse(4, "%s is %d columns wide; its header needs %d (A–%s) — run its setup (references/ledger.md)"
+                     % (tab, li[tab][1], len(header), COLS[tab]))
     bh = parse_values(load_result(os.path.join(d, "bh.txt")), run["ledger"], "%s!A1:%s1" % (tab, COLS[tab]))
     if not bh or pad(bh[0], len(header)) != header:
-        raise Refuse(4, "%s header changed" % tab)
+        raise Refuse(4, "%s header changed%s" % (tab, " (it ends with `item` in column I since SKB-128: run that setup, "
+                                                      "references/ledger.md)" if tab == "Harvest" else ""))
     wend = weeks_end(tab)
     wh = parse_values(load_result(os.path.join(d, "wh.txt")), run["ledger"], "Weeks!A1:%s1" % wend)
     need = ord(BLOCKS[tab][3]) - 64                 # the Weeks header must reach this block's own cells
@@ -1368,7 +1396,7 @@ def selftest():
 
         def fresh_b(hdr=None):
             return {"__tabs__": {"Weeks": (100, 26), "Reports": (500, 9), "Decisions": (500, 9),
-                                 "Proposals": (2100, 15), "Updates": (2100, 14), "Harvest": (4100, 8),
+                                 "Proposals": (2100, 15), "Updates": (2100, 14), "Harvest": (4100, 9),
                                  "Skills": (10100, 7)},
                     "Weeks": [hdr or weeks_hdr], "Reports": [REPORTS_HEADER], "Decisions": [DECISIONS_HEADER],
                     "Proposals": [PROPOSALS_HEADER], "Updates": [UPDATES_HEADER], "Harvest": [HARVEST_HEADER],
@@ -1419,13 +1447,36 @@ def selftest():
         check("Proposals block slot W41", block_slot("Proposals", 1), (42, 81))
         # SKB-091: Harvest (S–T) needs the A–T header; the A–R one is refused, not written past
         hrow = [["2026-W41", "2026-10-08T09:05:00+08:00", "ann", "Ann", "SEO", "shipped", "上線 3 篇 (abc1234)",
-                 "harvest-ann.md"]]
+                 "harvest-ann.md", "1.10"]]
         harv_p = os.path.join(tmpb, "harv.json")
         json.dump(hrow, open(harv_p, "w"), ensure_ascii=False)
         refuses("Harvest refuses the A–R Weeks header", 4, run_block, fresh_b(WEEKS_FULL[:18]), harv_p, None, "Harvest")
         sh = fresh_b(WEEKS_FULL)
         rh = run_block(sh, harv_p, tab_name="Harvest")
-        check("Harvest block delivered", rh["delivered"], "1-rows;Harvest!A82:H82;Weeks!S3")
+        check("Harvest block delivered", rh["delivered"], "1-rows;Harvest!A82:I82;Weeks!S3")
+        check("the Harvest row's item is written in column I", sh["Harvest"][81], hrow[0])
+        # SKB-128: a Ledger still on the eight-column Harvest tab is refused before anything is written
+        narrow = fresh_b(WEEKS_FULL)
+        narrow["__tabs__"]["Harvest"] = (4100, 8)
+        try:
+            run_block(narrow, harv_p, tab_name="Harvest")
+            fails.append("a Harvest block was written to a tab eight columns wide")
+        except Refuse as e:
+            check("a Harvest tab eight columns wide is refused, naming the setup",
+                  (e.code, "9 (A–I)" in str(e), len(narrow["Harvest"])), (4, True, 1))
+        old_hdr = fresh_b(WEEKS_FULL)
+        old_hdr["Harvest"] = [HARVEST_HEADER[:8]]
+        try:
+            run_block(old_hdr, harv_p, tab_name="Harvest")
+            fails.append("a Harvest block was written under the eight-cell header")
+        except Refuse as e:
+            check("the eight-cell Harvest header is refused, naming the setup",
+                  (e.code, "SKB-128" in str(e), len(old_hdr["Harvest"])), (4, True, 1))
+        eight = os.path.join(tmpb, "harv8.json")
+        json.dump([hrow[0][:8]], open(eight, "w"), ensure_ascii=False)
+        s8 = fresh_b(WEEKS_FULL)
+        run_block(s8, eight, tab_name="Harvest")
+        check("an eight-cell row is written with an empty item", s8["Harvest"][81], hrow[0][:8] + [""])
         check("Harvest Weeks cells", sh["Weeks"][2][18:20], ["ok", "2026-10-06T09:45:00+08:00"])
         check("Harvest leaves the other beats' cells alone", sh["Weeks"][2][:18], [""] * 18)
         check("Proposals still works under the A–T header", run_block(fresh_b(WEEKS_FULL), prop_p, tab_name="Proposals")["delivered"],
@@ -1436,13 +1487,13 @@ def selftest():
         many_p = os.path.join(tmpb, "many.json")
         json.dump(many, open(many_p, "w"), ensure_ascii=False)
         check("a 60-row Harvest block reads back in two pages and commits",
-              run_block(fresh_b(WEEKS_FULL), many_p, tab_name="Harvest")["delivered"], "60-rows;Harvest!A82:H141;Weeks!S3")
+              run_block(fresh_b(WEEKS_FULL), many_p, tab_name="Harvest")["delivered"], "60-rows;Harvest!A82:I141;Weeks!S3")
         refuses("a changed cell on the second page is caught", 6, run_block, fresh_b(WEEKS_FULL), many_p,
                 lambda v: v[:6] + ["changed"] + v[7:] if v[2] == "p55" else v, "Harvest")
 
         def stray(sheet):
             while len(sheet["Harvest"]) < 151:
-                sheet["Harvest"].append([""] * 8)
+                sheet["Harvest"].append([""] * 9)
             sheet["Harvest"][150] = ["2026-W41", "", "x", "X", "", "", "left over", ""]
 
         try:
@@ -1569,6 +1620,8 @@ def _write_cfg(tmp, tracker_id, ledger_id):
 MUTATIONS = [
     ("a block grid running out gives no warning", [('    if li[tab][0] < last + size * WARN_WEEKS:', '    if False:')]),
     ("every block reads Weeks up to V", [('    return WEEKS_END if tab == "Skills" else "T"', '    return WEEKS_END')]),
+    ("a tab narrower than its header is written", [("    if li[tab][1] < len(header):\n", "    if False:\n")]),
+    ("a block header that changed is written under", [("    if not bh or pad(bh[0], len(header)) != header:\n", "    if not bh:\n")]),
     # (name, [(old, new), ...]) — every pair is applied; each old text must occur exactly once
     ("Phase 3 blocks accept the Phase 2 header", [
         ("need = ord(BLOCKS[tab][3]) - 64", "need = min(14, ord(BLOCKS[tab][3]) - 64)")]),
