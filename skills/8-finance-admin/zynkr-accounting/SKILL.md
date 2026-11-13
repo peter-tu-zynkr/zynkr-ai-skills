@@ -130,8 +130,9 @@ Then diff the whole set against what the ledger already holds for the month. Mat
 date first, counterparty second. What survives the diff is the append batch.
 
 Run the recurring-vendor completeness check here — the monthly subscriptions are known, and a
-missing month is nearly always an oversight rather than a real gap. `references/reconciliation-rules.md`
-carries the list.
+missing month is nearly always an oversight rather than a real gap. The list is team data in Atlas
+(`get_knowledge`, key `zynkr-accounting.vendors-and-recurring`); `references/reconciliation-rules.md`
+§5–§6 says how to read it and what to do when Atlas cannot be reached.
 
 ## Step 4 — Reconcile, and make the gate hold
 

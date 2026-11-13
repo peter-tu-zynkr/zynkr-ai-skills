@@ -60,8 +60,9 @@ exact source it would need, and every real number names where it was read.
   reads Gmail itself.
 - **zynkr-gm** (0.02) — the FOUNDER-facing weekly GM brief; owns every 「GM 週報 / 這週重點 /
   H2 進度盤點 / KPI off-target」 trigger and the `KPI Dashboard` write rule (`Actual` · `As
-  of` · `Source` cells). When it is installed (`~/.claude/skills/zynkr-gm` or
-  `~/.agents/skills/zynkr-gm`) this skill CITES its `references/kpi-map.md` (Tracker # →
+  of` · `Source` cells). When it is installed (in Claude Code at `~/.claude/skills/zynkr-gm`; in
+  another agent, the `zynkr-gm` folder beside this skill's own) this skill CITES its
+  `references/kpi-map.md` (Tracker # →
   metric → AUTO / SEMI / HUMAN class → tool sketch) as the routing for KPI-Dashboard rows
   instead of re-deriving sources; it never writes an `Actual` cell. A GM-brief phrase ⇒
   hand over to zynkr-gm.
@@ -132,8 +133,8 @@ Sheet ID if one exists for this cycle (else the run creates a Sheet in the hub f
 and any ID overrides (a new tracker, a new OKR tracker, a new workbook). Compute the
 window: H1 = Jan 1 → Jun 30 · H2 = Jul 1 → Dec 31 · YE = Jan 1 → Dec 31 of the cycle
 year; if the as-of date falls inside the window, the window ends there (mid-cycle run).
-Check whether `zynkr-gm` is installed (`~/.claude/skills/zynkr-gm` or
-`~/.agents/skills/zynkr-gm`). Print one line before touching anything: `Cycle: <label>
+Check whether `zynkr-gm` is installed: in Claude Code at `~/.claude/skills/zynkr-gm`, never another
+copy; in another agent, the `zynkr-gm` folder beside this skill's own. Print one line before touching anything: `Cycle: <label>
 <year> · window <start> → <end> · workbook <ID or "new Sheet in hub"> · tracker <ID> ·
 OKR tracker <ID> · zynkr-gm <installed | not installed>`.
 

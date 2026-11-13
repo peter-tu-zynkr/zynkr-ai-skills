@@ -89,8 +89,8 @@ and the year-end retro read back (zynkr-gm reads the Weekly Ledger's snapshots, 
 - `./references/derived-state-rules.md` — zynkr-gm's rules, copied verbatim (owner:
   zynkr-gm; re-copy, never edit): state names, `ENDS_SOON_DAYS = 14` and the other
   constants, evidence to print, priority weighting. `zynkr-gm` (0.02, in-tree at
-  `skills/0-strategy/zynkr-gm/`) installs beside this skill — `~/.claude/skills/zynkr-gm` or
-  `~/.agents/skills/zynkr-gm`, i.e. `../zynkr-gm/` from this folder — and ships stdlib Python:
+  `skills/0-strategy/zynkr-gm/`) installs at `~/.claude/skills/zynkr-gm` in Claude Code (never
+  another copy), and in another agent beside this skill's own folder — and ships stdlib Python:
   `scripts/derive_state.py rows.json --today YYYY-MM-DD [--prev prev_rows.json] [--json]`
   (ENDS_SOON · OVERDUE · UNDATED · CHANGED · PROPOSE_DONE; CHANGED compares 狀態/開始/結束/負責人
   against `--prev`) and `scripts/tracker_diff.py before.json after.json [--json]` (added /
@@ -187,7 +187,7 @@ Neither source is written to; a missing baseline or zero recaps is stated, not p
 
 ### Step 3 — Derive state (zynkr-gm's rules, verbatim)
 
-1. **zynkr-gm installed** (`~/.claude/skills/zynkr-gm` or `~/.agents/skills/zynkr-gm`): dump
+1. **zynkr-gm installed** (`<zynkr-gm>` below: `~/.claude/skills/zynkr-gm` in Claude Code, never another copy; in another agent, the `zynkr-gm` folder beside this skill's own): dump
    Step 1's raw rows to `rows.json` (keys = the 13 header cells) and, when a `tracker-snapshots`
    baseline exists, that snapshot's rows to `prev_rows.json`; run `python3
    <zynkr-gm>/scripts/derive_state.py rows.json --today <as-of> [--prev prev_rows.json] --json`

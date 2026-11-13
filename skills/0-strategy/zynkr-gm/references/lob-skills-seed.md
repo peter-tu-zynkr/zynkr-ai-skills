@@ -1,33 +1,33 @@
 # LOB → instrument-skills (H2 2026)
 
-## Read the KB, not this list
+## Read Atlas, not this list
 
-**What skills exist is not written down here.** It is read at run time from
-`sources.skills_knowledge_map` — the [6.0] Zynkr Skills Knowledge Map Doc — one `## <N>. <Category>`
-section per LOB (see `source-map.md` for the extract + freshness check). Category number = LOB
-number, so "which skills does 3.0 Operations have" is one heading lookup.
+**What skills exist is not written down here.** It is read at run time from Zynkr Atlas:
+`list_artifacts` on the `zynkr-atlas` MCP server, called with **no `type`** (`type: "skill"` hides the
+orchestrators Atlas lists as agents), lists every approved skill and agent with its category, and the
+category is the LOB number (see `source-map.md` → *Which skills exist*). So "which skills does 3.0
+Operations have" is one listing, read for category 3.
 
-This file holds only what the KB **cannot** tell you, and which therefore has to be curated:
+This file holds only what Atlas **cannot** tell you, and which therefore has to be curated:
 
-1. **Chain order** — the KB lists skills; it does not say `seo-program-planner` runs before
+1. **Chain order** — Atlas lists skills; it does not say `seo-program-planner` runs before
    `seo-article-pipeline`, or that the consult-* chain has a fixed sequence.
 2. **Which skill moves which tracker item** — the mapping from an H2 P0/P1 number to an instrument.
-3. **Gaps** — a skill that does not exist cannot appear in the KB. Only a human notices absence.
+3. **Gaps** — a skill that does not exist cannot appear in Atlas. Only a human notices absence.
 4. **Tracker numbering quirks** — none since the 2026-08-21 renumber: tracker `#` now matches the LOB number (Tech = `6.x`, People = `7.x`).
    5.0 Product and 8.0 Finance have no tracker rows.
 
-Since SKB-068 each KB entry also names its **Skill Map home** (`Skill Map: <page> · <team>`, e.g.
-`Engagement · Sales`), and `## The Skill Map — six pages` lists every team with its count — so "which
-team runs this skill" and "what does the Sales team have" are KB lookups too, not this file's job.
+Atlas does not record a skill's Skill Map page or team, so "which team runs this skill" is a question
+for the Skill Map pages: say so rather than guess, and never answer it from this file.
 
-So: the KB answers *what exists*, this file answers *what to reach for and in what order*, and
+So: Atlas answers *what exists*, this file answers *what to reach for and in what order*, and
 skill-finder (5.01) answers *which skill for an arbitrary task*. When the two disagree about
-whether a skill exists, **the KB wins and this file is stale** — say so in the brief rather than
-quietly trusting the table below. Never add a skill name here to "fix" a KB that is behind;
-regenerate the KB instead.
+whether a skill exists, **Atlas wins and this file is stale** — say so in the brief rather than
+quietly trusting the table below. Never add a skill name here to fill a gap: a new skill merged on
+the workbench but not yet approved in Atlas is not an instrument yet.
 
-⚠️ The columns below name skills as of 2026-08-17. Treat them as a curated reading of the KB, not
-as the registry.
+⚠️ The columns below name skills as of 2026-08-17. Treat them as a curated reading, not as the
+registry.
 
 | LOB | H2 P0 / P1 items | Instrument skills (chain order where it matters) | Gaps (no skill) |
 |---|---|---|---|
@@ -41,8 +41,8 @@ as the registry.
 | 7.0 People & Talent (tracker 7.x) | P0 7.01 KPI 制度; P2 7.03 Training | zynkr-recruiter + recruiter-* (hiring); cv-customizer · career-consult (candidate side); training-* for 7.03 | 7.01 KPI / performance (zynkr-gm partly fills the metering) · org design · onboarding |
 | 8.0 Finance / 9.0 Legal | not in tracker | **zero skills**; runway meter = zynkr-gm reading `sources.finance_ledger` (the Sheet, not the stalled accounting app); monthly close = `/zynkr-accounting` | everything (accounting lives in the app, not a skill) |
 
-Refresh cadence: the *existence* half needs no refresh — it is read from the KB every run. `learn`
-re-derives the curated half (chain order · item→instrument mapping · gaps) from the KB + the tracker
+Refresh cadence: the *existence* half needs no refresh — it is read from Atlas every run. `learn`
+re-derives the curated half (chain order · item→instrument mapping · gaps) from Atlas + the tracker
 each quarter, or on demand when a skill ships; the brief only cites deltas.
 
 ## Boundary — who owns the weekly

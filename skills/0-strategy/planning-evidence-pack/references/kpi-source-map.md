@@ -37,8 +37,8 @@ Kit / LINE / Portaly / Supabase without a connector the user explicitly points a
 
 ## 2a · When `zynkr-gm` is installed — cite its `kpi-map.md`, do not re-derive
 
-`zynkr-gm` (sheetId 0.02) installs at `~/.claude/skills/zynkr-gm` or
-`~/.agents/skills/zynkr-gm`. Its `references/kpi-map.md` maps every `KPI Dashboard` row
+`zynkr-gm` (sheetId 0.02) installs at `~/.claude/skills/zynkr-gm` in Claude Code (never another copy),
+and in another agent beside this skill's own folder. Its `references/kpi-map.md` maps every `KPI Dashboard` row
 (Tracker # → metric → class **AUTO / SEMI / HUMAN** → 「Actual comes from」 →
 local tool sketch). For any KPI that is a `KPI Dashboard` row:
 

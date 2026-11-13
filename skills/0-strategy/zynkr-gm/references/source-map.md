@@ -17,13 +17,12 @@ Every source is addressed by its **role key** in the private config (`config.exa
 | `sources.org_taxonomy` | Org Taxonomy (Doc) | live tab "Org Taxonomy v2" — LOB 0–9 + DRIs. Owner resolution. | gov | monthly | read | read |
 | `sources.plan_docs.<lob>` | 7 function plans: `1.0` `2.0` `3.0` `4.0` `6.0` `7.0` `8.0` (Docs, single tab) | TOP "2026-08-06 Refresh — aligned to the H2 Planning Main Tracker" block only (P0/P1 tracker IDs + owner + optional date range; retired KPIs; 已定案/還在摸索 labels). Where a later "2026-08-10 Addendum" exists it wins over both. **No status lives here.** Body §1–§9 = May cut, superseded. Note: tracker `#` renumbered 2026-08-21 to match Org Taxonomy v2 — Tech = `6.x`, People = `7.x` (no translation needed; OKR-tracker `Tracker #` refs updated same day). 8.0 has no tracker rows; EAE (LOB 5) is tracked under 4.01. | 6 | on `modifiedTime` change only (key doc-watch on target IDs, not H2-folder shortcuts) | read | read |
 | `sources.eae_readme` | [3.0] Enterprise AI Enablement 企業 AI 診斷 — README (Doc) | 1-page pointer (五階段交付, consult-* chain, offering SOR link). Not a plan; no tracker rows of its own (EAE lives under 4.01). | 6 | on `modifiedTime` change | read | read |
-| `sources.skills_knowledge_map` | [6.0] Zynkr Skills Knowledge Map (Doc) — **the skills KB** | ONE category section per read: the `## <N>. <Category>` heading matching the LOB in hand (e.g. `## 0. Strategy & Leadership 策略與領導`), plus `## At a glance` when you need the totals and `## The Skill Map — six pages` when the question is which team runs what (each page's teams and counts, with links). Each `### slug (id)` under a category carries the skill's one-liner, source count, readiness, its **Skill Map home** (`Skill Map: <page> · <team>` — the one page it counts on, SKB-068) and, for a parent skill, its sub-agents. Appendix A = broken/dead knowledge sources; Appendix B = most-shared docs. **This is the answer to "what skills exist now"** — never keep a skill list in this repo. | 6 | on `modifiedTime` change (it is regenerated, not hand-edited) | read | read |
 | `sources.livestream_notes_folder` | 直播筆記 output folder (Drive folder) | Newest file `modifiedTime` only — health check that curate-livestream-transcripts ran this week. Never run it. | health | every run | list | list |
 | `sources.move_log` | GM knowledge move log (Sheet) | append one row per `learn --apply` change (before → after). | gov | write on `learn --apply` | — | append |
 | `sources.core_folder` / `sources.h2_planning_folder` | Drive folders holding the 0-level originals / the H2 suite | folder listings for `learn` drift (name · type · modifiedTime · shortcut target). | gov | monthly | list | list |
 | `sources.onboarding_master` | Onboarding 母本 (shared facts) | read for ⛔ deprecated paths only. `never_write: true` — shared-fact changes are proposed, never applied. | gov | monthly | read | read |
 
-Non-Drive reads (tools, not `sources.*` keys): CRM via `mcp__zynkr` (`list_deals`, `list_tasks`) for 2.x / 4.01; CMS Supabase `articles` for 1.03; Calendar for the calendar clock (cloud connector only — the workspace-mcp Calendar API is disabled locally). See `kpi-map.md`.
+Non-Drive reads (tools, not `sources.*` keys): CRM via `mcp__zynkr` (`list_deals`, `list_tasks`) for 2.x / 4.01; CMS Supabase `articles` for 1.03; Calendar for the calendar clock (cloud connector only — the workspace-mcp Calendar API is disabled locally). See `kpi-map.md`. Which skills exist: Atlas, through the `zynkr-atlas` MCP server, in interactive runs only — see *Which skills exist* below.
 
 The GM's own week: the `[Weekly Insights] <week>` mail that `/weekly-insights run` sends from the GM's laptop once a week, when the week closes on Wednesday evening (Gmail — cloud: `search_threads` + `get_thread`; local: the Gmail search tools). Read ONLY the plain-text block between `=== FOR THE GM BRIEF · <week> ===` and `=== END ===`. Rank: evidence, alongside the function SOTs — it fills the GM's block-04 line, feeds block-03 `PROPOSE_DONE` evidence and block 08, and never changes status. Absent → block 08 says the laptop recap did not arrive. See SKILL.md §3.4b.
 
@@ -63,30 +62,40 @@ When the result is too big for one tool reply, the harness saves it to a file: s
 
 `get_doc_as_markdown(document_id, include_comments=false)` has no range/tab parameter; `ops_weekly` (~266k chars), `vms_v2` and the plan docs will overflow context. Procedure: (1) call with `include_comments=false`; (2) when the harness saves the oversize result to a file, do NOT read it whole — run `python3 scripts/extract_newest_block.py <dump-file> --blocks 1|2` (weekly log: newest `## <Mon DD, YYYY>` block(s)) or `--heading "H2 2026 alignment"` (VMS) · `--heading "2026-08-06 Refresh"` (plan docs; `--heading "2026-08-10 Addendum"` too where one exists, it wins) · `--heading "2026-07-28 Refresh"` (integrated_refresh). Always name the dated heading: `--heading` takes the first heading containing the text, and a bare "Refresh" matches the Integrated Refresh doc's own title, whose section is the whole doc; (3) read only the extract. Gate every plan-doc / VMS read on `modifiedTime` from the doc-watch state so steady-state runs read no plan doc at all. Cloud (Drive connector `read_file_content`) returns the same full text — apply the same extract before reasoning.
 
-`skills_knowledge_map` is the same shape (~230k chars since the 2026-10-07 rebuild, one `##` per category): dump it, then
-`python3 scripts/extract_newest_block.py <dump-file> --heading "0. Strategy"` — one category, never the whole Doc
-(`--heading "The Skill Map"` for the team view). `--heading` takes the first heading containing the text and ignores
-the export's `0\.` escapes and `&amp;`; with no match it exits 1 and prints the Doc's top headings. It also reads the
-dump file as the harness saves it (JSON, `{"result": …}`). (Until SKB-068 the script had no `--heading` at all, though
-this file named it for the VMS and plan docs since SKB-006 and for this Doc since 2026-08-17 — a run that tried it was
-refused, then read the wrong slice or the whole dump.)
+`--heading` ignores the export's markdown escapes (`0\.`) and HTML entities (`&amp;`); with no match it exits 1 and
+prints the Doc's top headings. It also reads the dump file as the harness saves it (JSON, `{"result": …}`).
 
-## Freshness — the skills KB is a render, not a live feed
+## Which skills exist — Atlas, not a Doc
 
-The Knowledge Map is **generated** by `scripts/skills-index/build_knowledge_doc.py` in
-`zynkr-skill-builder`; it is only as current as the last rebuild. So do not trust it blind — check
-it against the workbench's full index (public and team skills), which costs one call:
+"What skills exist now" is answered by **Zynkr Atlas**, the record of every approved skill, through the
+`zynkr-atlas` MCP server. Only interactive runs need it, when a "what's next" needs an instrument; the
+Monday routine never reads it.
 
-```bash
-gh api repos/peter-tu-zynkr/zynkr-skill-builder/contents/generated/skills-index.json \
-  -H 'Accept: application/vnd.github.raw' | python3 -c "import json,sys; print(len(json.load(sys.stdin)))"
-```
+1. `list_artifacts` with `max_chars: 60000` and **no `type`** — one call lists every live artifact
+   (skills, agents, workflows, routers and SOPs), each with `slug`, `name`, `type`, `category`,
+   `semver`, `visibility`, `runs_on` and the one-liners `one_liner_en` / `one_liner_zh`. Leave the type
+   out: a skill whose frontmatter says `type: agent` (an orchestrator, such as sales-manager,
+   sales-discovery or zynkr-recruiter) is listed as an `agent`, so `type: "skill"` hides instruments.
+   The default budget, 20,000 characters, cuts the list short. If the answer ends with
+   `"truncated": true`, list again one type at a time (`skill`, `agent`, `workflow`, `router`, `sop`);
+   if a list is still cut, say in the brief's evidence line that it was partial rather than name
+   instruments from part of it. `category` is the LOB number, the same as the skill's workbench folder
+   (`skills/3-operations/…` is 3); a LOB with no artifacts simply has no entries, which is not a cut
+   list. Most one-liners are still empty, so the listing settles what exists and in which LOB, not what
+   each does: take candidates from `lob-skills-seed.md`'s mapping and the listed names. A listing is not
+   counted as a read.
+2. For the two or three skills you are about to name, `get_context(<slug>)` — what each reads and hands
+   off to — or `get_artifact_body(<slug>)` for its SKILL.md. Each counts as one read of that skill in
+   Atlas, which is what it is.
 
-(The workbench is private, so this needs `gh` signed in as a collaborator; without it, say the count
-was not checked. Never count `zynkr.ai/api/skills` instead: it lists public skills only.) Compare that count with the
-**index rows** number that opens the `## At a glance` → *Skills covered* line (`138 index rows: 105 skills and 33
-sub-agents…`) — rows with rows, sub-agents included. (Before SKB-068 that line counted skills only, so this check read
-"47 behind" on 2026-10-06, when the Doc lacked 15 skills and still listed one retired.) If the registry is ahead, say so in the brief's
-evidence line — **"skills KB is N behind, re-run build_knowledge_doc.py"** — and treat the Doc as a
-floor, not a ceiling. Never silently brief off a stale KB, and never patch the gap by typing skill
-names into this repo: the fix is always to regenerate the Doc.
+Atlas lists only what has been approved: a new skill merged on the workbench but still waiting in
+Atlas's 審核 is not on the list, and is not an instrument yet; a skill whose newer version waits is
+listed at the version approved last. Atlas does not record a skill's Skill Map page or
+team; when the question is which team runs a skill, say so and point to the Skill Map pages rather than
+guess. If Atlas cannot be reached, name instruments from `lob-skills-seed.md`'s table, say in the
+brief's evidence line that Atlas was not checked, and never type a skill list into this repo to fill the
+gap.
+
+(Until `SKB-129`, 13 Nov 2026, this was read from the [6.0] Zynkr Skills Knowledge Map Doc, a render of
+the workbench built by hand; its last build was on 7 Oct, and by 13 Nov it listed 138 skills and
+sub-agents to the workbench's 149. The Doc is retired and its builder removed.)

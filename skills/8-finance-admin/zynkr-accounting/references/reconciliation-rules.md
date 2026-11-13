@@ -55,7 +55,7 @@ you book that depends on the counterparty's convention:
   the platform fee as its own `platform-fee` row. The NT$15 remittance fee then needs a **third**
   row, `operating-cost` / `platform-fee`, description `撥款匯費`, amount `-15`. Without it the
   month is off by exactly 15.
-- **Net-booked counterparties** (a course platform's 分潤 payer; §5 names it) — income is recorded at the net amount that
+- **Net-booked counterparties** (a course platform's 分潤 payer; the Atlas note in §5 names it) — income is recorded at the net amount that
   actually landed, and the fee lives in the `notes` as `請款 <gross> 扣匯費 15`. No separate row.
 
 Getting this backwards is a 15- or 30-dollar residual, which is small enough to be tempting to
@@ -104,11 +104,20 @@ leaving it *unflagged* is what you must not do.
 The Financial Model splits revenue by matching the `vendor` string. Get this wrong and the money
 lands in the wrong line while every total stays correct — which makes it hard to spot.
 
+> **Both tables are team data — read them from Atlas** (`get_knowledge`, key
+> `zynkr-accounting.vendors-and-recurring`, on the `zynkr-atlas` MCP server). It holds the real
+> vendor strings and the real recurring list. If Atlas cannot be reached or the key is missing, say
+> so and ask before closing the month: switch the `zynkr-atlas` server back on or renew its token, or
+> ask an owner of the Atlas workspace to publish the note. Never close a month from the examples
+> below — they are invented and match nothing.
+
+The shape, with invented names:
+
 | Product line | Matches |
 |---|---|
-| **課程 (Hahow)** | `income` / `course-revenue` where vendor matches `*Hahow*`, `*好學校*` or `*原騰*` — 好學校 **is** Hahow's Chinese name, and 原騰數位科技 / 數位簡報室 pays the Hahow 分潤 |
+| **課程 (Platform A)** | `income` / `course-revenue` where vendor matches `*Platform A*` or the Chinese name it also pays under — list every alias, because the platform's 分潤 can arrive from a second company |
 | **課程 (Other)** | All other `course-revenue`, plus `card-settlement` |
-| **活動** | ACCUPASS only — `盈科泛利 (ACCUPASS)`, `ACCUPA`. Pays by 匯款 with 委託代銷 descriptions, so it never overlaps card settlements |
+| **活動** | The ticketing platform only, by its payer string. It pays by 匯款, so it never overlaps card settlements |
 | **顧問 · B2B** | `client-payment` |
 
 ⚠ **`總收入` in the Financial Model is not operating revenue.** A 業外 row sweeps in everything
@@ -127,18 +136,17 @@ These bill every month. A missing month is nearly always an oversight, so check 
 of each before closing. All are `source: personal`, `operating-cost` / `software`, and pending
 reimbursement unless stated.
 
+Read the real list from the Atlas note named at the top of §5. The shape, with invented vendors:
+
 | Vendor | Cadence | Notes |
 |---|---|---|
-| Anthropic | Monthly, plus ad-hoc API top-ups | Team plan + Max plan are separate rows |
-| OpenAI | ~2nd of the month | EUR |
-| Supabase | ~1st | |
-| Vercel | ~10th | |
-| Google (Workspace) | End of month | Seat count drifts — check the invoice, don't assume |
-| Buffer | ~19th | |
-| Kit (ConvertKit) | Annual, in August | Large single charge |
+| An AI model vendor | Monthly, plus ad-hoc API top-ups | Two plans on one vendor are separate rows |
+| A hosting vendor | ~10th of the month | |
+| An office suite | End of month | Seat count drifts — check the invoice, don't assume |
+| A mailing-list tool | Annual | Large single charge |
 
-The bank-side recurring items are payroll (one row per person on the payroll, around the 6th, for the *previous* month)
-and 記帳士 / 國稅局 payments, which are irregular.
+The bank-side recurring items are payroll (one row per person on the payroll, around the same day each month,
+for the *previous* month) and the bookkeeper's and the tax office's payments, which are irregular.
 
 ---
 

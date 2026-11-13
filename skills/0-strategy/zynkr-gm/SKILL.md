@@ -72,7 +72,6 @@ it — do not guess IDs and do not proceed with placeholders.
 | `sources.vms_v2` · `sources.integrated_refresh` | strategy docs — read the authoritative TOP section only |
 | `sources.plan_docs.<lob>` · `sources.eae_readme` | per-function H2 plan docs — Refresh block only, on change |
 | `sources.knowledge_directory` · `sources.org_taxonomy` | governance docs (SOR precedence table, DRIs) |
-| `sources.skills_knowledge_map` | **the skills KB** (generated Doc): every skill on main, the files each reads, and its Skill Map page and team — one `## <N>. <Category>` section per read, or `## The Skill Map` for the team view; check freshness first (`references/source-map.md`) |
 | `sources.livestream_notes_folder` | health-check only: date of the newest weekly note |
 | `constraints.*` | runway floor (months), books-stale days, burn cap, **burn window**, Q3/H2 end dates |
 | `routine.*` | trigger id, cron, connectors, model, subject prefix — for `render_routine_prompt.py` |
@@ -87,7 +86,7 @@ it — do not guess IDs and do not proceed with placeholders.
 | `references/brief-template.md` | Always — the exact 00–08 anatomy, headings, HTML skeleton, evidence-citation rule |
 | `references/derived-state-rules.md` | Always — ENDS_SOON / OVERDUE / UNDATED / PROPOSE_DONE / DIRECTION_UNLABELLED / STALLED, priority weighting |
 | `references/kpi-map.md` | When composing block 05 — per-metric class (AUTO/SEMI/HUMAN), where an Actual comes from, cloud availability |
-| `references/lob-skills-seed.md` | When a "what's next" needs an instrument — chain order, which skill moves which P0, and the category-0 weekly boundary. **Which skills exist is NOT in this file** — read it from `sources.skills_knowledge_map` (the skills KB Doc), one category section per LOB |
+| `references/lob-skills-seed.md` | When a "what's next" needs an instrument — chain order, which skill moves which P0, and the category-0 weekly boundary. **Which skills exist is NOT in this file** — read it from Atlas: `list_artifacts` on the `zynkr-atlas` MCP server, with no type, lists every approved skill and agent (`references/source-map.md` → *Which skills exist*) |
 
 ---
 

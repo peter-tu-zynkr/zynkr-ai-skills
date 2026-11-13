@@ -13,9 +13,8 @@ Default output: the newest N blocks verbatim (nothing stripped).
 
 --heading TEXT (SKB-068): any other big doc, one section at a time. Emits the section under the first
 heading whose text contains TEXT (case-insensitive; markdown escapes such as `0\\.`, bold markers, links
-and HTML entities ignored), up to the next heading of the same or a higher level. This is how the skills
-Knowledge Map is read one category at a time (`--heading "0. Strategy"`, `--heading "The Skill Map"`),
-and the VMS / plan docs one dated block at a time (`--heading "H2 2026 alignment"`, `--heading "2026-08-06 Refresh"`,
+and HTML entities ignored), up to the next heading of the same or a higher level. This is how the VMS /
+plan docs are read one dated block at a time (`--heading "H2 2026 alignment"`, `--heading "2026-08-06 Refresh"`,
 `--heading "2026-07-28 Refresh"`). Name the dated heading: a bare "Refresh" also matches the Integrated Refresh doc's
 own title, and a level-1 title's section is the whole doc.
 Exit 1, listing the doc's top headings, when nothing matches. With --json: {heading, level, line_start,
@@ -83,7 +82,7 @@ def heading_key(text):
 
 def doc_lines(text):
     """Lines as grep and sed count them. Not splitlines(): a Doc's in-paragraph breaks export as \\x0b, which
-    splitlines() also splits on, so its line numbers drift from the file's (397 of them in the skills KB)."""
+    splitlines() also splits on, so its line numbers drift from the file's (397 of them in the retired skills Knowledge Map's export)."""
     return [ln.rstrip("\r") for ln in text.split("\n")]
 
 
@@ -303,7 +302,8 @@ def selftest():
     assert parse_date_heading("## Sept 5, 2026") == "2026-09-05"
     assert parse_date_heading("## **Claude Code 課程**") is None
     assert parse_date_heading("### Aug 13, 2026") is None
-    # --heading: the skills Knowledge Map, one category at a time, in the shapes the Docs export writes
+    # --heading: one section of a big Doc, in the shapes the Docs export writes. The sample is the retired
+    # skills Knowledge Map's (SKB-129), kept because it carries every shape: escapes, entities, nested levels
     kb = KB_SAMPLE
     s0 = extract_heading(kb, "0. Strategy")
     assert s0 and s0["level"] == 2 and "zynkr-gm (0.02)" in s0["body"], s0

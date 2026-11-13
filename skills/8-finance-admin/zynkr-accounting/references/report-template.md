@@ -40,7 +40,8 @@ Kit's annual renewal landed" is worth more than the number alone.
 
 ### 3. Income by line
 
-By product line, using the vendor map — 課程 (Hahow) · 課程 (Other) · 活動 · 顧問 · B2B. Give each
+By product line, using the vendor map in Atlas (`zynkr-accounting.vendors-and-recurring`) — one
+section per line it names. Give each
 line its amount and the counterparty behind it. If one payment dominates the month, say so.
 
 ### 4. Cost by category
