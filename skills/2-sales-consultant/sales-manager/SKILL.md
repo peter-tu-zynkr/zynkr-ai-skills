@@ -270,11 +270,26 @@ two things under the bucket table, by `company.crm-tag-rules`:
   that deal came in; policy §1 ties the two on a contact's first deal alone. So use a deal only when
   it is the only deal naming this contact in the deals REVIEW read (all stages, open and closed);
   with more than one, the row asks the owner. Every proposal sits in the one batch the owner agrees. Put a 來源 (`group="source"`, `source="rule"`) in the batch when that deal's
-  `lead_source` maps back to exactly one value in `source-to-lead-source`. When it maps back to
+  `lead_source` maps back to exactly one value in `source-to-lead-source`, unless the deal is Mode B
+  (below). When it maps back to
   several and one of them is 其他, the batch proposes 其他 with the 待確認 value 來源不明
   (`group="review"`) beside it, as policy §1 says; if the owner picks another of those values in the
   batch, 來源不明 leaves the batch with it. Otherwise the row asks the owner which value it is. Never
   infer it from a job title or an industry.
+
+  **A Mode B deal is never mapped back.** Policy §1 makes it the exception: the deal opened when a
+  contact is claimed from the 陌開名單 roster is always `lead_source = outbound`, while the person, a
+  past student, keeps 課程學員. So REVIEW never maps its `outbound` back to 冷開發: the batch
+  proposes the value on the policy's `outbound-mode-b-source` line (`source="rule"`), the
+  one `/sales-outbound` Mode B gives the contacts it creates. A deal is Mode B as the pipeline
+  policy's 開發的分組 counts it: it has, or had, a 「五封未回 → 結案 lost（no_decision）」 task, or its
+  `notes` (`get_deal`) say Mode B. Look for the task among the open tasks REVIEW already read, and in
+  one `list_tasks(filter="all", limit=200)` read, which adds the done and dropped ones (rows with
+  `parent_kind="deal"`; `parent_id` is the deal). That read lists the earliest due date first, so when
+  it returns exactly 200 rows the latest may be missing, and when it fails no closed task is in view.
+  Either way an `outbound` deal with neither sign in view may still be Mode B: its row asks the owner
+  which of the two values the person has, the batch proposes neither, and the report says the task
+  read was cut or failed.
 
 > **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). `group` is the platform's English key (`source`, `review`) and `name` is the policy's value. If Atlas cannot be reached, the key or a line you need is missing, or any of `mcp__zynkr__list_tags`, `mcp__zynkr__apply_tag`, `mcp__zynkr__remove_tag` is not among your tools, skip the tag checks, put no tag change in the batch, and say so in the report; the rest of REVIEW runs as usual. A tag change in the batch that answers `not_found`, `invalid_input` or any other error except `conflict` (`forbidden`, `rate_limited`, `internal`, …) is left undone and listed in the report, with no retry and no stopping to ask; on `conflict`, read the contact back with `list_tags`, report what it shows, and do not retry. Never fall back to a value from memory or from an older copy of this file.
 
@@ -344,7 +359,7 @@ only after a single explicit confirmation:
 專案資料夾封存 · 1 個 deal   — 結案的 deal 還有 [N] 資料夾：移到結案專案資料夾
 關掉過期 task  · 8 個        — 早已完成或已無意義
 建立追蹤任務   · 2 個 deal   — 開著但沒有下一步（到期日依客戶回覆速度；沒有到期日的舊任務一併 drop）
-加／移除標籤   · 4 位聯絡人 — 待確認已補齊的移除；沒有來源、lead_source 對得上的補上
+加／移除標籤   · 4 位聯絡人 — 待確認已補齊的移除；沒有來源的補上（lead_source 對得上的；Mode B 學員序列的人補課程學員，不推成冷開發）
 
 要我執行嗎？想留下哪一筆，說一聲原因就好
 ```

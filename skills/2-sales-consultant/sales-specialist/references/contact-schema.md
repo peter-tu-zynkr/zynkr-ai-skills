@@ -37,9 +37,9 @@ The following schema is used to store all contacts extracted from business cards
 ## Where each field lands
 
 Every field has a home on the Zynkr platform — see the mapping table in
-`../sales-specialist-config.md`. In short: the person's fields go to
-`crm_contacts`, the company's fields (website, industry, address, office phone)
-to `crm_companies`, and the three with no column of their own — linkedin, notes,
+`../sales-specialist-config.md`. In short: the person's fields go to the
+contact, the company's fields (website, industry, address, office phone)
+to the company, and the three with no field of their own — linkedin, notes,
 card_date — into the `名片` note attached to the contact.
 
 The 12-field order above is still the schema the OCR step normalizes to. The

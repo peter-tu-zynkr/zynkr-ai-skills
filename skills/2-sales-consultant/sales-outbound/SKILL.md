@@ -73,8 +73,9 @@ transcript (that is `sales-follow-up`).
 
 It runs **autonomously**: parse → enrich → pick-up gate → write CRM → research the company →
 check calendar → draft email → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
-before sending) and the CRM write is one atomic statement. Tagging the new contact comes after
-that statement, as its own small step (step 4): a failed tag never undoes the lead.
+before sending), and the CRM write is five calls to the CRM's own tools (step 4b). A run that stops
+part-way says what it made and is finished from there, never run again from the top. Tagging the
+new contact comes after those calls, as its own small step: a failed tag never undoes the lead.
 
 ## Three modes
 
@@ -138,7 +139,6 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
 
 ## Fixed facts (don't re-derive these)
 
-- **Supabase project_id**: `uomieoqlkazknjgmfdda` (the shared Zynkr project; CRM tables are `crm_*`)
 - **Google account** for all Gmail tools: `<your-google-workspace-account>`
 - **Writing style is NOT owned by this file.** Besides the House style block at the end
   (《[2.0]》 + 《[3.2]》), this surface's rules live under `[@] 寫作指南`
@@ -149,8 +149,9 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
   reached or has no `doc-style`, say so in the report and draft on 《[2.0]》 + 《[3.2]》 alone) and
   《[3.2] 禁用詞清單》 `1N5sHLP4qzmmhpCGsi6KElxi1z0MFe4QZ0Q_35T10Uyg` **category X**
   (sales-email forbidden patterns). The Doc wins over the rules restated below.
-- **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid the SQL returns.
-- **The owner is the claimer** — the person running the skill, whose email and `workspace_id` `mcp__zynkr__whoami` gives (`{{OWNER_EMAIL}}` and `{{WORKSPACE_ID}}` in the SQL). Their member id and the default pipeline (`銷售流程`) are resolved **live** (inside the SQL, or by `mcp__zynkr__list_workspace_members` on the MCP path) — never hardcode an id, and never default the owner to `company.contact-email` when the claimer is someone else.
+- **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid a create tool returns, or the matched record's.
+- **The CRM is written only through the `zynkr` MCP's tools** (step 4b). The skill never writes CRM tables with SQL, so the CRM's own rules apply to every record: the deal gets its 交易 number, and `legal_basis` is required.
+- **The owner is the claimer** — the person running the skill, whose email `mcp__zynkr__whoami` gives. Their member id is resolved **live** with `mcp__zynkr__list_workspace_members`, and `create_deal` files the deal in the default pipeline (`銷售流程`) itself — never hardcode an id, and never default the owner to `company.contact-email` when the claimer is someone else.
 - **Do NOT log the drafted email as a CRM activity.** Peter's Gmail is already synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft, it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row.
 
 ---
@@ -217,10 +218,17 @@ themselves **before** any draft, and the next person who picks up the same email
 the client is taken. So the gate is the first CRM step of the run, and nothing is written, and no
 mail drafted, until it has passed.
 
-> **The pick-up rule and the deal name are written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server): the claim rule, and §1's deal name. The six steps below are how this skill runs the rule, and they run as written even when Atlas cannot be reached; only the deal name then falls back to the `{{DEAL_NAME}}` example in `references/lead-insert.sql`, and the report says so.
+> **The pick-up rule and the deal name are written in Atlas** (`get_knowledge`, key `sales.crm-data-standards`, on the `zynkr-atlas` MCP server): the claim rule, and §1's deal name. The six steps below are how this skill runs the rule, and they run as written even when Atlas cannot be reached; only the deal name then falls back to `<name> — <what they want>` (e.g. `小明 — Zynkr CRM Beta`), and the report says so.
 
 **The claimer** is the person running the skill: `mcp__zynkr__whoami` gives their name and email,
 and their member id is the `mcp__zynkr__list_workspace_members` row with that email.
+
+**The tools come first.** Before the gate's first step, check that `whoami`,
+`list_workspace_members`, `list_contacts`, `list_deals`, `list_companies`, `get_company`,
+`create_company`, `create_contact`, `create_deal`, `create_note` and `create_task` are all among the
+`zynkr` MCP's tools. If one is missing, stop before anything is written and say which: a lead
+written only in part is worse than none. The tag tools are not on the list, since a missing one
+only turns tags into a suggestion (below).
 
 #### 4a · The gate — six steps, on the `zynkr` MCP, before anything is written
 
@@ -252,8 +260,12 @@ talking to this person's company: an open deal on a colleague's address, or a co
 mail service (gmail.com, yahoo.com, yahoo.com.tw, hotmail.com, outlook.com, icloud.com, msn.com and
 the like) and the signal names no company. Otherwise:
 
-- `mcp__zynkr__list_companies(search=<the email's domain>)`, and once more by the company's name when
-  the signal names one; keep rows whose `domain` equals the email's domain, or whose name matches
+- `mcp__zynkr__list_companies(search=<the email's domain>, limit=100)` when that domain is not a
+  personal mail service, and `mcp__zynkr__list_companies(search=<search term>, limit=100)` when the
+  signal names a company, the search term being its name cut before the first comma, parenthesis,
+  `%`, `*` or backslash, at most 60 characters (the tool turns those characters into spaces and
+  keeps only the first 60, so a whole name like `範例科技 Co., Ltd.` finds nothing). Keep rows whose
+  `domain` equals the email's domain (never a personal mail service's), or whose name matches
   ignoring case and the legal suffix.
 - For each kept company: its open deals are the rows of the four `list_deals` calls above whose
   `company_id` is that company (no new calls), and `mcp__zynkr__get_company` shows any `description`
@@ -265,57 +277,71 @@ the like) and the signal names no company. Otherwise:
 
 #### 4b · Write the lead
 
-Read `references/lead-insert.sql`, fill the placeholders, run it via
-`mcp__supabase__execute_sql(project_id="uomieoqlkazknjgmfdda", query=...)`.
+Five writes on the `zynkr` MCP, one record at a time, in this order. Each is a two-call handshake:
+`confirm:false` previews, then the identical call with `confirm:true` writes. A later write needs
+an earlier one's id, so keep each id the moment its tool returns it. The enum values come from
+*Inference defaults* below.
 
-`{{OWNER_EMAIL}}` is the claimer's email and `{{WORKSPACE_ID}}` the `workspace_id`, both from
-`whoami`; the SQL resolves the claimer only inside that workspace and never picks one itself. The SQL carries the same gate inside the
-statement: if a deal claimed after 4a was already saved when the statement started, it writes
-nothing and returns `blocked = true` with that deal's number, stage, owner and last activity.
-Treat that exactly as 4a step 5: stop, no draft, report the line. It takes no lock, so two claims
-running at the same instant can both pass; that true race is caught afterwards by
-`/sales-manager` REVIEW's 重複認領 check.
+1. **Company** — none when *Inference defaults* says there is none (a personal address, and no
+   employer named). Otherwise reuse a company the check above found: the row whose `domain` equals
+   the email's domain, when that is not a personal mail service, else the row whose `name` equals
+   the company's full name, ignoring case. A name that matched only without its legal suffix is the
+   check's warning, not the same company. When neither is found and a search returned exactly 100
+   rows, the find is not sound: create no company, file the contact without one, and say so in the
+   report. Otherwise, when neither is found,
+   `mcp__zynkr__create_company(name=…, domain=…, industry=…, country=…, description=…,
+   owner_id=<claimer>)`, with `domain` only when the email's domain is the company's own and the
+   other fields only from the signal and the profile link (workflow step 2). A company that
+   already exists is left as it is.
+2. **Contact** — first run 4a's steps 2–5 again, since a teammate may have picked up the same email
+   since the gate. A stop there (an open deal, or a `list_deals` read of exactly 100 rows) ends the
+   run as it does in 4a, and the report also lists the company if write 1 made it; a contact found
+   now counts as one the gate matched. A matched contact is reused as it is, with no write; when
+   several match, the first, and the report names the others. Only when none matches:
+   `mcp__zynkr__create_contact(first_name=<the whole name>,
+   email=<the normalised email>, title=…, phone=…, company_id=<step 1's, when there is one>,
+   owner_id=<claimer>, lifecycle_stage=…, legal_basis="consent")`. Pass `lifecycle_stage` every
+   time (the tool defaults to `opportunity`) and `owner_id` every time (without it the contact has
+   no owner). `legal_basis` is `consent` (`sales.crm-data-standards` §3). The whole name goes in
+   `first_name` and `last_name` stays empty (§3). Leave out what the signal lacks: the 待確認 gaps
+   below are judged on what was written.
+3. **Deal** — `mcp__zynkr__create_deal(name=<the deal name, sales.crm-data-standards §1>,
+   contact_id=…, company_id=<step 1's, when there is one>, owner_id=<claimer>, stage=…,
+   lead_source=…, priority=…, notes=…)`, plus
+   `value` and `close_date` only when the signal states them. `deal_type` is the tool's default,
+   `new_business`. The tool puts the deal in the default pipeline and gives it its 交易 number, but
+   returns only the id: the number is read back after the last write (below).
+4. **Source note** — `mcp__zynkr__create_note(contact_id=…, subject=…, body=…)`, the subject naming
+   the channel and the outcome (`Threads 初次接觸 — 同意 demo`). The body opens with where it came
+   from, the channel and any handle (`來源：Threads DM · @example.marketing`), then the conversation
+   verbatim and who they are. A note takes one parent: on the contact, it shows on the contact's
+   page and on the deal's, whose timeline includes its contact's notes.
+5. **Follow-up task** — `mcp__zynkr__create_task(deal_id=…, subject=<the agreed next step, e.g.
+   安排 30 分鐘 Demo + 開通 Beta>, body=…, due_at=<task_due_days from today, 09:00 台北時間, ISO 8601
+   with +08:00>, assignee_id=<claimer>)`.
 
-An owner email that matches no user in that workspace fails with a NOT NULL error (usually on
-`workspace_id`). One statement:
-- resolves the claimer (inside `{{WORKSPACE_ID}}`) and the default pipeline live,
-- runs the gate (exact `email` / `secondary_email` match, open stages only),
-- **find-or-creates the company** (case-insensitive by name; skipped if no company),
-- **find-or-creates the contact** (by email or secondary email; reused if it already exists),
-- inserts a **new deal owned by the claimer**,
-- logs a **`note`** activity (the verbatim conversation + who they are) and a **`task`**
-  activity (the agreed next step, due in `{{TASK_DUE_DAYS}}` days, assigned to the claimer).
+**Read the 交易 number back** after the last write, or after the one that failed:
+`mcp__zynkr__list_deals(search=<search term>, limit=100)`, the search term being the deal name cut
+before its first comma, parenthesis, `%`, `*` or backslash, at most 60 characters, and keep the row
+whose `id` is the new deal's. The list puts the latest activity first, and a deal has none until
+its task is written, which is why the read comes last. A read that finds nothing stops nothing: the
+report then gives the deal by its link alone.
 
-It returns `company_id`, `contact_id`, `deal_id`, `note_id`, `task_id`, plus
-`contact_existed` / `company_existed` booleans so you can say so in the report, and `blocked`.
+**A write that fails stops the run there.** Retry nothing, delete nothing, and go on to no tag, no
+research and no draft. The report lists each record already made, with its link (the deal with
+its 交易 number), and names the write that failed with the tool's error. To finish, run the writes
+that are left and then the rest of the run, with those ids: in this conversation, or from the
+report pasted into a new one. Never start it again from the top. Once the deal exists, a second
+run stops at the gate on that deal (4a step 5), so its note, task and draft would never be written.
 
-**Escaping:** every `{{…}}` placeholder is replaced with a **SQL literal** — quote
-text and double any single quote (`O'Brien` → `'O''Brien'`), or write `NULL`. For an
-absent company, set `{{COMPANY_NAME}}` to an empty string `''` (the SQL then creates
-no company and the deal's `company_id` is NULL).
+The second look at write 2 leaves only the contact's and the deal's own calls between it and the
+claim. A teammate who claims the same client in that gap makes a second open deal on the contact,
+and `/sales-manager` REVIEW's 重複認領 check lists it for the two owners.
 
-**If the Supabase MCP is not authenticated** — you can tell because only
-`mcp__supabase__authenticate` / `complete_authentication` are exposed and
-`execute_sql` is missing — fall back to the `zynkr` MCP CRUD tools instead of
-blocking. Run the gate in 4a exactly as written, all six steps: its matched contact is your
-dedupe. Then `create_contact` (only when the gate matched none) → `create_deal` →
-`create_note` → `create_task`. Each is a two-call handshake (`confirm:false` to preview, then
-the identical call with `confirm:true`). They resolve workspace + pipeline natively, but three
-things the SQL did for free you must now pass explicitly: **`legal_basis`**
-(`consent` — the same house value baked into the SQL), **`lifecycle_stage`** (the
-tool defaults to `opportunity`), and **`owner_id`** = the claimer's member id on both
-`create_contact` and `create_deal` — never omitted: `create_contact` leaves the owner empty
-without it. The whole name goes in `first_name`, and `last_name` stays empty (`sales.crm-data-standards` §3). `create_task` takes `deal_id`, `due_at` (ISO 8601 with `+08:00`) and
-`assignee_id` = the claimer. On either path, write
-the phone and title the signal gave (`{{PHONE}}` / `{{TITLE}}`, or `phone` / `title` on
-`create_contact`); the 待確認 gaps below are judged on what was written, not on the signal.
-
-See *Inference defaults* below for the enum fields.
-
-**Tag the contact.** After the insert, tag the contact **only when this run created it**
-(`contact_existed` false). An existing contact keeps its tags: a missing 來源 there is
-`/sales-manager` REVIEW's to find. Use the `zynkr` MCP. This is the tool's own handshake, not a
-question to Peter: each tag is
+**Tag the contact.** After the five writes, tag the contact **only when it is new**: write 2 called
+`create_contact`, in this run or in the stopped run it finishes. An existing contact keeps its
+tags: a missing 來源 there is `/sales-manager` REVIEW's to find. Use the `zynkr` MCP. This is the
+tool's own handshake, not a question to Peter: each tag is
 `mcp__zynkr__apply_tag(group=…, name=…, entity_type="contact", entity_id=<contact_id>, source="rule")`
 to preview, then the same call with `confirm:true`. Both groups come from fixed rules, so `source`
 is `rule`.
@@ -324,18 +350,16 @@ is `rule`.
   event feedback row is `workshop`, an introduction `referral`), apply none and write
   `標籤建議：來源=<the channel they came through>`.
 - **待確認** (`group="review"`) — one value from `review-values` per gap: no phone → 電話缺漏, no
-  title → 待補職稱, a company email or company name but no company record → 未關聯公司. The insert
-  always sets `legal_basis`, so 同意權未確認 does not arise here.
+  title → 待補職稱, a company email or company name but no company record → 未關聯公司.
+  `create_contact` always sets `legal_basis`, so 同意權未確認 does not arise here.
 
 Never infer a tag from a job title or an industry. Read the result back with
 `mcp__zynkr__list_tags(entity_type="contact", entity_id=<contact_id>)` and report what it shows.
-When the policy or either tag tool is missing, apply nothing and put **no** tag suggestion into
-`{{NOTE_BODY}}`: the insert is a find-or-create, so before it runs you cannot know whether the
-contact is new, and a suggestion followed by hand on an existing contact would change a complete
-record. Only after the insert returns `contact_existed` false, and only when
-`mcp__zynkr__create_note` is among your tools, write the 來源 and 待確認 suggestions in one
-`mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)`; otherwise write none. A tag
-refused after the insert goes into that same kind of note.
+When the policy or either tag tool is missing, apply nothing and keep the suggestions out of the
+source note, which holds the signal as it came. Only when the contact is new (as above), write the
+來源 and 待確認 suggestions in one `mcp__zynkr__create_note(contact_id=…, subject="標籤建議", body=…)`;
+for a contact that already existed write none, since a suggestion followed by hand there would
+change a complete record. A refused tag goes into that same kind of note.
 
 > **The CRM tag rules are company policy — read them from Atlas** (`get_knowledge`, key `company.crm-tag-rules`, on the `zynkr-atlas` MCP server; each list is a `<name>: <value>` line at the top, and the `value:` line is the version date). Apply only a value those lines name: `group` is the platform's English key (`source`, `relationship`, `product`, `size`, `interest`, `review`) and `name` is the policy's value. Apply no tag when Atlas cannot be reached, the key or a line you need is missing, `mcp__zynkr__list_tags` or `mcp__zynkr__apply_tag` is not among your tools, or `apply_tag` answers `not_found` or `invalid_input` (an archived value, a group that does not fit the record): write each tag you would have applied as one line `標籤建議：<group>=<value>` in a CRM note on the record, say so in the report, and carry on with the run. When the policy itself cannot be read, write the evidence instead of a value (`標籤建議：主題=<what they asked about, in brief>`, `標籤建議：來源=<the channel they came through>`); never pick a value from memory or from an older copy of this file. On `conflict`, read the record back with `list_tags`, report what it shows, and do not retry. Any other error (`forbidden`, `rate_limited`, `internal`, …) is handled like `not_found`: no tag, a suggestion, no retry, and no stopping to ask.
 
@@ -473,9 +497,9 @@ Show the client card, then a compact artifact table:
 
 | 產出 | 連結 / 狀態 |
 |------|------------|
-| CRM Deal | <deal url>（負責人 <claimer>） |
+| CRM Deal | <交易 number> · <deal url>（負責人 <claimer>） |
 | 聯絡人 | <contact url>（新建 / 既有） |
-| 公司 | <company url>（新建 / 既有） |
+| 公司 | <company url>（新建 / 既有）／ 沒建（原因） |
 | 活動 | note · 1 task |
 | 標籤 | 來源=… · 待確認=…（已讀回）／ 未貼，標籤建議已記在 note（原因） |
 | 研究 | /sales-research 寫在公司的 note ／ 聯絡人兩三行 ／ 沿用本次對話的研究 ／ 沒跑（原因） |
@@ -489,8 +513,10 @@ evening slot is in the mail, say why: the afternoon windows in range gave fewer 
 
 If the contact already existed, say so: every deal they had was `won` or `lost`, so the gate
 let you attach a new deal to the same person rather than duplicating them. A run the gate
-stopped reports only its one line (4a step 5) — no table, no draft — and a run over the cap adds
-the cap line from *Inference defaults*.
+stopped reports only its one line (4a step 5) — no table, no draft — plus the company's link when
+the second look at 4b write 2 stopped it after write 1 made one. A run over the cap adds
+the cap line from *Inference defaults*. A run stopped by a failed write reports the records it made
+and the write that failed (4b), with no draft, and says how it is finished.
 
 ---
 
@@ -519,13 +545,13 @@ Pick the closest enum from the conversation; use the fallback when there's no si
   Create it after the first call, when they've told you.
 - **priority** (`low|medium|high`) — default **`medium`**; eager / near-term → `high`.
 - **deal_type** — **`new_business`** (this is a fresh lead).
-- **value** — **`NULL`** unless a concrete figure was discussed (beta / early chats have none).
-- **close_date** — `NULL` unless a date was stated.
+- **value** — **left empty** unless a concrete figure was discussed (beta / early chats have none).
+- **close_date** — left empty unless a date was stated (`YYYY-MM-DD`).
 - **task_due_days** — from the follow-up rhythm in `company.sales-pipeline-rules` (read it with the
   line below). A lead who just wrote to us has no reply history, so it is `followup-fast-days`.
   A contact who already existed gets the rhythm their reply lag earns (median days between our
   mail and their reply, last 90 days, from Gmail). When the signal names a deadline ("下週五前要",
-  "this month"), add the line `客戶時限：YYYY-MM-DD（原話）` to `{{DEAL_NOTES}}` and make the task
+  "this month"), add the line `客戶時限：YYYY-MM-DD（原話）` to the deal's `notes` and make the task
   due on the earlier of the rhythm's date and that deadline. An interval Peter promised in the
   thread ("我三天後回你") wins over both.
 - **claimer's open-deal count** — after the claim, count the claimer's open deals (the rows of
@@ -543,9 +569,14 @@ Pick the closest enum from the conversation; use the fallback when there's no si
   the skill prepares, he approves. That's also why it needn't confirm before running.
 - **Find-or-create, one open deal per client.** A person can come back for a second deal, but
   they shouldn't be duplicated as a contact, and two people must never chase the same client —
-  so contact/company are keyed (email / name), and a new deal is booked only when the contact
+  so contact/company are keyed (email / domain or name), and a new deal is booked only when the contact
   has none open. Re-running on the same email stops at the gate instead of booking a second
   deal; a client whose deals are all won or lost gets a fresh one.
+- **The CRM's own tools, never SQL** (owner, 2026-11-15). Every record goes in through the tools
+  the runner's own CRM connection offers, so the CRM's rules apply to it: the deal gets its 交易
+  number, `legal_basis` is required, and the workspace is the runner's. Five calls are not one
+  statement, so a run that stops part-way lists what it made and is finished from the write that
+  failed. Run again from the top, it would stop at the gate on its own deal.
 - **The claim comes before the draft.** The deal, owned by whoever picked the client up, is the
   claim: made first, it is what the next person's gate finds. The claimer runs the skill in
   their own session, so the draft lands in their own mailbox.

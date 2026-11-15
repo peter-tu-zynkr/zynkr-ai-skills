@@ -150,7 +150,11 @@ The judgement, in one line the client can check: **買了之後你會的，走�
   the covering email. That covers a length in any form: an hour count, a clock-time range
   (09:30–12:30), a timed agenda. A one-off event names its format (半天 / 全天); a recurring session
   gives its cadence (每週一次), never its length. A session's length and a week count together give
-  the rate away when the page has one priced line.
+  the rate away when the page has one priced line. Session times travel in each session's calendar
+  invite, the one exception to the rule above. This skill never sends one: whoever schedules the
+  sessions sends it to the client's contact to pass on (owner ruling, 2026-11-15). In place of any
+  time, the kickoff doc (when this skill writes it, in the revision loop's step 10) and the points
+  handed over for the covering email carry 「各場次時間以行事曆邀請為準」.
 - **Price at list, and apply only a reduction someone has decided.** Read the 知識庫 card
   `b2b-enterprise-pricing` and §2 of `sales.quote-proposal-policy` from Atlas before you price
   (`mcp__zynkr-atlas__get_knowledge`). The card says which reductions exist, when an entry price credits against later
@@ -197,8 +201,10 @@ criterion, any internal→external mapping, and the share URL.
 **The covering email is not this skill's to write, and not `sales-follow-up`'s either.** That
 skill follows up a call from its transcript and has no proposal mode. Whoever picks up the outbound with this client writes the
 email, in their own thread with the client. Give them a handoff line instead: the share URL and
-password, which version is current, and the two or three points the email should land (the
-ranking criterion, the 第一順位 total, and what is deliberately left out). When the written amount
+password, which version is current, and the points the email should land (the
+ranking criterion, the 第一順位 total, and what is deliberately left out). The points give no
+session time: they carry 「各場次時間以行事曆邀請為準」 instead, and the line says that no session
+invite has gone out from here, so whoever schedules the sessions still sends them. When the written amount
 is clearly above what was said on the call, the line also says the email must name the gap and the reason in one
 sentence (`sales.sop-proposal-quote` §四). Never draft or send that email from here.
 
@@ -266,10 +272,12 @@ Proposals are not written once. When comments come back:
    not the same content.
 9. **Resolve each comment** once its change is live. A comment left unapplied under item 2 stays open.
 10. **Sync every downstream copy in the same pass**: the CRM note (amounts and hours) and the
-   kickoff doc (amounts only: hours never leave the CRM note). If an unsent
+   kickoff doc (amounts only: hours never leave the CRM note, and its sessions carry
+   「各場次時間以行事曆邀請為準」, never a clock time or a length; a date stays). If an unsent
    covering email already sits in Gmail, it belongs to whoever picks up the outbound. Tell them
-   which totals and lines changed, and do not rewrite their email. A stale total in an unsent
-   email is the failure mode this step exists to stop.
+   which totals and lines changed and, if it gives a session time, to put that line in its place.
+   Do not rewrite their email. A stale total in an unsent email is the failure mode this step
+   exists to stop.
 
 Report the comment→change mapping back to Peter, and flag any judgement call — a wording change
 that shifts meaning, or a consistency edit applied beyond the anchored spot.
@@ -281,11 +289,24 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
   per-line pricing with hours · any reduction and who decided it · internal→external
   module mapping · anything deliberately unquoted and why
 - A handoff line for whoever picks up the outbound with this client: the share URL and
-  password, the current version, the points the covering email should land (amounts, never hours), and the chase
-  task's due date
+  password, the current version, the points the covering email should land (amounts, never hours or session
+  times), the chase task's due date, and that no session invite has gone out from here
 - A chase task on the deal, due by the policy's follow-up rhythm
 - The proposal's 產品 tags on the contact and the company, read back (or the `標籤建議` note)
 - On revisions: the comment→change table, the checksum verification, and what was synced
+
+## Limitations
+
+- **Three things the skill does not work around** (owner rulings, 2026-11-15):
+  - a one-off event on one priced line names its format (半天 / 全天);
+  - each session's calendar invite carries its start and end;
+  - a page with several amounts shows them side by side, each line at the amount it was priced at: never rounded,
+    and never shifted in part to another line.
+- **No calendar invites from here.** The skill sends none. It writes 「各場次時間以行事曆邀請為準」 in place of any time
+  in two places: the kickoff doc (the revision loop's step 10) and the covering email's points (the handoff line,
+  §7). The proposal itself gives a session's format or cadence and no time (§5). Each session's invite comes from
+  whoever schedules the sessions, sent to the client's contact to pass on, and the handoff line says that none has
+  gone out from here.
 
 ## House style
 
