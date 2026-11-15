@@ -6,12 +6,12 @@ description: >-
   discovery-call emails from website@zynkr.ai) and the [2.1] Inbound Sales Gmail
   label. For each real lead it creates a CRM deal in Supabase and drafts the
   first reply as a Gmail draft (never sent); the client folder and kickoff doc
-  come later, from /project-init at qualified. Use this skill whenever Peter runs
+  come later, from /project-init at qualified. Use this skill whenever someone runs
   /sales-inbound or says things like "process this week's consult inbounds",
   "處理本週顧問諮詢", "有沒有新的顧問諮詢", "check for new consulting leads",
   "turn the discovery-call inquiries into deals", "intake the consult requests",
   "回覆 inbound sales", "清 sales inbox", "處理詢價信", or otherwise asks to triage /
-  log inbound AI-consulting or team-training requests or inbound sales mail — even if he doesn't
+  log inbound AI-consulting or team-training requests or inbound sales mail — even if they don't
   name the CRM or the exact phrase. It is also the skill a
   scheduled weekly sales-inbound run should invoke. The Support label and the
   other website forms belong to /zynkr-support; one pasted signal belongs to
@@ -41,10 +41,14 @@ house-style: bound
 
 # Sales Inbound
 
-Peter gets inbound sales mail two ways: consulting and team-training inquiries through
+```bash
+npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-inbound
+```
+
+Zynkr gets inbound sales mail two ways: consulting and team-training inquiries through
 the Zynkr website's form, and mail that lands under the `[2.1] Inbound Sales` Gmail
 label. This skill clears both once a week: it reads the week's mail, and for every
-genuine lead it lays down what the sales motion needs — a **CRM deal** his team can
+genuine lead it lays down what the sales motion needs — a **CRM deal** the team can
 track and a **first-reply draft** so the lead hears back.
 
 The client folder and its kickoff doc are not this skill's. A lead is not a project
@@ -52,12 +56,12 @@ yet: `/project-init` opens the numbered folder, the kickoff documents and the de
 `專案資料夾：` line once the deal reaches **qualified**, after the discovery call.
 
 It runs **fully autonomously**: parse → filter → create → research → draft → report. No mid-run
-confirmation. The whole point is that Peter runs it (or a cron does) and comes
-back to a finished pipeline. Because it writes real CRM records and Gmail drafts,
+confirmation. The sales DRI (業務 DRI) runs it once a week, by hand or on a schedule of
+their own, and comes back to a finished pipeline. Because it writes real CRM records and Gmail drafts,
 the safety comes from being *idempotent* — it skips tests and skips any lead whose
 email already has an open deal, under any owner, so re-running the same week never creates
 duplicates and never takes a client a teammate is already working. A reply
-is only ever a draft: Peter reads it and sends it himself.
+is only ever a draft: the person who ran it reads it and sends it.
 
 ## Configuration
 
@@ -91,7 +95,7 @@ Each inbox has exactly one owner, so a lead never gets two drafts:
 - **/zynkr-support** owns `[3] Operation/[3.8] Support` and the website forms with any
   other interest (e.g. Zynkr CRM). It lists anything of this skill's it comes across
   and drafts nothing on it.
-- **/sales-outbound** takes one signal Peter pastes by hand (a DM, a card, a form
+- **/sales-outbound** takes one signal someone pastes by hand (a DM, a card, a form
   row). This skill is the weekly sweep.
 
 ## The inbound email shape
@@ -129,7 +133,8 @@ the latest message they sent. Three kinds turn up there:
 - **A lead** — someone asking about Zynkr's services, a price or a call. Log it and
   draft the reply (steps 3–5).
 - **A proposal** — a 講座提案, 合作邀請 or introduction. No deal and no draft: list it
-  in the report for Peter, who decides how to take it up.
+  in the report for Peter, who decides how to take it up. A runner who is not Peter forwards him that part of
+  the report.
 - **Not a prospect** — a vendor pitch, a newsletter, an automated mail. Skip it and
   say so in the report.
 
@@ -140,12 +145,20 @@ the latest message they sent. Three kinds turn up there:
 - **The owner of a new lead is the inbox's owner** — the person running the skill: `mcp__zynkr__whoami`
   gives their email, and their member id is the `mcp__zynkr__list_workspace_members` row with that
   email. `create_deal` resolves the pipeline (`銷售流程`) itself. Resolve both live; never hardcode an id.
+- **The mailbox is the runner's own.** Every Gmail call reads the mailbox of whoever runs the skill, so a
+  run finds leads only in a mailbox that receives the `website@zynkr.ai` inquiries and carries the
+  `[2] Sales & consultant/[2.1] Inbound Sales` label. Step 1 checks for the label first.
 
 ---
 
 ## Workflow
 
 ### 1 · Pull the week's inquiries
+
+First check the mailbox's labels with `mcp__google-workspace__list_gmail_labels`. If
+`[2] Sales & consultant/[2.1] Inbound Sales` isn't there, run the website search below and skip the Inbound Sales
+search. Open the report by saying so: this mailbox has no Inbound Sales label, so only the website inquiries were
+swept, and an empty result is not "no new mail".
 
 Search Gmail for the website's consulting and team-training inquiries from the last 7 days:
 
@@ -177,10 +190,14 @@ A thread can contain several messages (auto-reply, follow-ups) but they share a
 Thread ID — **dedupe by Thread ID** and keep only the original inquiry (the one
 that actually carries the `Name:` / `Email:` block). Read an Inbound Sales thread
 whole (`mcp__google-workspace__get_gmail_thread_content`): when its last message is
-Peter's, he has already replied, so skip it and list it as handled.
+a reply to the lead, sent from an `@zynkr.ai` address other than `website@zynkr.ai` with the lead among its
+recipients, it has already been answered, so skip it and list it as handled. A forward or a note to a teammate,
+an auto-reply and an unsent draft are not replies.
 
 If neither search matches, say so plainly ("No new inbound sales mail this week") and stop.
-That's a perfectly good outcome, not a failure.
+That's a perfectly good outcome, not a failure. When the label check skipped the Inbound Sales search, the line is
+"No new website inquiries this week. This mailbox has no Inbound Sales label, so that inbox wasn't checked" instead:
+an empty website search alone never means no new mail.
 
 ### 2 · Parse and filter out the noise
 
@@ -192,7 +209,7 @@ proposal or not a prospect; only leads go on to step 3.
 - the email is `@zynkr.ai`, or
 - the name, company, or email contains `test`, `測試`, `ga4`, or similar dummy markers.
 
-Skipping is normal — name what you skipped and why in the final report so Peter
+Skipping is normal — name what you skipped and why in the final report so whoever ran it
 can sanity-check your judgment.
 
 ### 3 · The pick-up gate — de-dup against the CRM
@@ -387,11 +404,17 @@ and say so in the report.
   `Email:` line, never a reply in the `website@zynkr.ai` thread (that would only email
   the website). An Inbound Sales lead gets a reply inside its thread: pass `thread_id`
   and keep the subject, prefixed `Re: `.
-- **How it reads.** Follow `/sales-outbound` steps 5 and 6, exactly as written there:
-  read Peter's calendar first and offer three real windows in 台北時間 when the ask is a
-  call (Taipei afternoon first, the fixed slot block, house wording), mirror their own words, add one short
-  paragraph of substance before the ask, match their language, and sign off as Peter.
+- **How it reads.** Follow `/sales-outbound` steps 5 and 6, exactly as written there. When the ask is a call and
+  Peter runs it, read his calendar first and offer three real windows in 台北時間 (Taipei afternoon first, the fixed
+  slot block, house wording); when anyone else runs it, the next bullet takes the slots' place. Mirror their own
+  words, add one short paragraph of substance before the ask, match their language, and sign off as Peter.
   Run only those two steps: its step 4 inserts a new deal, and this lead already has one.
+- **The calendar is the runner's.** `/sales-outbound` step 5 reads the calendar of the connected Google account,
+  and step 6 signs the reply as Peter. When `mcp__zynkr__whoami` names someone other than Peter, that calendar is
+  theirs, not his, so offer no slots. In place of the slot block, ask which times suit them (台北時間) and say the
+  invite follows once they confirm, in the reply's own language and register. A zh-TW reply that uses 你 says
+  「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」; one that uses 您, or an English reply, says the same in
+  its own words. Say in the report that the draft has no times because the run could not read Peter's calendar.
 - **A company asking what in-house training or consulting costs gets no figure here** (a website
   inquiry or an Inbound Sales lead): no price, no hourly rate and no hour count, whatever the 知識庫
   says. Those prices are fixed packages that `/sales-proposal-writer` writes after the call, so the
@@ -449,7 +472,7 @@ answer waited), and state the headline in prose (e.g. "Created 2 deals +
 ## Why it's built this way
 
 - **Idempotent over confirm-first.** Peter chose autonomous mode, so correctness
-  can't depend on him eyeballing a preview. The pick-up gate in step 3 (an exact email
+  can't depend on anyone eyeballing a preview. The pick-up gate in step 3 (an exact email
   match, open deals only) is what makes an unattended or scheduled re-run safe, and what
   keeps a teammate's client theirs.
 - **The platform creates the deal, not a hand-written statement.**
@@ -467,7 +490,7 @@ answer waited), and state the headline in prose (e.g. "Created 2 deals +
   Inbound Sales threads this skill logged, so a lead could get two drafts. The sales
   inboxes are this skill's now, and the Support inbox is /zynkr-support's.
 - **Skipped rows stay visible.** Tests and duplicates are filtered, but always
-  reported — a silent skip looks identical to "found nothing", and Peter needs to
+  reported — a silent skip looks identical to "found nothing", and whoever runs it needs to
   trust that a real lead never quietly vanished.
 
 ## Defaults you can safely assume (and Peter can override later)

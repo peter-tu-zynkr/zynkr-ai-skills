@@ -26,12 +26,13 @@ npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill sales-d
 Turn what we already know about a client into a plan for the 30-minute discovery call: two hypotheses worth
 testing, the questions to ask (each with why we ask it, what the client will probably say, and how to respond),
 and the agenda mail that goes out the day before. The plan is saved as one note on the deal for the deal owner, who
-runs the call. Each hypothesis is tested in the call by its own question; nothing reads the note back afterwards,
-because no CRM tool reads a deal's timeline.
+runs the call. Each hypothesis is tested in the call by its own question. No CRM tool reads a deal's timeline, so
+after the call the deal owner pastes the note's two hypothesis lines into `/sales-discovery`, whose summary records
+whether each one held.
 
 > **Where this fits:** `/sales-outbound` (the reply that books the call) → `/sales-research` (the company brief) →
-> **`/sales-discovery-prep`** → the call → `/sales-follow-up` (the follow-up mail), with `/sales-discovery` first when
-> the needs summary is wanted. `/sales-manager` hands a deal here when someone asks to prep its call.
+> **`/sales-discovery-prep`** → the call → `/sales-discovery` (the needs summary, which says whether each hypothesis
+> held) → `/sales-follow-up` (the follow-up mail). `/sales-manager` hands a deal here when someone asks to prep its call.
 
 **What it never does:** send a mail, write the deal's `notes` field, move a deal stage, or invent a fact about the
 client. Expected answers are guesses and are labelled as guesses.
@@ -179,8 +180,9 @@ are known (`/sales-follow-up` or the deal owner).
 ## Step 8 — Report
 
 Three lines: the deal and the call time; the note written (or not) and the question count; the agenda draft
-(drafted, skipped and why, or placeholders left). Then name the next step: after the call, give the transcript to
-`/sales-follow-up` for the follow-up mail, and to `/sales-discovery` first when the needs summary is wanted.
+(drafted, skipped and why, or placeholders left). Then name the next step: after the call, give the transcript and
+this note's two 假設 lines to `/sales-discovery`, whose summary says whether each held, then the transcript to
+`/sales-follow-up` for the follow-up mail. `/sales-follow-up` on its own never checks the hypotheses.
 
 ## House style
 

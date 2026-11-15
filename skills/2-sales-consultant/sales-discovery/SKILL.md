@@ -71,7 +71,11 @@ This mode interviews nobody and launches neither agent. The person running it is
    `contact_id`, read the name with `mcp__zynkr__get_contact`. With no deal or no contact, ask how the client writes
    their name and write the summaries all the same: Step 4 item 1 says what happens without a deal.
 3. **Note when the call happened** for `occurred_at`. If the record does not say, ask.
-4. **Write the two summaries.**
+4. **Ask once for the prep's two hypotheses.** When `/sales-discovery-prep` prepared this call, its `[會前準備]` note
+   on the deal lists 兩個假設, each with the question that tests it. No CRM tool reads a deal's notes back, so ask the
+   user to paste those two lines: 「這場有跑會前準備嗎？有的話，請貼上筆記裡『兩個假設』那兩行。」 With no prep, or nothing
+   pasted, there are no hypothesis lines.
+5. **Write the two summaries.**
    - `STAGE1_SUMMARY` has the sections `sales-discovery-pains` closes with: Background & Industry · Team & Role ·
      Current Projects & Challenges · 5D Exploration Results (Diagnose · Distill · Desire · Drag · Deadline).
    - `STAGE2_SUMMARY` has the four sections `sales-discovery-vision` closes with: Company Vision & Strategic
@@ -80,8 +84,13 @@ This mode interviews nobody and launches neither agent. The person running it is
    - Every line comes from the record. A section the call did not reach reads 「會中沒聊到」. Never fill one from
      the company brief, from the industry, or by inference.
    - Keep the client's own words where they named the cost of the problem or what matters most to them.
-5. **Show both summaries and ask once:** 「這樣有抓到這場會議嗎？（Yes / Adjust）」 On Adjust, change what they name
-   and show it again. On Yes, go to Step 4.
+   - **One line per hypothesis**, when item 4 has them: 「假設 1：<假設> → 成立｜不成立｜會中沒問 — 對方原話：<引述>」.
+     The prep's 依據 says where a guess came from; this line quotes the client instead. Write 成立 or 不成立 only
+     when the record holds the client's own answer on that hypothesis, to its question or offered unasked, and
+     quote it after 對方原話. A remark that only touches the topic is not an answer: write 會中沒問, with no quote.
+     These are `HYPOTHESIS_LINES`.
+6. **Show both summaries, and the hypothesis lines if any, and ask once:** 「這樣有抓到這場會議嗎？（Yes / Adjust）」
+   On Adjust, change what they name and show it again. On Yes, go to Step 4.
 
 ---
 
@@ -156,7 +165,8 @@ only in this chat:
    user all of it as one preview, and re-call each with `confirm:true` only after they agree: one question, not two.
    - Pass `occurred_at` whenever the call was not today.
    - The body is `STAGE1_SUMMARY` under 「痛點（需求定義）」, then `STAGE2_SUMMARY` under 「願景（策略探索）」, in the
-     client's language and exactly as the user agreed them.
+     client's language and exactly as the user agreed them. When Step 1a wrote `HYPOTHESIS_LINES`, they follow
+     under 「會前假設」, as agreed.
    - If only one stage ran, log that one and say which.
 3. **The tags in that preview.** `company.crm-tag-rules` gives this call the tags below. Every one is
    `source="ai"`, because it is read from what the client said. They go on the deal's contact and,
