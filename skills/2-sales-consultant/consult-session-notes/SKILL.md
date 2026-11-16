@@ -83,8 +83,15 @@ its source — who said it, or which transcript section.
    of the source skill's "No updates this week" rule. Never pad.
 4. **Client-facing email is ALWAYS a Gmail draft** — if Peter asks to send the
    summary out, `mcp__google-workspace__draft_gmail_message`. Never send.
-   Pass `body_format="html"` and `include_signature=true` (the body written as plain text, then
-   `& < >` escaped and line breaks turned into `<br>`), so the draft carries the sender's Gmail signature.
+   The body is the house recap format (`SKB-140`): read `references/recap-mail.md`, write the
+   summary as a JSON payload in the run's temp folder, run
+   `python3 scripts/render_recap_email.py <tmp>/recap.json --check`, then `--out <tmp>/recap.html`,
+   and pass the file's contents as `body` with `body_format="html"` and `include_signature=true`,
+   so the draft carries the sender's Gmail signature. The four sections map to blocks: Summary
+   Update and Progress → `text`; Blockers → `text`, with the client's own sentence in a `quote`
+   block when they said it; What's Next → `next_steps`, grouped by owner. The 痛點 ledger stays in
+   the `[Notes]` Doc and never goes in the mail. The one orange `action` block is a resource the
+   session promised, or the agreed next meeting; with neither, the mail has none.
 
 ---
 
@@ -291,8 +298,14 @@ Re-sync check: `git log --oneline b6bfb04c..origin/main -- skills/3-operations/p
 
 ## Reference files
 
-None — the summary template and the 痛點 ledger table live inline in this file
-(steps 2–3), so a standalone marketplace install is self-contained by design.
+The summary template and the 痛點 ledger table live inline in this file (steps 2–3). The client
+mail's format ships with the skill, so a standalone install stays self-contained:
+
+- `references/recap-mail.md` — the recap format: when it applies, the content rules, the payload
+- `scripts/render_recap_email.py` — renders the payload to the HTML body (`--check`, `--self-test`)
+
+Both are copies of `docs/recap-mail-shared/` in the skills workbench (`SKB-140`);
+`scripts/check-recap-mail-refs.sh` keeps them byte-identical.
 
 ## Limitations
 

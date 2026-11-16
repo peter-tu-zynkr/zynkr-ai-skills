@@ -95,6 +95,9 @@ sending) and the deal writes go through the Zynkr MCP's own preview/confirm.
   wins** — and flag that the condensed copy needs re-syncing.
 - **Solution page to pitch**: `https://zynkr.ai/crm` — the Zynkr CRM product page, the source of truth for capability names (Zynkr 執行模式, 工作指南, 名單拓展, 情境工程 engine). Fetch it to ground the pitch; never invent feature names. 簡報 was removed from the product on 2026-09-16 — never pitch it, even if a transcript mentions it. The same goes for 知識庫, which left the CRM on 2026-11-07: never pitch it as a CRM capability.
 - **Plan prices**: Atlas `zynkr-service-offerings` (`mcp__zynkr-atlas__get_knowledge`) is the source of truth. Read it when the call discussed a plan, so the mail describes the plan correctly. `https://zynkr.ai/crm-pricing` is the page to link the client to, not a source. Whether a mail names a number follows Atlas `sales-kit`: a number goes through `/sales-proposal-writer`, never straight into a mail.
+- **Recap format** (`SKB-140`): `references/recap-mail.md` + `scripts/render_recap_email.py`, both
+  in this skill folder. Copies of `docs/recap-mail-shared/` in the skills workbench, kept
+  byte-identical by `scripts/check-recap-mail-refs.sh`; change the seed, never a copy.
 - **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}`.
 - Never hardcode a user id (`auth.uid()` is NULL over MCP/SQL). The Zynkr MCP resolves the author itself — an activity written through it is authored by **the token's own user**, which for Peter's token is Peter.
 - **Do NOT log the follow-up email as a CRM activity.** Peter's Gmail is synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row. The **demo** is different — it isn't in Gmail, so the demo `note` is legitimately yours to write.
@@ -158,11 +161,20 @@ then read it with `get_gmail_thread_content` to grab the **last message's**
 Draft the reply with
 `mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to=<their email>, cc=<same cc as the thread>, thread_id=<id>, in_reply_to=<last Message-ID>, references=<chain>, subject="Re: <original subject>", body=<the mail as HTML>, body_format="html", include_signature=true)`.
 
-The draft must carry Peter's Gmail signature (the card with logo, title and phone that his
-sent mail always ends with; `SKB-085`, 2026-10-19). That signature is HTML: on a plain-text
-draft it is flattened into one run-on line, or lost. So write the body as plain text, then
-convert it mechanically: escape `&` `<` `>`, turn every line break into `<br>`, wrap it in
-`<div dir="ltr">…</div>`, and add nothing else.
+**The body is rendered, not typed** (`SKB-140`). A follow-up is a recap after a call, so it
+uses the house recap format: read `references/recap-mail.md`, write the mail as a JSON payload
+in the run's temp folder, then
+
+```bash
+python3 scripts/render_recap_email.py <tmp>/recap.json --check
+python3 scripts/render_recap_email.py <tmp>/recap.json --out <tmp>/recap.html
+```
+
+and pass the file's contents as `body`. `--check` refuses a payload that breaks a form rule; fix
+the payload, never the renderer. The draft must carry Peter's Gmail signature (the card with
+logo, title and phone that his sent mail always ends with; `SKB-085`, 2026-10-19), which is why
+the call keeps `body_format="html"` and `include_signature=true`: Gmail adds the card under the
+rendered body.
 
 ⚠️ **A threaded reply draft is immutable — get the body right the first time.**
 `mcp__claude_ai_Gmail__update_draft` DETACHES it: the call succeeds, but the returned
@@ -176,27 +188,30 @@ the `r-…` draft id. **Always verify afterwards** with `list_drafts`: `threadId
 equal the ORIGINAL thread id. A `threadId` that equals the `messageId` means detached.
 (`sales-outbound` may use `update_draft` freely — its mails are new, not threaded replies.)
 
-**Shape of the email.** The authoritative rules are 《[2.2] 內文風格指南》 **Part 3 §八 業務信件格式**
+**Shape of the email.** The authoritative wording rules are 《[2.2] 內文風格指南》 **Part 3 §八 業務信件格式**
 (positive) and 《[3.2] 禁用詞清單》 **category X** (forbidden) — read them first, see *Fixed facts*.
-What follows is the follow-up-specific running order plus a condensed fallback. **Where they
-disagree, the Docs win.**
+The *form* belongs to the recap format (`references/recap-mail.md`): it replaces X's plain-text
+form rules for a recap, and nothing else. What follows is the follow-up-specific running order,
+each beat with its block, plus a condensed fallback. **Where they disagree, the Docs win.**
 
 Follow-up-specific beats, in order:
-- **Open by mirroring their pain** — name the 1–2 problems they raised on the call, quoted back
-  in 「」 in *their* words. Never paraphrase their words into marketing language (category X).
-- **Map pain → capability** — as **prose paragraphs, not a bullet list**. One short paragraph per
-  pain, each answered by the capability they actually saw on the call. §八 caps a sales mail at
-  two lists total, reserved for 「要聊的三件事」 and the slot block; a pain/capability bullet wall
-  is precisely the 項目符號牆 category X forbids.
-- **Restate the concrete next steps** Peter promised (recording to follow, migration help…),
-  each with an owner and a time.
-- **Say one thing we cannot do**, with the reason, before they ask — §八 requires this in every
-  long mail. Pair it with one pressure-release line (「不用急著決定」).
-- **Convert** — one prose line naming Zynkr CRM and carrying `https://zynkr.ai/crm` + 免費開始 · 免綁信用卡.
+- **Open by mirroring their pain** (`intro` + a `quote` block) — name the 1–2 problems they raised
+  on the call; the strongest one goes in the `quote` block in *their* words, verbatim. Never
+  paraphrase their words into marketing language (category X).
+- **Map pain → capability** (`text` blocks) — one short paragraph per pain, each answered by the
+  capability they actually saw on the call. Prose, not a list. When they described the process the
+  capability changes, a `flow` block may show it, built only from steps they named.
+- **Restate the concrete next steps** Peter promised (recording to follow, migration help…)
+  (`next_steps`) — grouped by owner, each with a time.
+- **Say one thing we cannot do**, with the reason, before they ask (`text`) — §八 requires this in
+  every long mail. Pair it with one pressure-release line (「不用急著決定」).
+- **Convert** — the line naming Zynkr CRM with `https://zynkr.ai/crm` + 免費開始 · 免綁信用卡 is the
+  mail's one `action` block (the orange button), unless the call promised a resource: then the
+  resource takes the `action` block and the convert line is a `text` paragraph with the link.
   Name Plus or team only as the level-up, never as the ask, and write no number in the mail (Atlas `sales-kit`): a
   client who asked what it costs gets the link `https://zynkr.ai/crm-pricing`. Never paste a
   feature table into the mail — link it instead.
-- **Success-page line** — end with 「先附上 Zynkr 的成功案例給你參考：https://crm.zynkr.ai/d/ce18a6456fbb4e8c95c7b85828dc1ddb2760ae5cfb704f98aad4d37c41a9ca83」
+- **Success-page line** (`closing`) — end with 「先附上 Zynkr 的成功案例給你參考：[Zynkr 成功案例](https://crm.zynkr.ai/d/ce18a6456fbb4e8c95c7b85828dc1ddb2760ae5cfb704f98aad4d37c41a9ca83)」
   (the CRM 交付文件「Zynkr 成功案例」), or the same sentence in the mail's language when the prospect
   writes in another. If the mail names anything else to attach, it is an item Atlas `sales-kit`
   marks 可外發, named by its file name; never one marked 內部 or 暫停外發.
@@ -208,17 +223,19 @@ Condensed house style (fallback only — the Doc is authoritative):
   deliberate — do not normalise it. 「我們這邊／你這邊」 is the house softener.
 - Blank-line paragraphs, 1–3 sentences each. A post-demo follow-up runs **600–950 字** — that is
   the longest genre Peter writes. Do not exceed it.
-- Numbered lists are plain **`1. 2. 3.`** — NOT 1️⃣2️⃣3️⃣, never circled ①②③. Emoji numerals are a
-  *UI* convention; 禁用詞清單 S and X ban them in email. Peter's sent mail uses plain digits.
+- Numbering is the renderer's (the badges in `flow` and `next_steps`). Type no numbers, emoji
+  numerals (1️⃣) or circled digits (①) into payload text: 禁用詞清單 S and X ban them in email.
 - The dash is the **half-width ` — ` with one space each side**. Never the full-width ——.
 - Prose takes 句號; list items and micro-replies do not. Headings/taglines take no 句號. `·` for
   series separators. One space between CJK and Latin/digits. Time ranges use an EN dash `–`.
 - English terms go bare — Demo · brief · feedback · skill · MCP · CRM · token — with no
   parenthetical Chinese gloss. Write AI, never 人工智慧.
-- **No Markdown in the body.** No `##`, no `**bold**`, no `-` bullets, no `---`. The only
-  permitted heading form is `── 文字 · 文字 ──`, and only in a long post-meeting letter.
-- Sign off `Best regards,` + `Peter`. Type no title, phone, address, or signature block in the
-  body: Gmail adds the signature card under the sign-off (step 4's draft call).
+- **No Markdown in the payload text.** No `##`, no `**bold**`, no `-` bullets, no `---`: headings
+  are a block's `eyebrow` / `heading`, lists are blocks. The only inline marks are `[text](https://…)`
+  and `` `CODE` `` (see `references/recap-mail.md`).
+- Sign off `Best regards,` + `Peter`: the last `closing` line is `Best regards,` and `signoff` is
+  `Peter`. Type no title, phone, address, or signature block in the payload: Gmail adds the
+  signature card under the body (step 4's draft call).
 - **Draft only, never send.** Flag anything you were unsure about (e.g. whether the recording
   link belongs in this mail) so Peter can adjust before sending.
 
