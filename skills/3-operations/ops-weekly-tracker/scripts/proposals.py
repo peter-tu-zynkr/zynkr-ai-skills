@@ -2237,10 +2237,10 @@ def selftest():
                                             ensure_ascii=False))
 
         def apply_with(text, weeks=None, analysis=None, search=None, props=None, raw=False, now="2026-10-17T10:05:00+08:00",
-                       keep=False):
+                       keep=False, base=None):
             if not keep:
                 clear()
-            a = a_start("2026-W42", cfgp, now, os.path.join(tmp, "runs"))
+            a = a_start("2026-W42", cfgp, now, base or os.path.join(tmp, "runs"))
             for c in a["calls"]:
                 if c["tool"].endswith("get_gmail_thread_content"):
                     save_thread(c["save"], text, analysis, raw)
@@ -2338,6 +2338,47 @@ def selftest():
         check("the confirmation says what was recorded",
               ("核准：1、3、4、5" in ca["body"], "退回：2" in ca["body"], "10/17 09:00" in ca["body"]), (True, True, True))
         check("our confirmation reads back", confirmed_lists(ca["body"]), [[1, 3, 4, 5], [2]])
+        # SKB-139: the same decision under the runner, through the block write itself. Its read-back of the
+        # Proposals rows is the call apply then makes again (the same tool, the same args), so the one read
+        # made after the write is saved to both files. On 13 Nov the read-back's path took pp-2.txt's place,
+        # and apply stopped three times with the decision recorded and nothing confirmed.
+        import capture as C
+        runs = os.path.join(L.state_dir(), "runs")       # the runner saves only inside the state folder's runs
+        cap = os.path.join(tmp, "capture-apply")
+        os.makedirs(cap)
+        ran = apply_with(th, base=runs)
+        os.environ[L.CAPTURE_ENV] = cap
+        try:
+            L.register_calls(ran, cap)                   # as L.emit does when apply prints under the runner
+            rows_path = ran["write"][0]["rows_path"]
+            written = json.load(open(rows_path, encoding="utf-8"))
+            blk = L.blk_start("Proposals", "2026-W42", rows_path, cfgp, "2026-10-17T10:05:20+08:00", runs)
+            heads = {"Proposals!A1:%s1" % L.COLS["Proposals"]: [list(L.BLOCKS["Proposals"][1])],
+                     "Weeks!A1:%s1" % L.weeks_end("Proposals"): [list(L.WEEKS_FULL[:20])]}
+            feed(blk["calls"], lambda rng: heads.get(rng) or ledger_rows(rng, props=written))
+            plan = L.blk_plan(blk["dir"])
+            L.register_calls(plan, cap)
+            reread, back = ran["then"][0], plan["readback"][0]
+            check("runner: the block write reads back the very call apply then makes again",
+                  L.call_key(back["tool"], back["args"]), L.call_key(reread["tool"], reread["args"]))
+            saved = C.save({"tool_name": back["tool"], "tool_input": back["args"],
+                            "tool_response": fmt("LED", back["args"]["range_name"], written)}, cap)
+            check("runner: the read made after the write is saved to both files that wait on it (a zynkr-ops-weekly "
+                  "from before SKB-139 saves it to rb.txt only: install both skills at the same version)",
+                  sorted(os.path.basename(p) for p in saved), ["pp-2.txt", "rb.txt"])
+            check("runner: the block write's check reads its own file", "commit" in L.blk_check(blk["dir"]), True)
+            thread_call = ran["then"][1]
+            C.save({"tool_name": thread_call["tool"], "tool_input": thread_call["args"],
+                    "tool_response": json.dumps({"content": th, "analysis": {"excluded_drafts": 0}}, ensure_ascii=False)},
+                   cap)
+            try:
+                done = a_decide(ran["dir"], "2026-10-17T10:06:00+08:00")
+            except L.Refuse as e:
+                done = {"status": "refused (%d)" % e.code, "delivered": str(e)}
+            check("runner: apply reads both files and confirms", (done["status"], done["delivered"]),
+                  ("confirm", "shadow;4-approved;1-rejected;0-pending"))
+        finally:
+            os.environ.pop(L.CAPTURE_ENV, None)
         refuses("a re-read before the write landed", 6, lambda: recheck(apply_with(th), th, written=prow))
         stale = [list(r) for r in out]                # an older write: everything approved
         for c in stale:
@@ -2836,6 +2877,24 @@ def mutate():
     import tempfile
     src = open(os.path.abspath(__file__), encoding="utf-8").read()
     head, tail = src.split("\nMUTATIONS = [", 1)
+
+    def run(text):
+        """One copy's selftest, beside the core files it imports: ledger.py, and capture.py for the runner's
+        checks (SKB-139). A copy that cannot import them fails the control run below, never counts as a
+        catch."""
+        d = tempfile.mkdtemp(prefix="proposals-mut-")
+        try:
+            open(os.path.join(d, "proposals.py"), "w", encoding="utf-8").write(text)
+            for f in ("ledger.py", "capture.py"):
+                shutil.copy(os.path.join(core_dir(), f), d)
+            return subprocess.run([sys.executable, os.path.join(d, "proposals.py"), "--selftest"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True).returncode
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    if run(src) != 0:
+        print("mutate: the unmodified control copy fails its selftest")
+        return 1
     missed = 0
     for name, pairs in MUTATIONS:
         m = head
@@ -2846,13 +2905,7 @@ def mutate():
                 break
             m = m.replace(old, new)
         else:
-            d = tempfile.mkdtemp(prefix="proposals-mut-")
-            open(os.path.join(d, "proposals.py"), "w", encoding="utf-8").write(m + "\nMUTATIONS = [" + tail)
-            shutil.copy(os.path.join(core_dir(), "ledger.py"), d)
-            r = subprocess.run([sys.executable, os.path.join(d, "proposals.py"), "--selftest"],
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            shutil.rmtree(d, ignore_errors=True)
-            caught = r.returncode != 0
+            caught = run(m + "\nMUTATIONS = [" + tail) != 0
             print("mutate: %-46s %s" % (name, "caught" if caught else "MISSED"))
             missed += 0 if caught else 1
     print("mutate: %d of %d caught" % (len(MUTATIONS) - missed, len(MUTATIONS)))

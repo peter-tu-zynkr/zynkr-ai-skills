@@ -265,23 +265,91 @@ def selftest():
         run_hook({"tool_name": thread["tool"], "tool_input": thread["args"], "tool_response": "{\"result\": 2}"}, cap)
         check("a re-read: the new path", open(again["save"], encoding="utf-8").read(), "{\"result\": 2}")
         check("a re-read: the first file kept", open(thread["save"], encoding="utf-8").read(), first)
+        with open(os.path.join(cap, L.call_key(thread["tool"], thread["args"]) + ".json"), encoding="utf-8") as f:
+            on_record = L.printed_saves(json.load(f))
+        check("a re-read: the first path stays on the call's record, where the guard refuses a Write to it",
+              (thread["save"] in on_record, again["save"] in on_record), (True, True))
         # the same call printed twice in one step goes to both paths
         twins = [dict(read, save=os.path.join(run, "a.txt")), dict(read, save=os.path.join(run, "b.txt"))]
         L.register_calls({"calls": twins}, cap)
         run_hook({"tool_name": read["tool"], "tool_input": read["args"], "tool_response": "x"}, cap)
         check("twins: both saved", [open(t["save"]).read() for t in twins], ["x", "x"])
-        # a call printed again before it is made: the result goes to the newest path, and the first, which
-        # no result was saved to, is refused when typed by hand (code review of #131)
+        # a call printed again before it is made: both steps wait on it, so its result goes to both paths
+        # (SKB-139), and a file typed over by hand afterwards is refused as changed
         plan_a = dict(read, args=dict(read["args"], range_name="Weeks!A30:R30"), save=os.path.join(run, "plan-a.txt"))
         plan_b = dict(plan_a, save=os.path.join(run, "plan-b.txt"))
         L.register_calls({"calls": [plan_a]}, cap)
         L.register_calls({"calls": [plan_b]}, cap)
-        run_hook({"tool_name": plan_a["tool"], "tool_input": plan_a["args"], "tool_response": "Row  1: ['real']"}, cap)
-        check("printed again: saved to the newest path only",
-              (os.path.exists(plan_b["save"]), os.path.exists(plan_a["save"])), (True, False))
+        rc, so, se = run_hook({"tool_name": plan_a["tool"], "tool_input": plan_a["args"],
+                               "tool_response": "Row  1: ['real']"}, cap)
+        check("printed again before it is made: saved to both paths",
+              [open(p["save"], encoding="utf-8").read() if os.path.exists(p["save"]) else None for p in (plan_a, plan_b)],
+              ["Row  1: ['real']"] * 2)
+        check("printed again before it is made: the model is told both", (plan_a["save"] in so, plan_b["save"] in so),
+              (True, True))
         open(plan_a["save"], "w", encoding="utf-8").write("Row  1: ['typed']")
         got = refusal(L.load_result, plan_a["save"]) or (0, "")
-        check("printed again: the first path, typed by hand, refused", (got[0], "never saved" in got[1]), (3, True))
+        check("printed again: the earlier file, typed over by hand, refused", (got[0], "changed after" in got[1]), (3, True))
+        # printed again and never made: the earlier path, typed by hand, is still refused (code review of #131)
+        plan_c = dict(read, args=dict(read["args"], range_name="Weeks!A31:R31"), save=os.path.join(run, "plan-c.txt"))
+        plan_d = dict(plan_c, save=os.path.join(run, "plan-d.txt"))
+        L.register_calls({"calls": [plan_c]}, cap)
+        L.register_calls({"calls": [plan_d]}, cap)
+        open(plan_c["save"], "w", encoding="utf-8").write("Row  1: ['typed']")
+        got = refusal(L.load_result, plan_c["save"]) or (0, "")
+        check("printed again, never made: the earlier path, typed by hand, refused", (got[0], "never saved" in got[1]),
+              (3, True))
+        # a record that names a path only as printed before, as the rule before SKB-139 left one: check_saved
+        # reads every path on the record, so a file typed there is refused too
+        odd = dict(read, args=dict(read["args"], range_name="Weeks!A32:R32"), save=os.path.join(run, "odd-2.txt"))
+        stale = os.path.join(run, "odd-1.txt")
+        L.write_atomic(os.path.join(cap, L.call_key(odd["tool"], odd["args"]) + ".json"),
+                       json.dumps({"tool": odd["tool"], "args": odd["args"], "save": [odd["save"]],
+                                   "printed": [stale, odd["save"]]}).encode("utf-8"))
+        open(stale, "w", encoding="utf-8").write("Row  1: ['typed']")
+        got = refusal(L.load_result, stale) or (0, "")
+        check("a path on a call's record only as printed before, typed by hand: refused",
+              (got[0], "never saved" in got[1]), (3, True))
+
+        # SKB-139, the sequence of 13 Nov: apply prints its re-read of the Proposals block (pp-2.txt) for after
+        # its block write, then the block write prints its read-back of the same rows (rb.txt, in its own
+        # folder). The one read made after the write is saved to both. A step that prints the call after that
+        # read starts a new wait, and the files already saved keep what they hold.
+        blk = os.path.join(tmp, "runs", "2026-W45-proposals-1")
+        os.makedirs(blk)
+        pp = dict(read, args=dict(read["args"], range_name="Proposals!A242:O281"), save=os.path.join(run, "pp-2.txt"))
+        rb = dict(pp, save=os.path.join(blk, "rb.txt"))
+        L.register_calls({"then": [pp]}, cap)
+        L.register_calls({"readback": [rb]}, cap)
+        rc, so, se = run_hook({"tool_name": pp["tool"], "tool_input": pp["args"], "tool_response": "Row  1: ['after']"}, cap)
+        check("a re-read and a read-back of the same rows: one result, saved to both",
+              (rc, [under_runner(L.load_result, p["save"]) if os.path.exists(p["save"]) else None for p in (pp, rb)]),
+              (0, ["Row  1: ['after']"] * 2))
+        check("a re-read and a read-back of the same rows: the model is told both", (pp["save"] in so, rb["save"] in so),
+              (True, True))
+        pp3 = dict(pp, save=os.path.join(run, "pp-3.txt"))
+        L.register_calls({"then": [pp3]}, cap)
+        run_hook({"tool_name": pp["tool"], "tool_input": pp["args"], "tool_response": "Row  1: ['later']"}, cap)
+        check("printed after the read: only the new path takes the next result",
+              [open(p["save"], encoding="utf-8").read() if os.path.exists(p["save"]) else None for p in (pp, rb, pp3)],
+              ["Row  1: ['after']", "Row  1: ['after']", "Row  1: ['later']"])
+        # a waiting path the runner cannot write is not kept, or it would stop the newer step's own file from
+        # being saved for the rest of the beat (code review of SKB-139)
+        for n, (what, folder) in enumerate((("in a folder that is gone", os.path.join(tmp, "runs", "2026-W45-gone-1")),
+                                            ("outside the run folders", os.path.join(tmp, "not-runs")))):
+            os.makedirs(folder)
+            early = dict(read, args=dict(read["args"], range_name="Weeks!A%d:R%d" % (40 + n, 40 + n)),
+                         save=os.path.join(folder, "early.txt"))
+            L.register_calls({"then": [early]}, cap)
+            if what.startswith("in a folder"):
+                shutil.rmtree(folder)
+            late = dict(early, save=os.path.join(run, "late-%d.txt" % n))
+            L.register_calls({"readback": [late]}, cap)
+            rc, so, se = run_hook({"tool_name": late["tool"], "tool_input": late["args"],
+                                   "tool_response": "Row  1: ['late']"}, cap)
+            check("a waiting path %s: dropped, and the newer step's file saved" % what,
+                  (rc, open(late["save"], encoding="utf-8").read() if os.path.exists(late["save"]) else None),
+                  (0, "Row  1: ['late']"))
 
         # a result that cannot be written goes back to the model as a failure, never silently
         gone = dict(read, args=dict(read["args"], range_name="Weeks!A9:R9"),
@@ -366,6 +434,14 @@ LEDGER_MUTATIONS = [
                                 "        if False:\n            raise Refuse(3, \"%s changed after")]),
     ("a never-saved result read", [("        if p in {os.path.realpath(s) for s in saves}:", "        if False:")]),
     ("an earlier printed path forgotten", [('"printed": list(dict.fromkeys(before + saves))', '"printed": saves')]),
+    ("a waiting path dropped when printed again", [('"save": list(dict.fromkeys(saves + waiting))', '"save": saves')]),
+    ("a saved path saved to again", [("if not os.path.exists(saved_record(cap, p)) and can_save_at(p, runs)]",
+                                      "if can_save_at(p, runs)]")]),
+    ("a waiting path kept where it cannot be written", [
+        ("if not os.path.exists(saved_record(cap, p)) and can_save_at(p, runs)]",
+         "if not os.path.exists(saved_record(cap, p))]")]),
+    ("a waiting path kept outside the run folders", [("    return d.startswith(runs + os.sep) and os.path.isdir(d)",
+                                                      "    return os.path.isdir(d)")]),
     ("check_saved reads only the newest path", [("                saves = printed_saves(json.load(f))",
                                                  "                saves = json.load(f).get(\"save\") or []")]),
     ("a link's spelling misses the record", [("    p = os.path.realpath(path)\n    rec = saved_record(cap, p)",

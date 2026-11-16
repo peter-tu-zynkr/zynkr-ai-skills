@@ -426,23 +426,40 @@ def mark_folder(folder, cap):
     write_atomic(os.path.join(folder, RUN_MARK), (os.path.realpath(cap) + "\n").encode("utf-8"))
 
 
-def printed_saves(record):
+def printed_saves(record, keys=("save", "printed")):
     """Every path a call's record in the capture folder names: where the runner saves its result now
     ("save"), and every path a step printed for it before ("printed")."""
     out = []
-    for key in ("save", "printed"):
+    for key in keys:
         v = record.get(key) if isinstance(record, dict) else None
         out += [p for p in (v if isinstance(v, list) else [v]) if isinstance(p, str)]
     return out
 
 
+def can_save_at(path, runs):
+    """Whether capture.py can save at `path`: inside the run folders, in a folder that exists."""
+    d = os.path.realpath(os.path.dirname(os.path.abspath(path)))
+    return d.startswith(runs + os.sep) and os.path.isdir(d)
+
+
 def register_calls(obj, cap):
-    """Name each printed call's save path in the capture folder and mark the call saved_by runner. A
-    later step that prints the same call again names its own path, which replaces the earlier one as
-    where the runner saves it (a re-read goes to thread-2.txt, and thread.txt keeps what the first read
-    returned); the same call printed twice in one step is saved to both paths. Every path printed for a
-    call stays on its record ("printed"), so a path no result was saved to is refused however many steps
-    printed the call (check_saved)."""
+    """Name each printed call's save paths in the capture folder and mark the call saved_by runner. The
+    same call printed twice in one step is saved to both paths. Until a step prints the call again,
+    making the call again saves to the same paths again: that is the retry a refused result asks for.
+
+    A later step that prints the same call again adds its own paths. A path the runner already saved a
+    result to drops out of where it saves the call: a re-read goes to thread-2.txt, and thread.txt keeps
+    what the first read returned. A path the runner has saved nothing to yet keeps waiting, and the
+    call's next result goes there too (SKB-139). Apply's re-read of the Proposals block (pp-2.txt) and the
+    block write's read-back of the same rows (rb.txt) are one call. On 13 Nov the read-back's path took
+    pp-2.txt's place, and apply stopped three times waiting for a file the runner would never save. A
+    waiting path is kept only where the runner can write it (can_save_at), so it never stops this step's
+    own file from being saved, and this step's paths are saved first. Whether a result shows the rows
+    before or after a write is set by when the model makes the call, as it always was.
+
+    Every path printed for a call stays on its record ("printed"), so a path no result was saved to is
+    refused however many steps printed the call (check_saved), and the guard refuses a Write to each."""
+    runs = os.path.realpath(os.path.join(state_dir(), "runs"))
     paths = {}
     for c in printed_calls(obj):
         paths.setdefault(call_key(c["tool"], c["args"]), (c, []))[1].append(os.path.abspath(c["save"]))
@@ -451,15 +468,18 @@ def register_calls(obj, cap):
         reg = os.path.join(cap, key + ".json")
         try:
             with open(reg, encoding="utf-8") as f:
-                before = printed_saves(json.load(f))
+                record = json.load(f)
         except (OSError, ValueError):
-            before = []
-        write_atomic(reg, json.dumps({"tool": c["tool"], "args": c["args"], "save": saves,
+            record = {}
+        before = printed_saves(record)
+        waiting = [p for p in printed_saves(record, ("save",))
+                   if not os.path.exists(saved_record(cap, p)) and can_save_at(p, runs)]
+        write_atomic(reg, json.dumps({"tool": c["tool"], "args": c["args"],
+                                      "save": list(dict.fromkeys(saves + waiting)),
                                       "printed": list(dict.fromkeys(before + saves))},
                                      ensure_ascii=False).encode("utf-8"))
     # Only a real folder inside the run folders, as capture.py saves only there: never through a link out
     # of them. A folder that does not exist yet is marked when capture.py saves into it.
-    runs = os.path.realpath(os.path.join(state_dir(), "runs"))
     for folder in sorted({os.path.realpath(os.path.dirname(p)) for _c, saves in paths.values() for p in saves}):
         if folder.startswith(runs + os.sep) and os.path.isdir(folder):
             mark_folder(folder, cap)
