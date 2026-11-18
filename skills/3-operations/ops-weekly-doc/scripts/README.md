@@ -12,7 +12,8 @@ parser and the Ledger code are the core's (`../../zynkr-ops-weekly/scripts/`), n
 | `render_block.py` | the week's evidence + routing (+ carry-over) → the `〔自動彙整〕` block per heading |
 | `tidy_blocks.py` | Doc markdown → per group the block to keep, the blocks to archive, the open items to carry. With `--closed`: Drive plain-text export + structure → the `Done`/`Drop` bullets to delete, as index ranges. With `--fill`: `fill.json` + structure → each team's 下一步 and 待討論 as operations |
 | `test_tidy_blocks.py` | The `tidy` suite; `--mutate` breaks real lines of `tidy_blocks.py` one at a time |
-| `scaffold.gs` | **Apps Script**, not Python — duplicates next week's skeleton. See `../references/scaffold.md` |
+| `scaffold.gs` | **Apps Script**, not Python — duplicates next week's skeleton, reading only the top of the tab (`SKB-143`). See `../references/scaffold.md` |
+| `test_scaffold.mjs` | **Node** — runs `scaffold.gs` against a strict mock of DocumentApp. `--mutate`, `--tz-matrix` |
 
 ## The pipeline after the meeting (`tidy`)
 
@@ -48,6 +49,17 @@ All inputs may be saved MCP tool results (`{"result": "..."}`) as-is. Write ever
 `tidy_blocks.py` one at a time; every mutation must turn the suite red. It runs an UNmutated control
 copy first and refuses to report anything if that fails — until 2026-09-30 the harness itself produced
 uncompilable mutants, so every mutation "passed" and proved nothing.
+
+`node test_scaffold.mjs --mutate` does the same for the Apps Script. It runs `scaffold.gs` in a Node
+sandbox against a mock of DocumentApp that throws where Apps Script throws (an index out of range, an
+insert of an element still in the document, the wrong element type) and counts every read. Each case
+fixes the clock, and the mock's `Utilities.formatDate` formats the Date it is given in Taipei, so a
+script that reads the wrong date gets the wrong day. The suite
+proves the reads are the same at 50 sections and at 2,000, which is what the 12 Nov 2026 timeout was
+about, and that a second run writes nothing. `--mutate` runs it on an unmutated control first, then
+breaks real lines one at a time; `--tz-matrix` runs it under five time zones, since the script's dates
+are the runtime's own. `scripts/tests/ops-weekly-scaffold.test.ts` runs all three in the PR check. The
+fixtures are generic: never put the real Doc's text or id in them.
 
 `carryover.py` is the one worth exercising on real data, because its output is a *judgement* rather
 than a transformation, and both of its failure modes are invisible on small fixtures:
