@@ -1,0 +1,117 @@
+{
+  "rows": [
+    "fe0",
+    "be0",
+    "be1",
+    "db0",
+    "db1"
+  ],
+  "cols": 9,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "a1",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "a2",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "a3",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "b1",
+      "lane": "be",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "b2",
+      "lane": "be",
+      "sublane": 0,
+      "tier": 5,
+      "col": 5
+    },
+    {
+      "id": "b3",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "b4",
+      "lane": "db",
+      "sublane": 1,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "b9",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 7,
+      "col": 7
+    },
+    {
+      "id": "b10",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 7,
+      "col": 7
+    },
+    {
+      "id": "b12",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "b13",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 8,
+      "col": 8
+    },
+    {
+      "id": "unquoted",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 0,
+      "col": 4
+    },
+    {
+      "id": "end2",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 2
+    }
+  ]
+}

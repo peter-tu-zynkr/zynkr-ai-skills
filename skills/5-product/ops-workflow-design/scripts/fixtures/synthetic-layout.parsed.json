@@ -1,0 +1,329 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a batch is due",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a batch is due",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "pull",
+        "kind": "input",
+        "title": "1.1 Pull the batch",
+        "ref": null,
+        "by": 0,
+        "col": null,
+        "raw": "pull | input | 1.1 Pull the batch | by=external",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "clean",
+        "kind": "deterministic",
+        "title": "1.2 Clean the rows",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "clean | deterministic | 1.2 Clean the rows",
+        "line": 4,
+        "phase": 0,
+        "ordinal": 3
+      },
+      {
+        "id": "rows",
+        "kind": "store",
+        "title": "Row table",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "rows | store | Row table",
+        "line": 5,
+        "phase": 0,
+        "ordinal": 4
+      },
+      {
+        "id": "guide",
+        "kind": "knowledge",
+        "title": "[RAG] Cleaning guide v1",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "guide | knowledge | [RAG] Cleaning guide v1",
+        "line": 6,
+        "phase": 0,
+        "ordinal": 5
+      },
+      {
+        "id": "notes",
+        "kind": "knowledge",
+        "title": "[RAG] Field notes v2",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "notes | knowledge | [RAG] Field notes v2",
+        "line": 7,
+        "phase": 0,
+        "ordinal": 6
+      },
+      {
+        "id": "score",
+        "kind": "llm",
+        "title": "2.1 Score each row",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "score | llm | 2.1 Score each row",
+        "line": 9,
+        "phase": 1,
+        "ordinal": 7
+      },
+      {
+        "id": "fit",
+        "kind": "gate",
+        "title": "2.2 Scores fit?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "fit | gate | 2.2 Scores fit?",
+        "line": 10,
+        "phase": 1,
+        "ordinal": 8
+      },
+      {
+        "id": "fix",
+        "kind": "hitl",
+        "title": "2.3 Fix the outliers",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "fix | hitl | 2.3 Fix the outliers",
+        "line": 11,
+        "phase": 1,
+        "ordinal": 9
+      },
+      {
+        "id": "fixlog",
+        "kind": "artifact",
+        "title": "Fix record",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "fixlog | artifact | Fix record",
+        "line": 12,
+        "phase": 1,
+        "ordinal": 10
+      },
+      {
+        "id": "auto",
+        "kind": "deterministic",
+        "title": "2.4 Accept the batch",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "auto | deterministic | 2.4 Accept the batch",
+        "line": 13,
+        "phase": 1,
+        "ordinal": 11
+      },
+      {
+        "id": "early",
+        "kind": "deterministic",
+        "title": "2.5 Flag early rows",
+        "ref": null,
+        "by": null,
+        "col": 2,
+        "raw": "early | deterministic | 2.5 Flag early rows | col=2",
+        "line": 14,
+        "phase": 1,
+        "ordinal": 12
+      },
+      {
+        "id": "learned",
+        "kind": "knowledge",
+        "title": "[RAG] Learned rules v1",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "learned | knowledge | [RAG] Learned rules v1",
+        "line": 15,
+        "phase": 1,
+        "ordinal": 13
+      },
+      {
+        "id": "handoff",
+        "kind": "offpage",
+        "title": "3.1 Send to reporting",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "handoff | offpage | 3.1 Send to reporting",
+        "line": 17,
+        "phase": 2,
+        "ordinal": 14
+      },
+      {
+        "id": "show",
+        "kind": "output",
+        "title": "3.2 Show the summary",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "show | output | 3.2 Show the summary",
+        "line": 18,
+        "phase": 2,
+        "ordinal": 15
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · batch done",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · batch done",
+        "line": 19,
+        "phase": 2,
+        "ordinal": 16
+      }
+    ],
+    "phases": [
+      {
+        "name": "Collect",
+        "from": 1,
+        "to": 6
+      },
+      {
+        "name": "Check",
+        "from": 7,
+        "to": 13
+      },
+      {
+        "name": "Hand off",
+        "from": 14,
+        "to": 16
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "pull",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "pull",
+        "to": "clean",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "clean",
+        "to": "score",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "score",
+        "to": "fit",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "fit",
+        "to": "fix",
+        "role": "spine",
+        "label": "No"
+      },
+      {
+        "from": "fit",
+        "to": "auto",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "fix",
+        "to": "score",
+        "role": "spine",
+        "label": "rescore"
+      },
+      {
+        "from": "auto",
+        "to": "handoff",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "handoff",
+        "to": "show",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "show",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "start",
+        "to": "show",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "clean",
+        "to": "rows",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "guide",
+        "to": "clean",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "notes",
+        "to": "score",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "fix",
+        "to": "fixlog",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "fix",
+        "to": "learned",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "rows",
+        "to": "score",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "early",
+        "to": "rows",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 1,
+    "executionMode": null,
+    "warnings": []
+  }
+}

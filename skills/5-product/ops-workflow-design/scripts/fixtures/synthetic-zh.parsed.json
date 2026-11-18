@@ -1,0 +1,216 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "開始 · 客戶提出需求",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | 開始 · 客戶提出需求",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "ask",
+        "kind": "input",
+        "title": "1.1 填寫需求表單",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "ask | input | 1.1 填寫需求表單",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "draft",
+        "kind": "llm",
+        "title": "1.2 草擬報價",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "draft | llm | 1.2 草擬報價",
+        "line": 4,
+        "phase": 0,
+        "ordinal": 3
+      },
+      {
+        "id": "price",
+        "kind": "knowledge",
+        "title": "[RAG] 價目表 v4",
+        "ref": null,
+        "by": null,
+        "col": 2,
+        "raw": "price | knowledge | [RAG] 價目表 v4 | col=2",
+        "line": 5,
+        "phase": 0,
+        "ordinal": 4
+      },
+      {
+        "id": "big",
+        "kind": "gate",
+        "title": "2.1 金額超過十萬？",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "big | gate | 2.1 金額超過十萬？",
+        "line": 7,
+        "phase": 1,
+        "ordinal": 5
+      },
+      {
+        "id": "approve",
+        "kind": "hitl",
+        "title": "2.2 主管核准",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "approve | hitl | 2.2 主管核准",
+        "line": 8,
+        "phase": 1,
+        "ordinal": 6
+      },
+      {
+        "id": "auto",
+        "kind": "deterministic",
+        "title": "2.3 自動寄出",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "auto | deterministic | 2.3 自動寄出",
+        "line": 9,
+        "phase": 1,
+        "ordinal": 7
+      },
+      {
+        "id": "log",
+        "kind": "store",
+        "title": "報價紀錄 (Airtable)",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "log | store | 報價紀錄 (Airtable)",
+        "line": 10,
+        "phase": 1,
+        "ordinal": 8
+      },
+      {
+        "id": "send",
+        "kind": "output",
+        "title": "2.4 客戶收到報價",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "send | output | 2.4 客戶收到報價",
+        "line": 11,
+        "phase": 1,
+        "ordinal": 9
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "結束 · 報價已寄出",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | 結束 · 報價已寄出",
+        "line": 12,
+        "phase": 1,
+        "ordinal": 10
+      }
+    ],
+    "phases": [
+      {
+        "name": "需求",
+        "from": 1,
+        "to": 4
+      },
+      {
+        "name": "核准",
+        "from": 5,
+        "to": 10
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "ask",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "ask",
+        "to": "draft",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "draft",
+        "to": "big",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "big",
+        "to": "approve",
+        "role": "spine",
+        "label": "是"
+      },
+      {
+        "from": "big",
+        "to": "auto",
+        "role": "spine",
+        "label": "否"
+      },
+      {
+        "from": "approve",
+        "to": "send",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "auto",
+        "to": "send",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "send",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "price",
+        "to": "draft",
+        "role": "plumbing",
+        "label": "參考價格"
+      },
+      {
+        "from": "approve",
+        "to": "log",
+        "role": "plumbing",
+        "label": "核准紀錄"
+      },
+      {
+        "from": "auto",
+        "to": "log",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "log",
+        "to": "send",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": []
+  }
+}

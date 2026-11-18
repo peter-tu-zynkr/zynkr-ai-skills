@@ -119,7 +119,7 @@ After completing the redesign, ask:
    - State machine → AWS Step Functions, Temporal
    Include possible MVP stack for rapid prototyping.
 
-6. **Output a Blueprint for Implementation** — Steps → numbered sub-task cards (Input · Process · Output · layer · Reads · Writes · Knowledge · Tool) → stores touched → gaps closed. Optional: process map or structured pseudo-code. Handoff-ready for an engineer or builder, and for `ops-workflow-design`, which labels each Lucid node with the same sub-task number.
+6. **Output a Blueprint for Implementation** — Steps → numbered sub-task cards (Input · Process · Output · layer · Reads · Writes · Knowledge · Tool) → stores touched → gaps closed. Optional: process map or structured pseudo-code. Handoff-ready for an engineer or builder, and for `ops-workflow-design`, which starts each step title in the flow text with the same sub-task number.
 
 ## Process Redesign Considerations
 

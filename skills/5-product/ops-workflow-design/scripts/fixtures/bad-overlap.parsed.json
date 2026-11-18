@@ -1,0 +1,90 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · an order arrives",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · an order arrives",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "pack",
+        "kind": "deterministic",
+        "title": "1.2 Pack the order",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "pack | deterministic | 1.2 Pack the order",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "charge",
+        "kind": "deterministic",
+        "title": "1.1 Charge the card",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "charge | deterministic | 1.1 Charge the card",
+        "line": 5,
+        "phase": 1,
+        "ordinal": 3
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · order shipped",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · order shipped",
+        "line": 6,
+        "phase": 1,
+        "ordinal": 4
+      }
+    ],
+    "phases": [
+      {
+        "name": "Prepare",
+        "from": 1,
+        "to": 2
+      },
+      {
+        "name": "Pay",
+        "from": 3,
+        "to": 4
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "charge",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "charge",
+        "to": "pack",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "pack",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": []
+  }
+}

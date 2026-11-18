@@ -132,7 +132,7 @@ claim (which interview / transcript section it came from):
   `[Assessment]` is filed, take its section 1 steps with their numbers instead of
   re-deriving them, and say where the discovery material adds to them or
   contradicts them. Those numbers then stay the same in the redesign blueprint, the
-  Lucid chart and the PRD.
+  flow `/ops-workflow-design` draws and the PRD.
 - **To-Be flow** — the target process the client agrees to, numbered the same way
   (a new step goes under the step it belongs to: 3.1, 3.2), input → process → output
   on each line, the automated or changed steps marked. Layers and data stores are
@@ -255,7 +255,7 @@ team continues with `/ops-transformation redesign`, then `/ops-prd-writer`.
   sign-off.
 - **One set of step numbers.** The as-is steps keep the `[Assessment]`'s numbers, so
   the client, the designer and the builder can point at the same step in the BRD,
-  the blueprint, the Lucid chart and the PRD.
+  the blueprint, the drawn flow and the PRD.
 
 ## Inference defaults (Peter overrides by just saying so)
 

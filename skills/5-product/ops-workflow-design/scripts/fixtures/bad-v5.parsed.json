@@ -1,0 +1,115 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a question arrives",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a question arrives",
+        "line": 1,
+        "phase": null,
+        "ordinal": 1
+      },
+      {
+        "id": "ask",
+        "kind": "input",
+        "title": "1 Ask a question",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "ask | input | 1 Ask a question",
+        "line": 2,
+        "phase": null,
+        "ordinal": 2
+      },
+      {
+        "id": "answer",
+        "kind": "llm",
+        "title": "2 Draft the answer",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "answer | llm | 2 Draft the answer",
+        "line": 3,
+        "phase": null,
+        "ordinal": 3
+      },
+      {
+        "id": "faq",
+        "kind": "knowledge",
+        "title": "[RAG] Product FAQ v3",
+        "ref": null,
+        "by": null,
+        "col": 2,
+        "raw": "faq | knowledge | [RAG] Product FAQ v3 | col=2",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
+      },
+      {
+        "id": "show",
+        "kind": "output",
+        "title": "3 Show the answer",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "show | output | 3 Show the answer",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · answer shown",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · answer shown",
+        "line": 6,
+        "phase": null,
+        "ordinal": 6
+      }
+    ],
+    "phases": [],
+    "flow": [
+      {
+        "from": "start",
+        "to": "ask",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "ask",
+        "to": "answer",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "answer",
+        "to": "show",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "show",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "faq",
+        "to": "answer",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": []
+  }
+}

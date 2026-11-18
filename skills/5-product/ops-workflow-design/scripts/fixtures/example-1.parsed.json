@@ -1,0 +1,217 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "input",
+        "kind": "input",
+        "title": "Manual input",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "input | input | Manual input",
+        "line": 1,
+        "phase": null,
+        "ordinal": 1
+      },
+      {
+        "id": "ai",
+        "kind": "llm",
+        "title": "AI process",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "ai | llm | AI process",
+        "line": 2,
+        "phase": null,
+        "ordinal": 2
+      },
+      {
+        "id": "doc",
+        "kind": "artifact",
+        "title": "Document",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "doc | artifact | Document",
+        "line": 3,
+        "phase": null,
+        "ordinal": 3
+      },
+      {
+        "id": "decide",
+        "kind": "gate",
+        "title": "Decision",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "decide | gate | Decision",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
+      },
+      {
+        "id": "db",
+        "kind": "store",
+        "title": "Database",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "db | store | Database",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
+      },
+      {
+        "id": "ai_yes",
+        "kind": "llm",
+        "title": "AI process",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "ai_yes | llm | AI process",
+        "line": 6,
+        "phase": null,
+        "ordinal": 6
+      },
+      {
+        "id": "kb_one",
+        "kind": "knowledge",
+        "title": "Knowledge for retrieval",
+        "ref": null,
+        "by": null,
+        "col": 3,
+        "raw": "kb_one | knowledge | Knowledge for retrieval | col=3",
+        "line": 7,
+        "phase": null,
+        "ordinal": 7
+      },
+      {
+        "id": "manual_yes",
+        "kind": "hitl",
+        "title": "Manual operation",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "manual_yes | hitl | Manual operation",
+        "line": 8,
+        "phase": null,
+        "ordinal": 8
+      },
+      {
+        "id": "kb_two",
+        "kind": "knowledge",
+        "title": "Knowledge for retrieval",
+        "ref": null,
+        "by": null,
+        "col": 4,
+        "raw": "kb_two | knowledge | Knowledge for retrieval | col=4",
+        "line": 9,
+        "phase": null,
+        "ordinal": 9
+      },
+      {
+        "id": "manual_no",
+        "kind": "hitl",
+        "title": "Manual operation",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "manual_no | hitl | Manual operation",
+        "line": 10,
+        "phase": null,
+        "ordinal": 10
+      },
+      {
+        "id": "out",
+        "kind": "output",
+        "title": "Output to human",
+        "ref": null,
+        "by": 0,
+        "col": null,
+        "raw": "out | output | Output to human | by=external",
+        "line": 11,
+        "phase": null,
+        "ordinal": 11
+      }
+    ],
+    "phases": [],
+    "flow": [
+      {
+        "from": "input",
+        "to": "ai",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "ai",
+        "to": "decide",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "decide",
+        "to": "ai_yes",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "decide",
+        "to": "manual_no",
+        "role": "spine",
+        "label": "No"
+      },
+      {
+        "from": "ai_yes",
+        "to": "manual_yes",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "manual_no",
+        "to": "out",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "doc",
+        "to": "ai",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "ai",
+        "to": "doc",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "db",
+        "to": "decide",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "decide",
+        "to": "db",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "kb_one",
+        "to": "ai_yes",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "kb_two",
+        "to": "manual_yes",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 1,
+    "executionMode": null,
+    "warnings": []
+  }
+}

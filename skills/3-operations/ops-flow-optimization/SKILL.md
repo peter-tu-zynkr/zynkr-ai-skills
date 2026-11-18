@@ -1,7 +1,7 @@
 ---
 name: ops-flow-optimization
 sheetId: "3.14"
-description: "Streamline and re-sequence a business process into a clean 'ideal flow' before it gets built or automated. Canonical slot (course Ch5 §5.5.2): run it right AFTER the as-is→to-be redesign re-chains the flow — polishing the redesigned ordering — though it also works standalone on any messy as-is map. Runs a lean optimization pass: validate Input→Process→Output on every step, map dependencies, eliminate friction (duplicative / looping / missing steps), then apply disciplined re-sequencing only where it buys less rework, lower risk, or higher throughput. Use it whenever a process feels bloated, out of order, or 不順暢 — when someone says '幫我把流程理順', '這流程可以更精簡嗎', 'streamline this workflow', 'is my process in the right order', or right after FE/BE/DB redesign (ops-transformation Stage 3) and before drawing on Lucid. Enforces 'eliminate before you automate.' Does NOT do automation-feasibility scoring or FE/BE/DB layer assignment — hand off to ops-transformation for that."
+description: "Streamline and re-sequence a business process into a clean 'ideal flow' before it gets built or automated. Canonical slot (course Ch5 §5.5.2): run it right AFTER the as-is→to-be redesign re-chains the flow — polishing the redesigned ordering — though it also works standalone on any messy as-is map. Runs a lean optimization pass: validate Input→Process→Output on every step, map dependencies, eliminate friction (duplicative / looping / missing steps), then apply disciplined re-sequencing only where it buys less rework, lower risk, or higher throughput. Use it whenever a process feels bloated, out of order, or 不順暢 — when someone says '幫我把流程理順', '這流程可以更精簡嗎', 'streamline this workflow', 'is my process in the right order', or right after FE/BE/DB redesign (ops-transformation Stage 3) and before the flow is drawn (ops-workflow-design). Enforces 'eliminate before you automate.' Does NOT do automation-feasibility scoring or FE/BE/DB layer assignment — hand off to ops-transformation for that."
 category: operations
 project: ops-flow-optimization
 platform: claude
@@ -10,7 +10,7 @@ visibility: public
 author: Peter Tu
 input: "A process step list — ideally the redesigned to-be flow (ops-transformation Stage 3 blueprint), or a SIPOC / as-is map — plus the outcome the process must deliver"
 process: "I→P→O validation → dependency mapping → friction elimination → disciplined re-sequencing (with a payoff test) → streamlined to-be spine + decision log"
-output: "A streamlined 'ideal flow' spine (Before/After), a dependency map, a friction log, and a re-sequence decision log — ready for Lucid or the build"
+output: "A streamlined 'ideal flow' spine (Before/After), a dependency map, a friction log, and a re-sequence decision log — ready to draw or build"
 synergy:
   - "ops-transformation"
   - "ops-workflow-design"
@@ -25,7 +25,7 @@ house-style: bound
 npx skills add https://github.com/peter-tu-zynkr/zynkr-ai-skills --skill ops-flow-optimization
 ```
 
-Take a messy, human-grown business process and turn it into a clean **"ideal flow"** — I→P→O-valid on every step, dependency-ordered, and stripped of friction — *before* anyone builds or automates it. This is the lean-optimization pass that most teams skip: they jump straight from "here's our design" to "let's automate it," and end up **automating waste**. This skill makes you earn a streamlined flow first. Its canonical slot (course Ch5 §5.5.2, "Redesign the Flow") is right **after** the as-is→to-be transformation pass has re-chained the steps (`ops-transformation` Stage 3) and right before drawing on Lucid (`ops-workflow-design`) or building — though it also runs standalone on a raw SIPOC / as-is map whenever a flow feels tangled. It is deliberately *conservative about re-ordering* — it changes sequence only when the change pays for itself.
+Take a messy, human-grown business process and turn it into a clean **"ideal flow"** — I→P→O-valid on every step, dependency-ordered, and stripped of friction — *before* anyone builds or automates it. This is the lean-optimization pass that most teams skip: they jump straight from "here's our design" to "let's automate it," and end up **automating waste**. This skill makes you earn a streamlined flow first. Its canonical slot (course Ch5 §5.5.2, "Redesign the Flow") is right **after** the as-is→to-be transformation pass has re-chained the steps (`ops-transformation` Stage 3) and right before drawing the flow (`ops-workflow-design`) or building — though it also runs standalone on a raw SIPOC / as-is map whenever a flow feels tangled. It is deliberately *conservative about re-ordering* — it changes sequence only when the change pays for itself.
 
 The one law it enforces: **eliminate before you automate. Anchor the spine to I→P→O and dependencies; only then, rarely, re-sequence — and only for less rework, lower risk, or higher throughput.**
 
@@ -120,7 +120,7 @@ Compile the deliverable:
    - If the input had no layers at all (a raw as-is map), write `Layer / Reads / Writes / Knowledge: not assigned yet → ops-transformation` once above the spine. If the input was a numbered SIPOC (`ops-transformation`'s optional Stage 1.5), return the spine in that same form — the numbered SIPOC table with Supplier · Customer · Systems today carried through — because that table is the as-is card (`process-step-card.md` §5) and Stage 2 reads it.
    - A step **this pass added** (a split, a missing connector) inside a carded flow gets its Input · Process · Output and the line `Layer / Reads / Writes / Knowledge: to assign → ops-transformation` on its own card.
    - When the cards name two or more stores or knowledge sources, end the spine with the **store directory** (card §4).
-   - Renumber after cuts, splits and merges: keep the parent number and renumber only the children under it (`process-step-card.md` §1), and give the `old → new` map in one line. Your numbers are the ones `ops-transformation`'s final blueprint and the Lucid chart use from here on.
+   - Renumber after cuts, splits and merges: keep the parent number and renumber only the children under it (`process-step-card.md` §1), and give the `old → new` map in one line. From here on, `ops-transformation`'s final blueprint and the step titles `ops-workflow-design` writes use your numbers.
 2. **Dependency map** (Step 3).
 3. **Friction log** — what was eliminated and why (Step 4).
 4. **Re-sequence decision log** (Step 5).
@@ -130,7 +130,7 @@ Then point at the next stage explicitly — this skill deliberately stops before
 ```
 Next steps:
 1. If you ran this on a raw as-is map: assess automation feasibility + assign FE/BE/DB layers → ops-transformation (Stage 2–3), then re-run this pass on the redesigned flow (course Ch5 §5.5.2)
-2. Draw the streamlined spine as a Lucid swimlane (shape = semantics, color = ownership, V1–V14 lint) → ops-workflow-design
+2. Draw the streamlined spine as a swimlane flow (shape = semantics, color = ownership, V1–V14 lint), as an Atlas workflow draft or an SVG page drawing → ops-workflow-design
 3. Iterate — re-run this pass after the process changes
 ```
 
@@ -155,7 +155,7 @@ Next steps:
 ## Limitations
 
 - **Not discovery.** It optimizes a process you can already list. If the steps aren't understood, run `sales-discovery` or `ops-transformation` Stage 1 (SIPOC) first.
-- **Not architecture.** It stops at a clean, ordered spine. Layer assignment, automation feasibility, and MVP-stack choices belong to `ops-transformation`; the Lucid diagram + V1–V14 lint belong to `ops-workflow-design`.
+- **Not architecture.** It stops at a clean, ordered spine. Layer assignment, automation feasibility, and MVP-stack choices belong to `ops-transformation`; the drawing (an Atlas workflow or an SVG page) + V1–V14 lint belong to `ops-workflow-design`.
 - **Conservative by design.** It will often accept *zero* re-orders. That's the intended behavior — most value comes from I→P→O cleanup and friction removal, not from moving boxes around.
 
 ## House style

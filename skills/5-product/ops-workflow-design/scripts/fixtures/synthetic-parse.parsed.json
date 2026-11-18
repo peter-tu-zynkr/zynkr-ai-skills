@@ -1,0 +1,400 @@
+{
+  "frontmatterWarnings": [
+    {
+      "code": "unterminated_quote",
+      "field": "summary",
+      "detail": "\"an unterminated quote"
+    },
+    {
+      "code": "unparsed_line",
+      "field": "summary",
+      "detail": "this line has no key"
+    },
+    {
+      "code": "unterminated_quote",
+      "field": "steps",
+      "detail": "\"x | llm | broken"
+    }
+  ],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "a1",
+        "kind": "input",
+        "title": "1.1 A title that runs well past the sixty character cap that",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "a1 | input | 1.1 A title that runs well past the sixty character cap that Atlas sets on titles",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "a2",
+        "kind": "llm",
+        "title": "1.2 Draft",
+        "ref": "draft-skill",
+        "by": 1,
+        "col": 2,
+        "raw": "a2 | llm | 1.2 Draft | ref=draft-skill | by=internal | col=2 | colour=red",
+        "line": 4,
+        "phase": 0,
+        "ordinal": 3
+      },
+      {
+        "id": "a3",
+        "kind": "gate",
+        "title": "1.3 Good enough?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "a3 | gate | 1.3 Good enough?",
+        "line": 5,
+        "phase": 0,
+        "ordinal": 4
+      },
+      {
+        "id": "b1",
+        "kind": "hitl",
+        "title": "2.1 Review the \"draft\"",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "b1 | hitl | 2.1 Review the \"draft\"",
+        "line": 10,
+        "phase": 3,
+        "ordinal": 5
+      },
+      {
+        "id": "b2",
+        "kind": "hitl",
+        "title": "2.2 Approve",
+        "ref": "atlas:review-note",
+        "by": 0,
+        "col": null,
+        "raw": "b2 | hitl | 2.2 Approve | ref=atlas:review-note | by=external",
+        "line": 11,
+        "phase": 3,
+        "ordinal": 6
+      },
+      {
+        "id": "b3",
+        "kind": "store",
+        "title": "Decision log (new)",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "b3 | store | Decision log (new) | by=sometimes | col=x | =oops | col=1000",
+        "line": 12,
+        "phase": 3,
+        "ordinal": 7
+      },
+      {
+        "id": "b4",
+        "kind": "knowledge",
+        "title": "[RAG] Style guide v2",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "b4 | knowledge | [RAG] Style guide v2 | col=999",
+        "line": 13,
+        "phase": 3,
+        "ordinal": 8
+      },
+      {
+        "id": "b9",
+        "kind": "deterministic",
+        "title": "2.6 審核通過後歸檔",
+        "ref": null,
+        "by": null,
+        "col": 7,
+        "raw": "b9 | deterministic | 2.6 審核通過後歸檔 | col=007",
+        "line": 19,
+        "phase": 3,
+        "ordinal": 9
+      },
+      {
+        "id": "b10",
+        "kind": "output",
+        "title": "2.7 It's done",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "b10 | output | 2.7 It's done",
+        "line": 20,
+        "phase": 3,
+        "ordinal": 10
+      },
+      {
+        "id": "b12",
+        "kind": "llm",
+        "title": "2.9 Back\\slash and \"quotes\"",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "b12 | llm | 2.9 Back\\slash and \"quotes\"",
+        "line": 22,
+        "phase": 3,
+        "ordinal": 11
+      },
+      {
+        "id": "b13",
+        "kind": "offpage",
+        "title": "2.10 An emoji sits exactly where Atlas cuts this title: ---\ud83d",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "b13 | offpage | 2.10 An emoji sits exactly where Atlas cuts this title: ---😀 off",
+        "line": 23,
+        "phase": 3,
+        "ordinal": 12
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End # not a comment inside quotes",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End # not a comment inside quotes",
+        "line": 24,
+        "phase": 3,
+        "ordinal": 13
+      },
+      {
+        "id": "unquoted",
+        "kind": "offpage",
+        "title": "Hand off",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "unquoted | offpage | Hand off",
+        "line": 25,
+        "phase": 3,
+        "ordinal": 14
+      },
+      {
+        "id": "end2",
+        "kind": "end",
+        "title": "End two",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end2 | end | End two",
+        "line": 27,
+        "phase": 3,
+        "ordinal": 15
+      }
+    ],
+    "phases": [
+      {
+        "name": "Phase one",
+        "from": 1,
+        "to": 4
+      },
+      {
+        "name": "Phase two",
+        "from": 5,
+        "to": 15
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "a1",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "a1",
+        "to": "a2",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "a2",
+        "to": "a3",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "a3",
+        "to": "b1",
+        "role": "spine",
+        "label": "Yes|with|pipes"
+      },
+      {
+        "from": "a3",
+        "to": "a2",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "b1",
+        "to": "b2",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "b1",
+        "to": "b3",
+        "role": "plumbing",
+        "label": "writes"
+      },
+      {
+        "from": "b4",
+        "to": "a2",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "b2",
+        "to": "b9",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "b9",
+        "to": "b10",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "b10",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "b13",
+        "to": "unquoted",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "unquoted",
+        "to": "end2",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "b12",
+        "to": "b13",
+        "role": "spine",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": "llm",
+    "warnings": [
+      {
+        "code": "override_unknown",
+        "field": "executed_by",
+        "detail": "someone-else"
+      },
+      {
+        "code": "step_opt_unknown",
+        "field": "steps",
+        "detail": "a2: colour"
+      },
+      {
+        "code": "step_malformed",
+        "field": "steps",
+        "detail": "## "
+      },
+      {
+        "code": "step_opt_malformed",
+        "field": "steps",
+        "detail": "b3: by=sometimes"
+      },
+      {
+        "code": "step_opt_malformed",
+        "field": "steps",
+        "detail": "b3: col=x"
+      },
+      {
+        "code": "step_opt_malformed",
+        "field": "steps",
+        "detail": "b3: =oops"
+      },
+      {
+        "code": "step_opt_malformed",
+        "field": "steps",
+        "detail": "b3: col=1000"
+      },
+      {
+        "code": "step_opt_malformed",
+        "field": "steps",
+        "detail": "b4: col=999"
+      },
+      {
+        "code": "step_kind_unknown",
+        "field": "steps",
+        "detail": "b5: unknown"
+      },
+      {
+        "code": "step_id_invalid",
+        "field": "steps",
+        "detail": "B6"
+      },
+      {
+        "code": "step_id_duplicate",
+        "field": "steps",
+        "detail": "b2"
+      },
+      {
+        "code": "step_malformed",
+        "field": "steps",
+        "detail": "b7 | llm"
+      },
+      {
+        "code": "step_malformed",
+        "field": "steps",
+        "detail": "b8: no title"
+      },
+      {
+        "code": "step_ref_duplicate",
+        "field": "steps",
+        "detail": "b11: atlas:draft-skill (a2)"
+      },
+      {
+        "code": "step_id_invalid",
+        "field": "steps",
+        "detail": "\"x"
+      },
+      {
+        "code": "gate_branch_unlabeled",
+        "field": "flow",
+        "detail": "a3 -> a2"
+      },
+      {
+        "code": "flow_unknown_step",
+        "field": "flow",
+        "detail": "ghost"
+      },
+      {
+        "code": "flow_malformed",
+        "field": "flow",
+        "detail": "this is not a flow line"
+      },
+      {
+        "code": "flow_malformed",
+        "field": "flow",
+        "detail": "b9 => b10"
+      }
+    ]
+  }
+}

@@ -139,4 +139,4 @@ Three accepted moves, all buying *less rework*; one rejected for being cosmetic.
 
 *One dedup pass. No copy step. Exact-before-fuzzy so humans only touch ambiguity. CRM joined early so no post-hoc surprises.*
 
-**Hand-off:** this clean spine now goes to `ops-transformation` (which step is objective-high-frequency → deterministic? which is subjective → LLM suggests + human gate? assign FE/BE/DB), and then to `ops-workflow-design` to draw it as a Lucid swimlane and run the V1–V14 lint. This skill's job — a streamlined, I→P→O-clean, friction-free, sensibly-ordered spine — is done.
+**Hand-off:** this clean spine now goes to `ops-transformation` (which step is objective-high-frequency → deterministic? which is subjective → LLM suggests + human gate? assign FE/BE/DB), and then to `ops-workflow-design` to draw it as a swimlane flow and run the V1–V14 lint. This skill's job — a streamlined, I→P→O-clean, friction-free, sensibly-ordered spine — is done.

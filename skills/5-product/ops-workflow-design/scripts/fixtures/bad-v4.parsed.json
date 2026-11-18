@@ -1,0 +1,115 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a claim arrives",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a claim arrives",
+        "line": 1,
+        "phase": null,
+        "ordinal": 1
+      },
+      {
+        "id": "send",
+        "kind": "input",
+        "title": "1 Send the claim",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "send | input | 1 Send the claim",
+        "line": 2,
+        "phase": null,
+        "ordinal": 2
+      },
+      {
+        "id": "check",
+        "kind": "deterministic",
+        "title": "2 Check the fields",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "check | deterministic | 2 Check the fields",
+        "line": 3,
+        "phase": null,
+        "ordinal": 3
+      },
+      {
+        "id": "review",
+        "kind": "hitl",
+        "title": "3 Review the claim",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "review | hitl | 3 Review the claim",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
+      },
+      {
+        "id": "tell",
+        "kind": "output",
+        "title": "4 Tell the claimant",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "tell | output | 4 Tell the claimant",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · claimant told",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · claimant told",
+        "line": 6,
+        "phase": null,
+        "ordinal": 6
+      }
+    ],
+    "phases": [],
+    "flow": [
+      {
+        "from": "start",
+        "to": "send",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "send",
+        "to": "check",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "check",
+        "to": "review",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "review",
+        "to": "tell",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "tell",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": []
+  }
+}

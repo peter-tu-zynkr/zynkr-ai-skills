@@ -1,0 +1,125 @@
+{
+  "rows": [
+    "fe0",
+    "fe1",
+    "be0",
+    "be1",
+    "db0",
+    "db1"
+  ],
+  "cols": 9,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 1,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "pull",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "clean",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "rows",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "guide",
+      "lane": "db",
+      "sublane": 1,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "notes",
+      "lane": "db",
+      "sublane": 1,
+      "tier": 0,
+      "col": 1
+    },
+    {
+      "id": "score",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "fit",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "fix",
+      "lane": "be",
+      "sublane": 0,
+      "tier": 5,
+      "col": 5
+    },
+    {
+      "id": "fixlog",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 5,
+      "col": 5
+    },
+    {
+      "id": "auto",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 5,
+      "col": 5
+    },
+    {
+      "id": "early",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 6
+    },
+    {
+      "id": "learned",
+      "lane": "db",
+      "sublane": 1,
+      "tier": 5,
+      "col": 5
+    },
+    {
+      "id": "handoff",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 6,
+      "col": 7
+    },
+    {
+      "id": "show",
+      "lane": "fe",
+      "sublane": 1,
+      "tier": 7,
+      "col": 7
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 1,
+      "tier": 8,
+      "col": 8
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · someone wants an account",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · someone wants an account",
+        "line": 1,
+        "phase": null,
+        "ordinal": 1
+      },
+      {
+        "id": "form",
+        "kind": "input",
+        "title": "1 Fill in the sign-up form",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "form | input | 1 Fill in the sign-up form",
+        "line": 2,
+        "phase": null,
+        "ordinal": 2
+      },
+      {
+        "id": "check",
+        "kind": "gate",
+        "title": "2 Form complete?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "check | gate | 2 Form complete?",
+        "line": 3,
+        "phase": null,
+        "ordinal": 3
+      },
+      {
+        "id": "create",
+        "kind": "deterministic",
+        "title": "3 Create the account",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "create | deterministic | 3 Create the account",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
+      },
+      {
+        "id": "users",
+        "kind": "store",
+        "title": "User table",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "users | store | User table",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
+      },
+      {
+        "id": "welcome",
+        "kind": "output",
+        "title": "4 Show the welcome page",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "welcome | output | 4 Show the welcome page",
+        "line": 6,
+        "phase": null,
+        "ordinal": 6
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · account ready",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · account ready",
+        "line": 7,
+        "phase": null,
+        "ordinal": 7
+      }
+    ],
+    "phases": [],
+    "flow": [
+      {
+        "from": "start",
+        "to": "form",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "form",
+        "to": "check",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "check",
+        "to": "create",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "check",
+        "to": "start",
+        "role": "spine",
+        "label": "No"
+      },
+      {
+        "from": "create",
+        "to": "welcome",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "welcome",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "create",
+        "to": "users",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": []
+  }
+}

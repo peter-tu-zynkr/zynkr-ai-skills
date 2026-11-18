@@ -3,8 +3,8 @@
 > **Seed:** `docs/process-shared/process-step-card.md` (SKB-040; knowledge lane SKB-042). Copied byte-identically into
 > `references/process-step-card.md` of `ops-transformation` (3.10),
 > `ops-flow-optimization` (3.14) and `ops-workflow-design` (5.03). Edit the seed, then
-> re-copy all three in the same commit. No CI gate holds the copies identical yet — compare them by
-> hand (`cmp`) before you push.
+> re-copy all three in the same commit. The workbench's script tests (`cd scripts && npm test`)
+> fail, naming the copy, when one differs from the seed.
 
 Whoever reads a process should be able to answer two questions at any step, without scrolling to
 another section:
@@ -25,13 +25,14 @@ what this format exists to prevent. Every step carries both, on one card.
   `1.1, 1.2, 2.1…`; the sub-tasks a redesign breaks step 3 into are `3.1, 3.2…`. A flat flow is
   just `1, 2, 3`.
 - The number is the step's id **everywhere**: in the chat output, in the document, in the store
-  directory (§4), and on the Lucid node (`ops-workflow-design` puts it on the node's first line).
-  Someone holding the chart and the document must be able to match them by number alone.
+  directory (§4), and in the flow text (`ops-workflow-design` starts the step's title with it:
+  `1.1 Diff vs last week`). Someone holding the drawing and the document must be able to match them
+  by number alone.
 - If you add, remove, merge or move a step, renumber and say so in one line — an `old → new` map. Never
   renumber silently. Keep the parent number and renumber only the children under it (a step added
   between 3.1 and 3.2 makes the old 3.2 into 3.3; step 4 stays step 4), so numbers outside the
-  change never move. Whatever comes downstream — the final blueprint, the Lucid chart — uses the
-  numbers of the **last** pass that renumbered.
+  change never move. Whatever comes downstream — the final blueprint, the flow text and its
+  drawing — uses the numbers of the **last** pass that renumbered.
 
 ## 2. The card
 
@@ -53,8 +54,8 @@ Rules:
   step — merge or drop it (`ops-flow-optimization` Step 2). A step doing two things is two
   steps.
 - **Layer · Reads · Writes · Knowledge are required whenever the step touches a system** — every
-  to-be or redesigned flow, and every flow that is going onto a Lucid chart. See §5 for the as-is
-  case.
+  to-be or redesigned flow, and every flow that is going into flow text (an Atlas workflow or a page
+  drawing). See §5 for the as-is case.
 - **"none" is a value, not a blank.** `Reads: none · Writes: none · Knowledge: none` tells the
   reader the step needs nothing from the bottom lane. Those are the most useful lines on the card —
   never leave them out on a to-be step, not even in a compact one-line card.
@@ -75,14 +76,15 @@ Rules:
 
 ## 3. Layer vocabulary
 
-The same words as the Lucid lanes in `ops-workflow-design`, so a card and a chart node always agree:
+The same words as the lanes `ops-workflow-design` draws, so a card and a step in the flow text
+always agree:
 
-| Layer | What it means | Lucid lane · colour |
+| Layer | What it means | Lane · step kind in the flow text |
 |---|---|---|
-| **Front end** | A person sees or types something: a form, a mail, a chat post, a dashboard | FE lane · red family (darker = input, lighter = output) |
-| **Backend · human** | A person decides, reviews or approves (HITL) | BE manual lane · light blue |
-| **Backend · rules** | Fixed logic: rule-based automation, a state machine, a script | BE machine lane · purple |
-| **Backend · AI** | An LLM step. Needs a gate or a human downstream | BE machine lane · blue |
+| **Front end** | A person sees or types something: a form, a mail, a chat post, a dashboard | Front-end lane · `input` (in) or `output` (out) |
+| **Backend · human** | A person decides, reviews or approves (HITL) | Backend, manual process · `hitl` |
+| **Backend · rules** | Fixed logic: rule-based automation, a state machine, a script | Backend, state machine / AI · `deterministic`, or `gate` when it branches |
+| **Backend · AI** | An LLM step. Needs a gate or a human downstream | Backend, state machine / AI · `llm` |
 
 Two qualifiers may follow a layer, nothing else: **external / internal** after Front end (who the
 person is — a customer, or someone on the team), and **(gate)** after Backend · rules when the step
@@ -99,10 +101,10 @@ written to a system of record, a Backend · rules gate or a Backend · human ste
 **The database is never a step's layer.** The bottom lane holds two kinds of thing a step uses, and
 the card names both:
 
-| On the card | What it is | Lucid (`ops-workflow-design`) | Atlas workflow |
-|---|---|---|---|
-| `Reads:` / `Writes:` | A **data store** — a system of record: a log, a table, a record, a state | `Data base data table` sub-lane | a `store` step |
-| `Knowledge:` | A **knowledge source** — what the step must know to do the work well: rules, policies, playbooks, price lists, FAQs, past examples, templates | `Knowledge base knowledge` sub-lane · dark-green document labelled `[RAG] <name> v<version>` | a `knowledge` step |
+| On the card | What it is | In the flow text (`ops-workflow-design`, an Atlas workflow) |
+|---|---|---|
+| `Reads:` / `Writes:` | A **data store** — a system of record: a log, a table, a record, a state | a `store` step (an `artifact` step for a durable document) in the data band; `store ~> step` is a read, `step ~> store` a write |
+| `Knowledge:` | A **knowledge source** — what the step must know to do the work well: rules, policies, playbooks, price lists, FAQs, past examples, templates | a `knowledge` step titled `[RAG] <name> v<version>` in the knowledge band; `source ~> step` |
 
 A "save the record" sub-task is a Backend · rules step whose `Writes:` names the store. A step that
 **maintains** a knowledge source — writes a KB card, updates the rule table — names that source on
@@ -130,8 +132,8 @@ write>`, and separate two sources with `;` —
   a redesigned card whose knowledge gap waits, write it as `Knowledge: tacit — <who knows it>` (an
   as-is SIPOC records it in Systems today instead). It is a knowledge gap (§7), not a source: it
   stays out of the store directory until a card turns it into a `(new)` source.
-- A chart node carries the source's name, not its link — keep the link on the card and in the store
-  directory.
+- A `knowledge` step carries the source's name, not its link — keep the link on the card and in the
+  store directory.
 - **An AI step always has a real Knowledge line.** `Knowledge: none` on a Backend · AI step means it
   answers from the model alone — say in a few words why that is safe, or call it a gap (§7).
 - A person can need knowledge too: a reviewer applying a policy, a quoter using a price list. Put it
@@ -174,8 +176,8 @@ invent one.
   Layer is optional: the redesign assigns it. Here a **numbered SIPOC table** is the card —
   `| # | Supplier | Input | Process | Output | Customer | Systems today |`, one row per step —
   because the as-is card has exactly those fields and a table compares them best.
-- **To-be** (redesign, the optimization of a redesigned flow, anything drawn on Lucid): the full
-  card. Reads, Writes and Knowledge are required.
+- **To-be** (redesign, the optimization of a redesigned flow, anything written as flow text): the
+  full card. Reads, Writes and Knowledge are required.
 - **A step the redesign leaves alone** stays in the to-be flow as a card marked `kept as is`:
   its Input · Process · Output, `Layer: kept as is (manual today)` — or the layer it already has —
   and Reads / Writes / Knowledge taken from its Systems today (know-how only in someone's head stays
@@ -185,16 +187,16 @@ invent one.
   an as-is SIPOC Supplier, Customer, Systems today — through to its output, unchanged. A step that skill **adds** (a split, a missing connector) gets its Input ·
   Process · Output and the line `Layer / Reads / Writes / Knowledge: to assign →
   ops-transformation` on its own card.
-- **Reading a chart back** (`ops-workflow-design` READ): node labels are short, so Input and Output
-  are often inferred from the edges — mark an inferred field `(inferred)`, and write `not shown on
-  the chart` rather than inventing one (once above the cards, when no node carries it — a template
-  with generic labels). Knowledge nodes are the ones in the `Knowledge base knowledge` sub-lane,
-  or any dark-green `DocumentBlock` when the lanes carry other names. The arrowhead rule is the same
-  as for stores: arrowhead at the step means the step relies on the source (its `Knowledge:` line),
-  arrowhead at the source means the step maintains it (its `Writes:` line, marked `(knowledge)`). `(new | exists)`, "what it holds" and the join key go in the
-  store directory only when the chart says them. A store a chart draws twice on purpose (last
-  week's and this week's copy of a log) is one entry in the directory, with a note that it is
-  drawn twice — not two half-used stores.
+- **Reading a flow back** (`ops-workflow-design` READ): step titles are short, so Input and Output
+  are often inferred from the lines — mark an inferred field `(inferred)`, and write `not in the
+  flow text` rather than inventing one (once above the cards, when no step carries it — a template
+  with generic titles). Knowledge sources are the `knowledge` steps. Direction is the rule, as for
+  stores: a `~>` line from the source to the step means the step relies on it (its `Knowledge:`
+  line), and one from the step to the source means the step maintains it (its `Writes:` line,
+  marked `(knowledge)`). `(new | exists)`, "what it holds" and the join key go in the store
+  directory only when the flow says them. A store a flow draws twice on purpose (last week's and
+  this week's copy of a log) is one entry in the directory, with a note that it is drawn twice —
+  not two half-used stores.
 
 ## 6. Example (to-be, four steps of an invoice flow)
 

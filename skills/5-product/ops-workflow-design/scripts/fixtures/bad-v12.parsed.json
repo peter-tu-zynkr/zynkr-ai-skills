@@ -1,0 +1,145 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · an expense is filed",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · an expense is filed",
+        "line": 1,
+        "phase": null,
+        "ordinal": 1
+      },
+      {
+        "id": "file",
+        "kind": "input",
+        "title": "1 File the expense",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "file | input | 1 File the expense",
+        "line": 2,
+        "phase": null,
+        "ordinal": 2
+      },
+      {
+        "id": "rule",
+        "kind": "gate",
+        "title": "2 Is the total above the limit finance set for this year?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "rule | gate | 2 Is the total above the limit finance set for this year?",
+        "line": 3,
+        "phase": null,
+        "ordinal": 3
+      },
+      {
+        "id": "approve",
+        "kind": "hitl",
+        "title": "3 Manager approves",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "approve | hitl | 3 Manager approves",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
+      },
+      {
+        "id": "pay",
+        "kind": "deterministic",
+        "title": "4 Pay it out",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "pay | deterministic | 4 Pay it out",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
+      },
+      {
+        "id": "ledger",
+        "kind": "store",
+        "title": "Expense ledger",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "ledger | store | Expense ledger",
+        "line": 6,
+        "phase": null,
+        "ordinal": 6
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · expense paid",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · expense paid",
+        "line": 7,
+        "phase": null,
+        "ordinal": 7
+      }
+    ],
+    "phases": [],
+    "flow": [
+      {
+        "from": "start",
+        "to": "file",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "file",
+        "to": "rule",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "rule",
+        "to": "approve",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "rule",
+        "to": "pay",
+        "role": "spine",
+        "label": "No"
+      },
+      {
+        "from": "approve",
+        "to": "pay",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "pay",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "approve",
+        "to": "ledger",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "pay",
+        "to": "ledger",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 1,
+    "executionMode": null,
+    "warnings": []
+  }
+}

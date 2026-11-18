@@ -1,0 +1,66 @@
+{
+  "rows": [
+    "fe0",
+    "be1",
+    "db0"
+  ],
+  "cols": 4,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "ask",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "draft",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "check",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "send",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 0,
+      "col": 2
+    },
+    {
+      "id": "file",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "log",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 3
+    }
+  ]
+}

@@ -1,0 +1,203 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a request arrives",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a request arrives",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "ask",
+        "kind": "input",
+        "title": "1 Send the request",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "ask | input | 1 Send the request",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "draft",
+        "kind": "llm",
+        "title": "2 Draft the reply",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "draft | llm | 2 Draft the reply",
+        "line": 5,
+        "phase": 0,
+        "ordinal": 3
+      },
+      {
+        "id": "check",
+        "kind": "gate",
+        "title": "3 Reply complete?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "check | gate | 3 Reply complete?",
+        "line": 8,
+        "phase": 1,
+        "ordinal": 4
+      },
+      {
+        "id": "send",
+        "kind": "output",
+        "title": "4 Send the reply",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "send | output | 4 Send the reply",
+        "line": 10,
+        "phase": 1,
+        "ordinal": 5
+      },
+      {
+        "id": "file",
+        "kind": "deterministic",
+        "title": "5 File the reply",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "file | deterministic | 5 File the reply",
+        "line": 11,
+        "phase": 1,
+        "ordinal": 6
+      },
+      {
+        "id": "log",
+        "kind": "store",
+        "title": "Reply log",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "log | store | Reply log",
+        "line": 12,
+        "phase": 1,
+        "ordinal": 7
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · reply sent and filed",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · reply sent and filed",
+        "line": 13,
+        "phase": 1,
+        "ordinal": 8
+      }
+    ],
+    "phases": [
+      {
+        "name": "Intake",
+        "from": 1,
+        "to": 3
+      },
+      {
+        "name": "Reply",
+        "from": 4,
+        "to": 8
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "ask",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "ask",
+        "to": "draft",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "draft",
+        "to": "check",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "check",
+        "to": "draft",
+        "role": "spine",
+        "label": "No, redo"
+      },
+      {
+        "from": "send",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "file",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "file",
+        "to": "log",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": [
+      {
+        "code": "step_kind_unknown",
+        "field": "steps",
+        "detail": "notes: context"
+      },
+      {
+        "code": "step_kind_unknown",
+        "field": "steps",
+        "detail": "scratch: ephemeral"
+      },
+      {
+        "code": "step_kind_unknown",
+        "field": "steps",
+        "detail": "fork: junction"
+      },
+      {
+        "code": "flow_unknown_step",
+        "field": "flow",
+        "detail": "fork"
+      },
+      {
+        "code": "flow_unknown_step",
+        "field": "flow",
+        "detail": "fork"
+      },
+      {
+        "code": "flow_unknown_step",
+        "field": "flow",
+        "detail": "fork"
+      },
+      {
+        "code": "flow_unknown_step",
+        "field": "flow",
+        "detail": "notes"
+      },
+      {
+        "code": "flow_unknown_step",
+        "field": "flow",
+        "detail": "scratch"
+      }
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "rows": [
+    "fe0",
+    "be1",
+    "db0"
+  ],
+  "cols": 6,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "form",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "check",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "create",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "users",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "welcome",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 5,
+      "col": 5
+    }
+  ]
+}

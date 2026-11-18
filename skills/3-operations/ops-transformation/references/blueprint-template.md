@@ -2,7 +2,7 @@
 CONTRACT — this document is read back. Keep the numbered section headings exactly as they are.
   · /ops-prd-writer builds the PRD's design sketch from "## 3." and "## 5.", its data and
     knowledge lines from "## 4.", and adds every gap that waits in "## 6." to Out of scope
-  · /ops-workflow-design draws "## 3." and puts these step numbers on the Lucid nodes
+  · /ops-workflow-design draws "## 3." and starts its step titles with these step numbers
 Every card follows process-step-card.md §2; write `none` rather than leaving a line out.
 -->
 # [Blueprint] {{COMPANY}} — {{PROCESS}}
@@ -50,7 +50,7 @@ Every card follows process-step-card.md §2; write `none` rather than leaving a 
 
 ## 7. Next
 
-- /ops-workflow-design draws section 3; its node numbers are these step numbers.
+- /ops-workflow-design draws section 3; its step titles start with these step numbers.
 - /ops-prd-writer writes the PRD from the signed BRD and this blueprint.
 
 <!--

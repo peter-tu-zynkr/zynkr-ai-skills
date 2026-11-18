@@ -1,0 +1,169 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a lead fills in the form",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a lead fills in the form",
+        "line": 1,
+        "phase": null,
+        "ordinal": 1
+      },
+      {
+        "id": "form",
+        "kind": "input",
+        "title": "1 Fill in the form",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "form | input | 1 Fill in the form",
+        "line": 2,
+        "phase": null,
+        "ordinal": 2
+      },
+      {
+        "id": "score",
+        "kind": "deterministic",
+        "title": "2 Score the lead",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "score | deterministic | 2 Score the lead",
+        "line": 3,
+        "phase": null,
+        "ordinal": 3
+      },
+      {
+        "id": "hot",
+        "kind": "gate",
+        "title": "3 Hot lead?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "hot | gate | 3 Hot lead?",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
+      },
+      {
+        "id": "call",
+        "kind": "hitl",
+        "title": "4 Call the lead",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "call | hitl | 4 Call the lead",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
+      },
+      {
+        "id": "nurture",
+        "kind": "deterministic",
+        "title": "5 Add to the newsletter",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "nurture | deterministic | 5 Add to the newsletter",
+        "line": 6,
+        "phase": null,
+        "ordinal": 6
+      },
+      {
+        "id": "crm",
+        "kind": "store",
+        "title": "Lead list (CRM)",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "crm | store | Lead list (CRM)",
+        "line": 7,
+        "phase": null,
+        "ordinal": 7
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · lead followed up",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · lead followed up",
+        "line": 8,
+        "phase": null,
+        "ordinal": 8
+      }
+    ],
+    "phases": [],
+    "flow": [
+      {
+        "from": "start",
+        "to": "form",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "form",
+        "to": "score",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "score",
+        "to": "hot",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "hot",
+        "to": "call",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "hot",
+        "to": "nurture",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "call",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "nurture",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "call",
+        "to": "crm",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "nurture",
+        "to": "crm",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": [
+      {
+        "code": "gate_branch_unlabeled",
+        "field": "flow",
+        "detail": "hot -> nurture"
+      }
+    ]
+  }
+}

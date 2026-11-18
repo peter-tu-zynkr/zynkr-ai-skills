@@ -1,0 +1,52 @@
+{
+  "rows": [
+    "fe0",
+    "be1",
+    "db1"
+  ],
+  "cols": 5,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "ask",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "answer",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "faq",
+      "lane": "db",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "show",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    }
+  ]
+}

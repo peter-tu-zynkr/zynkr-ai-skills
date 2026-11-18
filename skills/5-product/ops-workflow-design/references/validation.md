@@ -1,127 +1,249 @@
 # Validation / Lint Rules
 
-Fourteen rules (V1–V14). Each cites the underlying principle (from `architecture-principles.md`), how to detect it in Lucid-JSON terms, and how to fix it. Apply them on every read and as a self-check after every draft/edit.
+Fourteen rules (V1–V14), plus two checks only a layout or a parser can make. Each rule cites the
+principle behind it (from `architecture-principles.md`), how to detect it in flow text, and how to
+fix it. Apply them on every read, and as the self-check after every draft and edit.
+
+---
+
+## Where each rule is checked
+
+Every rule has one home:
+
+- **lint** — `flow_svg.py lint` checks it mechanically and names the rule and the step ids: V4, V5,
+  V6, V9, V12 (label length) and V14, plus two boxes or labels that overlap, and a step or line
+  Atlas would not draw (`parse`).
+- **kind** — settled when you pick each step's kind. The kind decides the step's lane, shape and
+  fill, so a drawing can't break these rules; a wrong kind can. Check the kinds against the cards
+  and the titles: V1, V2, V3, V8 and V10.
+- **renderer** — `render` keeps it on every drawing, so a kit drawing needs no check: V12 (the
+  legend and empty lanes) and V13 (a) and (b).
+- **judgment** — read the flow: V7.
+- **retired** — no longer a rule: V11 and V13 (c). The renderer sets the text size.
+
+| Rule | In short | Home | Severity |
+|---|---|---|---|
+| V1 | `store` only for a durable system of record | kind | hard |
+| V2 | No business logic in the front end | kind | hard |
+| V3 | A gate decides, not an LLM | kind | hard |
+| V4 | HITL leaves a durable audit trail | lint | hard |
+| V5 | An LLM step has a fallback | lint | soft |
+| V6 | Gate branches are labelled | lint | hard |
+| V7 | Offpage is a boundary, not a hiding place | judgment | soft |
+| V8 | Lanes run FE → BE → DB | kind | hard |
+| V9 | Start and end at the boundaries | lint | soft |
+| V10 | Colour matches meaning | kind | soft |
+| V11 | Node text size | retired | — |
+| V12 | Clean-register hygiene | lint (label length) · renderer (legend, empty lanes) | soft |
+| V13 | Straight lines, legible lane headers | renderer (a, b) · retired (c) | soft |
+| V14 | One spine; at most 3 steps per column | lint | hard |
+| — | Two boxes or labels overlap | lint | hard |
+| — | A step or line Atlas would not draw, or a title or phase name it would cut (`parse`) | lint | hard |
+
+Severity sorts the report: a hard rule is a ship-blocker, a soft one an observation. **Lint exits 1
+on every rule it finds, soft ones included**, so a kit drawing ships with neither. On a chart read
+as an image, a soft finding is flagged, not blocking.
+
+`lint` also **warns** on a page-only kind (`context`, `junction`, `ephemeral`): the kit draws the
+step, but Atlas has no kind for it and would drop it, so the flow stays a page drawing. It warns on
+a step option it can't read (a `by=` or `col=` with a bad value, an unknown option) too. A warning
+never changes the exit.
 
 ---
 
 ## Hard rules (ship-blockers)
 
-### V1 — Cylinder only for durable system-of-record
+### V1 — `store` only for a durable system of record · kind
 
-- **Principle**: `architecture-principles.md` §2 rule 5 ("Vector DB is an index, not truth"); §1.3 A) Durable vs ephemeral.
-- **Detect**: a node with `BlockClass: DatabaseBlock` (cylinder) whose `FillColor` is *not* in the green `#e3fae3ff` family, OR whose label implies RAG / vector / index / knowledge retrieval.
-- **Fix**: move the concept to a `DocumentBlock` dark-green (`#c3f7c8ff`). The cylinder is reserved for durable records like `WorkflowInstance`, `DecisionLog`, `CommandLog`.
+- **Principle**: `architecture-principles.md` §2 rule 5 ("Vector DB is an index, not truth"); §1.3
+  A) Durable vs ephemeral.
+- **Detect**: a `store` step (drawn as the cylinder) whose title or card says index, vector,
+  embedding, RAG, retrieval or knowledge: something searched for meaning rather than a record kept.
+- **Fix**: make it a `knowledge` step titled `[RAG] <name> v<n>`, read through `~>` lines. Keep
+  `store` for durable records such as `WorkflowInstance`, `DecisionLog` or `CommandLog`.
 
-### V2 — No business logic in FE
+### V2 — No business logic in the front end · kind
 
 - **Principle**: §2 rule 1 ("FE shows intent; BE owns meaning").
-- **Detect**: any `ProcessBlock` whose parent swimlane is "Front end user", unless it's *pure UX* (e.g., "validate input format", "show confirmation").
-- **Fix**: move the step into the BE lane. Keep only UI-level work in FE.
+- **Detect**: an `input` or `output` step whose title decides, calculates or applies a rule
+  ("Calculate discount", "Check eligibility"). Pure UX is fine: "Validate the format", "Show the
+  confirmation".
+- **Fix**: split it. The front-end step keeps the surface (`input` or `output`), and a backend step
+  (`deterministic`, `llm` or `hitl`) takes the meaning.
 
-### V3 — Decisions deterministic by default
+### V3 — A gate decides, not an LLM · kind
 
-- **Principle**: `shape-color-principles.md` §5 rule 3 ("Prefer deterministic gates for branching").
-- **Detect**: a `DecisionBlock` colored dark-blue (LLM blue, `#cfe4ff` family).
-- **Fix**: restructure as "LLM suggests → deterministic gate enforces". Add a purple `DecisionBlock` downstream of the LLM step. The LLM produces a recommendation; the purple gate enforces the branch.
+- **Principle**: `shape-color-principles.md` §5 rule 3 ("Prefer deterministic gates for
+  branching").
+- **Detect**: an `llm` step whose outgoing `->` lines choose between business outcomes (approve or
+  reject, tier A or tier B): the model picks the branch. A `gate` always draws as a deterministic
+  decision, so the kind settles the colour; what is left to check is that branching happens at a
+  gate. An error or retry line out of an LLM step is a fallback (V5), not a decision.
+- **Fix**: LLM suggests → gate enforces. One `->` from the `llm` step to a `gate`, and the labelled
+  branches leave the gate.
 
-### V4 — HITL must have a durable audit trail
+### V4 — HITL leaves a durable audit trail · lint
 
-- **Principle**: §2 rule 2 ("HITL appears in FE, but belongs to BE"); §5.1 (HITL spec requires audit record).
-- **Detect**: a `ManualOperationBlockNew` whose downstream path does not reach any `DatabaseBlock` or durable green `DocumentBlock` before a terminal.
-- **Fix**: add a write to a decision log between the manual op and the terminal.
+- **Principle**: §2 rule 2 ("HITL appears in FE, but belongs to BE"); §5.1 (the HITL spec requires
+  an audit record).
+- **Detect**: a `hitl` step with no `~>` line to a `store` or `artifact` step.
+- **Fix**: write the decision down: `<hitl step> ~> <decision log>`, with the log as a `store` step
+  (`Decision log (new)` when it doesn't exist yet).
 
-### V6 — Decision branches must be labeled
+### V6 — Gate branches are labelled · lint
 
-- **Principle**: `shape-color-principles.md` §5 (decisions are questions; outcomes must be explicit).
-- **Detect**: an outgoing edge from a `DecisionBlock` whose `TextAreas` has no `Text` field (or empty).
-- **Fix**: add a label (`Yes`/`No`, or specific outcome names). Unlabeled branches = ambiguity.
+- **Principle**: `shape-color-principles.md` §5 (decisions are questions; outcomes must be
+  explicit). Atlas warns on the same thing.
+- **Detect**: a `->` line out of a `gate` with no label after the `|`.
+- **Fix**: label it: `big -> review | Yes`, or the outcome's name. Unlabelled branches are
+  ambiguity.
 
-### V8 — Lane order FE → BE → DB
+### V8 — Lanes run FE → BE → DB · kind
 
-- **Principle**: scaffold convention (see `scaffold.md`).
-- **Detect**: the three top swimlanes are not in this order from top to bottom.
-- **Fix**: reorder. Same content, but lanes vertically stacked FE → BE → DB.
+- **Principle**: the scaffold (`scaffold.md`).
+- **Detect**: nothing to check on a kit drawing: lanes come from kinds and always run FE · BE · DB,
+  top to bottom. A wrong lane is a wrong kind (V1, V2, V10). On a chart handed over as an image,
+  check the order by eye.
+- **Fix**: redraw it from flow text.
 
-### V14 — One spine; at most 3 nodes per column
+### V14 — One spine; at most 3 steps per column · lint
 
-- **Principle**: `SKILL.md` §9 ("One node per real step... grid-aligned — sign-offs directly above their stage, stores directly below"). That principle was always there; it had no rule and nothing checked it. **Owner ruling 2026-09-01** made it one.
-- **Detect**: any column (nodes sharing a centre-x band, counted **across all lanes**, not per lane) holding **4 or more** nodes; or one lane stacking three-plus parallel rows of process nodes, so the chart reads as a grid rather than a line.
-- **Fix**: pick **one** path as the spine and run it left to right, one node per column. Alternative paths leave the spine as labelled `offPageLink` exits — each gets its own chart, and rejoins (if it does) as a thin dashed grey edge, never as another row. Sign-offs (HITL) sit directly **above** the stage they gate; stores sit directly **below** the stage that writes them. That budget keeps a column at ≤3: spine node + one sign-off *or* store + one knowledge source.
-- **Why it's hard, not soft**: this is not cosmetics. A reader follows a process along one axis; parallel branch rows force them to read in two dimensions and the sequence is lost. Fixing it late means re-deciding what the chart is *about*, which is a re-architecture, not a nudge — so it belongs before the draft, not in the polish pass.
+- **Principle**: two registers, `SKILL.md` ("one step per real step … at most three steps in a
+  column"). The rule was always implied; an owner's ruling on 2026-09-01 made it a rule.
+- **Detect**: a column holding **4 or more** steps, counted **across all lanes** after layout. Lint
+  names the column as `col=` counts it, from 0, and its steps.
+- **Fix**: pick **one** path as the spine and run it left to right. Alternative paths leave the
+  spine through an `offpage` step that names their own flow, and rejoin, if they do, as a
+  plumbing line, never as another row. A column's budget is the spine step, one store or sign-off,
+  and one knowledge source. A source that steps only read takes `col=` to sit under its reader
+  (`scaffold.md`).
+- **Why it's hard, not soft**: this is not cosmetics. A reader follows a process along one axis;
+  parallel branch rows force them to read in two dimensions, and the sequence is lost. Fixing it
+  late means re-deciding what the flow is *about*, which is a re-architecture, not a nudge, so it
+  belongs before the draft.
+
+### Overlap · lint
+
+- **Detect**: two boxes, two labels or two phase bands overlap after layout. For phase bands lint
+  names the steps in the columns both phases hold, each with its `col=`; `lint --json` lists every
+  step's column.
+- **Fix**: reorder the steps or the phases, or move one step with `col=`, so each phase holds
+  neighbouring columns. A shorter title or label helps too.
+
+### Parse — a step or line Atlas would not draw · lint
+
+- **Detect**: the file holds something Atlas's parser drops: more than 200 steps or 300 flow lines,
+  a step line without its three parts, an id that breaks the id rule (`scaffold.md` §7) or is used
+  twice, an unknown kind, a second step naming the same `ref=`, a flow line that is neither
+  `a -> b` nor `a ~> b`, or a flow line naming a step that isn't there. Also a file that does not
+  open with its `---` line (a header pasted above it: Atlas then reads no steps at all), and a title
+  over 60 characters or a phase name over 40, which Atlas cuts.
+- **Fix**: fix the line: each step is `"<id> | <kind> | <title>"`, each flow line `"a -> b"` or
+  `"a ~> b"`. Start the file at its `---`, and shorten a long title (the detail goes on the step
+  card) or phase name. Atlas drops such a step or line, or cuts the title or the name, without a
+  word, so the canvas would not show what the file says.
 
 ---
 
-## Soft rules (observations — flag but don't block)
+## Soft rules (observations)
 
-### V5 — LLM steps need a fallback
+### V5 — An LLM step has a fallback · lint
 
-- **Principle**: §1.2 (LLM execution requires deterministic shadow + confidence threshold + fallback path); §5.2 (LLM spec checklist).
-- **Detect**: a `ProcessBlock` with LLM-blue fill (`#cfe4ff`) that has only one outgoing edge to the happy path — no review gate, no error/escalation edge.
-- **Fix**: add either (a) a deterministic decision gate downstream that checks confidence/output validity, (b) an HITL fallback edge, or (c) an explicit error/retry edge.
+- **Principle**: §1.2 (LLM execution needs a deterministic shadow, a confidence threshold and a
+  fallback path); §5.2 (the LLM spec checklist).
+- **Detect**: an `llm` step with a path to an `output`, an `end` or an `offpage` step that passes no
+  `gate` or `hitl` step, and with no error path of its own: a line back to an earlier step (a retry),
+  or a labelled branch beside its main line, the line out with no label. A label on its only line out
+  names the next step, and a step whose every line out is labelled sorts its result: neither is an
+  error path, so each of its paths needs a check.
+- **Fix**: add (a) a `gate` downstream that checks confidence or validity, (b) a `hitl` step that
+  reviews the output, or (c) an error or retry line: a labelled branch out of the AI step beside its
+  main line, or a line back to an earlier step.
 
-### V7 — Off-page link is a boundary, not a hiding place
+### V7 — Offpage is a boundary, not a hiding place · judgment
 
-- **Principle**: `shape-color-principles.md` §2 (Off-page link table row).
-- **Detect**: an `OffPageLinkBlock` placed mid-flow whose label implies business logic (e.g., "Calculate eligibility", "Apply discount tiers").
-- **Fix**: move the logic to a proper BE `ProcessBlock`. Keep the off-page link as a pure handoff (e.g., "Invoke Refund Workflow", "Emit Event: RefundRequested").
+- **Principle**: `shape-color-principles.md` §2 (the off-page link row).
+- **Detect**: an `offpage` step whose title implies business logic ("Calculate eligibility",
+  "Apply discount tiers"), or one that does work mid-flow instead of handing off.
+- **Fix**: move the logic into a backend step (`deterministic`, `llm` or `hitl`). Keep the `offpage`
+  step a pure hand-off ("Invoke the refund flow", "Emit RefundRequested").
+- **Not V10**: the kind fits a hand-off; the work sits in the wrong step. Report it once, as V7.
 
-### V9 — Terminals at boundaries
+### V9 — Start and end at the boundaries · lint
 
-- **Principle**: `shape-color-principles.md` §2 (Terminal row).
-- **Detect**: a flow with no `Terminator` start or end.
-- **Fix**: add explicit Start and End `Terminator` nodes. Readers need to know where the flow begins and ends.
+- **Principle**: `shape-color-principles.md` §2 (the terminal row).
+- **Detect**: a `start` step with an incoming `->` line, or an `end` step with an outgoing one. By
+  eye: a flow with no `start` or no `end` step at all.
+- **Fix**: one `start` that only leads out, and an `end` (or more than one) that only takes lines
+  in. Readers need to know where the flow begins and ends.
 
-### V10 — Color must match semantic
+### V10 — Colour matches meaning · kind
 
-- **Principle**: §6 / Shape × Color convention.
-- **Detect**: any node whose fill family contradicts its lane (e.g., a green `DatabaseBlock` floating in the FE lane, or a red node in the DB lane).
-- **Fix**: either move the node to the right lane, or recolor it to match the lane it belongs in.
+- **Principle**: §6 / the Shape × Color convention.
+- **Detect**: a kit drawing takes each step's fill from its kind through the registry, so the
+  colour is wrong only when the kind is: a step whose kind contradicts its card (an `llm` step a
+  person does, a `deterministic` step that is an LLM call, a `store` that is a document).
+- **Fix**: change the kind. Never write a colour: colours live only in `flow-colours.json`.
 
-### V11 — Node text size 10 (soft)
+### V12 — Clean-register hygiene · lint and renderer
 
-- **Principle**: legibility / canonical template uses `fontSize` 10; `SKILL.md` §8.
-- **Detect**: a node on default/auto font (short labels render oversized vs neighbours — the "ransom-note" look).
-- **Fix**: set every node's `fontSize` to 10.
+- **Principle**: two registers, `SKILL.md`.
+- **Lint** — a label longer than its place can hold: a step title that takes more than three lines
+  in its box, a line label of more than two lines, or a phase name wider than its band. Fix:
+  shorten it (verb + noun), and put the detail in the prose under the frontmatter.
+- **Renderer** — both registers draw the legend and leave out a lane row that holds no step;
+  `--register clean` shows labels only on the branches out of a gate or a junction.
+- The rest of the clean register is how you write the flow text: short titles, and one `knowledge`
+  step per source (`SKILL.md`, Two registers).
 
-### V12 — Clean-register hygiene (soft — stakeholder/presentation charts only)
+### V13 — Straight lines and legible lane headers · renderer
 
-- **Principle**: two registers, `SKILL.md` §9.
-- **Detect**: a stakeholder-facing chart missing a legend or "how to read" panel, with sentence-long node labels, empty lanes, or every edge labelled; OR distinct knowledge sources collapsed into one node so a coupling is lost.
-- **Fix**: add a colour-chip legend + overview panel; shorten labels to ≤4 words; drop/merge empty lanes; demote plumbing edges to dashed grey and label only decisions; keep each RAG source as its own dashed edge to its consuming stage.
+- **Principle**: readers track straight lines far more easily, and the lane titles are the first
+  thing they read.
+- **(a) Straight lines** — kept by the renderer: steps sit on shared rows and columns, and the
+  router draws right-angled lines.
+- **(b) Legible lane headers** — kept by the renderer: lane header fills come from the registry,
+  which keeps dark fills off headers.
+- **(c) Pinned text size** — retired: the renderer sets one text size.
 
-### V13 — Final polish: straight lines + legible lane headers (soft)
+### V11 — Node text size · retired
 
-- **Principle**: final-polish learnings from `[1.6] Slide production v4` (2026-06-12) — readers track straight connectors far more easily, and the lane-title column is the first thing they read.
-- **Detect**: (a) an elbow connector that bends between two nodes that could share an axis; (b) a dark lane `headerFill` (e.g. `#3a3f4b`) swallowing the small vertical title text; (c) any node or edge label not pinned to `fontSize` 10.
-- **Fix**: nudge node bounding boxes onto shared centre-axes (same centre-x for vertical runs, same centre-y for horizontal runs) so connectors run exactly straight where applicable; restyle lane headers to light fill + dark text; pin fonts via `lucid_edit_item` (`font_size: 10`). Judge all three from the PNG export, not the JSON.
+The renderer sets the text size of every step and label; there is nothing to pin.
 
 ---
 
 ## Lint output format
 
+`lint` prints this report (and `lint --json` the same as JSON); a VALIDATE report keeps it:
+
 ```
-Lint of <doc_id> · <title>
+Lint of <slug or file> · <title>
 Hard rule violations (ship-blockers):
-- V<#> — <node_id> (<label>): <one-line description>
-- ...
-
+- V<#> — <step id> (<title>)[, <step id> (<title>)…]: <what is wrong>. Fix: <the fix>.
 Soft observations:
-- V<#> — <node_id> (<label>): <one-line description>
-- ...
-
-Total: N hard, M soft.  /  Clean.
+- V<#> — <step id> (<title>): <what is wrong>. Fix: <the fix>.
+Warnings:
+- <code> — <what Atlas would drop, or the option it can't read>
+Total: N hard, M soft.
 ```
 
-If clean, say "Clean — no convention violations." Don't pad.
+Every line gives the rule, its severity (by the group it sits in), the step ids it is about (the
+flow's own `id`s, never positions) and the fix. A group with nothing in it is left out. A finding
+the kinds or judgment turned up (V1, V2, V3, V7, V8, V10) goes in its group the same way.
+
+If clean, the report ends "Clean — no convention violations." instead of the total. Don't pad.
 
 ---
 
 ## Quick spot-checks (do these in under a minute)
 
-From `architecture-principles.md` §10, restated for Lucid:
+From `architecture-principles.md` §10, restated for flow text:
 
-1. Can behavior change by changing UI labels alone? → V2 violation (business logic leaked to FE).
-2. Is there a canonical source named for each rule/definition? → If a `DecisionBlock` doesn't reference a policy, something's missing.
-3. Is any decision only in chat / ephemeral context? → Should be persisted; check V4.
-4. Does every LLM step have a downstream gate or fallback? → V5.
-5. Does every RAG knowledge node cite its source doc? → If `DocumentBlock` dark-green has no `[RAG] <name> v<version>` tagging, flag it.
+1. Can behaviour change by changing an `input` or `output` title alone? → V2 (business logic
+   leaked into the front end).
+2. Is there a canonical source for each rule? → a `gate` that applies a policy should have a
+   `knowledge` step for that policy, read into it with a `~>` line. If not, something's missing.
+3. Is any decision only in chat or session context? → it should be persisted: V4.
+4. Does every LLM step have a gate or a fallback after it? → V5.
+5. Does every `knowledge` step name its source? → its title reads `[RAG] <name> v<n>`, and its
+   card carries the link.

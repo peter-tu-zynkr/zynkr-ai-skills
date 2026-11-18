@@ -1,0 +1,216 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a customer has invoices to send",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a customer has invoices to send",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "upload",
+        "kind": "input",
+        "title": "1 Upload the invoice CSV",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "upload | input | 1 Upload the invoice CSV",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "extract",
+        "kind": "llm",
+        "title": "2 Extract line items",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "extract | llm | 2 Extract line items",
+        "line": 4,
+        "phase": 0,
+        "ordinal": 3
+      },
+      {
+        "id": "schema",
+        "kind": "knowledge",
+        "title": "[RAG] Extraction schema v1",
+        "ref": null,
+        "by": null,
+        "col": 2,
+        "raw": "schema | knowledge | [RAG] Extraction schema v1 | col=2",
+        "line": 5,
+        "phase": 0,
+        "ordinal": 4
+      },
+      {
+        "id": "big",
+        "kind": "gate",
+        "title": "3 Total over $10k?",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "big | gate | 3 Total over $10k?",
+        "line": 7,
+        "phase": 1,
+        "ordinal": 5
+      },
+      {
+        "id": "review",
+        "kind": "hitl",
+        "title": "4 Reviewer approves",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "review | hitl | 4 Reviewer approves",
+        "line": 8,
+        "phase": 1,
+        "ordinal": 6
+      },
+      {
+        "id": "post",
+        "kind": "deterministic",
+        "title": "5 Auto-post",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "post | deterministic | 5 Auto-post",
+        "line": 9,
+        "phase": 1,
+        "ordinal": 7
+      },
+      {
+        "id": "log",
+        "kind": "store",
+        "title": "Invoice log",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "log | store | Invoice log",
+        "line": 10,
+        "phase": 1,
+        "ordinal": 8
+      },
+      {
+        "id": "notify",
+        "kind": "output",
+        "title": "6 Notify the customer",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "notify | output | 6 Notify the customer",
+        "line": 11,
+        "phase": 1,
+        "ordinal": 9
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · customer notified",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · customer notified",
+        "line": 12,
+        "phase": 1,
+        "ordinal": 10
+      }
+    ],
+    "phases": [
+      {
+        "name": "Intake",
+        "from": 1,
+        "to": 4
+      },
+      {
+        "name": "Approval",
+        "from": 5,
+        "to": 10
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "upload",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "upload",
+        "to": "extract",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "extract",
+        "to": "big",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "big",
+        "to": "review",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "big",
+        "to": "post",
+        "role": "spine",
+        "label": "No"
+      },
+      {
+        "from": "review",
+        "to": "notify",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "post",
+        "to": "notify",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "notify",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "schema",
+        "to": "extract",
+        "role": "plumbing",
+        "label": "the fields to pull"
+      },
+      {
+        "from": "review",
+        "to": "log",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "post",
+        "to": "log",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "log",
+        "to": "notify",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 0,
+    "executionMode": null,
+    "warnings": []
+  }
+}

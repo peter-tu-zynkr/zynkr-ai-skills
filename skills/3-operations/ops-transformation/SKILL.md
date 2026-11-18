@@ -46,7 +46,7 @@ A client engagement runs this skill twice, once on each side of the BRD sign-off
 
 Read the entry point from the invocation (`/ops-transformation assess …`, `/ops-transformation redesign …`) or from the ask ("diagnose the client's quoting process" → `assess`; "the BRD is signed, design the fix" → `redesign`). For a client, ask once if it is unclear.
 
-The two documents carry the work across the sign-off, so the step numbers issued in the `[Assessment]` are the same in the BRD, the `[Blueprint]`, the Lucid chart and the PRD.
+The two documents carry the work across the sign-off, so the step numbers issued in the `[Assessment]` are the same in the BRD, the `[Blueprint]`, the flow `ops-workflow-design` draws (an Atlas workflow or a page drawing) and the PRD.
 
 **Fixed facts** (client runs):
 - **Google account** for all Drive and Docs tools: `<your-google-workspace-account>`
@@ -170,9 +170,9 @@ Compile all step redesigns into a single deliverable:
 5. Consolidated MVP stack (deduped across steps)
 6. **Gaps** — every knowledge and data gap Stage 2 called out, and the card that closes it, or why it waits. If Stage 3.5 ran, apply its `old → new` map to the closing cards and check each one still exists; a gap whose card was merged away goes back to "waits". This is the list to walk the client through: what the process needs to know, and what it needs to see, that it has no direct line to today
 
-These step numbers are the ids `ops-workflow-design` puts on the Lucid nodes, so the chart and this blueprint can be read side by side.
+These step numbers start the step titles in the flow text `ops-workflow-design` writes, so the flow and this blueprint can be read side by side.
 
-**`redesign` files this as the `[Blueprint]`** (Step 6, template `references/blueprint-template.md`), then hands off: `/ops-workflow-design` draws the to-be chart with these step numbers, and `/ops-prd-writer` writes the PRD from the signed BRD and this blueprint.
+**`redesign` files this as the `[Blueprint]`** (Step 6, template `references/blueprint-template.md`), then hands off: `/ops-workflow-design` draws the to-be flow with these step numbers and returns an Atlas review link or an SVG path, and `/ops-prd-writer` writes the PRD from the signed BRD and this blueprint.
 
 For a run without a client, ask:
 ```

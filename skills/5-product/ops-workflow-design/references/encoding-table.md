@@ -1,92 +1,100 @@
-# Semantic → Lucid Encoding Table
+# Encoding Table — kind → role → shape → lane
 
-The bridge between semantic concept (from `architecture-principles.md` and `shape-color-principles.md`) and concrete Lucid Standard Import JSON fields.
+The bridge between a semantic concept (from `architecture-principles.md` and
+`shape-color-principles.md`) and what the flow text and the drawing carry. In flow text, a step's
+**kind** is the whole encoding: the kind names the colour role, the role names the shape and the
+colours, and the kind decides the lane. Nothing else is written down.
 
 **How to use this table:**
 
-- When **reading** a Lucid JSON: read each node's `BlockClass` + `FillColor` → look up the row → that's the semantic role.
-- When **drafting** a Lucid spec: pick the semantic concept → use the `shapeType` and `FillColor` columns to build the node.
-- When **linting**: any mismatch between a node's lane and its color family is a violation (see `validation.md`).
+- **Drafting:** pick the semantic concept → write its kind in the step line
+  (`"<id> | <kind> | <title>"`). The kit (`scripts/flow_svg.py render`) and Atlas's canvas draw the
+  rest.
+- **Reading flow text:** the kind is the role. Read the row, and you have the layer and the mode.
+- **Reading a chart handed over as an image (PDF or PNG):** match each box's shape and colour family
+  against the rows below, and mark what you read off the picture `(inferred)`. A kit drawing names
+  every role it uses in its legend. Accept any colour in the same family: the family carries the
+  meaning, not the exact shade.
+- **Linting:** the kind settles the lane, the shape and the colour, so a drawing cannot break V1,
+  V2, V3, V8 or V10; a wrong kind can (`validation.md`, the rules whose home is "kind").
 
-The hex values are extracted from the canonical `[@] Architecture template` (Lucid doc id `bb9ba9aa-b4c2-4ad2-a432-87f6a805c4e0`). Use them as exact targets when drafting. When reading, accept any visually-similar hex in the same family (e.g., anything `#ff[d-f][0-f][0-d][0-f]ff` reads as "red family" → FE).
+**The colours live in one file:** `flow-colours.json`, one role per row below, under the role's name.
+Never write a colour value: not in flow text, not on the page around a drawing, not in a reply.
+Workflow drawings use workflow colours only, never a brand colour.
 
 ---
 
 ## Encoding table
 
-| # | Semantic concept | `shapeType` (used by `lucid_add_block` and in the spec) | `BlockClass` (appears in `fetch` output) | `FillColor` | Default lane |
-|---|---|---|---|---|---|
-| 1 | Terminal · Start / End | `Terminator` | `TerminatorBlockV2` (newer) or `TerminatorBlock` | `#ffe342ff` (yellow) | any |
-| 2 | FE — manual input from user | `Manual input` | `ManualInputBlock` | `#ffd9d9ff` (red, darker — input direction) | FE / External or Internal |
-| 3 | FE — output to human | `Manual input` | `ManualInputBlock` | `#fff0f0ff` (red, lighter — output direction) | FE / External or Internal |
-| 4 | FE — context document (ephemeral, in-session) | `Document` | `DocumentBlock` | `#fff0f0ff` (red, lighter) | FE |
-| 5 | BE — HITL manual operation (human in the loop) | `Manual operation` | `ManualOperationBlockNew` | `#edf5ffff` (light blue) | BE / Backend manual process |
-| 6 | BE — AI / agentic process step (LLM) | `Process` | `ProcessBlock` | `#cfe4ffff` (blue) | BE / State machine · AI assistant |
-| 7 | BE — deterministic process step (rules / state machine) | `Process` | `ProcessBlock` | purple family (e.g. `#9391ffff`) | BE / State machine · AI assistant |
-| 8 | BE — decision / gate (deterministic preferred) | `Decision` | `DecisionBlock` | `#dedeffff` (light purple) | BE / State machine · AI assistant |
-| 9 | DB — durable system-of-record (cylinder) | `Database` | `DatabaseBlock` | `#e3fae3ff` (green) | DB / Data base data table |
-| 10 | DB — durable artifact (document persisted) | `Document` | `DocumentBlock` | `#e3fae3ff` (green) | DB / Data base data table |
-| 11 | DB — RAG / knowledge artifact (for retrieval) | `Document` | `DocumentBlock` | `#c3f7c8ff` (dark green) | DB / Knowledge base knowledge |
-| 12 | Off-page link · cross-workflow handoff | `Off-page link` | `OffPageLinkBlock` | `#fff7a1ff` (yellow) | any (boundary only) |
-| 13 | Merge / fork control (Or-junction) | `Or` | `OrBlock` | `#dedeffff` (purple) | BE |
-| 14 | Swimlane container (the scaffold itself) | — (not a block; built into the spec) | `AdvancedSwimLaneBlock` | neutral `#dfe3e8ff` | structural |
-| 15 | Ephemeral context (session-only, light green) | `Document` | `DocumentBlock` | `#ecffec` family (lighter than `#e3fae3ff`) | DB lane or floating — **not** the cylinder |
+| # | Semantic concept | Kind | Registry role | Colour family | Shape the kit draws | Lane · row |
+|---|---|---|---|---|---|---|
+| 1 | Terminal · start / end | `start` · `end` | `terminal` | yellow | terminal (rounded ends) | Front end · the person's row |
+| 2 | FE — a person puts something in | `input` | `input` | red, darker (input direction) | manual input (slanted top) | Front end · external or internal |
+| 3 | FE — a person receives a result | `output` | `output` | red, lighter (output direction) | manual input (slanted top) | Front end · external or internal |
+| 4 | FE — context document (this session only) | `context` · page-only | `context` | red, lighter | document (wavy bottom) | Front end · external or internal |
+| 5 | BE — HITL manual operation (human in the loop) | `hitl` | `hitl` | light blue | manual operation (trapezoid) | Backend · manual process |
+| 6 | BE — AI / agentic step (LLM) | `llm` | `llm` | blue | process (rectangle) | Backend · state machine / AI |
+| 7 | BE — deterministic step (rules, a script, a state change) | `deterministic` | `deterministic` | purple | process (rectangle) | Backend · state machine / AI |
+| 8 | BE — decision / gate (deterministic) | `gate` | `gate` | light purple | decision (diamond) | Backend · state machine / AI |
+| 9 | DB — durable system of record | `store` | `store` | green | database (cylinder) | Data · data table |
+| 10 | DB — durable document | `artifact` | `artifact` | green | document (wavy bottom) | Data · data table |
+| 11 | DB — knowledge: retrieved or enforced | `knowledge` | `knowledge` | dark green | document (wavy bottom) | Data · knowledge |
+| 12 | Off-page link · hand-off to another flow | `offpage` | `offpage` | yellow | off-page (pentagon) | Backend · state machine / AI |
+| 13 | Merge / fork control | `junction` · page-only | `junction` | light purple | junction (circle with a cross) | Backend · state machine / AI |
+| 14 | The lane frame (the scaffold itself) | — | the registry's `lanes` | neutral grey | lane headers and a faint fill per layer | structural |
+| 15 | Ephemeral context (this session only) | `ephemeral` · page-only | `ephemeral` | light green, dashed outline | document (wavy bottom) | Data · data table — **never** the cylinder |
+
+- **Who sits at the front end:** `input`, `output`, `context`, `start` and `end` take the row of the
+  person in the frontmatter's `executed_by` (`external-user` or `internal-user`); a step's own
+  `by=external` or `by=internal` overrides it. Atlas's canvas places them the same way.
+- **Page-only kinds** (rows 4, 13 and 15): the kit draws them; Atlas has no kind for them yet and
+  would drop the step, so `lint` warns and a flow that uses one stays a page drawing.
+- **Row 14** has no kind: the registry's `lanes` block holds the lane headers, the faint fill of
+  each layer and the lane titles in English and zh-TW (the same titles Atlas's canvas shows).
+
+### Lines
+
+| Line | Flow text | Registry | Drawn as |
+|---|---|---|---|
+| Spine — the order the work runs in | `a -> b[ \| label]` | `edges.spine` | solid neutral dark grey, the heavier line |
+| Plumbing — reads, writes and knowledge | `a ~> b[ \| label]` | `edges.plumbing` | thin dashed grey, beneath the spine; the arrow points the way the data moves |
 
 ---
 
-## Color family quick reference
+## Colour family quick reference (reading an image)
 
-When you see this hex range, read it as this layer:
-
-| Family | Hex pattern | Layer / mode |
+| Family | Layer / mode | Rows |
 |---|---|---|
-| Red | `#ff[d-f][0-f][0-f][0-f]ff` (e.g., `#ffd9d9`, `#fff0f0`) | FE — human interaction |
-| Light blue | `#e[c-d]f5ff` family | BE HITL manual process |
-| Blue | `#cfe4ff` family | BE LLM / agentic |
-| Purple | `#d[e-f]d[e-f]ff` / `#9391ff` family | BE deterministic (process or decision gate) |
-| Green | `#e3fa[e-f][0-f]` family | DB durable system-of-record |
-| Light green | `#ecffe[0-f]` family | Ephemeral context (rare) |
-| Dark green | `#c3f7c8` family | RAG / knowledge for retrieval |
-| Yellow | `#ffe342` / `#fff7a1` family | Terminator or off-page link (boundary markers) |
-| Neutral grey | `#dfe3e8` family | Swimlane container — structural only |
+| Red (darker and lighter) | Front end — a person puts in, receives, or works from session context | 2, 3, 4 |
+| Light blue | Backend — a person executes (HITL) | 5 |
+| Blue | Backend — an LLM executes | 6 |
+| Purple (solid and light) | Backend — fixed rules: a step, a gate, a merge or fork | 7, 8, 13 |
+| Green | Data — a durable record or document | 9, 10 |
+| Dark green | Data — knowledge a step relies on | 11 |
+| Light green, dashed | Session-only context | 15 |
+| Yellow | Boundaries — where the flow starts and ends, and hand-offs | 1, 12 |
+| Neutral grey | The lane frame — structural only | 14 |
 
 ---
 
 ## Hard rules embedded in the table
 
-- **Row 9 (Cylinder, green) — HARD RULE.** `DatabaseBlock` is *only* for durable system-of-record. **Never** for vector / RAG / knowledge index. If you need RAG, use row 11 (`DocumentBlock` dark-green).
-- **Row 8 (Decision, purple) — HARD RULE.** Decisions stay purple by default. If you're tempted to color a decision blue ("LLM decides"), restructure: LLM suggests → deterministic gate enforces.
-- **Row 6 (LLM Process, blue) — soft rule.** Every blue `ProcessBlock` needs a downstream fallback path (deterministic gate, HITL escalation, or error edge). See validation rule V5.
+- **Row 9 (the cylinder, `store`) — HARD RULE (V1).** A cylinder is *only* a durable system of
+  record. **Never** a vector index, a RAG store or a knowledge base: that is row 11, a `knowledge`
+  step titled `[RAG] <name> v<n>`, read through `~>` lines.
+- **Row 8 (the diamond, `gate`) — HARD RULE (V3).** A decision is a `gate`, and a gate is always
+  drawn as the deterministic diamond. If you are tempted to let the model pick the branch
+  ("the LLM decides"), restructure: the LLM suggests (`llm`) → a gate enforces (`gate`), and the
+  labelled branches leave the gate (V6).
+- **Row 6 (`llm`) — checked by lint (V5).** Every `llm` step needs a gate, a HITL step, or a labelled
+  error or retry line after it.
 
 ---
 
 ## What's *not* in this table (intentionally)
 
-- The full Lucid Standard Import JSON schema — fetch `lucid://diagram-specification` at runtime; it can change.
-- Cloud architecture shapes (AWS, GCP, Azure icons) — only relevant for infrastructure diagrams, not process flows. Use `lucid://shape-libraries/*` if you ever need them.
-- Endpoint / arrow styles — fetch `lucid://endpoint-styles`. Default is `Equilateral Arrow`.
-
----
-
-## Standard Import quick-map (drafting via `lucid_create_diagram_from_specification`)
-
-The `shapeType` column above is the `add_block` / `fetch` vocabulary. The **Standard-Import `type`** (lowercase) is what goes in the create-spec JSON:
-
-| Semantic | Standard-Import `type` | BlockClass (fetch) | FillColor |
-|---|---|---|---|
-| Terminal · Start/End | `terminator` | TerminatorBlockV2 | `#ffe342` |
-| FE input | `manualInput` | ManualInputBlock | `#ffd9d9` |
-| FE output | `manualInput` | ManualInputBlock | `#fff0f0` |
-| HITL manual op | `manualOperation` | ManualOperationBlockNew | `#edf5ff` |
-| BE LLM step | `process` | ProcessBlock | `#cfe4ff` |
-| BE deterministic step | `process` | ProcessBlock | `#9391ff` |
-| Decision gate | `decision` | DecisionBlock | `#dedeff` |
-| DB cylinder | `database` | DatabaseBlock | `#e3fae3` |
-| Durable doc | `document` | DocumentBlock | `#e3fae3` |
-| RAG knowledge doc | `document` | DocumentBlock | `#c3f7c8` |
-
-Gotchas (full notes in `SKILL.md` §8):
-- Set every node's `fontSize` to **10**; short labels balloon on default.
-- `swimLanes` render **flat** (no nested sub-lanes) — one lane per sub-band, group via the title; lane widths must sum to the pool dimension.
-- `lucid_add_line` / `lucid_edit_item` endpoint styles are **Capitalized** (`None`, `Equilateral Arrow`); the create-spec uses lowercase (`none`, `arrow`).
-- No native legend block — build colour chips (filled rectangles whose own text is the label).
+- **The colour values** — `flow-colours.json`, by role name. A change there is a new registry
+  version, and every drawing is stamped with the version it was drawn with.
+- **Placement** — columns, phases and the at-most-three-per-column rule: `scaffold.md`.
+- **Sequence diagrams and infrastructure icons** — out of scope: flow text has no lifelines and no
+  cloud shapes.

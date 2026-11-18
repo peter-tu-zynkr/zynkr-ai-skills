@@ -1,0 +1,49 @@
+{
+  "$comment": "SKB-144 · AC-7. The one colour registry for every workflow drawing: the page drawings flow_svg.py renders, and, in the Atlas follow-on, the colours of Atlas's Download Lucid JSON and its Mermaid export. No other file in this skill holds a hex. Workflow drawings use workflow colours only: no brand colour from the workbench's scripts/brand-tokens.json appears here. A change is a new version (YYYY-MM-DD.N); every SVG is stamped with the version it was drawn with.",
+  "version": "2026-11-18.1",
+  "source": "Fills: references/encoding-table.md rows 1-15 (rows 1-12 as the table had them; row 3, output, keeps its own lighter red; rows 4, 13 and 15 are page-only kinds). Edges: plumbing from scaffold.md (dashed grey, width 1); the spine is neutral dark grey, the owner's choice A of 18 Nov 2026 (SKB-144). Lanes: the row-14 neutral family, light headers with dark titles and a faint per-layer lane fill (scaffold.md, clean register).",
+  "roles": [
+    { "role": "terminal", "row": 1, "kinds": ["start", "end"], "atlas": true, "shape": "terminal", "fill": "#FFE342", "stroke": "#A68A00", "label": { "en": "Start / end", "zh-TW": "開始 · 結束" } },
+    { "role": "input", "row": 2, "kinds": ["input"], "atlas": true, "shape": "manualIO", "fill": "#FFD9D9", "stroke": "#B85C64", "label": { "en": "A person puts in", "zh-TW": "人輸入" } },
+    { "role": "output", "row": 3, "kinds": ["output"], "atlas": true, "shape": "manualIO", "fill": "#FFF0F0", "stroke": "#B85C64", "label": { "en": "A person receives", "zh-TW": "人收到" } },
+    { "role": "context", "row": 4, "kinds": ["context"], "atlas": false, "shape": "document", "fill": "#FFF0F0", "stroke": "#B85C64", "label": { "en": "Context document (this session)", "zh-TW": "情境文件（本次）" } },
+    { "role": "hitl", "row": 5, "kinds": ["hitl"], "atlas": true, "shape": "manualOp", "fill": "#EDF5FF", "stroke": "#5A7EA6", "label": { "en": "Human step (HITL)", "zh-TW": "人工執行（HITL）" } },
+    { "role": "llm", "row": 6, "kinds": ["llm"], "atlas": true, "shape": "process", "fill": "#CFE4FF", "stroke": "#3A78C2", "label": { "en": "AI step (LLM)", "zh-TW": "AI 步驟" } },
+    { "role": "deterministic", "row": 7, "kinds": ["deterministic"], "atlas": true, "shape": "process", "fill": "#9391FF", "stroke": "#5552B8", "label": { "en": "Rules step", "zh-TW": "規則步驟" } },
+    { "role": "gate", "row": 8, "kinds": ["gate"], "atlas": true, "shape": "decision", "fill": "#DEDEFF", "stroke": "#6966C7", "label": { "en": "Decision gate", "zh-TW": "關卡（判斷分流）" } },
+    { "role": "store", "row": 9, "kinds": ["store"], "atlas": true, "shape": "database", "fill": "#E3FAE3", "stroke": "#4C9668", "label": { "en": "Data store (system of record)", "zh-TW": "資料紀錄" } },
+    { "role": "artifact", "row": 10, "kinds": ["artifact"], "atlas": true, "shape": "document", "fill": "#E3FAE3", "stroke": "#4C9668", "label": { "en": "Stored document", "zh-TW": "存檔文件" } },
+    { "role": "knowledge", "row": 11, "kinds": ["knowledge"], "atlas": true, "shape": "document", "fill": "#C3F7C8", "stroke": "#378454", "label": { "en": "[RAG] Knowledge", "zh-TW": "[RAG] 知識" } },
+    { "role": "offpage", "row": 12, "kinds": ["offpage"], "atlas": true, "shape": "offpage", "fill": "#FFF7A1", "stroke": "#A89600", "label": { "en": "Off-page link (another flow)", "zh-TW": "跨頁連結（另一個流程）" } },
+    { "role": "junction", "row": 13, "kinds": ["junction"], "atlas": false, "shape": "junction", "fill": "#DEDEFF", "stroke": "#6966C7", "label": { "en": "Merge / fork", "zh-TW": "合流 · 分流" } },
+    { "role": "ephemeral", "row": 15, "kinds": ["ephemeral"], "atlas": false, "shape": "document", "fill": "#ECFFEC", "stroke": "#69B07F", "dash": "4 3", "label": { "en": "Ephemeral context (session only)", "zh-TW": "暫存情境（只在本次）" } }
+  ],
+  "edges": {
+    "spine": { "stroke": "#555555", "dash": null, "width": 2, "label": { "en": "Main path (the next step)", "zh-TW": "主線（下一步）" } },
+    "plumbing": { "stroke": "#888888", "dash": "4 3", "width": 1, "label": { "en": "Reads and writes (the arrow points the way the data moves)", "zh-TW": "讀寫資料（箭頭是資料往哪走）" } }
+  },
+  "lanes": {
+    "header": { "fill": "#DFE3E8", "text": "#222222" },
+    "subheader": { "fill": "#ECEFF3", "text": "#3E444C" },
+    "fill": { "fe": "#FFF8F8", "be": "#F5F9FF", "db": "#F4FBF4" },
+    "separator": "#C8CED6",
+    "frame": "#AEB6C0",
+    "titles": {
+      "en": { "fe": "Front end user", "be": "Backend system / process policy", "db": "Data base / knowledge base" },
+      "zh-TW": { "fe": "前端使用者", "be": "後端系統・流程", "db": "資料庫・知識庫" }
+    },
+    "rows": {
+      "en": { "fe": ["External user", "Internal user"], "be": ["Backend manual process", "Backend state machine / AI assistant"], "db": ["Data base data table", "Knowledge base knowledge"] },
+      "zh-TW": { "fe": ["外部使用者", "內部使用者"], "be": ["人工執行 (HITL)", "狀態機・AI"], "db": ["資料表", "知識庫"] }
+    }
+  },
+  "text": { "primary": "#222222", "secondary": "#3E444C", "muted": "#6B7280" },
+  "page": {
+    "background": "#FFFFFF",
+    "panel": { "fill": "#FFFFFF", "stroke": "#DFE3E8" },
+    "phase": { "fill": "#ECEFF3", "stroke": "#C8CED6", "text": "#3E444C" },
+    "badge": { "fill": "#FFFFFF" },
+    "labelHalo": "#FFFFFF"
+  },
+  "avoid": ["#3A3F4B"]
+}

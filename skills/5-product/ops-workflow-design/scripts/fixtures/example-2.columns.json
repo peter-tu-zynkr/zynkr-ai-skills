@@ -1,0 +1,82 @@
+{
+  "rows": [
+    "fe0",
+    "be0",
+    "be1",
+    "db0",
+    "db1"
+  ],
+  "cols": 7,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "upload",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "extract",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "schema",
+      "lane": "db",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "big",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "review",
+      "lane": "be",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "post",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "log",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "notify",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 5,
+      "col": 5
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 0,
+      "tier": 6,
+      "col": 6
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "rows": [
+    "fe1",
+    "be0",
+    "be1",
+    "db0"
+  ],
+  "cols": 6,
+  "steps": [
+    {
+      "id": "start",
+      "lane": "fe",
+      "sublane": 1,
+      "tier": 0,
+      "col": 0
+    },
+    {
+      "id": "file",
+      "lane": "fe",
+      "sublane": 1,
+      "tier": 1,
+      "col": 1
+    },
+    {
+      "id": "rule",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 2,
+      "col": 2
+    },
+    {
+      "id": "approve",
+      "lane": "be",
+      "sublane": 0,
+      "tier": 3,
+      "col": 3
+    },
+    {
+      "id": "pay",
+      "lane": "be",
+      "sublane": 1,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "ledger",
+      "lane": "db",
+      "sublane": 0,
+      "tier": 4,
+      "col": 4
+    },
+    {
+      "id": "end",
+      "lane": "fe",
+      "sublane": 1,
+      "tier": 5,
+      "col": 5
+    }
+  ]
+}
