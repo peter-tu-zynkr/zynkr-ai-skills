@@ -404,17 +404,13 @@ and say so in the report.
   `Email:` line, never a reply in the `website@zynkr.ai` thread (that would only email
   the website). An Inbound Sales lead gets a reply inside its thread: pass `thread_id`
   and keep the subject, prefixed `Re: `.
-- **How it reads.** Follow `/sales-outbound` steps 5 and 6, exactly as written there. When the ask is a call and
-  Peter runs it, read his calendar first and offer three real windows in 台北時間 (Taipei afternoon first, the fixed
-  slot block, house wording); when anyone else runs it, the next bullet takes the slots' place. Mirror their own
-  words, add one short paragraph of substance before the ask, match their language, and sign off as Peter.
-  Run only those two steps: its step 4 inserts a new deal, and this lead already has one.
-- **The calendar is the runner's.** `/sales-outbound` step 5 reads the calendar of the connected Google account,
-  and step 6 signs the reply as Peter. When `mcp__zynkr__whoami` names someone other than Peter, that calendar is
-  theirs, not his, so offer no slots. In place of the slot block, ask which times suit them (台北時間) and say the
-  invite follows once they confirm, in the reply's own language and register. A zh-TW reply that uses 你 says
-  「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」; one that uses 您, or an English reply, says the same in
-  its own words. Say in the report that the draft has no times because the run could not read Peter's calendar.
+- **How it reads.** Follow `/sales-outbound` steps 5 and 6, exactly as written there. When the ask is a call, read
+  the runner's own calendar first and offer three real windows in 台北時間 (the fixed slot block, house wording).
+  Mirror their own words, add one short paragraph of substance before the ask, match their language, and sign off
+  as the runner. Run only those two steps: its step 4 inserts a new deal, and this lead already has one.
+- **The runner signs, from their own calendar** (owner, 2026-11-18, `SKB-146`). Whoever runs the sweep, Peter or
+  the sales DRI (業務 DRI), signs with their own name and offers slots from their own calendar, or asks instead when
+  there are none: all of it is `/sales-outbound` step 5 and step 6, not restated here.
 - **A company asking what in-house training or consulting costs gets no figure here** (a website
   inquiry or an Inbound Sales lead): no price, no hourly rate and no hour count, whatever the 知識庫
   says. Those prices are fixed packages that `/sales-proposal-writer` writes after the call, so the
@@ -458,7 +454,9 @@ inquiry, including the skipped ones so nothing is silently dropped:
 | 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 已有進行中的 deal（負責人 <member name>） | [deal](url) | — | — | — | ⏭️ 歸那筆 deal |
 ```
 
-Under the table, the gate's one line for every lead an open deal already holds (step 3.5), so the
+Under the table, one line for whose name and calendar the drafts used (`署名 <name> · 時段取自 <calendar id>`, or
+無時段 and `/sales-outbound` step 5's reason, or 未擬 and the connected account when step 6 found the mailbox is not
+the runner's), then the gate's one line for every lead an open deal already holds (step 3.5), so the
 owner can be told. In the 標籤 column name the values applied; a lead whose tags were not applied says
 `標籤建議已記在 note` and why. In the 研究 column write 公司 note, 聯絡人兩三行, 沿用本次對話的研究,
 待研究 (research could not run here, step 4b) or 沒跑 and why. Then the 待研究 lines, any owner at or over the open-deal cap (step 4.5), the proposals found under the Inbound Sales label (sender · subject · one line),

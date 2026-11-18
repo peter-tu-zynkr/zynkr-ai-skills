@@ -1,6 +1,6 @@
 {
   "skill_name": "sales-outbound",
-  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Since SKB-136 every write goes through the zynkr MCP's create tools; there is no SQL path. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts, and eval 4's company 範例科技 ExampleCo with its research note (shown to the owner first). Eval 4 is SKB-126 (sales audit round 2, P64 and P122): a demo agreed in a DM leaves the deal at contacted, and the company research runs before the draft. Before eval 4, list_companies(search=範例科技) must find no company; a leftover from an earlier run is removed first, so the research note the assertion finds is this run's.",
+  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Since SKB-136 every write goes through the zynkr MCP's create tools; there is no SQL path. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts, and eval 4's company 範例科技 ExampleCo with its research note (shown to the owner first). Eval 4 is SKB-126 (sales audit round 2, P64 and P122): a demo agreed in a DM leaves the deal at contacted, and the company research runs before the draft. Before eval 4, list_companies(search=範例科技) must find no company; a leftover from an earlier run is removed first, so the research note the assertion finds is this run's. Evals 5 and 6 are SKB-146 (audit item P78): the runner signs and offers slots from their own calendar. Run eval 5 in the session of a member other than Peter (member B), with their own Google Calendar connected and at least three `Available` blocks on it in the next 5–10 working days; run eval 6 in the same member's session with no calendar connector. Clean them up with the rest.",
   "evals": [
     {
       "id": 0,
@@ -75,6 +75,34 @@
         "A note whose body opens with '🔎 AI 背景研究' is on the company, created after the deal and before the Gmail draft",
         "The report's table has a 研究 row naming that note",
         "Created exactly one Gmail draft to demo.agreed@example.com (html, include_signature=true) and sent nothing"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "p78-runner-signs-own-calendar",
+      "prompt": "幫我回這個 DM 並建 lead：「可以約個時間聊聊嗎？我是測試者，email 是 runner.slots@example.com」",
+      "expected_output": "No contact has runner.slots@example.com, so the gate goes to step 6 and the deal is owned by member B. Step 5 finds the calendar whose id is member B's whoami email, reads member B's `Available` blocks and offers three windows from them in 台北時間, sorted by member B's own clock. The draft lands in member B's mailbox, signs off `Best regards,` with member B's own name (never Peter's), and carries member B's Gmail signature card.",
+      "files": [],
+      "assertions": [
+        "list_calendars was read, and the calendar read with list_events(calendarId=...) is the one whose id equals member B's whoami email",
+        "Each of the three slots in the draft lies inside an `Available` block on member B's calendar, with no meeting overlapping it",
+        "The slot block is labelled （台北時間） and the report lists each slot's equivalent on member B's clock and its `Available` block",
+        "The draft's sign-off is `Best regards,` followed by member B's own name, and the name Peter appears nowhere in the sign-off",
+        "Created exactly one Gmail draft to runner.slots@example.com (html, include_signature=true) in member B's mailbox and sent nothing",
+        "The report's 署名 · 時段 row names member B and member B's calendar"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "p78-no-calendar-asks-instead",
+      "prompt": "幫我回這個 DM 並建 lead：「想約時間聊聊你們的服務，email 是 runner.noslots@example.com」",
+      "expected_output": "Same session as eval 5 but with no Google Calendar connector. The claim runs as usual. Step 5 finds no calendar tool, so the draft offers no times: in place of the slot block it asks which times suit them (台北時間) and says the invite follows once they confirm, using 你 as the DM does. It is still signed with member B's own name. The report says the draft has no times because this session has no calendar connector.",
+      "files": [],
+      "assertions": [
+        "No calendar was read, and no other person's calendar was used in its place",
+        "The draft has no numbered slot block and contains 「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」",
+        "The draft's sign-off is `Best regards,` followed by member B's own name",
+        "The report's 署名 · 時段 row says 無時段 and names the missing calendar connector as the reason"
       ]
     }
   ]

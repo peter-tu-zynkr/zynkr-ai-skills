@@ -19,7 +19,8 @@
         "The deal notes carry the source line and the brief context, and no 專案資料夾： line",
         "Skipped the GA4 Test row as a test (no deal and no draft for it)",
         "Opened the deal with lead_source=content (how the inquiry came in, not any existing tag). If this run created Jane's contact, tagged it by company.crm-tag-rules: 來源 (group=source, source=rule) only when its source-to-lead-source entry equals content, 主題 (group=interest, source=ai) only for topics her inquiry names, 待確認 (group=review) only for gaps the inquiry could not fill; read back with list_tags. Where the policy or a tag tool is unavailable or apply_tag refuses, applied none and wrote a 標籤建議 note instead",
-        "Reported the summary table (交易 and 回覆草稿 columns, no folder column) listing both leads and their outcomes"
+        "Reported the summary table (交易 and 回覆草稿 columns, no folder column) listing both leads and their outcomes",
+        "The reply draft signs off with the runner's own name (Peter in the recorded run), and when it offers times they come from the runner's own calendar's `Available` blocks; with no calendar connector it asks which times suit them instead, and the report says why (SKB-146)"
       ]
     },
     {

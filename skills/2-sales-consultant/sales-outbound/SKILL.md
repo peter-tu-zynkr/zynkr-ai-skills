@@ -8,7 +8,8 @@ description: >-
   link. An open deal on their email stops the run; otherwise it claims them in Zynkr CRM
   (company + contact, a deal owned by the runner, a verbatim source note, a follow-up task)
   and drafts the reply as a Gmail DRAFT (never sent), in the signal's language and Peter's
-  voice, with three calendar-checked 台北時間 slots when the ask is a meeting. Trigger on
+  voice, signed by the person running it, with three 台北時間 slots checked on their own calendar
+  when the ask is a meeting. Trigger on
   /sales-outbound or when Peter pastes a DM, a feedback-form row, or an enquiry and says
   "draft a reply", "draft an outbound mail", "回這個", "幫我擬回覆", "把這個 lead 建進 CRM 並擬信", "log this
   lead and draft the email", "turn this DM into a draft", "這個回饋幫我建客戶並擬信". Mode B — a
@@ -31,7 +32,7 @@ author: Peter Tu
 sheetId: "2.09"
 input: "ONE person's interest signal carrying an email — a pasted DM/chat thread, an event feedback or form row, a website enquiry, or business-card text; optionally their profile URL."
 process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → /sales-research brief → calendar slots for a meeting → Gmail draft → report."
-output: "A CRM lead (company + contact + a deal owned by the runner + note + task) and a Gmail draft, with three 台北時間 slots for a meeting; an open deal on the email stops it instead."
+output: "A CRM lead (company + contact + runner-owned deal + note + task) and a Gmail draft the runner signs, with three 台北時間 slots from their calendar for a meeting; an open deal stops it."
 synergy: ["sales-research"]
 reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules", "doc-style", "company.company-directory-sheet", "company.workflow-library-folder"]
 house-style: bound
@@ -61,8 +62,9 @@ the person's profile link), and it:
    contact, a **new deal owned by the person running the skill**, a **verbatim source
    note**, and a **follow-up task** for the next step — all before any draft.
 3. **Drafts the reply** — a Gmail **draft** (never sent), in the signal's
-   language and Peter's voice, that moves the next step forward — with three
-   calendar-checked slots when that next step is a meeting.
+   language and Peter's voice, signed by the person running the skill, that moves the next
+   step forward — with three slots checked on that person's own calendar when that next step
+   is a meeting.
 
 **What counts as a signal** — any ONE of these, for ONE named person:
 a copied DM / chat thread · a row from an event feedback or registration form ·
@@ -72,7 +74,7 @@ whole spreadsheet of people (that is `sales-client-sourcing`) and NOT a meeting
 transcript (that is `sales-follow-up`).
 
 It runs **autonomously**: parse → enrich → pick-up gate → write CRM → research the company →
-check calendar → draft email → report. No mid-run confirmation — the email lands as a *draft* (safe, Peter reviews
+check calendar → draft email → report. No mid-run confirmation — the email lands as a *draft* (safe, the runner reviews
 before sending), and the CRM write is five calls to the CRM's own tools (step 4b). A run that stops
 part-way says what it made and is finished from there, never run again from the top. Tagging the
 new contact comes after those calls, as its own small step: a failed tag never undoes the lead.
@@ -386,22 +388,40 @@ claim the brief marks unverified stays out of the mail. When the research cannot
 (no web search, a refused write), draft anyway: the mail is a draft, and the report's 研究 row
 says why there is no brief.
 
-### 5 · If the ask is a meeting, derive three REAL slots
+### 5 · If the ask is a meeting, derive three REAL slots from the runner's own calendar
 
 **Never invent availability.** Whenever the draft will propose a call / demo / meeting,
 read the calendar first — a guessed window is usually already booked.
 
+**The calendar is the runner's own** (owner, 2026-11-18, `SKB-146`). The person running the skill
+signs the mail and holds the meeting, so the slots come from their calendar: Peter's only when Peter
+runs it. The runner is the `mcp__zynkr__whoami` email of step 4, and their calendar is the one the
+Google Calendar connector of their own session reads.
+
+0. **Check that the calendar is there and is theirs.** The connector's tools
+   (`mcp__claude_ai_Google_Calendar__list_calendars` and `…__list_events`) must be in this session;
+   a session that lists them only by name loads them first (ToolSearch), and that is not a missing
+   tool. In `list_calendars`, the runner's own calendar is the one whose `id` equals the runner's
+   `whoami` email, both trimmed and lower-cased. The list also holds calendars the runner merely
+   subscribes to, a teammate's among them, and none of those is theirs. When a tool is missing, or no
+   calendar's `id` is the runner's email (the connector is signed in to another account, or the CRM
+   knows them by an alias), there are **no slots**: the draft asks instead (*No slots* below), and the
+   report says why. Never read another person's calendar to fill the gap.
 1. **Read the events.** Use
-   `mcp__claude_ai_Google_Calendar__list_events(startTime=…, endTime=…, timeZone="Asia/Taipei", orderBy="startTime")`
+   `mcp__claude_ai_Google_Calendar__list_events(calendarId="<the id step 0 matched>", startTime=…, endTime=…, timeZone="Asia/Taipei", orderBy="startTime")`
    across the next 5–10 working days.
    ⚠️ Do **NOT** use `mcp__google-workspace__get_events` — the Calendar API is disabled
    on Peter's GCP project (`963483219986`) and it returns a hard error.
-2. **Find the bookable windows.** Peter's calendar marks them with events literally
+2. **Find the bookable windows.** The runner's calendar marks them with events literally
    titled **`Available`** (and **`Not available`** for the inverse). Take each
    `Available` block and subtract every real meeting overlapping it. A leftover
-   shorter than 30 minutes is not a slot.
-3. **Pick three, Taipei afternoon first**, spread across different days. Peter is in
-   Amsterdam, so his morning is the prospect's afternoon. Sort the windows by the
+   shorter than 30 minutes is not a slot. A calendar with no `Available` block in range
+   gives **no slots** (*No slots* below), and the report says so.
+3. **Pick three, spread across different days**, by the runner's own clock: the
+   `timeZone` `list_calendars` gives for their calendar.
+
+   **A runner in Amsterdam** (`Europe/Amsterdam`, which is Peter's): **Taipei afternoon
+   first.** Their morning is the prospect's afternoon. Sort the windows by the
    Amsterdam clock:
    - **First choice:** a window before 12:00 Amsterdam. That is the Taipei afternoon,
      about 15:00–19:00 台北時間. Fill all three from these when there are enough.
@@ -410,16 +430,33 @@ read the calendar first — a guessed window is usually already booked.
    - **Never** a window that lands before 12:00 台北時間. That is Peter's night.
 
    A window that crosses 12:00 Amsterdam counts as first choice for its morning part.
-   When the prospect has said which days they cannot do, drop those days before you
+
+   **A runner in Taipei** (`Asia/Taipei`): there is no clock to cross. Take the earliest
+   windows in range, one per day. **A runner in any other time zone:** convert the windows
+   to 台北時間 first, keep only the parts that fall between 09:00 and 21:00 台北時間, then the
+   same as Taipei, and name the zone in the report.
+
+   For every runner: when the prospect has said which days they cannot do, drop those days before you
    sort. If the days left give fewer than three windows, offer the ones there are and
    keep the escape line. Never make up a slot from an hour that is not marked
    `Available`. Express each as the whole remaining window (`15:30–18:00`), not one
    fixed time — let the prospect choose inside it.
-4. **Convert to Taipei and say so.** Peter's calendar is `Europe/Amsterdam`; almost
+4. **Convert to Taipei and say so.** The runner's calendar may not be on Taipei time
+   (Peter's is `Europe/Amsterdam`); almost
    every prospect is in Taiwan (+886), 6–7 hours ahead, so an unlabelled 「下午」 means
-   two different things. Label the block **「（台北時間）」**. Keep the Amsterdam
-   equivalents for the CRM note and your report — not for the email.
-5. **Record them on the deal** so Peter needn't re-convert when she replies.
+   two different things. Label the block **「（台北時間）」**. Keep the equivalents on
+   the runner's own clock (Amsterdam for Peter) for the CRM note and your report — not
+   for the email.
+5. **Record them on the deal** so the runner needn't re-convert when the prospect replies.
+
+**No slots — the ask instead.** When step 0, 2 or 3 leaves no window, the mail offers no
+times. In place of the slot block, ask which times suit them (台北時間) and say the invite
+follows once they confirm, in the reply's own language and form of address. A zh-TW reply that
+uses 你 says 「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」; one that uses 您, or
+an English reply, says the same in its own words. Never fill the gap with a guessed hour or
+someone else's calendar. The report names the reason: no calendar connector in this session, a
+connected calendar that is not the runner's, no `Available` block in range, or none left once
+step 3 dropped the days or hours that cannot be offered.
 
 If the ask is not a meeting (send info, share a link), skip this step entirely.
 
@@ -429,7 +466,8 @@ Draft the outbound reply with
 `mcp__google-workspace__draft_gmail_message(user_google_email="<your-google-workspace-account>", to="<their email>", subject="…", body="<the mail as HTML>", body_format="html", include_signature=true)`.
 
 **The draft must carry the sender's Gmail signature** — the card with logo, title, phone and
-links that Peter's sent mail always ends with. Two settings do it, and both are required:
+links that the team's sent mail always ends with. The sender is the runner: the draft lands in
+their own mailbox, so the card is theirs. Two settings do it, and both are required:
 - `include_signature=true` appends the signature saved in Gmail settings.
 - `body_format="html"`, because that signature is HTML. On a plain-text draft it is flattened
   into one run-on line with no logo, and a draft sent that way can go out with none at all
@@ -460,7 +498,7 @@ Rules for the draft:
   (see *Fixed facts*) — read them; the Doc wins over this summary. The load-bearing few:
   - Greeting `Hi <名>，` / `哈囉 <名>，` / `<名> 你好，` / `<名> 您好，` (cold, HR, senior), full-width
     comma. 你／您 follows the counterpart and only ever steps **down**, never back up.
-  - 我們 for company commitments, 我 for what Peter does himself — mixing is deliberate.
+  - 我們 for company commitments, 我 for what the signer does themselves — mixing is deliberate.
   - A standard outbound mail runs **280–400 字**, blank-line paragraphs of 1–3 sentences.
   - Numbered lists are plain **`1. 2. 3.`** — NOT 1️⃣2️⃣3️⃣, never circled ①②③. Emoji numerals are
     a *UI* convention and are banned in email by 禁用詞清單 S and X.
@@ -468,8 +506,8 @@ Rules for the draft:
     Everything else is prose — a bullet wall is the 項目符號牆 category X forbids.
   - The dash is the **half-width ` — ` with one space each side**. Never the full-width ——.
   - Headings/taglines take **no 句號 (。)**; `·` for series separators; no Markdown in the body.
-  - Sign off `Best regards,` + `Peter`. Type no signature block in the body: Gmail adds the
-    signature card under the sign-off (see the draft call above).
+  - Sign off `Best regards,` + the runner's name (*The runner signs* below). Type no signature
+    block in the body: Gmail adds the signature card under the sign-off (see the draft call above).
 - **The slot block is fixed house wording** (Peter's own). Three slots, a fourth escape
   line, then the invite promise:
 
@@ -483,8 +521,18 @@ Rules for the draft:
 
   確認後我會寄出會議邀請。
   ```
-- **Sign off** `Best regards,` then `Peter`.
-- **Create a draft, never send.** Peter reviews and sends himself.
+- **The runner signs** (owner, 2026-11-18, `SKB-146`). Sign off `Best regards,` then the name of
+  the person running the skill, from the name `mcp__zynkr__whoami` gives: its first word when the
+  name is in Latin letters (`Peter Tu` signs `Peter`), the whole name when it is in Chinese
+  characters. Never another person's name, and never a name copied from this file or an example.
+- **The mailbox must be the runner's.** Before drafting, check that the Google account the draft
+  goes to (`<your-google-workspace-account>`) is the `whoami` email, both trimmed and lower-cased.
+  When it is not, draft nothing: a draft in another person's mailbox would carry their signature
+  card under the runner's name, and the runner would never see it. The report names the connected
+  account, and the mail is drafted from this step once the runner's own account is connected.
+- **The house voice holds whoever signs.** The voice rules above are Peter's house voice: a
+  teammate's mail reads the same and is signed with their own name.
+- **Create a draft, never send.** The runner reviews it and sends it themselves.
 - **Verify before reporting** — confirm the draft carries label `DRAFT` and that
   `in:sent to:<their email>` returns nothing. Say so in the report.
 
@@ -504,12 +552,17 @@ Show the client card, then a compact artifact table:
 | 標籤 | 來源=… · 待確認=…（已讀回）／ 未貼，標籤建議已記在 note（原因） |
 | 研究 | /sales-research 寫在公司的 note ／ 聯絡人兩三行 ／ 沿用本次對話的研究 ／ 沒跑（原因） |
 | Gmail 草稿 | 已放進收件匣，待你過目後寄出（已確認未寄出） |
+| 署名 · 時段 | <署名> · 三個時段取自 <the runner's calendar id> ／ 無時段（原因） ／ 不約會議 |
 ```
 
-When the mail carries slots, also show them with their Amsterdam equivalents and the
-`Available` block each came from — that is what lets Peter sanity-check you did read
-the calendar rather than guess. Mark each one Taipei afternoon or Taipei evening. If an
-evening slot is in the mail, say why: the afternoon windows in range gave fewer than three.
+When the mail carries slots, also show them with their equivalents on the runner's own
+clock (Amsterdam for Peter) and the `Available` block each came from — that is what lets
+the runner sanity-check you did read the calendar rather than guess. For an Amsterdam
+runner, mark each one Taipei afternoon or Taipei evening; if an evening slot is in the
+mail, say why: the afternoon windows in range gave fewer than three. When a meeting mail
+carries no slots, name which of step 5's reasons left it without them. When step 6 drafted
+nothing because the mailbox is not the runner's, the Gmail 草稿 row says 未擬 and names the
+connected account.
 
 If the contact already existed, say so: every deal they had was `won` or `lost`, so the gate
 let you attach a new deal to the same person rather than duplicating them. A run the gate
@@ -588,6 +641,11 @@ Pick the closest enum from the conversation; use the fallback when there's no si
   afternoon" is both probably booked and ambiguous about whose afternoon it means.
   Both failures cost a round-trip and read as careless. Three real windows plus an
   escape line converts in a single reply.
+- **The runner signs and offers their own hours** (owner, 2026-11-18, `SKB-146`). Whoever
+  runs the skill sends the mail and holds the call, so the name under it and the hours in it
+  are theirs. Before this, a teammate's run signed as Peter and offered no times, since it
+  could not read his calendar from their account. Without a calendar of their own connected,
+  the run still asks instead of guessing.
 - **One signal shape in, one shape out.** The input parser is the only thing that
   differs between a DM, a feedback row and a card — everything downstream (CRM write,
   calendar, draft, report) is identical. That is why this skill absorbed the extra

@@ -84,6 +84,7 @@ Best regards,
 <業務名字>
 ```
 
+- `<業務名字>` 是執行這個技能的人自己的名字，取自 `mcp__zynkr__whoami` 給的名字：英文名取第一個字（`Peter Tu` 署 `Peter`），中文名寫全名。不寫別人的名字，取法同 `SKILL.md` 步驟 6（`SKB-146`）。
 - 繁中信也用 `Best regards,`（對外商窗口通用）；純中文情境可改 `謝謝您，`。
 - 署名下面不要再打職稱、Email、LINE：Gmail 簽名已經有，手打一份會疊成兩份。
 - 草稿怎麼建才會帶上 Gmail 簽名，見 `SKILL.md` 步驟 6（MCP）與 `sequence-5touch.md` 步驟 5（Playwright）。
