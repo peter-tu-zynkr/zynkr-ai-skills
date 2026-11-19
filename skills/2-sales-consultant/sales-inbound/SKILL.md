@@ -35,6 +35,7 @@ reads:
   - "sales.crm-data-standards"
   - "company.sales-pipeline-rules"
   - "company.crm-tag-rules"
+  - "company.contact-email"
 house-style: bound
 
 ---
@@ -405,12 +406,18 @@ and say so in the report.
   the website). An Inbound Sales lead gets a reply inside its thread: pass `thread_id`
   and keep the subject, prefixed `Re: `.
 - **How it reads.** Follow `/sales-outbound` steps 5 and 6, exactly as written there. When the ask is a call, read
-  the runner's own calendar first and offer three real windows in 台北時間 (the fixed slot block, house wording).
+  the meeting host's calendar first and offer three real windows in 台北時間 (the fixed slot block, house wording).
   Mirror their own words, add one short paragraph of substance before the ask, match their language, and sign off
   as the runner. Run only those two steps: its step 4 inserts a new deal, and this lead already has one.
-- **The runner signs, from their own calendar** (owner, 2026-11-18, `SKB-146`). Whoever runs the sweep, Peter or
-  the sales DRI (業務 DRI), signs with their own name and offers slots from their own calendar, or asks instead when
-  there are none: all of it is `/sales-outbound` step 5 and step 6, not restated here.
+- **The runner signs; the meeting host's calendar gives the slots** (owner, 2026-11-18: `SKB-146`, its calendar
+  half corrected by `SKB-147`). Whoever runs the sweep, Peter or the sales DRI (業務 DRI), signs with their own name.
+  The slots come from the calendar of the person who will hold the call, never the sender's. **For a discovery call
+  the host is Peter, calendar id `<your-company-contact-email>`** (Atlas `get_knowledge`, key `company.contact-email`,
+  on the `zynkr-atlas` MCP server; the value is on its `value:` line). That line is this skill's one named host. A
+  sweep the DRI runs reads Peter's calendar from the DRI's session, so it must be shared with the DRI's Google account
+  with See all event details. Not shared, free/busy only, or no value in Atlas means no slots: the draft asks which
+  times suit them, the report says why, and the runner's own calendar never stands in. The rest is `/sales-outbound`
+  step 5 and step 6, not restated here.
 - **A company asking what in-house training or consulting costs gets no figure here** (a website
   inquiry or an Inbound Sales lead): no price, no hourly rate and no hour count, whatever the 知識庫
   says. Those prices are fixed packages that `/sales-proposal-writer` writes after the call, so the
@@ -454,8 +461,9 @@ inquiry, including the skipped ones so nothing is silently dropped:
 | 3 | Inbound Sales | 小明 | 某公司 | ⏭️ 已有進行中的 deal（負責人 <member name>） | [deal](url) | — | — | — | ⏭️ 歸那筆 deal |
 ```
 
-Under the table, one line for whose name and calendar the drafts used (`署名 <name> · 時段取自 <calendar id>`, or
-無時段 and `/sales-outbound` step 5's reason, or 未擬 and the connected account when step 6 found the mailbox is not
+Under the table, one line for whose name and calendar the drafts used (`署名 <runner> · 時段取自 <the host's calendar
+id>`, or 無時段 and `/sales-outbound` step 5's reason, with the sharing fix when the host's calendar is not shared with
+event details, or 未擬 and the connected account when step 6 found the mailbox is not
 the runner's), then the gate's one line for every lead an open deal already holds (step 3.5), so the
 owner can be told. In the 標籤 column name the values applied; a lead whose tags were not applied says
 `標籤建議已記在 note` and why. In the 研究 column write 公司 note, 聯絡人兩三行, 沿用本次對話的研究,

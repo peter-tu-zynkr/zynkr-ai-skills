@@ -2,25 +2,21 @@
 name: sales-outbound
 description: >-
   Turn ONE person's interest signal into a tracked CRM lead AND a ready-to-send reply. The
-  signal is a copied DM / chat thread (Threads, IG, LINE, FB Messenger, WhatsApp, email), one
-  row from an event feedback or registration form, a website enquiry, or business-card text —
-  one named person who showed interest and left an email address, optionally with a profile
-  link. An open deal on their email stops the run; otherwise it claims them in Zynkr CRM
-  (company + contact, a deal owned by the runner, a verbatim source note, a follow-up task)
-  and drafts the reply as a Gmail DRAFT (never sent), in the signal's language and Peter's
-  voice, signed by the person running it, with three 台北時間 slots checked on their own calendar
-  when the ask is a meeting. Trigger on
-  /sales-outbound or when Peter pastes a DM, a feedback-form row, or an enquiry and says
+  signal is a copied DM / chat thread (Threads, IG, LINE, FB Messenger, WhatsApp, email), an
+  event feedback or registration form row, a website enquiry, or business-card text: one named
+  person with an email address. An open deal on their email stops the run; otherwise it claims
+  them in Zynkr CRM (company, contact, a runner-owned deal, a source note and a
+  task) and drafts the reply as a Gmail DRAFT (never sent) in the signal's language, signed by
+  the runner, with three real 台北時間 slots when the ask is a meeting. Trigger on
+  /sales-outbound or when Peter pastes a DM, a form row or an enquiry and says
   "draft a reply", "draft an outbound mail", "回這個", "幫我擬回覆", "把這個 lead 建進 CRM 並擬信", "log this
   lead and draft the email", "turn this DM into a draft", "這個回饋幫我建客戶並擬信". Mode B — a
-  five-touch outbound SEQUENCE for someone who has NEVER replied: trigger on "一週五封", "連續開發信",
-  "跑一整套序列", "同一個人五次", "五封序列", or when Peter points at the 陌開名單 roster; it claims each person
-  first (contact + a deal owned by the claimer), then drafts all five mails (see
-  references/sequence-5touch.md). Mode C — ONE mail to a COMPANY's shared inbox from the company
-  directory list: trigger on "Mode C", "公司名單", "工商名錄", "對公司窗口開發"; it claims the row,
-  researches the company, drafts one mail and files only a CRM company with a research note and a
-  no-reply reminder; the contact and the deal come only once the company replies ("{公司} 回信了")
-  (see references/sequence-company.md). Distinct from sales-client-sourcing (BATCH-enriches a WHOLE
+  five-touch SEQUENCE for someone who has NEVER replied: trigger on "一週五封", "連續開發信",
+  "跑一整套序列", "同一個人五次", "五封序列", or the 陌開名單 roster; it claims each person (contact +
+  deal), then drafts all five mails. Mode C — ONE mail to a COMPANY's shared inbox from the company
+  directory list: trigger on "Mode C", "公司名單", "工商名錄", "對公司窗口開發"; it researches the
+  company and drafts one mail; the contact and deal wait for its reply ("{公司} 回信了"). Distinct
+  from sales-client-sourcing (BATCH-enriches a WHOLE
   survey Sheet), sales-inbound (the weekly sweep of inbound website consult EMAILS) and
   sales-follow-up (ONE completed demo transcript on an EXISTING deal).
 category: sales-consultant
@@ -31,8 +27,8 @@ visibility: public
 author: Peter Tu
 sheetId: "2.09"
 input: "ONE person's interest signal carrying an email — a pasted DM/chat thread, an event feedback or form row, a website enquiry, or business-card text; optionally their profile URL."
-process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a deal owned by the runner, note, task) → /sales-research brief → calendar slots for a meeting → Gmail draft → report."
-output: "A CRM lead (company + contact + runner-owned deal + note + task) and a Gmail draft the runner signs, with three 台北時間 slots from their calendar for a meeting; an open deal stops it."
+process: "Parse the signal → enrich from any profile link → pick-up gate (an open deal on the email stops the run) → claim the lead (company + contact, a runner-owned deal, note, task) → /sales-research brief → slots from the host's calendar → Gmail draft → report."
+output: "A CRM lead (company + contact + runner-owned deal + note + task) and a Gmail draft the runner signs, with three 台北時間 slots from the host's calendar; an open deal stops it."
 synergy: ["sales-research"]
 reads: ["gov-subsidy-mechanics", "sales.crm-data-standards", "company.outbound-touches-sheet", "company.contact-email", "company.line-url", "company.sales-pipeline-rules", "company.crm-tag-rules", "doc-style", "company.company-directory-sheet", "company.workflow-library-folder"]
 house-style: bound
@@ -63,8 +59,8 @@ the person's profile link), and it:
    note**, and a **follow-up task** for the next step — all before any draft.
 3. **Drafts the reply** — a Gmail **draft** (never sent), in the signal's
    language and Peter's voice, signed by the person running the skill, that moves the next
-   step forward — with three slots checked on that person's own calendar when that next step
-   is a meeting.
+   step forward — with three slots checked on the calendar of the person who will hold the
+   meeting (the meeting host, Peter for a discovery call) when that next step is a meeting.
 
 **What counts as a signal** — any ONE of these, for ONE named person:
 a copied DM / chat thread · a row from an event feedback or registration form ·
@@ -154,6 +150,13 @@ Playwright 照 `sequence-5touch.md` 步驟 5，不要讓 `fill()` 把簽名蓋�
 - **CRM record URLs** for the report: `https://crm.zynkr.ai/deals/{id}` · `.../contacts/{id}` · `.../companies/{id}` — `{id}` is the uuid a create tool returns, or the matched record's.
 - **The CRM is written only through the `zynkr` MCP's tools** (step 4b). The skill never writes CRM tables with SQL, so the CRM's own rules apply to every record: the deal gets its 交易 number, and `legal_basis` is required.
 - **The owner is the claimer** — the person running the skill, whose email `mcp__zynkr__whoami` gives. Their member id is resolved **live** with `mcp__zynkr__list_workspace_members`, and `create_deal` files the deal in the default pipeline (`銷售流程`) itself — never hardcode an id, and never default the owner to `company.contact-email` when the claimer is someone else.
+- **The meeting host** is the person who will attend the call, and step 5 takes the slots from their
+  calendar, never the sender's (owner, 2026-11-18, `SKB-147`). **For a discovery call the host is Peter,
+  calendar id `<your-company-contact-email>`.** That line is the skill's one named host: a later host is
+  a change to it alone. Read the id from Atlas (`get_knowledge`, key `company.contact-email`, on the
+  `zynkr-atlas` MCP server; the value is on its `value:` line). If Atlas cannot be reached or the key has
+  no `value:` line, there is no host calendar: step 5 gives no slots and the report says why. The host
+  is not the claimer: the runner still owns the deal and signs the mail.
 - **Do NOT log the drafted email as a CRM activity.** Peter's Gmail is already synced into the CRM (`app/lib/integrations/sync.ts`, 15-min cron): the moment he sends the draft, it auto-appears on the contact's 電子郵件 timeline as an outbound email. Logging it here would duplicate that row.
 
 ---
@@ -388,39 +391,54 @@ claim the brief marks unverified stays out of the mail. When the research cannot
 (no web search, a refused write), draft anyway: the mail is a draft, and the report's 研究 row
 says why there is no brief.
 
-### 5 · If the ask is a meeting, derive three REAL slots from the runner's own calendar
+### 5 · If the ask is a meeting, derive three REAL slots from the meeting host's calendar
 
 **Never invent availability.** Whenever the draft will propose a call / demo / meeting,
 read the calendar first — a guessed window is usually already booked.
 
-**The calendar is the runner's own** (owner, 2026-11-18, `SKB-146`). The person running the skill
-signs the mail and holds the meeting, so the slots come from their calendar: Peter's only when Peter
-runs it. The runner is the `mcp__zynkr__whoami` email of step 4, and their calendar is the one the
-Google Calendar connector of their own session reads.
+**The calendar is the meeting host's** (owner, 2026-11-18, `SKB-147`, correcting `SKB-146`). The slots
+must be hours when the person on the call is free, so they come from the calendar of the person who
+will hold the meeting, not the sender's. The host is named once, in *Fixed facts* (a discovery call:
+Peter, calendar id `<your-company-contact-email>`). When Peter runs the skill, that is his own
+calendar. When the sales DRI (業務 DRI) or anyone else runs it, it is still the host's calendar, read
+from the runner's session through the Google Calendar connector. The runner signs either way (step 6).
 
-0. **Check that the calendar is there and is theirs.** The connector's tools
+0. **Find the host's calendar.** The connector's tools
    (`mcp__claude_ai_Google_Calendar__list_calendars` and `…__list_events`) must be in this session;
    a session that lists them only by name loads them first (ToolSearch), and that is not a missing
-   tool. In `list_calendars`, the runner's own calendar is the one whose `id` equals the runner's
-   `whoami` email, both trimmed and lower-cased. The list also holds calendars the runner merely
-   subscribes to, a teammate's among them, and none of those is theirs. When a tool is missing, or no
-   calendar's `id` is the runner's email (the connector is signed in to another account, or the CRM
-   knows them by an alias), there are **no slots**: the draft asks instead (*No slots* below), and the
-   report says why. Never read another person's calendar to fill the gap.
+   tool. Take the host's calendar id from *Fixed facts*, trimmed and lower-cased, and read it
+   directly in step 1. `list_events` reads a calendar shared with the runner even when it is not in
+   their calendar list, and a share the runner never added to that list is the usual case.
+   `list_calendars` lists only the calendars the runner owns or has added, so it serves one purpose
+   here: the host's time zone. When one of its entries has an `id` equal to the host's id (both
+   trimmed and lower-cased), take that entry's `timeZone`; when none does, take the `timeZone`
+   `list_events` returns if it returns one, else `Asia/Taipei`, and say in the report which one you
+   used. When the runner is the host, that entry is their own calendar. When the runner is someone
+   else, the host must have shared the calendar with them with **See all event details**
+   (查看所有活動詳細資料): step 2 needs the literal `Available` titles, which a free/busy-only share
+   hides. Never fill a gap from the runner's own calendar, a teammate's, or a guess.
 1. **Read the events.** Use
-   `mcp__claude_ai_Google_Calendar__list_events(calendarId="<the id step 0 matched>", startTime=…, endTime=…, timeZone="Asia/Taipei", orderBy="startTime")`
+   `mcp__claude_ai_Google_Calendar__list_events(calendarId="<the host's calendar id>", startTime=…, endTime=…, timeZone="Asia/Taipei", orderBy="startTime")`
    across the next 5–10 working days.
    ⚠️ Do **NOT** use `mcp__google-workspace__get_events` — the Calendar API is disabled
    on Peter's GCP project (`963483219986`) and it returns a hard error.
-2. **Find the bookable windows.** The runner's calendar marks them with events literally
+   What comes back decides whether there can be slots:
+   - **An access error** (not found, forbidden): the host's calendar is not shared with the runner.
+     **No slots.**
+   - **Events, but none of them has a `summary`:** the share is free/busy only. **No slots.** One
+     untitled event among titled ones is a private event, not free/busy access: it is still a busy
+     time that step 2 subtracts.
+   - **No events at all in range:** **no slots**, and the report names both possible causes: no
+     `Available` block in range, or a free/busy-only share.
+2. **Find the bookable windows.** The host's calendar marks them with events literally
    titled **`Available`** (and **`Not available`** for the inverse). Take each
    `Available` block and subtract every real meeting overlapping it. A leftover
    shorter than 30 minutes is not a slot. A calendar with no `Available` block in range
    gives **no slots** (*No slots* below), and the report says so.
-3. **Pick three, spread across different days**, by the runner's own clock: the
-   `timeZone` `list_calendars` gives for their calendar.
+3. **Pick three, spread across different days**, by the host's own clock: the
+   time zone step 0 found.
 
-   **A runner in Amsterdam** (`Europe/Amsterdam`, which is Peter's): **Taipei afternoon
+   **A host in Amsterdam** (`Europe/Amsterdam`, which is Peter's): **Taipei afternoon
    first.** Their morning is the prospect's afternoon. Sort the windows by the
    Amsterdam clock:
    - **First choice:** a window before 12:00 Amsterdam. That is the Taipei afternoon,
@@ -431,21 +449,21 @@ Google Calendar connector of their own session reads.
 
    A window that crosses 12:00 Amsterdam counts as first choice for its morning part.
 
-   **A runner in Taipei** (`Asia/Taipei`): there is no clock to cross. Take the earliest
-   windows in range, one per day. **A runner in any other time zone:** convert the windows
+   **A host in Taipei** (`Asia/Taipei`): there is no clock to cross. Take the earliest
+   windows in range, one per day. **A host in any other time zone:** convert the windows
    to 台北時間 first, keep only the parts that fall between 09:00 and 21:00 台北時間, then the
    same as Taipei, and name the zone in the report.
 
-   For every runner: when the prospect has said which days they cannot do, drop those days before you
+   For every host: when the prospect has said which days they cannot do, drop those days before you
    sort. If the days left give fewer than three windows, offer the ones there are and
    keep the escape line. Never make up a slot from an hour that is not marked
    `Available`. Express each as the whole remaining window (`15:30–18:00`), not one
    fixed time — let the prospect choose inside it.
-4. **Convert to Taipei and say so.** The runner's calendar may not be on Taipei time
+4. **Convert to Taipei and say so.** The host's calendar may not be on Taipei time
    (Peter's is `Europe/Amsterdam`); almost
    every prospect is in Taiwan (+886), 6–7 hours ahead, so an unlabelled 「下午」 means
    two different things. Label the block **「（台北時間）」**. Keep the equivalents on
-   the runner's own clock (Amsterdam for Peter) for the CRM note and your report — not
+   the host's own clock (Amsterdam for Peter) for the CRM note and your report — not
    for the email.
 5. **Record them on the deal** so the runner needn't re-convert when the prospect replies.
 
@@ -454,9 +472,15 @@ times. In place of the slot block, ask which times suit them (台北時間) and 
 follows once they confirm, in the reply's own language and form of address. A zh-TW reply that
 uses 你 says 「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」; one that uses 您, or
 an English reply, says the same in its own words. Never fill the gap with a guessed hour or
-someone else's calendar. The report names the reason: no calendar connector in this session, a
-connected calendar that is not the runner's, no `Available` block in range, or none left once
-step 3 dropped the days or hours that cannot be offered.
+any calendar but the host's, the runner's own included. The report names the reason: no calendar
+connector in this session, no host calendar id from Atlas, an access error on the host's calendar
+(not shared with the runner), the host's events all without a title (a free/busy-only share), no
+events at all in range (no `Available` block, or a free/busy-only share: name both), no `Available`
+block in range, or none left once step 3 dropped the days or hours that cannot be offered. When the
+reason is or may be the sharing, the report also gives the fix, in two steps: the host shares their
+calendar with the runner's Google account with **See all event details**, and the runner may also
+add it to their own calendar list (so `list_calendars` shows its time zone). The next run can then
+offer times.
 
 If the ask is not a meeting (send info, share a link), skip this step entirely.
 
@@ -552,13 +576,13 @@ Show the client card, then a compact artifact table:
 | 標籤 | 來源=… · 待確認=…（已讀回）／ 未貼，標籤建議已記在 note（原因） |
 | 研究 | /sales-research 寫在公司的 note ／ 聯絡人兩三行 ／ 沿用本次對話的研究 ／ 沒跑（原因） |
 | Gmail 草稿 | 已放進收件匣，待你過目後寄出（已確認未寄出） |
-| 署名 · 時段 | <署名> · 三個時段取自 <the runner's calendar id> ／ 無時段（原因） ／ 不約會議 |
+| 署名 · 時段 | 署名 <runner> · 時段取自 <the host's calendar id> ／ 無時段（原因） ／ 不約會議 |
 ```
 
-When the mail carries slots, also show them with their equivalents on the runner's own
+When the mail carries slots, also show them with their equivalents on the host's own
 clock (Amsterdam for Peter) and the `Available` block each came from — that is what lets
 the runner sanity-check you did read the calendar rather than guess. For an Amsterdam
-runner, mark each one Taipei afternoon or Taipei evening; if an evening slot is in the
+host, mark each one Taipei afternoon or Taipei evening; if an evening slot is in the
 mail, say why: the afternoon windows in range gave fewer than three. When a meeting mail
 carries no slots, name which of step 5's reasons left it without them. When step 6 drafted
 nothing because the mailbox is not the runner's, the Gmail 草稿 row says 未擬 and names the
@@ -641,11 +665,13 @@ Pick the closest enum from the conversation; use the fallback when there's no si
   afternoon" is both probably booked and ambiguous about whose afternoon it means.
   Both failures cost a round-trip and read as careless. Three real windows plus an
   escape line converts in a single reply.
-- **The runner signs and offers their own hours** (owner, 2026-11-18, `SKB-146`). Whoever
-  runs the skill sends the mail and holds the call, so the name under it and the hours in it
-  are theirs. Before this, a teammate's run signed as Peter and offered no times, since it
-  could not read his calendar from their account. Without a calendar of their own connected,
-  the run still asks instead of guessing.
+- **The runner signs; the host's calendar gives the hours** (owner, 2026-11-18: `SKB-146`, its
+  calendar half corrected by `SKB-147`). Whoever runs the skill sends the mail, so the name under
+  it is theirs. The hours belong to whoever must be free for the call, and today every discovery
+  call is Peter's, so a run by the sales DRI offers Peter's hours. For a few hours `SKB-146` took
+  them from the runner's own calendar, which offered times when the sender was free and the person
+  on the call might not be. Without the host's calendar, shared with event details, the run still
+  asks instead of guessing.
 - **One signal shape in, one shape out.** The input parser is the only thing that
   differs between a DM, a feedback row and a card — everything downstream (CRM write,
   calendar, draft, report) is identical. That is why this skill absorbed the extra

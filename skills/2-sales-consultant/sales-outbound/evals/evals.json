@@ -1,6 +1,6 @@
 {
   "skill_name": "sales-outbound",
-  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Since SKB-136 every write goes through the zynkr MCP's create tools; there is no SQL path. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts, and eval 4's company 範例科技 ExampleCo with its research note (shown to the owner first). Eval 4 is SKB-126 (sales audit round 2, P64 and P122): a demo agreed in a DM leaves the deal at contacted, and the company research runs before the draft. Before eval 4, list_companies(search=範例科技) must find no company; a leftover from an earlier run is removed first, so the research note the assertion finds is this run's. Evals 5 and 6 are SKB-146 (audit item P78): the runner signs and offers slots from their own calendar. Run eval 5 in the session of a member other than Peter (member B), with their own Google Calendar connected and at least three `Available` blocks on it in the next 5–10 working days; run eval 6 in the same member's session with no calendar connector. Clean them up with the rest.",
+  "notes": "SKB-105 pick-up gate (spec docs/specs/SKB-105-pickup-gate.md, AC-1 to AC-4). Side-effecting skill: writes real CRM contacts, deals, notes and tasks, and Gmail drafts (never sent). Baseline (no-skill) runs are intentionally omitted because they would create duplicate production records. Run in order, in the session of the member who will own the test deals (member B below); 'another member' (member A) is simulated by a test deal created with create_deal(owner_id=<member A's id from list_workspace_members>), so no teammate has to act. Every email is on example.com. Since SKB-136 every write goes through the zynkr MCP's create tools; there is no SQL path. Cleanup after the last eval: delete the test drafts, then remove the test deals and contacts, and eval 4's company 範例科技 ExampleCo with its research note (shown to the owner first). Eval 4 is SKB-126 (sales audit round 2, P64 and P122): a demo agreed in a DM leaves the deal at contacted, and the company research runs before the draft. Before eval 4, list_companies(search=範例科技) must find no company; a leftover from an earlier run is removed first, so the research note the assertion finds is this run's. Evals 5 and 6 are SKB-146 (audit item P78): the runner signs. Since SKB-147 the slots come from the meeting host's calendar (Peter's, the `company.contact-email` id), not the runner's. Run eval 5 in the session of a member other than Peter (member B), with the Google Calendar connector and Peter's calendar shared with member B's account with See all event details (it need not be in member B's calendar list), with at least three `Available` blocks on it in the next 5–10 working days; run eval 6 in the same member's session with no calendar connector; run eval 7 in the session of a member to whom Peter's calendar is shared free/busy only. Clean them up with the rest.",
   "evals": [
     {
       "id": 0,
@@ -79,17 +79,17 @@
     },
     {
       "id": 5,
-      "name": "p78-runner-signs-own-calendar",
+      "name": "p78-runner-signs-host-calendar",
       "prompt": "幫我回這個 DM 並建 lead：「可以約個時間聊聊嗎？我是測試者，email 是 runner.slots@example.com」",
-      "expected_output": "No contact has runner.slots@example.com, so the gate goes to step 6 and the deal is owned by member B. Step 5 finds the calendar whose id is member B's whoami email, reads member B's `Available` blocks and offers three windows from them in 台北時間, sorted by member B's own clock. The draft lands in member B's mailbox, signs off `Best regards,` with member B's own name (never Peter's), and carries member B's Gmail signature card.",
+      "expected_output": "No contact has runner.slots@example.com, so the gate goes to step 6 and the deal is owned by member B. Step 5 reads the host's calendar id from Atlas `company.contact-email` and calls list_events with that id directly (Peter's calendar, shared with member B with event details, whether or not it is in member B's calendar list). It takes Peter's time zone from the matching list_calendars entry when there is one, else from list_events, else Asia/Taipei, and the report says which. It reads Peter's `Available` blocks and offers three windows from them in 台北時間, sorted by Peter's clock (Amsterdam: Taipei afternoon first). Member B's own calendar is not used for slots. The draft lands in member B's mailbox, signs off `Best regards,` with member B's own name (never Peter's), and carries member B's Gmail signature card.",
       "files": [],
       "assertions": [
-        "list_calendars was read, and the calendar read with list_events(calendarId=...) is the one whose id equals member B's whoami email",
-        "Each of the three slots in the draft lies inside an `Available` block on member B's calendar, with no meeting overlapping it",
-        "The slot block is labelled （台北時間） and the report lists each slot's equivalent on member B's clock and its `Available` block",
+        "list_events was called with calendarId equal to the `company.contact-email` value, not member B's whoami email, and the report names the time zone the slots were sorted by and where it came from",
+        "Each of the three slots in the draft lies inside an `Available` block on Peter's calendar, with no meeting overlapping it",
+        "The slot block is labelled （台北時間） and the report lists each slot's equivalent on Peter's clock (Amsterdam) and its `Available` block",
         "The draft's sign-off is `Best regards,` followed by member B's own name, and the name Peter appears nowhere in the sign-off",
         "Created exactly one Gmail draft to runner.slots@example.com (html, include_signature=true) in member B's mailbox and sent nothing",
-        "The report's 署名 · 時段 row names member B and member B's calendar"
+        "The report's 署名 · 時段 row names member B as the signer and Peter's calendar id as the source of the slots"
       ]
     },
     {
@@ -99,10 +99,23 @@
       "expected_output": "Same session as eval 5 but with no Google Calendar connector. The claim runs as usual. Step 5 finds no calendar tool, so the draft offers no times: in place of the slot block it asks which times suit them (台北時間) and says the invite follows once they confirm, using 你 as the DM does. It is still signed with member B's own name. The report says the draft has no times because this session has no calendar connector.",
       "files": [],
       "assertions": [
-        "No calendar was read, and no other person's calendar was used in its place",
+        "No calendar was read, and neither member B's own calendar nor any other was used in place of the host's",
         "The draft has no numbered slot block and contains 「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」",
         "The draft's sign-off is `Best regards,` followed by member B's own name",
         "The report's 署名 · 時段 row says 無時段 and names the missing calendar connector as the reason"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "skb147-host-calendar-free-busy-asks-instead",
+      "prompt": "幫我回這個 DM 並建 lead：「下週可以約 30 分鐘聊聊嗎？email 是 host.freebusy@example.com」",
+      "expected_output": "Run by member B, to whom Peter's calendar is shared free/busy only. The claim runs as usual. Step 5 calls list_events on Peter's calendar id: either events come back with no `summary` on any of them (a free/busy-only share), or none come back at all. Either way the draft offers no times: it asks which times suit them (台北時間) and says the invite follows, using 你 as the DM does. Member B's own calendar is not read for slots. It is signed with member B's own name. The report says 無時段 and gives the reason: a free/busy-only share, or, when no events came back at all, both causes (no `Available` block in range, or a free/busy-only share). It gives the fix in two steps: Peter shares his calendar with member B's Google account with See all event details, and member B may also add it to their calendar list.",
+      "files": [],
+      "assertions": [
+        "No slot in the draft was taken from member B's own calendar or from any calendar but the host's",
+        "The draft has no numbered slot block and contains 「不曉得你哪些時間方便（台北時間）？確認後我會寄出會議邀請。」",
+        "The draft's sign-off is `Best regards,` followed by member B's own name",
+        "The report's 署名 · 時段 row says 無時段 and names a free/busy-only share as the reason (both causes when no events came back), and gives the fix: the host shares the calendar with See all event details, and the runner may also add it to their calendar list"
       ]
     }
   ]
