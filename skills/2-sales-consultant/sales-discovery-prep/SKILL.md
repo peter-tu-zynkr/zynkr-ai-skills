@@ -125,6 +125,13 @@ out yet (search the sent mail for the meeting date). Otherwise skip, and say why
 - Fill the bank's agenda template: the contact's name as they write it, the date and time (台北時間) and the link
   from the calendar event, the sender's name from Step 1. Unknown values stay as ＜＞ placeholders, named in the report.
 - Write it in the language of the client's own mail.
+- **前置準備, when the call needs something from the client.** The template already asks for one recent example
+  and invites colleagues. When a hypothesis or the brief needs more (a sample file, a person in the room, a figure,
+  access to a tool), list each item as its own line, in time order: what exactly they prepare · who on their side
+  (主管 · IT · 承辦人 · 財務) · by when (會前一天 · 會議當天). Close with one 「您不用準備」 line that names what they
+  might wrongly think is theirs, such as slides, a written requirements document or a budget figure. One summary
+  line such as 「請準備相關資料」 is not enough: a vague ask turns into a misunderstanding with the client. Ask only
+  for what the call will use, and add no list when the template's two asks cover it.
 - Thread it onto their latest mail:
 
 ```text
@@ -139,7 +146,8 @@ mcp__google-workspace__draft_gmail_message(
 
 ## Step 7 — Preview, confirm once, write the note
 
-Show the whole prep in the chat: the hypotheses, the question list, the opening, the agenda-draft status. Ask once:
+Show the whole prep in the chat: the hypotheses, the question list, the opening, the agenda-draft status and the
+client's 前置準備 (or 「無」). Ask once:
 **「這份會前準備要存到交易上嗎？」** Edits come back here and are shown again.
 
 On yes, preview then apply:
@@ -170,6 +178,7 @@ Note body (zh-TW):
 
 開場：<開場詞>
 議程信：<已擬草稿，未寄出 | 未擬：原因>
+客戶前置準備：<n 項：準備什麼／誰／何時前 | 無>
 
 預想回答是會前的推測。兩個假設在會中用各自那一題驗證。
 ```

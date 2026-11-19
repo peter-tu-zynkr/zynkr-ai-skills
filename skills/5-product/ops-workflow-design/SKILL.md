@@ -324,6 +324,11 @@ A worked READ is in `references/worked-examples.md`.
    - Does a step use a skill or a note (a step with `ref=`, or one that should have it)?
    - Does it need sign-off before anyone uses it?
 
+   **Material for students, a cohort or a workshop:** the place they draw a workflow is Zynkr
+   Atlas, which the course or workshop provides. Every flow there takes its kind's lane from the
+   step itself, and a step can bind to the skill it uses. Never tell them they need an account
+   with another drawing tool.
+
    **Any yes** → an Atlas draft (step 6). **All no** → a page drawing (step 7). A flow with a
    page-only kind is a page drawing whatever the answers, and the reply says why: Atlas would drop
    those steps. Without the Atlas tools, or with a token that may not draft, say so and return the
@@ -364,8 +369,11 @@ A worked READ is in `references/worked-examples.md`.
      open `http://127.0.0.1:<port>/<name>.svg`, and stop the server after the screenshot. A
      navigation that times out on an SVG has often loaded it: take the screenshot before you retry.
      Look for cut titles, crowded columns and lines that cross a box; fix the text and render
-     again. Without Playwright, the reply says the drawing was linted, not looked at. Playwright
-     saves the screenshot in the session's working folder and logs under `.playwright-mcp/` there:
+     again. When lines crowd, give the drawing room: pin a source or store under its own step with
+     `col=`, give a branch a band of its own, or send a side path out through `offpage`. A wide
+     drawing may scroll on its page. Never squeeze it instead: no titles cut short to make room, no
+     lines laid over one another or through a box. Without Playwright, the reply says the drawing
+     was linted, not looked at. Playwright saves the screenshot in the session's working folder and logs under `.playwright-mcp/` there:
      when that folder is a repository, delete both once you have looked, so neither lands in a
      commit.
    - Return the SVG path.
@@ -493,6 +501,11 @@ draws its own way: the register is a page option.
 - **All knowledge in one step "to look clean".** Keep which source feeds which step as separate
   `knowledge` steps and lines; merging them hides real couplings.
 - **A colour value written anywhere.** Colours live only in `references/flow-colours.json`.
+- **A lane drawing built by hand.** A workflow on a page is the SVG `render` writes, placed on the
+  page as it is. A hand-built SVG or HTML lane carries its own colours, misses the lint, and can't
+  move to Atlas as text. The host page's brand rules stop at the drawing's edge.
+- **A crowded drawing squeezed to fit.** Lines that overlap or cut through a box hide which step
+  feeds which. Give the drawing room (DRAFT step 7) and let it scroll.
 - **A page-only kind in an Atlas draft.** Atlas drops the step without a word; the flow stays a page
   drawing.
 - **Shipping without looking.** A page drawing ships after a clean lint (for an edit, one that adds
