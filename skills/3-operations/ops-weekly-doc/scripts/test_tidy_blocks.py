@@ -1555,10 +1555,188 @@ check("an escaped asterisk is text: the block is filled",
       (thu_skip(ESCAPED, ESC_ST), len(T.fill_plan(ESCAPED.split("\n"), ESC_ST, "t.9", THU_FILL)["groups"])), ([], 2))
 
 
+# ── 21. SKB-151: bullets the meeting (or the unopposed harvest) closed, no chip ──
+# The closures name bullets of the MEETING's section (Nov 19) by heading and text as the export
+# prints them; tidy removes them from the scaffold's copy (Nov 26) under every SKB-039 rule.
+EV_EXPORT = """\
+Nov 26, 2026
+#Sales Sam Rivera
+* 5 筆陌開陪跑 deal〔WB 11/2 起〕
+* sales follow up〔WB 10/19 起〕
+* 拜訪清單整理
+   * 名單 A
+* P1 Funnel In Progress
+   * Step one
+   * Step two
+* Grown since the meeting
+* New this week
+#Ops
+* 5 筆陌開陪跑 deal〔WB 11/2 起〕
+Nov 19, 2026
+#Sales Sam Rivera
+* 5 筆陌開陪跑 deal〔WB 11/2 起〕
+* sales follow up〔WB 10/19 起〕
+* 拜訪清單整理
+   * 名單 A
+* P1 Funnel In Progress
+   * Step one
+   * Step two
+* Grown
+#Ops
+* 5 筆陌開陪跑 deal〔WB 11/2 起〕
+Nov 12, 2026
+"""
+SALES = "#Sales Sam Rivera"
+
+
+def ev(heading, text, why="meeting", how="done", label=None, i=[0]):
+    i[0] += 1
+    return {"id": "b%d" % i[0], "heading": heading, "text": text, "label": label or text, "why": why, "how": how}
+
+
+EV = {"section": "Nov 19, 2026", "items": [
+    ev(SALES, "5 筆陌開陪跑 deal〔WB 11/2 起〕", label="5 筆陌開陪跑 deal"),
+    ev(SALES, "拜訪清單整理", why="harvest"),
+    ev(SALES, "P1 Funnel In Progress", how="drop"), ev(SALES, "Step one"), ev(SALES, "Step two"),
+    ev(SALES, "Grown"),
+    ev(SALES, "New this week")]}
+
+
+def ev_closed(closures, exp=EV_EXPORT):
+    return T.closed_bullets(export(exp), NAMES, set(), closures)
+
+
+r = ev_closed(EV)
+check("the meeting's closures leave the copy; nothing else does",
+      sorted((e["owner"], e["line"], e["status"]) for e in r["closed"]),
+      [(SALES, "5 筆陌開陪跑 deal〔WB 11/2 起〕", "會上說完成"), (SALES, "P1 Funnel In Progress", "會上說放棄")])
+check("a closure is keyed by its heading: the same text under #Ops stays",
+      [e["owner"] for e in r["closed"] if e["line"].startswith("5 筆")], [SALES])
+check("a bullet whose sub-items the evidence does not all name is kept",
+      [e["reason"] for e in r["skipped"] if e["line"] == "拜訪清單整理"], ["a sub-item no chip or evidence closes: * 名單 A"])
+check("sub-items the evidence names go with their bullet, as one tree",
+      [len(e["lines"]) for e in r["closed"] if e["line"] == "P1 Funnel In Progress"], [3])
+check("a bullet edited since the meeting is reported, not guessed at",
+      [u["label"] for u in r["closures"]["unmatched"]], ["Grown"])
+check("evidence reaches only a verbatim copy of the meeting's section",
+      [e["reason"] for e in r["skipped"] if e["line"] == "New this week"],
+      ["not in Nov 19, 2026 as-is under the same heading — not a scaffold copy, left alone"])
+# chipped in the meeting's section after the minutes read it, so the scaffold copied the chip too
+r2 = ev_closed({"section": "Nov 19, 2026", "items": [ev(SALES, "sales follow up〔WB 10/19 起〕")]},
+              EV_EXPORT.replace("* sales follow up〔WB 10/19 起〕\n", "* sales follow up〔WB 10/19 起〕Done\n"))
+check("a bullet the meeting closed and someone also chipped is one close, not 'unmatched'",
+      ([e["status"] for e in r2["closed"] if e["line"].startswith("sales follow")], r2["closures"]["unmatched"]),
+      (["Done"], []))
+check("an open bullet nobody closed stays", any(e["line"].startswith("sales follow") for e in r["closed"] + r["skipped"]), False)
+check("each closed bullet says which evidence closed it",
+      sorted(e["evidence"]["why"] for e in r["closed"]), ["meeting", "meeting"])
+
+r = ev_closed(dict(EV, section="Nov 12, 2026"))
+check("closures for another week are refused whole", (r["closed"], bool(r["closures"]["refused"])), ([], True))
+r = ev_closed(None)
+check("without closures nothing open is touched, and nothing is reported", (r["closed"], "closures" in r), ([], False))
+CHIPPED = EV_EXPORT.replace("* sales follow up〔WB 10/19 起〕\n", "* sales follow up〔WB 10/19 起〕Done\n")
+r = ev_closed(EV, CHIPPED)
+check("chips still close alongside evidence",
+      sorted(e["line"] for e in r["closed"])[-1], "sales follow up〔WB 10/19 起〕Done")
+
+EV_STRUCT = structure(
+    "Nov 26, 2026\n", "#Sales \n",
+    "5 筆陌開陪跑 deal〔WB 11/2 起〕\n",       # 20
+    "sales follow up〔WB 10/19 起〕\n",        # 30
+    "Nov 19, 2026\n", "tail\n")
+EV_ONE = """\
+Nov 26, 2026
+#Sales Sam Rivera
+* 5 筆陌開陪跑 deal〔WB 11/2 起〕
+* sales follow up〔WB 10/19 起〕
+Nov 19, 2026
+#Sales Sam Rivera
+* 5 筆陌開陪跑 deal〔WB 11/2 起〕
+* sales follow up〔WB 10/19 起〕
+"""
+res = T.locate_closed(ev_closed(EV, EV_ONE), EV_STRUCT, NAMES)
+check("an evidence close is pinned to its one paragraph like a chipped one",
+      [(e["start_index"], e["end_index"]) for e in res["closed"]], [(20, 30)])
+
+ARCH = """\
+## Oct 8, 2026
+### #Sales
+〔自動彙整 WB 10/5 · 10-06 09:00〕
+· 上週 — 甲 完成
+〔自動彙整 WB 9/28 · 09-29 09:00〕
+· 本週 — 乙件事 ／ 丙件事
+### #Ops
+〔自動彙整 WB 10/5 · 10-06 09:00〕
+· 上週 — 戊 完成
+〔自動彙整 WB 9/28 · 09-29 09:00〕
+· 本週 — 乙件事 ／ 丁件事
+## Oct 1, 2026
+### #Sales
+"""
+
+
+def arch_carry(closures=None):
+    r = T.analyse(ARCH.split("\n"), target="Oct 8, 2026", today=T.date(2026, 10, 9), closures=closures)
+    return {g["owner"].strip("# "): [c["text"] for c in g["carry"]] for g in r["groups"]}, r
+
+
+base, _ = arch_carry()
+check("the carry rescues an archived block's plan", base, {"Sales": ["乙件事", "丙件事"], "Ops": ["乙件事", "丁件事"]})
+got, r = arch_carry({"section": "Oct 1, 2026", "items": [ev("#Sales", "乙件事")]})
+check("what the meeting closed is not carried again, under its own heading only", got,
+      {"Sales": ["丙件事"], "Ops": ["乙件事", "丁件事"]})
+check("closures for the previous week are used", r["closures_ignored"], None)
+got, r = arch_carry({"section": "Sep 24, 2026", "items": [ev("#Sales", "乙件事")]})
+check("closures for another week are left out of the carry", got, base)
+check("... and the run says so", "Sep 24, 2026" in (r["closures_ignored"] or ""), True)
+PRI = ARCH.replace("· 本週 — 乙件事 ／ 丙件事\n### #Ops", "· 本週 — 乙件事 ／ P1 丙件事\n### #Ops")
+got = {g["owner"].strip("# "): [c["text"] for c in g["carry"]] for g in T.analyse(
+    PRI.split("\n"), target="Oct 8, 2026", today=T.date(2026, 10, 9),
+    closures={"section": "Oct 1, 2026", "items": [ev("#Sales", "P1 丙件事〔WB 9/28 起〕", label="丙件事")]})["groups"]}
+check("a closed item with a priority chip is not carried again", got["Sales"], ["乙件事"])
+check("one carry key whatever chips a side kept",
+      (T.carry_key("P1 Zynkr atlas〔WB 11/2 起〕"), T.carry_key("Zynkr atlas 完成")), ("zynkratlas", "zynkratlas"))
+
+with tempfile.TemporaryDirectory() as tmp:
+    bad = Path(tmp) / "c.json"
+    bad.write_text('{"section": "Nov 19, 2026", "items": [{"text": "no heading"}]}', encoding="utf-8")
+    check("a closures file without headings stops the run", refuses(lambda: T.load_closures(str(bad))), True)
+    check("no closures file is no closures", T.load_closures(None), None)
+
+
 # ── MUTATIONS: prove the tests above can actually go red ─────────────────────
 # Each mutation breaks one real line of tidy_blocks.py; if the suite still passes, the matching
 # test is decorative and must be rewritten. Every anchor must occur EXACTLY once.
 MUTATIONS = [
+    # SKB-151: evidence closes
+    ("evidence never closes anything",
+     '                    evidence = said', '                    evidence = None'),
+    ("closures for another week are used",
+     'if cmap and closures.get("section") != prev_label:', 'if False:'),
+    ("the carry drops a closed label under every heading",
+     'evidence_closed = {key for keys, key in by_heading if keys & here}',
+     'evidence_closed = {key for keys, key in by_heading}'),
+    ("the carry keeps the priority chip on its side",
+     'or key in live or carry_key(text) in evidence_closed', 'or key in live or key in evidence_closed'),
+    ("a chipped closure is reported unmatched",
+     '                    matched.add((nonspace(owner(sec, i)), nonspace(bare)))   # chipped too: one close',
+     '                    pass'),
+    ("the carry uses closures of another week",
+     "        if closures.get(\"section\") != prev:", "        if False:"),
+    ("evidence takes sub-items it does not name",
+     "            if loose:\n", "            if False:\n"),
+    ("evidence ignores the heading",
+     'out[(nonspace(it["heading"]), nonspace(it["text"]))] = it',
+     'out[(nonspace(it["heading"]), nonspace(it["text"]))] = it\n'
+     '        out[("#Ops", nonspace(it["text"]))] = it'),
+    ("the carry brings back what the meeting closed",
+     "or key in live or carry_key(text) in evidence_closed", "or key in live"),
+    ("an edited bullet is not reported",
+     "for k, it in cmap.items() if k not in matched]", "for k, it in cmap.items() if False]"),
+    ("a closures file without headings is read",
+     'any(not isinstance(x, dict) or not x.get("heading") or not x.get("text") for x in obj["items"]):',
+     'False:'),
     ("a note-ended label is appended under the note",
      "elif child_depth(sec[kids[-1]]) > child_depth(sec[kids[0]]):", "elif False:"),
     ("a styled block is called one that does not line up",

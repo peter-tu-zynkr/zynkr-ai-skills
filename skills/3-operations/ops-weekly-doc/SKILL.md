@@ -5,8 +5,8 @@ description: >-
   The writer of a small team's weekly operations Google Doc in the weekly loop. Before the meeting it
   writes each team's section (進度 · 卡關 · 下一步 · 待討論) from the team's harvest, inside marked
   〔自動彙整〕 blocks only (sections); after it, it writes the meeting's minutes from the Fireflies
-  transcript into the Doc and the Weekly Ledger (minutes), then trims the copied week section and
-  fills next week's with the agreed actions (tidy). It never edits a human's line, never rebuilds
+  transcript into the Doc and the Weekly Ledger (minutes), then trims the copied week section, removes
+  the bullets the meeting closed, and fills next week's with the agreed actions (tidy). It never edits a human's line, never rebuilds
   the skeleton the Apps Script scaffold copies, and never writes a past week. Trigger on
   "/ops-weekly-doc", "週會紀錄", "會議紀錄寫進 Doc", "整理週報 Doc", "tidy the weekly doc", "write the
   team sections", "meeting minutes from Fireflies". BOUNDARY — do NOT hijack: /zynkr-ops-weekly (the
@@ -21,7 +21,7 @@ visibility: public
 author: Peter Tu
 input: "A mode (sections, minutes or tidy) and the ISO week the runner passes as week=; all identifiers come from the private config at ~/.config/zynkr/ops-weekly.json."
 process: "Anchor on the runner's week and the target Thursday → read routing from the Doc's owner chips → read the week's evidence → write marked blocks only, through scripts that plan every range → read back and assert → receipt."
-output: "Each team's 〔自動彙整〕 block in this week's section, the meeting's minutes block and Decisions rows, and a tidied week section with next week's actions filled in."
+output: "Each team's 〔自動彙整〕 block (done bullets put to the meeting), the minutes block and Decisions rows, and a tidied section without the closed bullets, next week's actions filled in."
 synergy: [zynkr-ops-weekly, ops-weekly-tracker, project-manager, project-minutes-sync, zynkr-gm]
 executed_by: internal-user
 house-style: bound
@@ -162,6 +162,24 @@ stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
    Save `{"<id>": "<line>", …}` to the `save` path it prints, one entry per item, each id exactly as
    listed: an id carries a hash of its item, so a line from another run never fits. An item you leave out
    keeps its English text, cut at 80. With no items listed, save nothing.
+4b. **Hold the harvest against the Doc's open bullets (`SKB-151`).** A bullet leaves the Doc only when
+   something closes it, and nobody sets the chips. This step names the bullets the harvest says are
+   finished, so the meeting can let them close.
+   1. Fetch the Drive plain-text export with `get_drive_file_content` (the only read that shows the
+      chips) and run `python3 scripts/open_items.py --export <export> --markdown <step-3 markdown>
+      --section "<this Thursday's heading>" > open.json`.
+   2. `python3 scripts/sections.py reconcile --dir <dir> --routing routing.json --open open.json`. It
+      lists, per person, their open bullets beside their 完成 lines (never a bullet with an open
+      sub-item: tidy could not remove it), and `tracker_hints` (a bullet naming a tracker `#` that a 完成
+      line of theirs moved). A hint is not a match: a line tied to `#6.10` can be one step of it.
+   3. **Match only what is plainly the same work, finished.** For a bullet, pick a 完成 line only when
+      that line says this piece of work is done, not a step of it, not work near it. An item carried
+      for weeks that the harvest does not mention stays open: leave it. When unsure, leave it out — an
+      unmatched bullet just stays open, a wrong match puts open work up for closing. Save
+      `{"<bullet id>": {"row": "<row id>", "said": "<one zh-TW line, about 30 字, of what finished>"}}`
+      to the `save` path it prints (`{}` when nothing matches).
+   4. Pass `--matches <that path>` to `render` in step 5. Render refuses a bullet or row it did not list,
+      a row that is not 完成, and a row of someone other than the bullet's person.
 5. `python3 scripts/sections.py render --dir <dir> --routing routing.json --stamp "<MM-DD HH:MM>"
    --short <the save path>`, with the stamp's time from Step 0. Save what it prints as `blocks.json`.
    - **What it writes:**
@@ -188,7 +206,11 @@ stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
        asked about; then the sure gaps; then at most two of the person's own items that read 進行中 and
        that no harvest line was tied to in the last three recorded weeks, while they harvested in each
        (`…三週沒有收成紀錄，還在進行嗎？`). Before three such weeks exist it asks nothing;
-     - 下一步 is left out when last week's `tidy` already filled the meeting's actions into the kept block.
+     - 下一步 is left out when last week's `tidy` already filled the meeting's actions into the kept block;
+     - 待討論 ends with one `會後收掉：<bullet>｜收成：<what finished>（還沒做完請在會上說）` line per match of
+       step 4b, at most five a person (`closing.left_over` counts the rest; they come up next week).
+       Render stages exactly these in the run folder (`closing.json`); step 7's `confirm` passes on
+       to Thursday only the ones the Doc shows. A render without step 4b stages none.
    - **What it keeps:** the harvest lines it wrote, per person, in the loop's state folder
      (`<week>.progress.json`), which Monday's recap repeats as 上週進度.
    - **What it never writes:** a person it cannot name, and a heading it cannot route.
@@ -198,8 +220,13 @@ stop and do not write the Doc: receipt `status=failed delivered=<its message>`.
    --blocks blocks.json --at at.json --tab <tab_id>` and apply what it prints in **one**
    `batch_update_doc`, exactly as listed.
 7. Read the Doc again and confirm one `〔自動彙整 <label>` stamp per block heading in the section.
-8. Receipt `status=ok delivered=<n>-blocks;quiet-<n>;harvest-<recorded|not-recorded>;facts-<found|none>;short-<used>-of-<items>;layout-<item|kind>`
-   (`layout` from render's `by_item`).
+   Then save that read (`get_doc_as_markdown`) and run `python3 scripts/sections.py confirm --dir <dir>
+   --markdown <it>` (`SKB-151`, also when step 6 wrote nothing because the blocks were already there).
+   It keeps, as `<week>.closing.json` in the state folder, the 會後收掉 candidates whose line this
+   section shows, and names any it does not (`not_in_doc`): Thursday closes by silence only what the
+   team was shown. Skip it, and Thursday closes nothing by silence.
+8. Receipt `status=ok delivered=<n>-blocks;quiet-<n>;harvest-<recorded|not-recorded>;facts-<found|none>;short-<used>-of-<items>;layout-<item|kind>;closing-<n>`
+   (`layout` from render's `by_item`, `closing` from `confirm`'s `confirmed`).
    The report names `owners_without_name` (an owner chip missing from `chat_ids`) and
    `harvest_without_heading` (a person with a harvest but no heading), so the owner can fix either.
 
@@ -217,16 +244,31 @@ path to save each result to **word for word**; the next step reads them back.
    call plus the tracker reads (`#` and 項目). Make them all.
    - **Exit 4, no transcript:** read Thursday's section of the Doc as edited (`get_doc_as_markdown`)
      and take the minutes from there, with `"source": "doc"`. Say so in the report.
+2b. **The Doc's open bullets (`SKB-151`).** Fetch the Drive plain-text export (`get_drive_file_content`)
+   and the markdown, run `python3 scripts/open_items.py --export <export> --markdown <markdown>
+   --section "<Thursday's heading>" > open.json`, then `python3 scripts/minutes.py items --dir <dir>
+   --open open.json`. It keeps both in the run folder and lists the section's open bullets and
+   Wednesday's 會後收掉 candidates (`still_open` false: edited or closed since Wednesday).
 3. **Read the transcript and write `minutes.json`** in the shape the script's docstring gives:
-   decisions, actions (`what`, `owner`, `due`, `item`, `new`), blockers, topics, dropped, progress.
+   decisions, actions (`what`, `owner`, `due`, `item`, `new`), blockers, topics, dropped, progress,
+   closed, kept.
    - Write only what was said. An owner is a roster name exactly as the config's `chat_ids` writes it,
      `All`, or `""` when nobody took it. A `due` is a date someone said, or `""`; never infer one.
    - `item` is a tracker `#` when the talk was plainly about that item; leave it out when unsure.
    - Transcription mangles names; map a misheard name only when the context settles it.
+   - `closed`: a bullet from `items`' open list that someone said is done (`how: done`) or not
+     happening (`how: drop`), with the words that said it as `quote`. Only what was said about that
+     bullet's work; a nearby topic is not it.
+   - `kept`: a 會後收掉 candidate someone said is not finished, with the words. Every other candidate
+     still open closes: the meeting saw it listed and let it stand. That is the rule the team was told
+     on Wednesday, so apply it even when the candidate never came up.
 4. `python3 scripts/minutes.py check --dir <dir> --input minutes.json`. It refuses an owner off the
-   roster, an item `#` the tracker lacks, a date that is not a full date, text over 200 characters
-   and more rows than the block holds. Fix `minutes.json` and run it again until it passes. Then it
-   writes `rows.json`, `block.json` and `fill.json`.
+   roster, an item `#` the tracker lacks, a date that is not a full date, text over 200 characters,
+   more rows than the block holds, a `closed`/`kept` id `items` did not list, a bullet both closed and
+   kept, and `closed` from the Doc (only a transcript can close a bullet; with the Doc as the source no
+   candidate closes either, and they are asked again next Wednesday). Fix `minutes.json` and run it
+   again until it passes. Then it writes `rows.json`, `block.json` (with a 收掉 section listing what
+   closed and why), `fill.json` and `closures.json`.
 5. **The Ledger first.** `python3 <core>/scripts/ledger.py block start --tab Decisions --week <ISO
    week> --rows <dir>/rows.json`, then `plan`, `check` and `confirm` as `<core>/references/ledger.md`
    describes. An action without an owner and a date is written 狀態 `待定`; it stays open.
@@ -236,7 +278,9 @@ path to save each result to **word for word**; the next step reads them back.
    `at.json`, and run `python3 scripts/render_block.py ops --blocks <dir>/block.json --at at.json
    --tab <tab_id>`. Apply its operations in **one** `batch_update_doc`, then re-read the section and
    confirm the block is there once, under the date heading.
-7. Keep `fill.json`: `tidy` writes it into next week's section (step 9).
+7. Keep `fill.json` and `closures.json`: `tidy` writes the first into next week's section (step 9) and
+   removes what the second names (steps 2 and 7). The closures are not Ledger rows: Monday's recap reads
+   a kind it does not know as an open question. Their record is the 會議紀錄 block's 收掉 lines.
 
 Fireflies is read here and nowhere else. The minutes never go to the Chat space, and the progress
 lines go to the Ledger only. Receipt `delivered=` is the `delivered` value `check` printed.
@@ -263,7 +307,9 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    section.
 2. Fetch the Doc as markdown, and the Drive plain-text export with `get_drive_file_content` — the
    only read that shows a `Done`/`Drop` chip. Save the export as `e0` and run
-   `python3 scripts/tidy_blocks.py --input <markdown> --export e0`. It returns, per department
+   `python3 scripts/tidy_blocks.py --input <markdown> --export e0 --closures <minutes run>/closures.json`
+   (`SKB-151`; this week's newest `minutes` run folder, `<state>/runs/<ISO week>-minutes-*`, or no flag
+   when `minutes` wrote none: then nothing closes but chips). It returns, per department
    group: the block to `keep`, the blocks to `archive`, the still-open items to `carry` and
    `carry_header_needed`. Without `--export` an item someone marked `Done` is carried again,
    reopened, because the markdown hides the chip. It writes nothing and makes every judgement
@@ -308,8 +354,12 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
       that renders `P0`/`Done`/`Drop` chips) and a **fresh** `inspect_doc_structure(tab_id,
       detailed=true)` (steps 4–5 moved every index). Save them as `e1` and `s1`, then run exactly:
       `python3 scripts/tidy_blocks.py --closed --export e1 --structure s1 --markdown <step-2
-      markdown> --section "<target Thursday>" > plan.json`
-      The markdown supplies the headings and person names the other two reads hide.
+      markdown> --section "<target Thursday>" --closures <minutes run>/closures.json > plan.json`
+      The markdown supplies the headings and person names the other two reads hide. `--closures`
+      (`SKB-151`) is the same file as step 2's, and left out the same way when `minutes` wrote
+      none. A bullet it names closes as if chipped, under every gate below; `closures.refused`
+      (a file for another week) and `closures.unmatched` (a bullet edited since the meeting, or
+      already gone) are reported, never forced.
       - **Non-zero exit** (no JSON — e.g. wrong tab, the export and structure disagree on the
         section boundary): delete nothing, report `partial` with the message.
       - `refused` set, or `closed` empty: step 7 is done; report it (with `skipped[]`) and stop.
@@ -317,7 +367,7 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
       **again**, save them as `e2` and `s2`, and run exactly — note the **different output file**,
       a `> plan.json` here would empty the plan it is checking against:
       `python3 scripts/tidy_blocks.py --closed --export e2 --structure s2 --markdown <step-2
-      markdown> --section "<target Thursday>" --expect plan.json > recheck.json`
+      markdown> --section "<target Thursday>" --closures <the same file> --expect plan.json > recheck.json`
       Non-zero exit means the section changed since the plan: **delete nothing**, report
       `partial`, and let the next hourly retry start over from 7.1. On exit 0, go straight to 7.3 —
       no other tool call in between.

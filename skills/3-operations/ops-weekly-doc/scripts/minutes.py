@@ -11,10 +11,15 @@ exact calls to make, with a path to save each result to word for word; the next 
         -> the tracker reads (#, 項目) and the one transcript titled `meeting.calendar_title` on that
            Thursday (Taipei) with the call that fetches it; or "found": false: read the meeting's Doc
            section as edited instead
+    minutes.py items --dir D --open open.json
+        -> SKB-151: the meeting section's open bullets (open_items.py's output, kept as D/open.json) and
+           Wednesday's 會後收掉 candidates (<week>.closing.json, kept as D/candidates.json), to hold the
+           transcript against
     minutes.py check --dir D --input minutes.json [--now ISO]
         -> refuses an owner off the roster, an item # the tracker lacks, a date that is not a date;
            writes rows.json (the Ledger's Decisions block), block.json (the Doc's 會議紀錄 block, for
-           render_block.py ops) and fill.json (each person's 下一步 and 待討論, for tidy)
+           render_block.py ops), fill.json (each person's 下一步 and 待討論, for tidy) and closures.json
+           (the bullets tidy removes from next week's section, SKB-151)
 
 minutes.json, written by the model from the transcript (or the Doc) and nothing else:
 
@@ -24,11 +29,21 @@ minutes.json, written by the model from the transcript (or the Doc) and nothing 
      "blockers":  [{"text", "owner"?, "item"?, "since"?: "YYYY-MM-DD"}],
      "topics":    [{"text", "owner"?}],
      "dropped":   [{"item", "text"}],
-     "progress":  [{"item", "text", "state"?}]}
+     "progress":  [{"item", "text", "state"?}],
+     "closed":    [{"bullet", "how": "done" | "drop", "quote"}],
+     "kept":      [{"bullet", "quote"}]}
 
 An owner is a roster name exactly as the tracker writes it (the config's `chat_ids` display names) or
 `All`. An action with no owner or no date stays open (狀態 待定). A blocker first seen more than seven
 days before the meeting is a risk (類型 風險).
+
+`closed` and `kept` (SKB-151) name bullets by the ids `items` listed. `closed` is a bullet of the Doc the
+meeting said is finished or dropped, with the words that said so; only a transcript can say it. `kept` is a
+會後收掉 candidate someone said is not done. Every other candidate still in the section as Wednesday read
+it closes: the meeting saw it listed and let it stand. With the Doc as the source no candidate closes,
+since nothing shows what was said; they are asked again next Wednesday. The closures are recorded in the
+會議紀錄 block's 收掉 lines and in closures.json, not in the Ledger: Monday's recap reads any kind it does
+not know as an open question.
 
 Exit codes are ledger.py's: 2 config or arguments · 3 input refused · 4 no transcript.
 """
@@ -261,7 +276,134 @@ def entries(data, key):
     return v
 
 
-def check(data, run, items, now):
+# ── items (SKB-151) ──────────────────────────────────────────────────────────
+def closing_path(week):
+    """Wednesday's 會後收掉 candidates, written by sections.py render (the same path)."""
+    return os.path.join(L.state_dir(), "%s.closing.json" % week)
+
+
+def m_items(d, open_path):
+    """Keep the meeting section's open bullets and Wednesday's candidates in the run folder, and list both."""
+    run = L.load_run(d)
+    try:
+        opened = json.load(open(open_path, encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise L.Refuse(3, "cannot read %s (%s)" % (open_path, e))
+    if not isinstance(opened, dict) or not isinstance(opened.get("items"), list):
+        raise L.Refuse(3, "%s is not open_items.py's output" % open_path)
+    if opened.get("section") != run["heading"]:
+        raise L.Refuse(3, "%s lists %r, not the meeting's section %r" % (open_path, opened.get("section"), run["heading"]))
+    cands, why = [], None
+    p = closing_path(run["week"])
+    if os.path.exists(p):
+        try:
+            got = json.load(open(p, encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise L.Refuse(3, "cannot read %s (%s): re-run sections' confirm, or remove it to ask no "
+                              "candidates this week" % (p, e))
+        if not isinstance(got, dict) or not isinstance(got.get("candidates", []), list):
+            raise L.Refuse(3, "%s is not a closing list" % p)
+        if got.get("section") == run["heading"]:
+            cands = got.get("candidates", [])
+        else:
+            why = "%s is for %r, not %r" % (p, got.get("section"), run["heading"])
+    else:
+        why = "no 會後收掉 list this week (sections did not run, or listed none)"
+    json.dump(opened, open(os.path.join(d, "open.json"), "w", encoding="utf-8"), ensure_ascii=False)
+    json.dump(cands, open(os.path.join(d, "candidates.json"), "w", encoding="utf-8"), ensure_ascii=False)
+    here = {it["id"] for it in opened["items"]}
+    return {"section": run["heading"],
+            "open": [{"id": it["id"], "person": it.get("person"), "label": it["label"], "since": it.get("since"),
+                      "open_sub_items": it.get("open_sub_items") or []}
+                     for it in opened["items"]],
+            "candidates": [{"id": c["id"], "person": c.get("person"), "label": c["label"], "harvest": c.get("harvest"),
+                            "still_open": c["id"] in here} for c in cands],
+            "candidates_note": why,
+            "rule": "closed: a bullet the meeting said is done or dropped, with the words. kept: a candidate someone said "
+                    "is not done. Every other candidate still open closes. Name bullets only by these ids."}
+
+
+def _ns(s):
+    return re.sub(r"\s+", "", s or "")
+
+
+def closures_of(data, run, opened, cands):
+    """(closures, kept, left) from minutes.json's closed and kept: what tidy removes, and why."""
+    closed_in, kept_in = entries(data, "closed"), entries(data, "kept")
+    if opened is None:
+        if closed_in or kept_in:
+            raise L.Refuse(3, "closed and kept name bullets of the Doc: run `items` first")
+        return [], [], []
+    if closed_in and data.get("source") != "fireflies":
+        raise L.Refuse(3, "closed: only the meeting's transcript can close a bullet; the Doc's own chips already do")
+    by_id = {it["id"]: it for it in opened["items"]}
+    cand = {c["id"]: c for c in cands}
+    out, said, kept = [], set(), set()
+    for i, x in enumerate(closed_in + kept_in):
+        if not isinstance(x, dict):
+            raise L.Refuse(3, "%s %d must be an object {bullet, quote}, not %r"
+                           % ("closed" if i < len(closed_in) else "kept", 1 + (i if i < len(closed_in) else i - len(closed_in)), x))
+    for i, x in enumerate(closed_in):
+        w = "closed %d" % (i + 1)
+        bid = str((x or {}).get("bullet") or "").strip()
+        if bid not in by_id:
+            raise L.Refuse(3, "%s: bullet %r is not an open bullet of %s (use the ids `items` listed)" % (w, bid, run["heading"]))
+        if bid in said:
+            raise L.Refuse(3, "%s: bullet %s is closed twice" % (w, bid))
+        how = str(x.get("how") or "done").strip()
+        if how not in ("done", "drop"):
+            raise L.Refuse(3, "%s: how must be done or drop, not %r" % (w, how))
+        said.add(bid)
+        out.append(dict(by_id[bid], how=how, why="meeting", quote=text_of(x, "quote", w)))
+    for i, x in enumerate(kept_in):
+        w = "kept %d" % (i + 1)
+        bid = str((x or {}).get("bullet") or "").strip()
+        if bid not in cand:
+            raise L.Refuse(3, "%s: %r is not one of Wednesday's 會後收掉 candidates" % (w, bid))
+        if bid in said:
+            raise L.Refuse(3, "%s: bullet %s is both closed and kept" % (w, bid))
+        text_of(x, "quote", w)
+        kept.add(bid)
+    left = []
+    for c in cands:
+        if c["id"] in said or c["id"] in kept:
+            continue
+        if c["id"] not in by_id:
+            left.append({"id": c["id"], "label": c["label"], "why": "edited or closed since Wednesday"})
+        elif data.get("source") != "fireflies":
+            left.append({"id": c["id"], "label": c["label"], "why": "no transcript: asked again next Wednesday"})
+        else:
+            out.append(dict(by_id[c["id"]], how="done", why="harvest", harvest=c.get("harvest") or ""))
+    # tidy removes a bullet only with every open sub-item under it closed too: a close the Doc cannot carry
+    # out is never recorded as one. Said in the meeting, it is refused; a silent candidate waits.
+    listed = {(_ns(it["heading"]), _ns(it["text"])) for it in opened["items"]}
+    while True:
+        shut = {(_ns(c["heading"]), _ns(c["text"])) for c in out}
+        bad = next((c for c in out if any((_ns(c["heading"]), _ns(k)) not in shut
+                                          for k in c.get("open_sub_items") or [])), None)
+        if bad is None:
+            break
+        loose = next(k for k in bad["open_sub_items"] if (_ns(bad["heading"]), _ns(k)) not in shut)
+        if bad["why"] == "meeting" and (_ns(bad["heading"]), _ns(loose)) in listed:
+            raise L.Refuse(3, "closed: bullet %s (%s) has an open sub-item %r: close that too, or leave the "
+                              "bullet open" % (bad["id"], bad["label"], loose))
+        out.remove(bad)
+        left.append({"id": bad["id"], "label": bad["label"],
+                     "why": ("an open sub-item: %s" % loose) if bad["why"] == "harvest" or
+                            (_ns(bad["heading"]), _ns(loose)) in listed else
+                            "said closed, but its sub-item %s has no id (written twice, or a Metrics row): set a "
+                            "chip on it in the Doc" % loose})
+    return out, sorted(kept), left
+
+
+def closure_line(c):
+    who = " — %s" % c["person"] if c.get("person") else ""
+    if c["why"] == "harvest":
+        return "%s%s · 收成已完成（%s），會上無異議" % (c["label"], who, c.get("harvest", "")[:40])
+    return "%s%s · 會上說%s" % (c["label"], who, "已完成" if c["how"] == "done" else "放棄")
+
+
+def check(data, run, items, now, bullets=None, cands=()):
     if not isinstance(data, dict):
         raise L.Refuse(3, "minutes.json must be an object")
     src = data.get("source")
@@ -272,7 +414,7 @@ def check(data, run, items, now):
     roster, thu, week = run["roster"], date.fromisoformat(run["meeting"]), run["week"]
     source = "Fireflies %s" % run["transcript"] if src == "fireflies" else "Doc %s" % run["heading"]
     rows, prog, warnings = [], [], []
-    doc = {"決議": [], "待辦": [], "卡關": [], "待討論": [], "放棄": []}
+    doc = {"決議": [], "待辦": [], "卡關": [], "待討論": [], "放棄": [], "收掉": []}
     fill = {n: {"下一步": [], "待討論": []} for n in roster if n != "All"}
     cite = "〔%s 會議〕" % md(thu)
     opened, risks, unrouted = [], [], []
@@ -339,6 +481,9 @@ def check(data, run, items, now):
             raise L.Refuse(3, "%s: state %r is not a 狀態 (%s)" % (w, state, " / ".join(VOCAB)))
         prog.append([week, run["meeting"], "進度", t, "", "", it, source, state])
 
+    closures, kept, left = closures_of(data, run, bullets, list(cands or ()))
+    doc["收掉"] = [closure_line(c) for c in closures]
+
     if len(rows) > BLOCK_ROWS:
         raise L.Refuse(3, "%d decisions, actions, blockers and topics do not fit the %d-row block; merge the smallest"
                        % (len(rows), BLOCK_ROWS))
@@ -355,14 +500,19 @@ def check(data, run, items, now):
     block = {"heading": run["heading"], "stamp_line": stamp_line, "body": body, "text": stamp_line + "\n" + body}
     decided = len(doc["決議"]) + len(doc["待辦"]) + len(doc["放棄"])
     return {"rows": rows, "block": block, "fill": {n: v for n, v in fill.items() if v["下一步"] or v["待討論"]},
+            "closures": {"week": week, "section": run["heading"], "items": closures},
             "summary": {"source": src, "transcript": run.get("transcript"), "rows": len(rows),
                         "decisions": len(doc["決議"]), "actions": len(doc["待辦"]), "open_actions": opened,
                         "blockers": len(doc["卡關"]), "risks": risks, "topics": len(doc["待討論"]),
                         "dropped": len(doc["放棄"]), "progress": min(len(prog), room), "unrouted": unrouted,
+                        "closed": {"meeting": sum(1 for c in closures if c["why"] == "meeting"),
+                                   "harvest": sum(1 for c in closures if c["why"] == "harvest"),
+                                   "kept": kept, "left": left, "open_read": bullets is not None},
                         "warnings": warnings,
                         "doc_key": {"starts": "〔自動彙整 %s · " % wb_label(week), "ends": "〕" + TITLE},
                         "delivered": ("no-decisions;" if not decided else "%d-decided;" % decided)
-                                     + ("transcript-found" if src == "fireflies" else "doc-fallback")}}
+                                     + ("transcript-found" if src == "fireflies" else "doc-fallback")
+                                     + (";%d-closed" % len(closures) if closures else "")}}
 
 
 def m_check(d, input_path, now=None):
@@ -373,13 +523,17 @@ def m_check(d, input_path, now=None):
         data = json.load(open(input_path, encoding="utf-8"))
     except (OSError, ValueError) as e:
         raise L.Refuse(3, "cannot read %s (%s)" % (input_path, e))
-    res = check(data, run, tracker_index(run), L.parse_now(now))
-    for name, obj in (("rows.json", res["rows"]), ("block.json", {"blocks": [res["block"]]}), ("fill.json", res["fill"])):
+    op, cp = os.path.join(d, "open.json"), os.path.join(d, "candidates.json")
+    opened = json.load(open(op, encoding="utf-8")) if os.path.exists(op) else None
+    cands = json.load(open(cp, encoding="utf-8")) if os.path.exists(cp) else []
+    res = check(data, run, tracker_index(run), L.parse_now(now), opened, cands)
+    for name, obj in (("rows.json", res["rows"]), ("block.json", {"blocks": [res["block"]]}), ("fill.json", res["fill"]),
+                      ("closures.json", res["closures"])):
         with open(os.path.join(d, name), "w", encoding="utf-8") as f:
             json.dump(obj, f, ensure_ascii=False, indent=1)
     return dict(res["summary"], dir=d, block=res["block"]["text"],
                 files={"rows": os.path.join(d, "rows.json"), "block": os.path.join(d, "block.json"),
-                       "fill": os.path.join(d, "fill.json")})
+                       "fill": os.path.join(d, "fill.json"), "closures": os.path.join(d, "closures.json")})
 
 
 def main(argv=None):
@@ -393,6 +547,9 @@ def main(argv=None):
     s.add_argument("--now")
     f = sub.add_parser("find")
     f.add_argument("--dir", required=True)
+    it = sub.add_parser("items")
+    it.add_argument("--dir", required=True)
+    it.add_argument("--open", required=True, help="open_items.py's output for the meeting's section")
     c = sub.add_parser("check")
     c.add_argument("--dir", required=True)
     c.add_argument("--input", required=True)
@@ -409,6 +566,8 @@ def main(argv=None):
             res = m_find(a.dir)
             L.emit(res)
             return 0 if res["found"] else 4
+        elif a.cmd == "items":
+            L.emit(m_items(a.dir, a.open))
         elif a.cmd == "check":
             L.emit(m_check(a.dir, a.input, a.now))
         else:
@@ -609,8 +768,103 @@ def selftest():
            res["rows"][0])
         json.dump({"source": "doc", "topics": [{"text": "x", "owner": "Ben Wu"}]}, open(os.path.join(d, "in.json"), "w"))
         out = m_check(d, os.path.join(d, "in.json"), "2026-10-23T08:30:00+08:00")
-        ok("check writes its three files", all(os.path.exists(p) for p in out["files"].values()))
+        ok("check writes its four files", all(os.path.exists(p) for p in out["files"].values()) and len(out["files"]) == 4)
         ok("block.json is render_block's shape", json.load(open(out["files"]["block"]))["blocks"][0]["heading"] == "Oct 22, 2026")
+        ok("without items no bullet closes", json.load(open(out["files"]["closures"]))["items"] == []
+           and out["closed"]["open_read"] is False, out["closed"])
+
+        # ── SKB-151: the meeting closes Doc bullets ──
+        old_state = os.environ.get("ZYNKR_OPS_WEEKLY_STATE")
+        os.environ["ZYNKR_OPS_WEEKLY_STATE"] = os.path.join(tmp, "state")
+        os.makedirs(os.path.join(tmp, "state"), exist_ok=True)
+        listing(("A", "Team Weekly Meeting", "2026-10-22T13:00:00.000Z", 33.4))
+        m_find(d)
+        run = L.load_run(d)
+
+        def bullet(i, label):
+            return {"id": "b%d" % i, "heading": "#Sales Ann Lee", "text": "%s〔WB 10/5 起〕" % label, "label": label,
+                    "person": "Ann Lee"}
+        opened = {"section": "Oct 22, 2026", "items": [bullet(1, "甲件事"), bullet(2, "乙件事"), bullet(3, "丙件事"),
+                                                       bullet(4, "丁件事")]}
+        cands = [dict(bullet(2, "乙件事"), harvest="乙 已上線"), dict(bullet(3, "丙件事"), harvest="丙 shipped"),
+                 dict(bullet(9, "舊的寫法"), harvest="x")]
+        json.dump({"week": "2026-W43", "section": "Oct 22, 2026", "candidates": cands},
+                  open(closing_path("2026-W43"), "w"))
+        op = os.path.join(tmp, "open.json")
+        json.dump(opened, open(op, "w"))
+        r = m_items(d, op)
+        ok("items: the open bullets and the candidates, each candidate said open or not",
+           len(r["open"]) == 4 and [c["still_open"] for c in r["candidates"]] == [True, True, False], r)
+        json.dump(dict(opened, section="Oct 15, 2026"), open(op, "w"))
+        refuses("items: another week's section", m_items, d, op)
+
+        said = {"source": "fireflies", "closed": [{"bullet": "b1", "how": "drop", "quote": "甲不做了"}],
+                "kept": [{"bullet": "b3", "quote": "丙還沒，下週"}]}
+        res = check(said, run, items, now, opened, cands)
+        got = [(c["id"], c["why"], c["how"]) for c in res["closures"]["items"]]
+        ok("closed by the meeting, and the unopposed candidate; the objected one and the bullet nobody named stay",
+           got == [("b1", "meeting", "drop"), ("b2", "harvest", "done")], got)
+        ok("a candidate edited since Wednesday is reported, not closed",
+           [x["id"] for x in res["summary"]["closed"]["left"]] == ["b9"], res["summary"]["closed"])
+        ok("the 會議紀錄 block says what closed and why",
+           "收掉\n\t甲件事 — Ann Lee · 會上說放棄\n\t乙件事 — Ann Lee · 收成已完成（乙 已上線），會上無異議" in res["block"]["body"],
+           res["block"]["body"])
+        ok("closures name the meeting's section, with heading and text for tidy",
+           res["closures"]["section"] == "Oct 22, 2026" and res["closures"]["items"][0]["heading"] == "#Sales Ann Lee")
+        ok("the receipt counts them", res["summary"]["delivered"].endswith(";2-closed"), res["summary"]["delivered"])
+        ok("no closure row reaches the Ledger", all(r[2] != "收掉" for r in res["rows"]))
+        refuses("closed: an id items did not list", check, dict(said, closed=[{"bullet": "b7", "quote": "x"}]), run, items, now, opened, cands)
+        refuses("closed: no words", check, dict(said, closed=[{"bullet": "b1", "quote": " "}]), run, items, now, opened, cands)
+        refuses("closed: how is done or drop", check, dict(said, closed=[{"bullet": "b1", "how": "maybe", "quote": "x"}]),
+                run, items, now, opened, cands)
+        refuses("closed twice", check, dict(said, closed=[{"bullet": "b1", "quote": "x"}, {"bullet": "b1", "quote": "y"}]),
+                run, items, now, opened, cands)
+        refuses("kept: not a candidate", check, dict(said, kept=[{"bullet": "b4", "quote": "x"}]), run, items, now, opened, cands)
+        refuses("both closed and kept", check, dict(said, kept=[{"bullet": "b1", "quote": "x"}],
+                                                     closed=[{"bullet": "b1", "quote": "y"}]), run, items, now, opened,
+                [dict(bullet(1, "甲件事"))])
+        refuses("closed without the open bullets read", check, said, run, items, now)
+        doc_run = dict(run, source="doc")
+        refuses("closed from the Doc", check, dict(said, source="doc"), doc_run, items, now, opened, cands)
+        res = check({"source": "doc"}, doc_run, items, now, opened, cands)
+        ok("no transcript: no candidate closes, each is asked again",
+           res["closures"]["items"] == [] and len(res["summary"]["closed"]["left"]) == 3, res["summary"]["closed"])
+        kid = dict(bullet(5, "子項"), text="子項")
+        parent = dict(bullet(2, "乙件事"), open_sub_items=["子項"])
+        nested = dict(opened, items=[bullet(1, "甲件事"), parent, kid])
+        res = check({"source": "fireflies"}, run, items, now, nested, [dict(parent, harvest="乙 已上線")])
+        ok("a candidate with an open sub-item waits: tidy could not remove it",
+           res["closures"]["items"] == [] and res["summary"]["closed"]["left"][0]["why"] == "an open sub-item: 子項",
+           res["summary"]["closed"])
+        refuses("closed: a bullet with an open sub-item", check,
+                {"source": "fireflies", "closed": [{"bullet": "b2", "quote": "乙做完了"}]}, run, items, now, nested, [])
+        res = check({"source": "fireflies", "closed": [{"bullet": "b2", "quote": "乙做完了"},
+                                                       {"bullet": "b5", "quote": "子項也好了"}]}, run, items, now, nested, [])
+        ok("... closed with its sub-item, both close", [c["id"] for c in res["closures"]["items"]] == ["b2", "b5"],
+           res["closures"])
+        twin = dict(opened, items=[bullet(1, "甲件事"), parent])        # 子項 not listed: written twice
+        res = check({"source": "fireflies", "closed": [{"bullet": "b2", "quote": "乙做完了"}]}, run, items, now, twin, [])
+        ok("said closed, its sub-item has no id: held back with the reason, not refused",
+           res["closures"]["items"] == [] and "no id" in res["summary"]["closed"]["left"][0]["why"],
+           res["summary"]["closed"])
+        refuses("closed: an entry that is not an object", check, {"source": "fireflies", "closed": ["b1"]},
+                run, items, now, opened, cands)
+        refuses("kept: an entry that is not an object", check, {"source": "fireflies", "kept": ["b2"]},
+                run, items, now, opened, cands)
+        open(closing_path("2026-W43"), "w").write('{"section": "Oct 22')
+        json.dump(opened, open(op, "w"))
+        refuses("items: a half-written closing list", m_items, d, op)
+        json.dump({"week": "2026-W43", "section": "Oct 22, 2026", "candidates": cands},
+                  open(closing_path("2026-W43"), "w"))
+        m_items(d, op)
+        json.dump(said, open(os.path.join(d, "in.json"), "w"))
+        out = m_check(d, os.path.join(d, "in.json"), "2026-10-23T08:30:00+08:00")
+        ok("check reads what items kept and writes closures.json",
+           [c["id"] for c in json.load(open(out["files"]["closures"]))["items"]] == ["b1", "b2"], out["closed"])
+        if old_state is None:
+            os.environ.pop("ZYNKR_OPS_WEEKLY_STATE", None)
+        else:
+            os.environ["ZYNKR_OPS_WEEKLY_STATE"] = old_state
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if fails:
@@ -682,6 +936,26 @@ MUTATIONS = [
     ("the heading zero-padded", [("    return \"%s %d, %d\" % (d.strftime(\"%b\"), d.day, d.year)", "    return d.strftime(\"%b %d, %Y\")")]),
     ("an undated entry is today's", [("    if not s:\n        return None", "    if False:\n        return None")]),
     ("the listing read unchecked", [("    L.check_saved(p)\n    try:\n        listing = json.load", "    try:\n        listing = json.load")]),
+    # SKB-151
+    ("an objection does not keep a candidate", [("        if c[\"id\"] in said or c[\"id\"] in kept:", "        if c[\"id\"] in said:")]),
+    ("an edited candidate closes anyway", [("        if c[\"id\"] not in by_id:\n            left.append",
+                                             "        if False:\n            left.append")]),
+    ("candidates close without a transcript", [("        elif data.get(\"source\") != \"fireflies\":\n            left.append",
+                                                 "        elif False:\n            left.append")]),
+    ("the Doc closes bullets", [("    if closed_in and data.get(\"source\") != \"fireflies\":", "    if False:")]),
+    ("closed takes any id", [("        if bid not in by_id:\n            raise L.Refuse(3, \"%s: bullet %r is not an open bullet",
+                               "        if False:\n            raise L.Refuse(3, \"%s: bullet %r is not an open bullet")]),
+    ("kept takes any id", [("        if bid not in cand:", "        if False:")]),
+    ("closures left out of the Doc block", [("    doc[\"收掉\"] = [closure_line(c) for c in closures]", "    pass")]),
+    ("another week's open bullets accepted", [("    if opened.get(\"section\") != run[\"heading\"]:", "    if False:")]),
+    ("a non-object entry reaches .get", [("        if not isinstance(x, dict):\n            raise L.Refuse(3, \"%s %d must be",
+                                          "        if False:\n            raise L.Refuse(3, \"%s %d must be")]),
+    ("a said close with an unlisted sub-item is refused", [("        if bad[\"why\"] == \"meeting\" and (_ns(bad[\"heading\"]), _ns(loose)) in listed:",
+                                                             "        if bad[\"why\"] == \"meeting\":")]),
+    ("an open sub-item does not hold its parent", [("        if bad is None:\n", "        if True:\n")]),
+    ("a half-written closing list crashes", [("        except (OSError, ValueError) as e:\n            raise L.Refuse(3, \"cannot read %s (%s): re-run",
+                                               "        except KeyError as e:\n            raise L.Refuse(3, \"cannot read %s (%s): re-run")]),
+    ("closures.json not written", [("                      (\"closures.json\", res[\"closures\"])):", "):")]),
 ]
 
 if __name__ == "__main__":

@@ -254,8 +254,8 @@ Retrieval is **search-first**, cheap, and repeatable — run it per question:
 1. **Once per run**: read the two ALWAYS-READ style cards by key —
    `mcp__zynkr-atlas__get_knowledge(key: "tone-voice-rules")` and
    `mcp__zynkr-atlas__get_knowledge(key: "term-mapping-table", max_chars: 60000)` (the table is
-   long). Every draft follows their voice rules and the 用語對照表 term mappings (they kill
-   晶晶體 Chinglish).
+   long). Both point to 《[2.0]》, read in *House style* below: every draft follows Part 2 §2.6
+   客服回信 and every Part 1 §7 固定用語 (they kill 晶晶體 Chinglish).
 2. **Search**: `mcp__zynkr-atlas__search_knowledge` with **one or two words** from the question —
    nouns and product-specific words. Every word of a query must appear in a card, so keep zh and
    EN in separate queries (`報價`, then `price`) and skip filler ("how", "請問", "可以"). Broaden
@@ -280,8 +280,8 @@ Ask: *Does the KB answer each question the inquirer asked?*
 
 > **A company's quote is not this skill's.** When a company asks what in-house training or
 > consulting costs, draft nothing and write no figure, whatever the KB or this conversation says:
-> those prices come from `/sales-proposal-writer` after a call, as fixed packages with no hourly
-> rate and no hour count. List the thread under ➡️ in the report, so the lead is logged and offered
+> those prices come from `/sales-proposal-writer` after a call, as fixed packages, never
+> per hour and never with an hour count. List the thread under ➡️ in the report, so the lead is logged and offered
 > the call. A holding draft here would stop /sales-inbound drafting its first reply.
 >
 > **Other prices supplied in conversation:** if the KB has no price for a public course or a plan
@@ -298,9 +298,9 @@ Ask: *Does the KB answer each question the inquirer asked?*
 4. **Offer follow-up** — short closing line.
 5. **Sign-off** — `Peter` (Peter signs in English even on zh-TW replies).
 
-Tone: friendly + professional, per the `tone-voice-rules` card; apply every `term-mapping-table`
-row (e.g. never "discovery call" in zh-TW — 「線上會議」). Contractions OK in EN. zh-TW: 您 for
-first-time inquirers, 你 only if already on first-name terms. Avoid corporate jargon ("we strive
+Tone: friendly + professional, per 《[2.0]》 Part 2 §2.6; apply every Part 1 §7 固定用語
+(e.g. never "discovery call" in zh-TW — 「線上會議」). Contractions OK in EN. zh-TW: 「你」, first
+message included (業務第二波 Q13). Avoid corporate jargon ("we strive
 to", "as per our policy").
 
 ### Low confidence (KB missing / only partial / walk failed) → holding reply + notify Peter
@@ -434,7 +434,7 @@ curating the KB is /zynkr-kms's job.
   automatically low-confidence → holding reply.
 - **Prices:** even with an authoritative price, don't invent the *scope* around it —
   travel fees, materials, multi-day discounts, validity windows. State only the price you were
-  given; flag the rest in `[[NEEDS PETER]]`. Never write a price as an hourly rate or as hours × a rate.
+  given; flag the rest in `[[NEEDS PETER]]`. Never state a price per hour or next to an hour count.
   How long a course runs is not a price: a durations card may answer that.
 - **Cite, don't restate-and-drift:** the canonical numbers live in fact cards. Resolve a cited
   fact into the reply, but if a qa card's body and its cited fact ever disagree, **trust the fact

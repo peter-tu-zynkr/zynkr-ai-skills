@@ -7,8 +7,8 @@ description: >-
   it alive through the revision rounds. It does four things in one pass: ranks the
   client's asks by an openly-stated criterion and presents them as 第一順位／額外項目
   (never colour codes, never our internal IDs); splits them into a recurring lane
-  and a one-off build lane; prices every line from the two Atlas price cards, anchored at
-  the hourly rate Atlas holds as a company fact, shown to the client as a fixed amount per deliverable, never as hours; and writes an honest-boundaries section saying
+  and a one-off build lane; prices every line from the two Atlas price cards and the team's quote rules in
+  Atlas, shown to the client as a fixed amount per deliverable, never as hours; and writes an honest-boundaries section saying
   what we will not do and why. On later rounds it reads the review comments on the
   document, applies them, resolves them, verifies the published body by checksum,
   and syncs the CRM note and the kickoff doc in the same pass, telling the outbound owner
@@ -65,12 +65,14 @@ new one. The revision loop below is the half that earns its keep.
 - **Pricing source of truth** — Atlas: `zynkr-service-offerings` (the product lines, plans and list prices) and
   `b2b-enterprise-pricing` (the enterprise packages and quoting rules), read at run time with
   `mcp__zynkr-atlas__get_knowledge`. The Drive docs 《[2.1] Product line》 and 《[2.1] Zynkr B2B Pricing Sheet》 are their
-  mirrors, so never price from them. A plan or package those cards list takes its listed price. Every other number
-  traces to the hourly-rate anchor, **`<your-pricing-hourly-rate>`**. Never invent a tier; if the shape does not fit, price it
-  as hours × anchor, show the client only the amount, and keep the hours in the CRM note.
+  mirrors, so never price from them. A plan or package those cards list takes its listed price. How every other line is
+  priced is team-only: it is §1 of `sales.quote-proposal-policy` (below), read before you price, and it prices
+  from **`<your-pricing-hourly-rate>`**. Never invent a tier; show the client only the amount, and keep the
+  hours and the working in the CRM note.
 
-  > **`<your-pricing-hourly-rate>` is a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, stop and ask the user to make the fact readable: switch the `zynkr-atlas` server back on or renew its token, or ask an owner or admin of the Atlas workspace to publish the fact with its `value:` line. The figure stays out of the chat: never ask anyone to type it there, and never write it in your own replies. Never price a line with the blank still in it.
-- **Quote rules** — `sales.quote-proposal-policy`, read from Atlas before you price: who may decide a discount (§2),
+  > **`<your-pricing-hourly-rate>` is the anchor that rule prices from, a company fact — read it from Atlas** (`get_knowledge`, key `company.pricing-hourly-rate`, on the `zynkr-atlas` MCP server; the value is the `value:` line). If Atlas cannot be reached, the key is missing, or there is no `value:` line, stop and ask the user to make the fact readable: switch the `zynkr-atlas` server back on or renew its token, or ask an owner or admin of the Atlas workspace to publish the fact with its `value:` line. The figure stays out of the chat: never ask anyone to type it there, and never write it in your own replies. Never price a line with the blank still in it.
+- **Quote rules** — `sales.quote-proposal-policy`, read from Atlas before you price: how a line is priced (§1),
+  who may decide a discount (§2),
   when to talk before quoting (§4) and what every proposal states (§5). The figures it holds (how long a quote lasts,
   the default payment split) are read there each run and never written into this file.
 - **Delivery surface** — the 交付文件 module on the Zynkr platform. Published with
@@ -166,7 +168,7 @@ The judgement, in one line the client can check: **買了之後你會的，走�
   because `mcp__zynkr__update_deal(id=…, notes=<the whole field>)` replaces the whole field. Preview, then
   `confirm:true`. Tell the deal owner to take the scope and amount to one of the people §2 names. All of this is
   internal policy, never quoted to the client. If either price card cannot
-  be read but the rate was, price what is custom at the anchor with no reduction, leave a listed plan or package as an
+  be read but the rate was, price what is custom by §1 of the policy with no reduction, leave a listed plan or package as an
   unpriced line, and flag it for Peter. If the
   rate itself cannot be read, nothing can be priced: stop, as its lookup line says. Never apply a
   rule from memory or from an older copy of this file.

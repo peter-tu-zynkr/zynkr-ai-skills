@@ -152,6 +152,13 @@ def normalise(text):
     return re.sub(r"[\s\d%（）()【】\[\]·・、，,.。\-–—_:：&＆]+", "", text).lower()
 
 
+def carry_key(item):
+    """SKB-151: one key for a carried item and a closure's label or text, whatever chips either kept:
+    `· P1 Zynkr atlas〔WB 11/2 起〕` and the closure's `Zynkr atlas` are one item."""
+    item = re.sub(r"〔\s*(?:WB\s*\d{1,2}/\d{1,2}|\d{4}-W\d{1,2})\s*起\s*〕", " ", item)
+    return normalise(PRIORITY_RE.sub("", strip_status(item.strip())))
+
+
 def close_key(item):
     """Key for 'has this been reported done' — status and done-words dropped on both sides."""
     return normalise(DONE_WORDS_RE.sub("", strip_status(item)))
@@ -290,7 +297,7 @@ def closed_in_export(export_lines, label):
     return keys
 
 
-def analyse(lines, target=None, today=None, export_lines=None):
+def analyse(lines, target=None, today=None, export_lines=None, closures=None):
     marks = sections(lines)
     if not marks:
         raise SystemExit("tidy: no dated week section found — is this the right tab?")
@@ -304,6 +311,18 @@ def analyse(lines, target=None, today=None, export_lines=None):
     nxt = next((i for i, _ in marks if i > start), len(lines))
     sec = lines[start:nxt]
     chip_closed = closed_in_export(export_lines, label)
+    # SKB-151: what the meeting closed in the previous week's section is not carried again from an
+    # archived block of the SAME heading. A file for another week is left out whole, as step 7 does.
+    prev = next((lab for i, lab in marks if i > start), None)
+    names = set(MAILTO_NAME_RE.findall("\n".join(lines)))
+    closures_note, by_heading = None, []
+    if closures and closures.get("items"):
+        if closures.get("section") != prev:
+            closures_note = (f"closures name bullets of {closures.get('section')!r}, not of {prev!r}"
+                             " — left out whole")
+        else:
+            by_heading = [(line_keys(x["heading"], names), carry_key(v))
+                          for x in closures["items"] for v in (x.get("label"), x["text"]) if v]
 
     out = []
     for group in find_groups(sec):
@@ -328,6 +347,9 @@ def analyse(lines, target=None, today=None, export_lines=None):
         blocks.sort(key=lambda b: b["key"], reverse=True)
         keep, archive = blocks[0], blocks[1:]
 
+        head = next((k for k in range(group[0], -1, -1) if HEADING_RE.match(sec[k].strip())), None)
+        here = heading_keys(sec[head], names) if head is not None else set()
+        evidence_closed = {key for keys, key in by_heading if keys & here}
         closed, live = set(), set()
         for b in blocks:
             for s in b["rows"]:
@@ -391,7 +413,8 @@ def analyse(lines, target=None, today=None, export_lines=None):
                     # there has not disappeared, so repeating it in the carried list is noise —
                     # the list exists to rescue what archiving would otherwise erase.
                     if (not key or len(key) < MIN_ITEM_LEN or close_key(text) in closed
-                            or key in live or text in NOISE or NOISE_RE.match(text)):
+                            or key in live or carry_key(text) in evidence_closed
+                            or text in NOISE or NOISE_RE.match(text)):
                         continue
                     wk = week_key(since, "", today)
                     if key not in found:
@@ -416,7 +439,7 @@ def analyse(lines, target=None, today=None, export_lines=None):
             "carry_header_needed": not has_header and bool(
                 carried or CARRIED_BULLET_RE.match(FOOTNOTE_RE.sub("", nxt_line))),
         })
-    return {"section": label, "groups": out,
+    return {"section": label, "groups": out, "closures_ignored": closures_note,
             "totals": {
                 "blocks": sum(1 + len(g["archive"]) for g in out),
                 "keep": len(out),
@@ -554,12 +577,33 @@ def heading_keys(markdown, names):
     return keys
 
 
-def closed_bullets(lines, names, headings):
-    """Which Done/Drop bullets in the newest section may be removed (rules 1–3), and which may not."""
+EVIDENCE_STATUS = {("meeting", "done"): "會上說完成", ("meeting", "drop"): "會上說放棄",
+                   ("harvest", "done"): "收成完成，會上無異議"}
+
+
+def closure_map(closures):
+    """{(heading key, text key): item} of a closures.json (minutes.py check, SKB-151)."""
+    out = {}
+    for it in (closures or {}).get("items", []):
+        out[(nonspace(it["heading"]), nonspace(it["text"]))] = it
+    return out
+
+
+def closed_bullets(lines, names, headings, closures=None):
+    """Which Done/Drop bullets in the newest section may be removed (rules 1–3), and which may not.
+
+    `closures` (SKB-151) closes a bullet no chip closed: one the meeting said was done or dropped, or
+    one Wednesday's harvest said was done and the meeting let stand. It names bullets of the PREVIOUS
+    section (the meeting's), by heading and text as the export prints them, so it only ever reaches a
+    verbatim copy — and every rule below applies to it exactly as to a chip. A closures file for any
+    other section is refused whole, and the chips are read as before."""
     names, headings = set(names), set(headings)
     marks = export_sections(lines)
     res = {"section": marks[0][1] if marks else None, "previous": None, "refused": None,
            "closed": [], "skipped": [], "section_lines": [], "done_blocks": []}
+    cmap = closure_map(closures)
+    if closures is not None:
+        res["closures"] = {"given": len(cmap), "matched": [], "unmatched": [], "refused": None}
     if len(marks) < 2:
         res["refused"] = "fewer than two dated sections — there is nothing to prove a copy against"
         return res
@@ -580,6 +624,11 @@ def closed_bullets(lines, names, headings):
     sec = [clean(l) for l in lines[s0 + 1:s1]]
     prev = [clean(l) for l in lines[s1 + 1:s2]]
     res["section_lines"] = sec
+    if cmap and closures.get("section") != prev_label:
+        res["closures"]["refused"] = (f"closures name bullets of {closures.get('section')!r}, not of"
+                                      f" {prev_label!r} — left out whole, the chips are read as before")
+        cmap = {}
+    matched = set()
 
     def heading(line):
         return line.lstrip("﻿").startswith("#") or bool(line_keys(line, names) & headings)
@@ -624,10 +673,17 @@ def closed_bullets(lines, names, headings):
             i = j
             continue
         m = BULLET_RE.match(sec[i]) or DOT_ITEM_RE.match(sec[i])
-        tail = None
+        tail = evidence = None
         if m:
             tail = status_of(m.group(2)) if m.re is BULLET_RE else CLOSED_TAIL_RE.search(m.group(2))
-        if not tail:
+            if cmap and not heading(sec[i]):
+                bare = m.group(2)[:tail.start()] if tail and tail.re is CLOSED_TAIL_RE else m.group(2)
+                said = cmap.get((nonspace(owner(sec, i)), nonspace(bare)))
+                if tail and said:
+                    matched.add((nonspace(owner(sec, i)), nonspace(bare)))   # chipped too: one close
+                elif not tail:
+                    evidence = said
+        if not tail and not evidence:
             i += 1
             continue
         depth, j = len(m.group(1)), i + 1
@@ -635,14 +691,32 @@ def closed_bullets(lines, names, headings):
             while j < len(sec) and (c := BULLET_RE.match(sec[j])) and len(c.group(1)) > depth:
                 j += 1
         tree = sec[i:j]
-        entry = {"at": i, "line": m.group(2), "status": tail.group(1),
+        status = tail.group(1) if tail else EVIDENCE_STATUS.get((evidence.get("why"), evidence.get("how")),
+                                                                "收掉")
+        entry = {"at": i, "line": m.group(2), "status": status,
                  "owner": owner(sec, i), "lines": tree}
+        if evidence:
+            entry["evidence"] = {"id": evidence.get("id"), "why": evidence.get("why"), "how": evidence.get("how")}
+            matched.add((nonspace(entry["owner"]), nonspace(m.group(2))))
         if any(heading(l) for l in tree):
             res["skipped"].append({**entry, "reason": "a heading sits inside it — heading chips"
                                                       " route the week and cannot be recreated"})
             i = j
             continue
-        open_child = next((l.strip() for l in tree[1:] if OPEN_ANY_RE.search(l)), None)
+        if evidence:
+            # Evidence names one bullet. A sub-item under it is closed only by its own chip or its own
+            # evidence: the meeting saying 「X 做完了」 does not say each step under X is.
+            loose = next((l.strip() for l in tree[1:]
+                          if (c := BULLET_RE.match(l)) and not status_of(c.group(2))
+                          and (nonspace(entry["owner"]), nonspace(c.group(2))) not in cmap), None)
+            if loose:
+                res["skipped"].append({**entry, "reason": f"a sub-item no chip or evidence closes: {loose}"})
+                i += 1          # its own closed sub-items still get their turn
+                continue
+            for l in tree[1:]:
+                if (c := BULLET_RE.match(l)) and (nonspace(entry["owner"]), nonspace(c.group(2))) in cmap:
+                    matched.add((nonspace(entry["owner"]), nonspace(c.group(2))))
+        open_child = None if evidence else next((l.strip() for l in tree[1:] if OPEN_ANY_RE.search(l)), None)
         if open_child:
             res["skipped"].append({**entry, "reason": f"an item under it is still open: {open_child}"})
             i += 1          # its own closed sub-items still get their turn
@@ -673,6 +747,12 @@ def closed_bullets(lines, names, headings):
                 done += 1
         if done >= 2 and not opened:
             res["done_blocks"].append({"heading": sec[a].strip(), "done": done})
+    if cmap:
+        # Evidence for a bullet not in this section (edited after the meeting, or already gone) is
+        # reported, never guessed at: the edited bullet is a different item until a person says so.
+        res["closures"]["matched"] = sorted(cmap[k].get("id") or "" for k in matched)
+        res["closures"]["unmatched"] = [{"id": it.get("id"), "label": it.get("label") or it["text"]}
+                                        for k, it in cmap.items() if k not in matched]
     return res
 
 
@@ -1174,13 +1254,35 @@ def load_export(path):
     return raw.split("\n")
 
 
+def load_closures(path):
+    """closures.json from minutes.py check, or None. A file that does not parse stops the run: a
+    half-read list would close some of what the meeting said and silently keep the rest."""
+    if not path:
+        return None
+    try:
+        obj = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"tidy: cannot read closures {path} ({e})")
+    if not isinstance(obj, dict) or not isinstance(obj.get("items"), list) or \
+            any(not isinstance(x, dict) or not x.get("heading") or not x.get("text") for x in obj["items"]):
+        raise SystemExit(f"tidy: {path} is not a closures file (section, items[{{heading, text, …}}])")
+    return obj
+
+
 def report_closed(res):
     print(f"SECTION {res['section']}  (proved against {res['previous']})\n")
     if res.get("refused"):
         print(f"  REFUSED — {res['refused']}")
+    c = res.get("closures")
+    if c:
+        print(f"  closures: {c['given']} given, {len(c['matched'])} found here"
+              + (f" — REFUSED: {c['refused']}" if c["refused"] else ""))
+        for u in c["unmatched"]:
+            print(f"  not here {u['label'][:60]}  — edited or gone since the meeting; left as it is")
     for e in res["closed"]:
         subs = len(e["lines"]) - 1
         print(f"  DELETE [{e['start_index']},{e['end_index']})  {e['line'][:60]}"
+              + (f"  ({e['status']})" if e.get("evidence") else "")
               + (f"  +{subs} sub-items" if subs else ""))
     for e in res["skipped"]:
         print(f"  keep   {e['line'][:60]}  — {e['reason']}")
@@ -1212,6 +1314,9 @@ def main():
     ap.add_argument("--fill", help="fill.json from minutes.py check: the operations that write each person's"
                                    " 下一步 and 待討論 into their kept block (needs --input, --structure, --tab)")
     ap.add_argument("--fill-check", help="plan.json from --fill: after the write, verify it")
+    ap.add_argument("--closures", help="SKB-151: closures.json from minutes.py check — bullets the meeting"
+                                       " (or the harvest, unopposed) closed; with --closed they are removed"
+                                       " like chipped ones, and the carry leaves them out")
     args = ap.parse_args()
 
     if args.fill or args.fill_check:
@@ -1253,7 +1358,7 @@ def main():
             ap.error("--closed needs --structure and --markdown")
         md = read_tool_file(args.markdown)
         names = set(MAILTO_NAME_RE.findall(md))
-        res = closed_bullets(load_export(args.export), names, heading_keys(md, names))
+        res = closed_bullets(load_export(args.export), names, heading_keys(md, names), load_closures(args.closures))
         if args.section and res["section"] != args.section:
             raise SystemExit(f"tidy --closed: export's newest section is {res['section']!r},"
                              f" not {args.section!r} — refusing")
@@ -1270,7 +1375,8 @@ def main():
     raw = read_tool_file(args.input) if args.input else sys.stdin.read()
     # --export (the Drive plain-text export) lets the carry see Done/Drop chips the markdown drops.
     res = analyse(raw.split("\n"), args.section,
-                  export_lines=load_export(args.export) if args.export else None)
+                  export_lines=load_export(args.export) if args.export else None,
+                  closures=load_closures(args.closures))
     if args.report:
         report(res)
     else:

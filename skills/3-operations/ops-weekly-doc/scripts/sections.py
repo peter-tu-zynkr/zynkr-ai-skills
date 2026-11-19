@@ -7,7 +7,10 @@ just before) and Monday's recap facts (the tracker as of last week, the meeting'
     sections.py items --dir D --routing R                   -> the harvest items the blocks show, to say
                                                                again short in zh-TW, and where to save
                                                                them (SKB-127)
-    sections.py render --dir D --routing R --stamp "11-05 09:40" [--short short.json]
+    sections.py reconcile --dir D --routing R --open open.json
+                                                            -> SKB-151: each person's open Doc bullets
+                                                               beside their 完成 harvest lines, to match
+    sections.py render --dir D --routing R --stamp "11-05 09:40" [--short short.json] [--matches m.json]
                                                             -> blocks in render_block's shape, for
                                                                `render_block.py ops`
     sections.py --selftest | --mutate
@@ -26,7 +29,12 @@ line per item the person moved (`#6.10 <item>｜完成 2、進行中 1：…`, n
 person is neither owner nor helper), then each line the tracker holds no open item for (`不在 Tracker｜…`).
 待討論 then opens by asking about every item the week's work overtook (the tracker still reads 未開始 or
 暫停), and ends with at most two of the person's own 進行中 items that no line was tied to for three
-recorded weeks. render keeps the lines it wrote in `<week>.progress.json` for Monday's recap. A week with
+recorded weeks. render keeps the lines it wrote in `<week>.progress.json` for Monday's recap.
+SKB-151: after `reconcile`, 待討論 ends with one 「會後收掉」 line for each open bullet of the person's in the
+Doc that a 完成 line of their harvest finishes (the model's match, checked here; a tracker # both name is only a hint),
+at most CLOSE_MAX; render keeps them in its run folder, and `confirm`, after the blocks are read back from
+the Doc, keeps the ones the Doc shows as `<week>.closing.json`: Thursday's minutes closes each one the
+meeting lets stand, so a line the team never saw is never one. A week with
 no item list, or no tied line, is written by kind as above.
 Each harvest item is written as the model's own short zh-TW line from short.json (SKB-127): a harvest
 is English and runs to 300 characters, and cut at 80 it stopped mid-word in a zh-TW Doc. A line that is
@@ -82,6 +90,8 @@ UNTRACKED = "不在 Tracker"     # a line the tracker holds no open item for, in
 STALE = ("未開始", "暫停")       # a status the week's shipped or moving work has overtaken
 SILENT_WEEKS = 3               # an item nobody tied a line to for this many recorded weeks is asked about
 SILENT_MAX = 2                 # at most this many such questions per person
+CLOSE_MAX = 5                  # SKB-151: at most this many 會後收掉 lines per person a week; the rest wait
+TRACKED_RE = re.compile(r"#(\d{1,2}\.\d{2})(?!\d)")   # a tracker item a bullet names: `#6.10`
 PAREN_TAIL = re.compile(r"\s*[（(][^（()）]*[）)]\s*$")     # an item name's closing bracketed note
 
 
@@ -264,12 +274,13 @@ def kinds_label(rows):
     return "、".join("%s %d" % (KIND_ZH[k], n) for k, n in ((k, sum(1 for r in rows if r[5] == k)) for k in ("shipped", "moving")) if n)
 
 
-def parts_for(run, who, harvest, facts, filled, short=None, items=None, seen=None, note=None):
+def parts_for(run, who, harvest, facts, filled, short=None, items=None, seen=None, note=None, closing=None):
     """[(label, [items])] for one person, in the frozen label order; 進度 is always there. `short` maps a
     unit's id to its accepted zh-TW line; a unit without one keeps its harvest text, cut at CLIP. `items` is
     the week's tracker items when its lines were tied to them (SKB-128): 進度 is then written by item, and
     待討論 asks about a status the week's work has overtaken. `seen` is what `collect` remembers of the
-    weeks before. `note`, when given, is filled with what Monday's recap repeats of this block."""
+    weeks before. `note`, when given, is filled with what Monday's recap repeats of this block. `closing` is
+    the person's 會後收掉 lines (SKB-151), the last of 待討論."""
     short = short or {}
     rows = [(item_id(i, r), r) for i, r in enumerate(harvest) if r[3] == who]
 
@@ -341,6 +352,7 @@ def parts_for(run, who, harvest, facts, filled, short=None, items=None, seen=Non
     if items and seen and run.get("week"):
         out["待討論"] += ["#%s %s：三週沒有收成紀錄，還在進行嗎？" % (it["#"], item_name(it, 30))
                         for it in silent(run, who, items, seen, run["week"])]
+    out["待討論"] += closing or []
     if note is not None:
         note.update(totals=tot, lines=lines, waiting=waits, left=left,
                     moving=[n for n in moved if any(r[8] == n and r[5] == "moving" for _, r in rows)])
@@ -441,7 +453,116 @@ def load_short(path, wanted):
     return ok, report
 
 
-def s_render(d, routing_path, stamp, facts_path=None, short_path=None):
+# ── reconcile (SKB-151): the harvest's 完成 lines against the Doc's open bullets ────────────────────
+def meeting_heading(week):
+    """This week's Thursday as the Doc's section heading reads: `Nov 19, 2026` (scaffold.gs's format)."""
+    d = L.monday(week) + timedelta(days=3)
+    return "%s %d, %d" % (d.strftime("%b"), d.day, d.year)
+
+
+def closing_path(week):
+    """The week's 會後收掉 candidates, for Thursday's minutes (minutes.py reads the same path)."""
+    return os.path.join(L.state_dir(), "%s.closing.json" % week)
+
+
+def load_open(path, run):
+    try:
+        opened = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise L.Refuse(3, "cannot read %s (%s)" % (path, e))
+    if not isinstance(opened, dict) or not isinstance(opened.get("items"), list):
+        raise L.Refuse(3, "%s is not open_items.py's output" % path)
+    if opened.get("section") != meeting_heading(run["week"]):
+        raise L.Refuse(3, "%s lists %r, not this Thursday's section %r"
+                       % (path, opened.get("section"), meeting_heading(run["week"])))
+    return opened
+
+
+def bullets_of(run, opened, who):
+    """`who`'s open bullets: the person chip on the bullet, or on the heading it sits under."""
+    return [b for b in opened["items"] if b.get("email") and run["names"].get(b["email"]) == who
+            and not b.get("open_sub_items")]       # tidy removes a bullet only with its sub-items closed
+
+
+def shipped_of(harvest, who):
+    return [(item_id(i, r), r) for i, r in enumerate(harvest) if r[3] == who and r[5] == "shipped"]
+
+
+def sure_matches(run, opened, harvest):
+    """{bullet id: row id} where the bullet names a tracker item (`#6.10`) a 完成 line of its person moved.
+    A hint for the model, never a match by itself: a 完成 line tied to #6.10 can be one step of it."""
+    out = {}
+    for b in opened["items"]:
+        if b.get("open_sub_items"):
+            continue
+        who = run["names"].get(b.get("email") or "")
+        rows = shipped_of(harvest, who) if who else []
+        for n in TRACKED_RE.findall(b["text"]):
+            hit = next((rid for rid, r in rows if r[8] == n), None)
+            if hit:
+                out[b["id"]] = hit
+                break
+    return out
+
+
+def s_reconcile(d, routing_path, open_path):
+    """Each routed person's open bullets beside their 完成 lines, for the model to match; the bullets are
+    kept as D/open.json for render."""
+    run, harvested, harvest = read_harvest(d)
+    routing = json.load(open(routing_path, encoding="utf-8"))
+    opened = load_open(open_path, run)
+    json.dump(opened, open(os.path.join(d, "open.json"), "w", encoding="utf-8"), ensure_ascii=False)
+    people = []
+    for who in sorted(routed_people(run, routing)):
+        bs, rows = bullets_of(run, opened, who), shipped_of(harvest, who)
+        if bs and rows:
+            people.append({"who": who,
+                           "bullets": [{"id": b["id"], "label": b["label"], "since": b.get("since")} for b in bs],
+                           "shipped": [{"row": rid, "text": r[6]} for rid, r in rows]})
+    return {"section": opened["section"], "harvest": "recorded" if harvested else "not-recorded", "people": people,
+            "tracker_hints": sure_matches(run, opened, harvest), "save": os.path.join(d, "matches.json"),
+            "max_per_person": CLOSE_MAX,
+            "rule": "Match a bullet to a 完成 line only when the line says that same piece of work is finished, "
+                    "not a step of it or work near it. Leave out anything you are unsure of: an unmatched bullet "
+                    "stays open, a wrong match closes open work. Save {bullet id: {\"row\": row id, \"said\": "
+                    "one zh-TW line of about 30 字 saying what finished}}. tracker_hints pairs a bullet with a 完成 line "
+                    "tied to the tracker item it names: still match it only if that line finishes the whole bullet."}
+
+
+def load_matches(path, run, opened, harvest):
+    """[(bullet, row id, row, said)] in the Doc's order: the model's matches, each checked."""
+    by_b = {b["id"]: b for b in opened["items"]}
+    rows = {item_id(i, r): r for i, r in enumerate(harvest)}
+    got = {}
+    if path:
+        try:
+            got = json.load(open(path, encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise L.Refuse(3, "cannot read %s (%s)" % (path, e))
+        if not isinstance(got, dict):
+            raise L.Refuse(3, "%s must be an object of {bullet id: {row, said}}" % path)
+    chosen = {}
+    for bid, m in got.items():
+        rid = m.get("row") if isinstance(m, dict) else None
+        if bid not in by_b:
+            raise L.Refuse(3, "matches: %s is not an open bullet of %s" % (bid, opened["section"]))
+        if by_b[bid].get("open_sub_items"):
+            raise L.Refuse(3, "matches: %s has an open sub-item (%s): tidy could not remove it, so it is not "
+                              "put up" % (bid, by_b[bid]["open_sub_items"][0]))
+        if rid not in rows:
+            raise L.Refuse(3, "matches: %s names row %r, which is not this week's harvest" % (bid, rid))
+        if rows[rid][5] != "shipped":
+            raise L.Refuse(3, "matches: row %s is a %s line, not 完成" % (rid, rows[rid][5]))
+        owner = run["names"].get(by_b[bid].get("email") or "")
+        if owner != rows[rid][3]:
+            raise L.Refuse(3, "matches: %s is %s's bullet, row %s is %s's line" % (bid, owner, rid, rows[rid][3]))
+        line, why = check_line(m.get("said"))
+        chosen[bid] = (rid, None if why else line)
+    return [(b, chosen[b["id"]][0], rows[chosen[b["id"]][0]], chosen[b["id"]][1])
+            for b in opened["items"] if b["id"] in chosen]
+
+
+def s_render(d, routing_path, stamp, facts_path=None, short_path=None, matches_path=None):
     run, harvested, harvest = read_harvest(d)
     routing = json.load(open(routing_path, encoding="utf-8"))
     items = tracked(run, harvest)
@@ -450,6 +571,12 @@ def s_render(d, routing_path, stamp, facts_path=None, short_path=None):
     facts_path = facts_path or latest_facts(run["week"])
     facts = json.load(open(facts_path, encoding="utf-8")) if facts_path else None
     filled = os.path.exists(os.path.join(L.state_dir(), "%s.tidy.done" % R.previous_week(run["week"])))
+    op = os.path.join(d, "open.json")
+    opened = load_open(op, run) if os.path.exists(op) else None
+    if matches_path and opened is None:
+        raise L.Refuse(3, "--matches without the open bullets: run reconcile first")
+    matched = load_matches(matches_path, run, opened, harvest) if opened else []
+    cands, left_over = [], 0
     label = R.wb_label(run["week"])
     header = STAMP.format(week=label, stamp=stamp)
     blocks, nameless, routed, people = [], [], set(), {}
@@ -462,7 +589,15 @@ def s_render(d, routing_path, stamp, facts_path=None, short_path=None):
             continue
         routed.add(who)
         note = {}
-        body = body_text(parts_for(run, who, harvest, facts, filled, short, items, seen, note))
+        mine_ = [m for m in matched if run["names"].get(m[0].get("email") or "") == who]
+        left_over += max(0, len(mine_) - CLOSE_MAX)
+        closing = []
+        for b, rid, r, said_ in mine_[:CLOSE_MAX]:
+            what = said_ or R.clip(r[6], 40)
+            line = "會後收掉：%s｜收成：%s（還沒做完請在會上說）" % (R.clip(b["label"], 30), what)
+            closing.append(line)
+            cands.append(dict(b, row=rid, harvest=what, line=line))
+        body = body_text(parts_for(run, who, harvest, facts, filled, short, items, seen, note, closing))
         if note.get("lines") or note.get("waiting"):
             people[who] = note
         blocks.append({"heading": h["heading"], "owner_email": h["owner_email"], "owner_name": who,
@@ -473,11 +608,63 @@ def s_render(d, routing_path, stamp, facts_path=None, short_path=None):
         # render of the week writes it again, so it holds what the last one wrote.
         json.dump({"week": run["week"], "label": label, "span": span(run["week"]), "by_item": items is not None,
                    "people": people}, open(progress_path(run["week"]), "w", encoding="utf-8"), ensure_ascii=False)
+    # SKB-151: what the blocks list as 會後收掉, staged in the run folder. Thursday may close only what
+    # `confirm` then finds in the Doc: a render whose blocks never landed asks nobody anything.
+    json.dump({"week": run["week"], "section": meeting_heading(run["week"]), "candidates": cands},
+              open(os.path.join(d, "closing.json"), "w", encoding="utf-8"), ensure_ascii=False)
     return {"week": label, "stamp": header, "idempotency_key": "〔自動彙整 %s" % label, "blocks": blocks,
+            "closing": {"read": opened is not None, "candidates": len(cands), "left_over": left_over,
+                        "unrouted": sorted(m[0]["label"] for m in matched
+                                           if run["names"].get(m[0].get("email") or "") not in routed),
+                        "confirm": "after step 7: sections.py confirm --dir %s --markdown <the Doc read back>" % d},
             "harvest": "recorded" if harvested else "not-recorded", "by_item": items is not None,
             "facts": facts_path, "next_steps_filled": filled, "owners_without_name": nameless,
             "harvest_without_heading": sorted({x[3] for x in harvest} - routed), "short": short_report,
             "counts": {"blocks": len(blocks), "quiet": sum(1 for b in blocks if QUIET in b["body"])}}
+
+
+# tidy's SECTION_RE: a comment on the date heading prints as `## Nov 19, 2026[^3]`
+DATE_HEADING_RE = re.compile(r"^#{1,6}\s*([A-Z][a-z]{2}\s+\d{1,2},\s*\d{4})\s*(?:\[\^[^\]]*\]\s*)*$")
+
+
+def s_confirm(d, markdown_path):
+    """Keep, for Thursday, the 會後收掉 lines the Doc's section shows: `<week>.closing.json`. A candidate whose
+    line is not there was never put to the team, so it is left out (and asked again next Wednesday)."""
+    run = L.load_run(d)
+    staged = os.path.join(d, "closing.json")
+    try:
+        got = json.load(open(staged, encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise L.Refuse(3, "cannot read %s (%s): run render first" % (staged, e))
+    try:
+        md = open(markdown_path, encoding="utf-8").read()
+    except OSError as e:
+        raise L.Refuse(3, "cannot read %s (%s)" % (markdown_path, e))
+    if md.lstrip().startswith("{"):
+        try:
+            md = json.loads(md).get("result", md)
+        except ValueError:
+            pass
+    want = meeting_heading(run["week"])
+    lines, inside, sec = md.split("\n"), False, []
+    for line in lines:
+        m = DATE_HEADING_RE.match(line.strip())
+        if m:
+            if inside:
+                break
+            inside = re.sub(r"\s+", " ", m.group(1)) == want
+            continue
+        if inside:
+            sec.append(line)
+    if not sec:
+        raise L.Refuse(3, "%s has no %r section: read the Doc's markdown after the write" % (markdown_path, want))
+    flat = re.sub(r"\s+", "", "\n".join(sec).replace("\\", ""))
+    shown = [c for c in got["candidates"] if re.sub(r"\s+", "", c.get("line") or "") in flat and c.get("line")]
+    missing = [c["label"] for c in got["candidates"] if c not in shown]
+    json.dump({"week": run["week"], "section": want, "candidates": shown},
+              open(closing_path(run["week"]), "w", encoding="utf-8"), ensure_ascii=False)
+    return {"week": run["week"], "section": want, "confirmed": len(shown), "not_in_doc": missing,
+            "saved": closing_path(run["week"])}
 
 
 def progress_path(week):
@@ -496,12 +683,20 @@ def main(argv=None):
     it = sub.add_parser("items")
     it.add_argument("--dir", required=True)
     it.add_argument("--routing", required=True, help="parse_routing.py's output, as render takes it")
+    rc = sub.add_parser("reconcile")
+    rc.add_argument("--dir", required=True)
+    rc.add_argument("--routing", required=True)
+    rc.add_argument("--open", required=True, help="open_items.py's output for this Thursday's section")
     r = sub.add_parser("render")
     r.add_argument("--dir", required=True)
     r.add_argument("--routing", required=True, help="parse_routing.py's output, saved as a file")
     r.add_argument("--stamp", required=True, help='the time shown in the stamp, e.g. "11-05 09:40"')
     r.add_argument("--facts", help="a recap facts.json other than Monday's (by hand only)")
     r.add_argument("--short", help="the model's {item id: short zh-TW line}, saved where `items` said")
+    r.add_argument("--matches", help="SKB-151: the model's {bullet id: {row, said}}, saved where `reconcile` said")
+    cf = sub.add_parser("confirm")
+    cf.add_argument("--dir", required=True)
+    cf.add_argument("--markdown", required=True, help="get_doc_as_markdown of the tab, read after the write")
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
@@ -512,8 +707,12 @@ def main(argv=None):
             L.emit(s_start(a.week, a.config))
         elif a.cmd == "items":
             L.emit(s_items(a.dir, a.routing))
+        elif a.cmd == "reconcile":
+            L.emit(s_reconcile(a.dir, a.routing, a.open))
         elif a.cmd == "render":
-            L.emit(s_render(a.dir, a.routing, a.stamp, a.facts, a.short))
+            L.emit(s_render(a.dir, a.routing, a.stamp, a.facts, a.short, a.matches))
+        elif a.cmd == "confirm":
+            L.emit(s_confirm(a.dir, a.markdown))
         else:
             ap.print_help()
             return 2
@@ -656,6 +855,105 @@ def selftest():
         except L.Refuse:
             pass
         os.remove(it["save"])
+
+        # ── SKB-151: the harvest's 完成 lines against the Doc's open bullets ──
+        def bul(i, label, who="Ann Lee", email="ann@example.com", text=None):
+            return {"id": "b%d" % i, "heading": "#H %s" % who, "text": text or label, "label": label,
+                    "person": who, "email": email, "since": None}
+        opened = {"section": "Nov 5, 2026", "items": [
+            bul(1, "SEO 三篇文章"), bul(2, "FAQ 頁"), bul(3, "#3.01 月結", "Cat Ho", "cat@example.com"),
+            bul(4, "沒有人的", None, None)]}
+        opp = os.path.join(tmp, "open.json")
+        json.dump(opened, open(opp, "w"), ensure_ascii=False)
+        rc = s_reconcile(st["dir"], routing, opp)
+        check("reconcile: per person, their open bullets beside their 完成 lines; a bullet of no one's is left out",
+              [(p["who"], [b["id"] for b in p["bullets"]], [s_["text"] for s_ in p["shipped"]]) for p in rc["people"]],
+              [("Ann Lee", ["b1", "b2"], ["three articles live (abc1234)"]), ("Cat Ho", ["b3"], ["books closed"])])
+        ann_row = rc["people"][0]["shipped"][0]["row"]
+        cat_row = rc["people"][1]["shipped"][0]["row"]
+        hv = read_harvest(st["dir"])[2]
+        wait_row = next(item_id(i, r) for i, r in enumerate(hv) if r[5] == "waiting")
+        mp = os.path.join(st["dir"], "matches.json")
+
+        def render_with(m):
+            json.dump(m, open(mp, "w"), ensure_ascii=False)
+            return s_render(st["dir"], routing, "11-05 09:40", matches_path=mp)
+        out = render_with({"b1": {"row": ann_row, "said": "三篇 SEO 文章上線了"}})
+        body = {b["heading"]: b["body"] for b in out["blocks"]}["行銷"].split("\n")
+        check("render: the match is the last line of 待討論, said short, and the meeting is told it may object",
+              body[-1], "\t會後收掉：SEO 三篇文章｜收成：三篇 SEO 文章上線了（還沒做完請在會上說）")
+        staged = os.path.join(st["dir"], "closing.json")
+        saved = json.load(open(staged, encoding="utf-8"))
+        check("render: what the block lists is staged for confirm",
+              (saved["section"], [c["id"] for c in saved["candidates"]], saved["candidates"][0]["harvest"],
+               out["closing"]["candidates"], os.path.exists(closing_path(W))),
+              ("Nov 5, 2026", ["b1"], "三篇 SEO 文章上線了", 1, False))
+        mdp = os.path.join(tmp, "doc.md")
+        open(mdp, "w").write("## Nov 12, 2026\n## Nov 5, 2026[^3]\n### 行銷\n* 會後收掉：SEO 三篇文章｜收成：三篇 SEO 文章上線了（還沒做完請在會上說）\n")
+        cf_ = s_confirm(st["dir"], mdp)
+        check("confirm: a line the Doc shows is kept for Thursday",
+              (cf_["confirmed"], [c["id"] for c in json.load(open(closing_path(W)))["candidates"]]), (1, ["b1"]))
+        open(mdp, "w").write("## Nov 12, 2026\n* 會後收掉：SEO 三篇文章｜收成：三篇 SEO 文章上線了（還沒做完請在會上說）\n## Nov 5, 2026\n### 行銷\n")
+        cf_ = s_confirm(st["dir"], mdp)
+        check("confirm: a line the Doc's section does not show is never put to the meeting",
+              (cf_["not_in_doc"], json.load(open(closing_path(W)))["candidates"]), (["SEO 三篇文章"], []))
+        nested = dict(opened, items=[dict(bul(1, "SEO 三篇文章"), open_sub_items=["第三篇"])] + opened["items"][1:])
+        json.dump(nested, open(opp, "w"), ensure_ascii=False)
+        check("reconcile: a bullet with an open sub-item is not put up (tidy could not remove it)",
+              [b["id"] for b in s_reconcile(st["dir"], routing, opp)["people"][0]["bullets"]], ["b2"])
+        try:
+            render_with({"b1": {"row": ann_row}})
+            check("render refuses a match on a bullet with an open sub-item", "no refusal", "refused")
+        except L.Refuse:
+            pass
+        check("a tracker hint skips a bullet with an open sub-item",
+              sure_matches(L.load_run(st["dir"]), dict(opened, items=[dict(opened["items"][2], open_sub_items=["x"])]),
+                           [[W, at, "cat", "Cat Ho", "", "shipped", "closed", "", "3.01"]]), {})
+        json.dump(opened, open(opp, "w"), ensure_ascii=False)
+        s_reconcile(st["dir"], routing, opp)
+        out = render_with({"b1": {"row": ann_row, "said": "x" * 80}})
+        check("render: a said line that does not pass is the harvest text, cut",
+              {b["heading"]: b["body"] for b in out["blocks"]}["行銷"].split("\n")[-1],
+              "\t會後收掉：SEO 三篇文章｜收成：%s（還沒做完請在會上說）" % R.clip("three articles live (abc1234)", 40))
+        for name, m in (("a bullet reconcile did not list", {"b9": {"row": ann_row}}),
+                        ("a row not in this week's harvest", {"b1": {"row": "h1-000000"}}),
+                        ("a waiting line is not 完成", {"b2": {"row": wait_row}}),
+                        ("another person's line", {"b1": {"row": cat_row}})):
+            try:
+                render_with(m)
+                check("render refuses %s" % name, "no refusal", "refused")
+            except L.Refuse:
+                pass
+        run_ = L.load_run(st["dir"])
+        check("a bullet naming a tracker item its person's 完成 line moved is a hint for the model",
+              sure_matches(run_, opened, [[W, at, "cat", "Cat Ho", "", "shipped", "closed", "", "3.01"],
+                                          [W, at, "ann", "Ann Lee", "", "shipped", "x", "", "3.01"]]),
+              {"b3": item_id(0, [W, at, "cat", "Cat Ho", "", "shipped", "closed", "", "3.01"])})
+        check("#3.01 is not #3.012", TRACKED_RE.findall("#3.012 和 #3.01"), ["3.01"])
+        many = dict(opened, items=[bul(10 + n, "第 %d 件" % n) for n in range(CLOSE_MAX + 2)])
+        json.dump(many, open(opp, "w"), ensure_ascii=False)
+        s_reconcile(st["dir"], routing, opp)
+        out = render_with({"b%d" % (10 + n): {"row": ann_row} for n in range(CLOSE_MAX + 2)})
+        check("at most CLOSE_MAX a person; the rest wait for next week, and are counted",
+              (sum("會後收掉" in l for l in {b["heading"]: b["body"] for b in out["blocks"]}["行銷"].split("\n")),
+               out["closing"]["left_over"], len(json.load(open(staged))["candidates"])), (CLOSE_MAX, 2, CLOSE_MAX))
+        json.dump(dict(opened, section="Oct 29, 2026"), open(opp, "w"), ensure_ascii=False)
+        try:
+            s_reconcile(st["dir"], routing, opp)
+            check("reconcile refuses another week's section", "no refusal", "refused")
+        except L.Refuse:
+            pass
+        os.remove(os.path.join(st["dir"], "open.json"))
+        try:
+            render_with({"b1": {"row": ann_row}})
+            check("--matches without reconcile is refused", "no refusal", "refused")
+        except L.Refuse:
+            pass
+        out = s_render(st["dir"], routing, "11-05 09:40")
+        check("a render without reconcile stages no candidates",
+              (json.load(open(staged))["candidates"], out["closing"]["read"]), ([], False))
+        os.remove(mp)
+
         many = [[W, at, "xu", "Xu", "", "shipped", "item %d" % n, ""] for n in range(8)]
         many += [[W, at, "xu", "Xu", "", "waiting", "wait %d" % n, ""] for n in range(5)]
         check("only what a block shows is asked for: 進度's 6, 卡關's 4",
@@ -870,6 +1168,34 @@ def selftest():
 
 
 MUTATIONS = [
+    # SKB-151
+    ("a waiting line closes a bullet", [('        if rows[rid][5] != "shipped":', "        if False:")]),
+    ("another person's line closes a bullet", [("        if owner != rows[rid][3]:", "        if False:")]),
+    ("a made-up bullet id is taken", [("        if bid not in by_b:\n            raise L.Refuse(3, \"matches:",
+                                       "        if False:\n            raise L.Refuse(3, \"matches:")]),
+    ("no cap on 會後收掉", [("        for b, rid, r, said_ in mine_[:CLOSE_MAX]:", "        for b, rid, r, said_ in mine_:")]),
+    ("the candidates are not kept for Thursday", [('            cands.append(dict(b, row=rid, harvest=what, line=line))\n', "")]),
+    ("the 會後收掉 lines never reach the block", [('    out["待討論"] += closing or []\n', "")]),
+    ("confirm keeps a line the Doc never showed",
+     [('    shown = [c for c in got["candidates"] if re.sub(r"\\s+", "", c.get("line") or "") in flat and c.get("line")]',
+       '    shown = list(got["candidates"])')]),
+    ("a bullet with an open sub-item is put up",
+     [('            and not b.get("open_sub_items")]', '            ]')]),
+    ("render publishes for Thursday itself",
+     [('              open(os.path.join(d, "closing.json"), "w", encoding="utf-8"), ensure_ascii=False)',
+       '              open(closing_path(run["week"]), "w", encoding="utf-8"), ensure_ascii=False)')]),
+    ("render takes a match on a bullet with an open sub-item",
+     [('        if by_b[bid].get("open_sub_items"):\n            raise L.Refuse(3, "matches: %s has an open sub-item',
+       '        if False:\n            raise L.Refuse(3, "matches: %s has an open sub-item')]),
+    ("a tracker hint offers a bullet with an open sub-item",
+     [('        if b.get("open_sub_items"):\n            continue\n', '')]),
+    ("confirm misses a commented date heading",
+     [('\\s*(?:\\[\\^[^\\]]*\\]\\s*)*$")', '\\s*$")')]),
+    ("a tracker # is never a sure match", [("                out[b[\"id\"]] = hit\n", "                pass\n")]),
+    ("another week's bullets are read", [("    if opened.get(\"section\") != meeting_heading(run[\"week\"]):", "    if False:")]),
+    ("a render without reconcile keeps old candidates",
+     [("    json.dump({\"week\": run[\"week\"], \"section\": meeting_heading(run[\"week\"]), \"candidates\": cands},",
+       "    if cands: json.dump({\"week\": run[\"week\"], \"section\": meeting_heading(run[\"week\"]), \"candidates\": cands},")]),
     ("the Harvest read stops at its first page", [("for a in range(first, last + 1, L.PAGE)]",
                                                    "for a in range(first, first + 1, L.PAGE)]")]),
     ("a quiet week reads as progress", [('    if not rows or all(r[5] == "quiet" for _, r in rows):\n', "    if not rows:\n")]),

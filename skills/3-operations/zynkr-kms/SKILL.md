@@ -303,10 +303,9 @@ saying so.
 
 > **Style rules are not Q&A.** When Peter gives a **tone / wording / term** rule (e.g.
 > `parachute`→「和團隊諮詢、觀察流程」, `discovery call`→「線上會議」), it belongs on a style card
-> in `kb.tone-style`: a new row in the 用語對照表 is a **correction packet** for
-> `term-mapping-table` (read it with `get_knowledge(key: "term-mapping-table", max_chars: 60000)`
-> and quote the rows around where the new one goes). A broader voice rule is a packet for
-> `tone-voice-rules`.
+> in 《[2.0]》, which both `kb.tone-style` cards point to since 2026-11-19: a new 用語 is a line for
+> Part 1 §7 固定用語 (hand Peter the line and the bullet it follows), and a broader voice rule for a
+> support reply is a line for Part 2 §2.6 客服回信. Neither is a packet for the two pointer cards.
 
 ### Lens 2 — Where it goes (which section, new card or a change)
 - Map the intent → its section key (`kb.<slug>`), one that is in the set.

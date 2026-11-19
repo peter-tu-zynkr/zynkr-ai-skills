@@ -33,7 +33,7 @@ registry row in `drive-mirror.md`. `nn` is that Doc's number.
 > and reference cards **cite** them (`cites: ["<key>"]`). A company fact (`company.…`) is never
 > filed in a section: cards cite it by key.
 > **Tone-style** likewise holds only the two style fact cards; a wording rule from Peter is a
-> correction packet for `term-mapping-table`, not a new card.
+> line for 《[2.0]》 Part 1 §7, which both cards point to, not a new card.
 
 ## Classification notes
 - Prefer the **most specific** fit. "How much for in-house team training?" is

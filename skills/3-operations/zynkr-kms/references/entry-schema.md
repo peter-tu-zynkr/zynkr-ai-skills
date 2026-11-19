@@ -20,8 +20,8 @@ published, before the card that cites it.
 > that changes over time (price, rate, policy, lead time) — it belongs in a **fact card**, and
 > reference cards **cite** it. Don't restate cited numbers inside a reference card's body.
 
-Some numbers are not cards at all. A **company fact** (a key starting `company.`, e.g. the hourly
-rate) belongs to the owner: only an owner or admin changes one, in Atlas. It is never filed in a
+Some numbers are not cards at all. A **company fact** (a key starting `company.`, e.g.
+`company.contact-email`) belongs to the owner: only an owner or admin changes one, in Atlas. It is never filed in a
 section and never drafted. A card that rests on one cites it by key and never copies its value.
 
 ---
@@ -52,7 +52,7 @@ section and linked to what it cites, which serves nobody until a person publishe
   "key": "qa.day-course-quote",
   "kind": "reference",
   "title": "半天或一天的 AI 內訓怎麼報價？",  // canonical, normalized question
-  "body": "依 FACT:b2b-enterprise-pricing 報價 — 企業內訓是套裝固定價，客戶說的時數只用來對應半天或全天，不寫時數 × 費率；正式報價交 /sales-proposal-writer。\n\n---\n\nKeywords: 報價 · 費用 · 半天 · 全天 · quote · package · half day\n\nsource_type: peter_answer · <YYYY-MM-DD> · inbound 詢價 · <gmail thread permalink>",
+  "body": "依 FACT:b2b-enterprise-pricing 報價 — 企業內訓是套裝固定價，客戶說的時數只用來對應半天或全天；正式報價交 /sales-proposal-writer。\n\n---\n\nKeywords: 報價 · 費用 · 半天 · 全天 · quote · package · half day\n\nsource_type: peter_answer · <YYYY-MM-DD> · inbound 詢價 · <gmail thread permalink>",
   "collection": "kb.pricing-quoting",
   "cites": ["b2b-enterprise-pricing"]  // published keys only
 }
@@ -130,8 +130,8 @@ Evidence: <Gmail thread permalink> · <YYYY-MM-DD> · Peter: 「<his words>」
 - One packet per card. Quote only the lines that change, with enough around them to find them.
 - A packet for a **company fact** names it by key and says what the reply states; the owner, or
   an admin, changes it in Atlas.
-- A new row for the 用語對照表 is a packet for `term-mapping-table`: quote the rows around where
-  it goes.
+- A new 用語 goes in 《[2.0]》 Part 1 §7 固定用語, not in `term-mapping-table`, which points there
+  since 2026-11-19: hand Peter the line and the bullet it follows.
 - The next run reads the card again with `get_knowledge`. Once it carries the packet's new line,
   the packet is applied.
 
