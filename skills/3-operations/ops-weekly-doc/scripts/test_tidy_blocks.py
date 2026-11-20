@@ -1251,7 +1251,10 @@ FMT_EX = ("#Sales Sam Rivera\n〔自動彙整 WB 10/26 · 10-27 09:40〕\n* 上�
           "* 還沒收掉的\n   * 寫文件〔WB 9/7 起〕Done\n")
 fr = T.closed_bullets(export("Nov 5, 2026\n" + FMT_EX + "Oct 29, 2026\n" + FMT_EX), NAMES, set())
 check("step 7 never deletes a summary sub-bullet (`* 上週` / `   * 乙事 Done`), only the carried one",
-      [e["lines"] for e in fr["closed"]], [["   * 寫文件〔WB 9/7 起〕Done"]])
+      [e["lines"] for e in fr["closed"] if e["status"] != T.SUMMARY_COPY], [["   * 寫文件〔WB 9/7 起〕Done"]])
+check("…the whole copied `* 上週` goes as one summary label (SKB-157), never a sub-bullet alone",
+      [e["lines"] for e in fr["closed"] if e["status"] == T.SUMMARY_COPY],
+      [["* 上週", "   * 舊事 完成", "   * 乙事 Done"]])
 
 import carryover as C
 check("carryover counts the carried and the team's bullets, never the summary's",
@@ -1705,6 +1708,144 @@ with tempfile.TemporaryDirectory() as tmp:
     check("no closures file is no closures", T.load_closures(None), None)
 
 
+# ── 22. SKB-157: next week's section starts fresh — minutes, copied summaries, stale stamps ──
+# The shape of the 11-20 clean-up: the 11/12 minutes copied forward, each kept block still holding
+# last week's 進度 / 卡關 / 待討論, a `2026-W38` block nobody's harvest renews, and the meeting's own
+# 〔11/19 會議〕 lines that `fill` wrote into the new section only.
+NAMES26 = {"Sam Rivera"}
+MD26 = """\
+## Nov 26, 2026
+### #Sales [Sam Rivera](mailto:owner-a@example.com)
+### # AI enablement [Sam Rivera](mailto:owner-a@example.com)
+"""
+HEADS26 = T.heading_keys(MD26, NAMES26)
+MIN26 = """\
+〔自動彙整 WB 11/9 · 11-13 03:42〕會議紀錄
+* 決議
+   * 分潤系統先放棄
+* 待辦
+   * 持續開發潛在客戶 — Sam Rivera · WIP"""
+SALES_PREV = """\
+#Sales Sam Rivera
+〔自動彙整 WB 11/16 · 11-18 22:05〕
+* 進度
+   * 寄出三封開發信
+* 卡關
+   * 名單重複抓取
+* 待討論
+   * #2.03 業務分潤系統：留著、交給別人，還是放棄？
+* 還沒收掉的
+   * 系統架構學習〔WB 11/2 起〕WIP"""
+AI_PREV = """\
+# AI enablement Sam Rivera
+〔自動彙整 2026-W38 · 09-16 09:40〕
+* 本週
+   * 熟悉公司系統
+* 還沒收掉的
+   * 整理crm測試資料〔WB 8/31 起〕WIP"""
+# In the new section: fill wrote 下一步 under Sales's stamp, and the owner answered the question.
+SALES_NEW = SALES_PREV.replace("〔自動彙整 WB 11/16 · 11-18 22:05〕\n",
+                               "〔自動彙整 WB 11/16 · 11-18 22:05〕\n* 下一步\n   * 名單整理進 CRM〔11/19 會議〕\n")
+EXPORT26 = f"""\
+Nov 26, 2026
+{MIN26}
+{SALES_NEW}
+{AI_PREV}
+Nov 19, 2026
+{MIN26}
+{SALES_PREV}
+{AI_PREV}
+"""
+r26 = T.closed_bullets(export(EXPORT26), NAMES26, HEADS26)
+got26 = {(e["owner"], e["line"]): e for e in r26["closed"]}
+skip26 = {(e["owner"], e["line"]): e["reason"] for e in r26["skipped"]}
+min_head = "〔自動彙整 WB 11/9 · 11-13 03:42〕會議紀錄"
+check("SKB-157: last week's minutes, copied forward, go whole — stamp and every nested bullet",
+      [e["lines"] for e in r26["closed"] if e["line"] == min_head], [MIN26.split("\n")])
+check("…and a minutes 待辦 marked WIP is not mistaken for a bullet of the team's",
+      [e for e in r26["skipped"] if "持續開發" in e["line"]], [])
+check("SKB-157: the kept block's copied 進度 / 卡關 / 待討論 go, each with its sub-bullets",
+      sorted(l for (o, l), e in got26.items() if e["status"] == T.SUMMARY_COPY and o == "#Sales Sam Rivera"),
+      ["* 卡關", "* 待討論", "* 進度"])
+check("…the 待討論 goes with its question and nothing past it",
+      got26[("#Sales Sam Rivera", "* 待討論")]["lines"],
+      ["* 待討論", "   * #2.03 業務分潤系統：留著、交給別人，還是放棄？"])
+check("…the meeting's 下一步, written only here, stays", ("#Sales Sam Rivera", "* 下一步") in got26, False)
+check("…and is reported as not a copy", ("#Sales Sam Rivera", "* 下一步") in skip26, True)
+check("…還沒收掉的 and its carried items are never touched",
+      [k for k in list(got26) + list(skip26) if "還沒收掉的" in k[1] or "系統架構" in k[1]], [])
+check("…a stamp the meeting's lines still sit under stays",
+      [k for k in got26 if "WB 11/16" in k[1]], [])
+ai_stamp = ("# AI enablement Sam Rivera", "〔自動彙整 2026-W38 · 09-16 09:40〕")
+check("SKB-157: a stamp no harvest renewed for ten weeks goes, once its summary goes",
+      (got26.get(ai_stamp, {}).get("status"), ("# AI enablement Sam Rivera", "* 本週") in got26),
+      (T.STALE_STAMP, True))
+check("…its 還沒收掉的 header stays with the carried items under it",
+      [k for k in got26 if "還沒收掉的" in k[1]], [])
+
+ANSWERED = EXPORT26.replace("還是放棄？\n* 還沒收掉的\n   * 系統架構學習〔WB 11/2 起〕WIP\n# AI",
+                            "還是放棄？留著\n* 還沒收掉的\n   * 系統架構學習〔WB 11/2 起〕WIP\n# AI", 1)
+ra = T.closed_bullets(export(ANSWERED), NAMES26, HEADS26)
+check("SKB-157: a question answered only in the new section is not a copy — it waits a week",
+      (("#Sales Sam Rivera", "* 待討論") in {(e["owner"], e["line"]) for e in ra["closed"]},
+       ("#Sales Sam Rivera", "* 待討論") in {(e["owner"], e["line"]) for e in ra["skipped"]}), (False, True))
+
+FRESH26 = EXPORT26.replace("Nov 26, 2026\n" + MIN26, "Nov 26, 2026\n" + MIN26.replace("11-13 03:42", "11-20 03:10"), 1)
+rf = T.closed_bullets(export(FRESH26), NAMES26, HEADS26)
+check("SKB-157: minutes that differ from last week's are this week's — they stay",
+      [e["status"] for e in rf["closed"] if "會議紀錄" in e["line"]], [])
+
+RECENT = EXPORT26.replace("2026-W38 · 09-16 09:40", "WB 11/9 · 11-11 09:40")
+rr = T.closed_bullets(export(RECENT), NAMES26, HEADS26)
+check("SKB-157: a block from two weeks back keeps its stamp (its summary still goes)",
+      ([e["line"] for e in rr["closed"] if e["status"] == T.STALE_STAMP],
+       ("# AI enablement Sam Rivera", "* 本週") in {(e["owner"], e["line"]) for e in rr["closed"]}), ([], True))
+
+KEPT_OLD = EXPORT26.replace("〔自動彙整 2026-W38 · 09-16 09:40〕\n* 本週", "〔自動彙整 2026-W38 · 09-16 09:40〕\n* 下一步\n"
+                            "   * 新的事〔11/19 會議〕\n* 本週", 1)
+rk = T.closed_bullets(export(KEPT_OLD), NAMES26, HEADS26)
+check("SKB-157: an old stamp with the meeting's lines under it stays",
+      [e["line"] for e in rk["closed"] if e["status"] == T.STALE_STAMP], [])
+
+NESTED = EXPORT26.replace("* 進度\n   * 寄出三封開發信", "* 進度\n   * 下一步", 2)
+rn = T.closed_bullets(export(NESTED), NAMES26, HEADS26)
+check("SKB-157: a sub-bullet that reads like a label stays inside its label's subtree",
+      [e["lines"] for e in rn["closed"] if e["owner"] == "#Sales Sam Rivera" and "進度" in e["line"]],
+      [["* 進度", "   * 下一步"]])
+check("…and never becomes a label of its own", [e["line"] for e in rn["closed"] + rn["skipped"]
+                                               if e["line"].startswith(" ")], [])
+
+RESTAMPED = EXPORT26.replace("2026-W38 · 09-16 09:40", "2026-W38 · 09-16 09:41", 1)
+rs = T.closed_bullets(export(RESTAMPED), NAMES26, HEADS26)
+check("SKB-157: an old stamp that is not a verbatim copy stays, even with its summary gone",
+      ([e["line"] for e in rs["closed"] if e["status"] == T.STALE_STAMP],
+       [e["status"] for e in rs["skipped"] if "W38" in e["line"]]), ([], [T.STALE_STAMP]))
+
+STRUCT26 = structure(
+    "Nov 26, 2026\n",                                       # 0
+    "〔自動彙整 WB 11/9 · 11-13 03:42〕會議紀錄\n",               # 10
+    "決議\n", "分潤系統先放棄\n", "待辦\n", "持續開發潛在客戶 — Sam Rivera · WIP\n",  # 20–50 typed, as minutes writes it
+    "#Sales \n",                                            # 60
+    "〔自動彙整 WB 11/16 · 11-18 22:05〕\n",                     # 70
+    "下一步\n", "名單整理進 CRM〔11/19 會議〕\n",                  # 80, 90
+    "進度\n", "寄出三封開發信\n",                                 # 100, 110
+    "卡關\n", "名單重複抓取\n",                                  # 120, 130
+    "待討論\n", "#2.03 業務分潤系統：留著、交給別人，還是放棄？\n",       # 140, 150
+    "還沒收掉的\n", "系統架構學習〔WB 11/2 起〕\n",                  # 160, 170
+    "# AI enablement \n",                                   # 180
+    "〔自動彙整 2026-W38 · 09-16 09:40〕\n",                      # 190
+    "本週\n", "熟悉公司系統\n",                                   # 200, 210
+    "還沒收掉的\n", "整理crm測試資料〔WB 8/31 起〕\n",                # 220, 230
+    "Nov 19, 2026\n",                                       # 240
+)
+res26 = T.locate_closed(r26, STRUCT26, NAMES26)
+check("SKB-157: each removal pins to one range — minutes, three labels, the old stamp and its 本週",
+      sorted((e["start_index"], e["end_index"]) for e in res26["closed"]),
+      [(10, 60), (100, 120), (120, 140), (140, 160), (190, 200), (200, 220)])
+check("…and nothing is skipped for want of a single place", [e["reason"] for e in res26["skipped"]
+                                                             if "places" in e["reason"]], [])
+
+
 # ── MUTATIONS: prove the tests above can actually go red ─────────────────────
 # Each mutation breaks one real line of tidy_blocks.py; if the suite still passes, the matching
 # test is decorative and must be rewritten. Every anchor must occur EXACTLY once.
@@ -1939,6 +2080,36 @@ MUTATIONS = [
     ("fill writes lowest first", 'res["groups"].sort(key=lambda g: g["at"], reverse=True)', 'pass'),
     ("fill's post-check ignores a missing item",
      'if len(rows) != 1 or [unmd(y) for y in split_items(rows[0])] != [unmd(x) for x in want]:', 'if len(rows) != 1:'),
+    # SKB-157 — next week's section starts fresh
+    ("last week's minutes are never removed", 'if MINUTES_RE.match(sec[i].strip()):', 'if False:'),
+    ("minutes are removed without proof",
+     '            if copied(tree, entry):         # a verbatim copy: the meeting\'s section keeps it\n                res["closed"].append(entry)\n            else:\n'
+     '                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is — this"\n'
+     '                                                          f" week\'s minutes',
+     '            if True:\n                res["closed"].append(entry)\n            else:\n'
+     '                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is — this"\n'
+     '                                                          f" week\'s minutes'),
+    ("the minutes block stops at its stamp", 'while j < len(sec) and BULLET_RE.match(sec[j]):', 'while False:'),
+    ("the copied summary is never removed", '    copied_summaries(sec, label, prev_label, res, owner, copied)\n\n    i = 0',
+     '    i = 0'),
+    ("a summary label is removed without proof",
+     '            elif copied(tree, entry):\n                res["closed"].append(entry)\n            else:\n'
+     '                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is under the same"\n'
+     '                                                          f" heading — this week',
+     '            elif True:\n                res["closed"].append(entry)\n            else:\n'
+     '                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is under the same"\n'
+     '                                                          f" heading — this week'),
+    ("the carried list goes with the summary",
+     '            if LABEL_BULLET_RE.match(sec[q]).group(2) == CARRY_LABEL:\n                continue',
+     '            if False:\n                continue'),
+    ("a summary label leaves its sub-bullets behind",
+     'end = max(k for k in range(q, nxt) if k in mach) + 1', 'end = q + 1'),
+    ("a sub-bullet is taken for a label", 'and (lb := LABEL_BULLET_RE.match(sec[q])) and not lb.group(1)]',
+     'and (lb := LABEL_BULLET_RE.match(sec[q]))]'),
+    ("a stamp goes while the meeting's lines sit under it", 'if whole and began and began <', 'if began and began <'),
+    ("a recent stamp is taken for a stale one", 'began < on - timedelta(days=STALE_DAYS)', 'began < on'),
+    ("a stale stamp is removed without proof",
+     '            if copied([line], entry):', '            if True:'),
     ("walk_block does not know the fill labels",
      r'還沒收掉的|下一步|待討論)\s*(?:—\s*(.*?))?\s*$")', r'還沒收掉的)\s*(?:—\s*(.*?))?\s*$")'),
 ]

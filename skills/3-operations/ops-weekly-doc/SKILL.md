@@ -347,6 +347,17 @@ into every new week until someone deleted it by hand (the owner's 09-18 comments
    `· 上週 — 甲 完成` never is. A chip with typed progress after it closes a bullet too
    (`* 課程剪輯   Done 進度：2-4`). So does last week's agenda: the `〔自動彙整 …〕本週會議議程`
    block the scaffold copied in goes whole; the week it was written keeps it (the owner, 10-25).
+   Next week's section starts fresh (`SKB-157`, the owner's 11-20 clean-up), under the same proof:
+   - **Last week's minutes:** a `〔自動彙整 …〕會議紀錄` block goes whole, stamp and every bullet under it.
+     Before this it stood alone at the section top, was "kept", and travelled into three sections.
+   - **The copied summary:** in every stamped block, each label (`進度`, `卡關`, `待討論`, `下一步`,
+     the older `上週`/`本週`…) goes with its sub-bullets, so the kept block keeps its stamp for step 9
+     to fill under. `還沒收掉的` and its carried items are never touched. A label the meeting's fill
+     wrote into since is not a copy, so a re-run leaves it; an answer typed after a 待討論 question
+     in the new section waits a week, like any close made there.
+   - **A stale stamp:** a stamp whose week began more than 28 days before the section goes too, once
+     none of its summary stays — no harvest has renewed it (`2026-W38` under AI enablement, ten weeks
+     on). Its `還沒收掉的` line stays, with the carried items under it.
    **You never choose a line or an index yourself; `tidy_blocks.py` does, and every step below is a gate.**
    Run it only after step 6 confirmed the block writes — the Drive export can lag a write by
    about a minute, and a stale export makes the script skip or refuse rather than delete.
@@ -492,7 +503,8 @@ ZYNKR-OPS-WEEKLY-RESULT: mode=tidy week=2026-W45 status=failed delivered=none;sc
   deletion of that content is a human act, at the meeting. **One exception, `tidy` step 7 only:** a
   bullet whose status chip reads `Done`/`Drop` is removed from the newest section, and only a range
   `tidy_blocks.py --closed` returned, re-confirmed with `--expect` on fresh reads and verified with
-  `--postcheck` after. A heading is never in such a range.
+  `--postcheck` after. A heading is never in such a range. The same gates remove the copied minutes,
+  summary labels and stale stamps (`SKB-157`), which are the machine's lines anyway.
 - **Never rebuild the Doc's skeleton.** Person chips cannot be created by Apps Script or the Docs REST
   API — only copied. Rebuilding loses the routing table. Copy, or do nothing.
 - **Never write to a past section.** If the target Thursday is behind the one this mode owns, stop and

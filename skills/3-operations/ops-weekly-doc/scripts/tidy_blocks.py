@@ -501,6 +501,16 @@ CLOSED_MID_RE = re.compile(r"(?<=\s)(Done|Drop|Dropped)(?=\s)")
 # Thursday's agenda. The scaffold copies it into the new week, where it is last week's agenda
 # until Thursday's `agenda` beat writes the new one (the owner, 10-25).
 AGENDA_RE = re.compile(r"^〔自動彙整[^〕]*〕\s*本週會議議程$")
+# SKB-157 — last week's minutes. `minutes` writes `〔自動彙整 WB 11/9 · 11-13 03:42〕會議紀錄` with its
+# `* 決議` / `* 待辦` bullets; none of them is a summary label, so walk_block ends the block at its
+# stamp, it stood alone at the section top as a one-block group, was "kept", and travelled into
+# three sections (the owner's 11-20 clean-up). It goes whole, like the agenda.
+MINUTES_RE = re.compile(r"^〔自動彙整[^〕]*〕\s*會議紀錄$")
+# SKB-157 — a stamp no harvest has renewed for this long is gone with its summary: `2026-W38` under
+# a heading `sections` no longer writes still stood in the Nov 26 section, ten weeks on.
+STALE_DAYS = 28
+SUMMARY_COPY = "上週的摘要"
+STALE_STAMP = "停更的區塊"
 OPEN_ANY_RE = re.compile(
     r"(?:^|\s|(?<=〕))(In Progress|Not Started|Pause|Paused|Blocked|WIP|進行中|卡住|還沒開始|暫停)(?=\s|$)",
     re.IGNORECASE)
@@ -589,6 +599,68 @@ def closure_map(closures):
     return out
 
 
+def week_start(week, on):
+    """The Monday a stamp's week label names (`WB 11/16`, `2026-W38`), resolved as of `on`; None if unreadable."""
+    y, w = week_key(week, "", on)
+    if not y:
+        return None
+    try:
+        return date.fromisocalendar(y, w, 1)
+    except ValueError:
+        return None
+
+
+def copied_summaries(sec, label, prev_label, res, owner, copied):
+    """SKB-157: next week's section starts with no copy of last week's summary.
+
+    The kept block is a copy too. Its `* 進度` / `* 卡關` / `* 待討論` (every label but 還沒收掉的,
+    whose sub-bullets are the team's carried items) report the week the meeting just discussed,
+    and `sections` prepends a new block on Wednesday rather than replacing it: left in place, the
+    next meeting reads two weeks of 進度 under one heading, and an answered 待討論 question stays
+    asked (the owner's 11-20 clean-up). Each label goes with its sub-bullets, under the same proof
+    as a closed bullet — a verbatim copy under the same heading in the previous section, which
+    keeps it. A label `fill` has written to since is not a copy, so a re-run leaves it.
+
+    A stamp goes too when its week is more than STALE_DAYS before the section and none of its
+    summary stays: no harvest has renewed it. A stamp `fill` can still write under is kept."""
+    try:
+        on = parse_label(label)
+    except ValueError:
+        return
+    for s, line in enumerate(sec):
+        t = line.strip()
+        if "〔自動彙整" not in t or AGENDA_RE.match(t) or MINUTES_RE.match(t):
+            continue
+        last, _, mach = walk_block(sec, s)
+        heads = [q for q in range(s + 1, last + 1)
+                 if q in mach and (lb := LABEL_BULLET_RE.match(sec[q])) and not lb.group(1)]
+        whole = True
+        for q, nxt in zip(heads, heads[1:] + [last + 1]):
+            if LABEL_BULLET_RE.match(sec[q]).group(2) == CARRY_LABEL:
+                continue
+            end = max(k for k in range(q, nxt) if k in mach) + 1
+            tree = sec[q:end]
+            entry = {"at": q, "line": sec[q].strip(), "status": SUMMARY_COPY,
+                     "owner": owner(sec, q), "lines": tree}
+            if any(not x.strip() for x in tree):
+                res["skipped"].append({**entry, "reason": "a blank line inside it — left as it is"})
+                whole = False
+            elif copied(tree, entry):
+                res["closed"].append(entry)
+            else:
+                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is under the same"
+                                                          f" heading — this week's summary, or written since"})
+                whole = False
+        stamp = STAMP_RE.search(t)
+        began = week_start(stamp.group(1), on) if stamp else None
+        if whole and began and began < on - timedelta(days=STALE_DAYS):
+            entry = {"at": s, "line": t, "status": STALE_STAMP, "owner": owner(sec, s), "lines": [line]}
+            if copied([line], entry):
+                res["closed"].append(entry)
+            else:
+                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is under the same heading"})
+
+
 def closed_bullets(lines, names, headings, closures=None):
     """Which Done/Drop bullets in the newest section may be removed (rules 1–3), and which may not.
 
@@ -653,10 +725,27 @@ def closed_bullets(lines, names, headings, closures=None):
     # (`* 上週` / `    * 甲 完成`): a 完成 there is a report, never a bullet to delete.
     machine = set().union(*(walk_block(sec, k)[2] for k, l in enumerate(sec) if "〔自動彙整" in l))
 
+    copied_summaries(sec, label, prev_label, res, owner, copied)
+
     i = 0
     while i < len(sec):
         if i in machine:
             i += 1
+            continue
+        if MINUTES_RE.match(sec[i].strip()):
+            # SKB-157: the stamp and every bullet under it, nested ones included.
+            j = i + 1
+            while j < len(sec) and BULLET_RE.match(sec[j]):
+                j += 1
+            tree = sec[i:j]
+            entry = {"at": i, "line": sec[i].strip(), "status": "上週的會議紀錄",
+                     "owner": owner(sec, i), "lines": tree}
+            if copied(tree, entry):         # a verbatim copy: the meeting's section keeps it
+                res["closed"].append(entry)
+            else:
+                res["skipped"].append({**entry, "reason": f"not in {prev_label} as-is — this"
+                                                          f" week's minutes, not a copy"})
+            i = j
             continue
         if AGENDA_RE.match(sec[i].strip()):
             j = i + 1
@@ -968,7 +1057,8 @@ def format_check(plan, lines):
     start = hit[0]
     sec = lines[start:next((i for i, _ in marks if i > start), len(lines))]
     got = {}
-    for s in (k for k, line in enumerate(sec) if "〔自動彙整" in line and not AGENDA_RE.match(line.strip())):
+    for s in (k for k, line in enumerate(sec) if "〔自動彙整" in line and not AGENDA_RE.match(line.strip())
+              and not MINUTES_RE.match(line.strip())):
         last, rows, machine = walk_block(sec, s)
         typed = any(sec[k].strip().startswith("·") for k in range(s + 1, last + 1))
         got.setdefault((owner_of(sec, s), sec[s].strip()), []).append((rows, typed))
@@ -1282,7 +1372,8 @@ def report_closed(res):
     for e in res["closed"]:
         subs = len(e["lines"]) - 1
         print(f"  DELETE [{e['start_index']},{e['end_index']})  {e['line'][:60]}"
-              + (f"  ({e['status']})" if e.get("evidence") else "")
+              + (f"  ({e['status']})" if e.get("evidence") or e["status"] in (SUMMARY_COPY, STALE_STAMP,
+                                                                                "上週的會議紀錄") else "")
               + (f"  +{subs} sub-items" if subs else ""))
     for e in res["skipped"]:
         print(f"  keep   {e['line'][:60]}  — {e['reason']}")
