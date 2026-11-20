@@ -9,8 +9,8 @@ status: Done
 visibility: public
 author: Peter Tu
 input: "A process description or step cards, flow text (a file, or an Atlas workflow slug), a change or lint request on a flow, or an exported chart image"
-process: "Pick the job (read · draft · edit · validate) → step cards → flow text on the FE/BE/DB convention → lint with the kit → route: an Atlas workflow draft, or an SVG page drawing that is rendered, linted and looked at"
-output: "A narrated flow with step cards, an Atlas review link (a draft, never approved), an SVG page drawing, or a lint report (rule · severity · step ids · fix)"
+process: "Pick the job (read · draft · edit · validate) → step cards → flow text on the FE/BE/DB convention → lint with the kit → route: an Atlas workflow draft, or a page drawing (phases as columns, steps stacked, hover and links) that is rendered, linted and looked at"
+output: "A narrated flow with step cards, an Atlas review link (a draft, never approved), a page drawing (SVG or HTML fragment), or a lint report (rule · severity · step ids · fix)"
 synergy: []
 house-style: bound
 
@@ -92,6 +92,7 @@ references; read them so you can recover the *why* when a judgment call comes up
 | `references/shape-color-principles.md` | When you need Shape × Color restated briefly (shape = what the step is; colour = who owns it and how it runs). |
 | `references/encoding-table.md` | Always when you read, draft or edit: each encoding row, its step kind, its shape and its role in the colour registry. |
 | `references/scaffold.md` | Always when you draft: the flow-text scaffold — phases, the spine, plumbing, lanes by kind, columns and V14, titles. |
+| `references/page-drawing.md` | Always before a page drawing: what the standard drawing holds, the `page:` list that fills its cards, how its columns are made, and what to check when you look. |
 | `references/validation.md` | Always when you validate, and as the self-check after every draft or edit: V1–V14 and where each is checked. |
 | `references/worked-examples.md` | When you want a READ or a DRAFT to model your output on, written as flow text. |
 | `references/process-step-card.md` | Always when you read or draft: the step card (number · Input · Process · Output · layer · Reads · Writes · Knowledge) every step is reported in. Shared with `ops-transformation` and `ops-flow-optimization`. |
@@ -126,6 +127,10 @@ the same file drafts into Atlas or renders as a page without a change.
   would drop the step, so a flow that uses one stays a page drawing.
 - **Caps** — 200 steps and 300 flow lines; titles past 60 characters and phase names past 40 are
   cut. Atlas drops a step with an unknown kind, and lint reports it as `parse`.
+- **`page:`** — optional, read by the kit only: what a card shows on a page beyond its title.
+  `"<id> | note=… | run=… | link=https://… | tip=… | break"` for a step, and
+  `"## <phase> | <one line>"` for the line under a phase's name
+  (`references/page-drawing.md` §2). Atlas ignores the list, so the file still drafts unchanged.
 - **The prose** below the frontmatter says what the flow does, then carries the step cards and the
   store directory. Input · Process · Output live there: the grammar has no field for them.
 
@@ -177,24 +182,40 @@ One file on Python's standard library. Run it by its full path, with `-I`, from 
 install puts it at `~/.claude/skills/ops-workflow-design`.
 
 ```bash
-python3 -I <skill>/scripts/flow_svg.py render <flow.md> [--registry <path>] [--out <file>.svg] [--lang en|zh-TW] [--register audit|clean]
-python3 -I <skill>/scripts/flow_svg.py lint <flow.md> [--json]
+python3 -I <skill>/scripts/flow_svg.py render <flow.md> [--embed] [--layout stacked|canvas] [--stack 2-6] [--out <file>] [--lang en|zh-TW] [--register audit|clean] [--registry <path>]
+python3 -I <skill>/scripts/flow_svg.py table <flow.md> [--lang en|zh-TW] [--out <file>.html]
+python3 -I <skill>/scripts/flow_svg.py lint <flow.md> [--layout canvas|stacked] [--register audit|clean] [--stack 2-6] [--lang en|zh-TW] [--json]
 python3 -I <skill>/scripts/flow_svg.py --selftest
 ```
 
-- **`render`** writes one self-contained SVG. The lanes run FE · BE · DB, each step takes its
-  kind's shape and fill, and every colour is written inline from the registry: no stylesheet, no
-  external reference, no dark theme. The root carries the registry's version
-  (`data-flow-colours`), and the same input gives the same bytes. Steps take the columns Atlas's
-  canvas gives them, so a page drawing that starts being run moves to Atlas with the same text.
-  `--lang` picks the language of the lane titles and the legend; `--register` is below (Two
-  registers).
+- **`render`** writes the page drawing (`references/page-drawing.md`). The lanes run FE · BE · DB,
+  each phase is a run of columns with its steps stacked inside, each step takes its kind's shape
+  and fill, and a card shows its number, its name and what `page:` adds: a note, what runs it, a
+  link. A store lists the steps that write and read it. Hovering a step lights only its lines.
+  - Every colour is written inline from the registry: no external reference, no dark theme. The
+    drawing's one style block holds the hover rules and no colour. The root carries the
+    registry's version (`data-flow-colours`), and the same input gives the same bytes.
+  - **`--embed`** writes an HTML fragment for a page instead of a bare SVG: the legend, a
+    fit-to-width button, a box that scrolls sideways and the drawing inline.
+  - **`--layout canvas`** draws Atlas's own columns instead, one step to a row and column, with no
+    notes, links or hover: a preview of how a draft will sit in Atlas, not a page drawing.
+  - `--stack` sets how many backend steps a column holds (4 unless you say). `--lang` picks the
+    language of the lane titles and the legend; `--register` is below (Two registers).
+- **`table`** writes the steps table for under the drawing: one row per work step, numbered as
+  the drawing is, with the stores it reads and writes taken from the `~>` lines.
 - **`lint`** names the rule and the step ids, and exits 1 on any rule it finds, soft ones
   included: V4, V5, V6, V9, V12 (label length), V14 (counted after layout), two boxes, labels or
   phase bands that overlap, and a step or line Atlas would not draw or a title or phase name it
   would cut (`parse`). V5, V9 and V12 are soft, the rest hard (`references/validation.md`). It warns, without
-  failing, on a page-only kind or a step option it can't read. `--json` prints the same report as
-  JSON, with the column each step landed in (`columns`). A clean flow exits 0.
+  failing, on a page-only kind or a step option it can't read, and notes a `page:` line it
+  skipped. `--json` prints the same report as JSON, with the column each step landed in
+  (`columns`). A clean flow exits 0.
+  - Plain `lint` checks the flow as Atlas will draw it, V14 included. Every flow passes it before
+    it is drafted into Atlas.
+  - **`lint --layout stacked`** checks the page drawing instead: the same rules without V14 (the
+    page builds its own columns), with overlaps and long card text measured on the stacked
+    drawing. Give it the `--register`, `--stack` and `--lang` you render with, so it measures the
+    drawing you ship: a label the clean register leaves off can't overlap there.
 - **Exit 2** from any command means the kit could not run (a missing file, a bad registry). It is
   never a pass: say what it printed.
 - **`--selftest`** checks the kit against its fixtures: parsing and columns against Atlas's own
@@ -319,6 +340,8 @@ A worked READ is in `references/worked-examples.md`.
    (`references/validation.md`: the kind checks V1, V2, V3, V8 and V10, and V7). Settle them now: a
    fix after an Atlas draft is filed waits for a reviewer. When lint names a V14 or an overlap,
    `lint --json` lists the column each step landed in (`columns`), so you can see which step moved.
+   A flow that will only ever be a page drawing lints with `--layout stacked` instead: V14 counts
+   Atlas's columns, which that drawing doesn't use.
 5. **Route it** — three questions about the flow:
    - Does the team or a client run it?
    - Does a step use a skill or a note (a step with `ref=`, or one that should have it)?
@@ -358,27 +381,37 @@ A worked READ is in `references/worked-examples.md`.
      `/review`. That page says the draft waits for review until a reviewer approves it, then draws
      the flow.
    - Approve nothing.
-7. **A page drawing.**
-   - `python3 -I <skill>/scripts/flow_svg.py render <flow.md> --out <name>.svg`, with
-     `--lang zh-TW` for a zh-TW flow and `--register clean` for stakeholders (Two registers, below).
-   - `lint` exits 0 on the same file (step 4); lint again if you changed it since.
+7. **A page drawing** (`references/page-drawing.md`).
+   - **Fill the cards.** Add a `page:` list: one line under each phase's name, and for each step a
+     `note=` of a few words and a `run=` naming what runs it. Add `link=` and `tip=` where the
+     step's source is known: the skill's page, the Atlas note, the Sheet, the page that explains
+     it. Never guess an address: a step with no known source gets no link, and the reply lists
+     those steps as links still to add.
+   - **For a page**, `python3 -I <skill>/scripts/flow_svg.py render <flow.md> --embed --out
+     <name>.html`, and `table <flow.md> --out <name>-steps.html` for the steps table under it.
+     **For a file on its own**, `render <flow.md> --out <name>.svg`. Add `--lang zh-TW` for a
+     zh-TW flow and `--register clean` for stakeholders (Two registers, below).
+   - `lint --layout stacked`, with the same `--register`, `--stack` and `--lang` as the render,
+     exits 0 on the same file; lint again if you changed it since.
    - **Look at it.** With Playwright connected, open the SVG (`browser_navigate`) and take a
      screenshot (`browser_take_screenshot`). Playwright may refuse a `file://` path: then copy the
      SVG into an empty folder of its own, serve that folder to this machine alone
      (`python3 -I -m http.server <port> --bind 127.0.0.1 --directory <folder>`, in the background),
      open `http://127.0.0.1:<port>/<name>.svg`, and stop the server after the screenshot. A
      navigation that times out on an SVG has often loaded it: take the screenshot before you retry.
-     Look for cut titles, crowded columns and lines that cross a box; fix the text and render
-     again. When lines crowd, give the drawing room: pin a source or store under its own step with
-     `col=`, give a branch a band of its own, or send a side path out through `offpage`. A wide
-     drawing may scroll on its page. Never squeeze it instead: no titles cut short to make room, no
-     lines laid over one another or through a box. Without Playwright, the reply says the drawing
+     Look for cut titles, crowded columns and lines that cross a box, and hover one step with
+     several lines (`browser_hover`): only its lines stay dark. For an `--embed` fragment, wrap it
+     in a bare HTML page in that folder and open that. Fix the text and render again. When lines
+     crowd, give the drawing room: move a phase boundary, start a new column with `<id> | break`
+     in `page:`, or send a side path out through `offpage` (`references/page-drawing.md` §3). A
+     wide drawing may scroll on its page. Never squeeze it instead: no titles cut short to make
+     room, no lines laid over one another or through a box. Without Playwright, the reply says the drawing
      was linted, not looked at. Playwright saves the screenshot in the session's working folder and logs under `.playwright-mcp/` there:
      when that folder is a repository, delete both once you have looked, so neither lands in a
      commit.
-   - Return the SVG path.
+   - Return the path of the SVG, or of the fragment and its table.
 8. **Report** — a one-paragraph narrative of what you built, the step cards and the store
-   directory numbered as the titles are, then the review link or the SVG path as the last line.
+   directory numbered as the titles are, then the review link or the drawing's path as the last line.
 
 Never make a Lucid chart: Lucid is retired.
 
@@ -462,9 +495,9 @@ A drawing serves one of two audiences. Decide which before drafting, and ask if 
 - **Clean** (stakeholders, "make it human-readable", 「視覺友善」): the spine reads at a glance.
 
 The same flow text renders in either register. Both draw a legend, so no one has to memorise the
-colour code, and both leave out a lane row that holds no step. Both put each step's number on a
-tab at the top of its box: a drawing and its step cards match by number alone
-(`process-step-card.md` §1), whichever register the drawing is in.
+colour code, and both leave out a lane row that holds no step. Both put each step's number on its
+box: a drawing and its step cards match by number alone (`process-step-card.md` §1), whichever
+register the drawing is in.
 
 - **`--register audit`** shows every label and writes the step and line counts under the title.
 - **`--register clean`** shows labels only on the branches out of a gate or a junction (a decision
@@ -474,8 +507,10 @@ tab at the top of its box: a drawing and its step cards match by number alone
 
 What the clean register asks of the flow text:
 
-1. One step per real step, and at most three steps in a column, counted across all lanes (V14).
-2. Short titles: at most four words after the step number. The detail goes on the cards.
+1. One step per real step, and one spine: alternative paths leave through `offpage` steps instead
+   of stacking as rows.
+2. Short titles: at most four words after the step number, and a `note=` of a few words. The
+   detail goes on the step cards.
 3. Distinct knowledge stays distinct: one `knowledge` step and one `~>` line per source, so the
    reader still sees which source feeds which step.
 
@@ -501,11 +536,22 @@ draws its own way: the register is a page option.
 - **All knowledge in one step "to look clean".** Keep which source feeds which step as separate
   `knowledge` steps and lines; merging them hides real couplings.
 - **A colour value written anywhere.** Colours live only in `references/flow-colours.json`.
-- **A lane drawing built by hand.** A workflow on a page is the SVG `render` writes, placed on the
+- **A lane drawing built by hand.** A workflow on a page is what `render` writes, placed on the
   page as it is. A hand-built SVG or HTML lane carries its own colours, misses the lint, and can't
-  move to Atlas as text. The host page's brand rules stop at the drawing's edge.
+  move to Atlas as text. The stacked columns, the hover, the links and the store tags all come
+  from the kit: a drawing that needs one of them needs a `page:` line, not a script of its own.
+  The host page's brand rules stop at the drawing's edge.
+- **One step to a column on a page.** `--layout canvas` is Atlas's preview. On a page it makes a
+  long strip of title-only cards that nobody can take in at once.
+- **Bare cards.** A page drawing whose cards show a title and nothing else has no `page:` list.
+  Write the notes and what runs each step before you render.
+- **A link nobody gave.** A `link=` is an address the user gave or one you opened. Never build one
+  from a name.
+- **The drawing as an image.** An `<img>` of the SVG loses the hover and the links. Put the
+  `--embed` fragment on the page.
 - **A crowded drawing squeezed to fit.** Lines that overlap or cut through a box hide which step
-  feeds which. Give the drawing room (DRAFT step 7) and let it scroll.
+  feeds which. Give the drawing room (DRAFT step 7) and let it scroll; the fit button shows the
+  whole of it.
 - **A page-only kind in an Atlas draft.** Atlas drops the step without a word; the flow stays a page
   drawing.
 - **Shipping without looking.** A page drawing ships after a clean lint (for an edit, one that adds
@@ -518,7 +564,7 @@ draws its own way: the register is a page option.
 ## Output style
 
 - Be terse. The user reads what you say, not your deliberations.
-- A drafted or edited flow ends with the review link or the SVG path as the last line.
+- A drafted or edited flow ends with the review link or the drawing's path as the last line.
 - When reading, lead with the outcome (start → end) before details.
 - Steps are always numbered step cards (Input · Process · Output · layer · Reads · Writes ·
   Knowledge), never separate FE / BE / DB lists: a reader learns whether a step touches the
@@ -535,6 +581,11 @@ draws its own way: the register is a page option.
   its graph doesn't back, and draws a line between two bound steps only when its graph holds that
   edge.
 - **Page-only kinds keep a flow off Atlas** until Atlas has kinds for them.
+- **Hover needs a current browser.** The fading uses the CSS `:has()` selector. A browser without
+  it shows every line at full strength, and a touch screen has no hover: the drawing still reads,
+  and the links still open.
+- **Atlas shows none of `page:`.** Notes, links and phase lines are for the page drawing; on
+  Atlas's canvas a step's detail comes from the skill or note its `ref=` binds.
 - **Out of scope:** sequence diagrams (message timing between services), and architecture-only
   component diagrams; for the FE/BE/DB view as a slide page, use `slide-arch-diagram`.
 - A team that still needs a Lucid file takes it from the Atlas workflow's Download Lucid JSON

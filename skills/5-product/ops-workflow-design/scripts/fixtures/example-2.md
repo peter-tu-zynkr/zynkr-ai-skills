@@ -31,6 +31,17 @@ flow:
   - "review ~> log"
   - "post ~> log"
   - "log ~> notify"
+page:
+  - "## Intake | The customer sends the file and AI reads it"
+  - "## Approval | Over $10k waits for a person; the rest posts itself"
+  - "upload | note=One CSV, a row per invoice"
+  - "extract | note=AI · reads every row | run=extract-invoice prompt"
+  - "big | note=Rules · compares each total"
+  - "review | note=A person approves or rejects"
+  - "post | note=Rules · no person involved"
+  - "notify | note=An email with the result"
+  - "schema | note=The fields step 2 pulls | link=https://example.com/extraction-schema | tip=Opens the extraction schema"
+  - "log | note=Every approved or posted invoice"
 ---
 
 # Invoice approval

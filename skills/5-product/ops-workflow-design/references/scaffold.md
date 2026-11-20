@@ -116,7 +116,10 @@ direction is the meaning:
 
 ## 6) Columns, and at most 3 steps per column (V14)
 
-The renderer places columns the way Atlas's canvas does:
+A flow has two sets of columns. **On a page** the kit builds its own: each phase is a run of
+columns and its steps stack inside them, so nothing below applies and `col=` is not read
+(`page-drawing.md` §3). **On Atlas's canvas**, and in `render --layout canvas`, columns are
+placed this way, and V14 counts them:
 
 - **The spine sets the column.** Columns count from 0 at `start`. Each step sits one column right
   of the furthest step whose `->` line leads to it.
@@ -196,6 +199,10 @@ flow:
   - "<gate id> -> <id> | No"
   - "<hitl id> ~> <store id> | <what it writes>"
   - "<knowledge id> ~> <llm id>"
+page:
+  - "## <Phase 1> | <one line on what happens in this phase>"
+  - "<id> | note=<a few words on the step> | run=<what runs it>"
+  - "<id> | note=<what the store holds> | link=<https://… its source> | tip=<what opens>"
 ---
 
 # <Process name>

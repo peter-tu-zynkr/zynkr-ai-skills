@@ -184,8 +184,22 @@ flow:
   - "review ~> log"
   - "post ~> log"
   - "log ~> notify"
+page:
+  - "## Intake | The customer sends the file and AI reads it"
+  - "## Approval | Over $10k waits for a person; the rest posts itself"
+  - "upload | note=One CSV, a row per invoice"
+  - "extract | note=AI · reads every row | run=extract-invoice prompt"
+  - "big | note=Rules · compares each total"
+  - "review | note=A person approves or rejects"
+  - "post | note=Rules · no person involved"
+  - "notify | note=An email with the result"
+  - "schema | note=The fields step 2 pulls | link=https://example.com/extraction-schema | tip=Opens the extraction schema"
+  - "log | note=Every approved or posted invoice"
 ---
 ```
+
+The `page:` list is for the page drawing (step 7): Atlas ignores it. Its one link is a
+placeholder address for the example; in a real flow a link is one the user gave.
 
 4. **Lint** — `python3 -I <skill>/scripts/flow_svg.py lint example-2.md`:
 
@@ -205,9 +219,14 @@ flow:
    `list_pending` and `get_draft` on the new version: its sha256 equals `shasum -a 256 example-2.md`.
    Approve nothing.
 7. **A page drawing**, when the user wants a picture now (or every routing answer is no):
-   `python3 -I <skill>/scripts/flow_svg.py render example-2.md --register clean --out invoice-approval.svg`,
-   then look at it. Each step carries its number on a tab, the lanes run front end, backend, data,
-   and only the gate's branches carry labels.
+   `python3 -I <skill>/scripts/flow_svg.py render example-2.md --register clean --embed --out invoice-approval.html`
+   and `table example-2.md --out invoice-approval-steps.html`; `lint example-2.md --layout stacked --register clean`
+   exits 0; then look at it. The ten steps sit
+   in two columns, one per phase: Intake's steps stacked in the first, Approval's in the second.
+   Each work card carries its number and its note, and step 2 names what runs it; the invoice log
+   reads `W 4 5 · R 6`;
+   the schema's name is underlined and opens its page; only the gate's branches carry labels; and
+   hovering step 5 leaves only its three lines dark.
 
 **Output to the user:**
 

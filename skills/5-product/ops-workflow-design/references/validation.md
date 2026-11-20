@@ -12,7 +12,10 @@ Every rule has one home:
 
 - **lint** — `flow_svg.py lint` checks it mechanically and names the rule and the step ids: V4, V5,
   V6, V9, V12 (label length) and V14, plus two boxes or labels that overlap, and a step or line
-  Atlas would not draw (`parse`).
+  Atlas would not draw (`parse`). `lint --layout stacked` checks the page drawing: the same rules
+  without V14, with the overlaps and the card text measured on the stacked drawing its
+  `--register`, `--stack` and `--lang` make (a title, a note or a phase line that takes too many
+  lines is a V12).
 - **kind** — settled when you pick each step's kind. The kind decides the step's lane, shape and
   fill, so a drawing can't break these rules; a wrong kind can. Check the kinds against the cards
   and the titles: V1, V2, V3, V8 and V10.
@@ -112,6 +115,11 @@ never changes the exit.
   column"). The rule was always implied; an owner's ruling on 2026-09-01 made it a rule.
 - **Detect**: a column holding **4 or more** steps, counted **across all lanes** after layout. Lint
   names the column as `col=` counts it, from 0, and its steps.
+- **Where it applies**: Atlas's columns, which is what plain `lint` lays out. The page drawing
+  builds its own columns (a phase is a run of columns, and its steps stack top to bottom inside
+  them, `page-drawing.md`), so `lint --layout stacked` does not count V14. The rule's first half
+  holds on both: one spine. On a page each column is one stretch of that spine read top to
+  bottom, never a second path beside it.
 - **Fix**: pick **one** path as the spine and run it left to right. Alternative paths leave the
   spine through an `offpage` step that names their own flow, and rejoin, if they do, as a
   plumbing line, never as another row. A column's budget is the spine step, one store or sign-off,

@@ -22,14 +22,25 @@ It also draws three page-only kinds Atlas has no kind for yet: `context` (encodi
 `junction` (row 13) and `ephemeral` (row 15). Atlas would drop those steps, so lint warns, and a
 flow that uses one stays a page drawing.
 
-  python3 flow_svg.py render <flow.md> [--registry P] [--out F.svg] [--lang en|zh-TW] [--register audit|clean]
-  python3 flow_svg.py lint <flow.md> [--json] [--registry P]
+Since SKB-154 a page is drawn in the STACKED layout (references/page-drawing.md): a phase is a run
+of columns, its steps stack top to bottom inside them, a store sits under the step that writes it,
+a card shows what the frontmatter's `page:` list adds (a note, what runs the step, a link), and
+hovering a step lights only its lines. Atlas's own columns stay as `--layout canvas`, and plain
+`lint` still lays the flow out as Atlas will.
+
+  python3 flow_svg.py render <flow.md> [--embed] [--layout stacked|canvas] [--stack 2-6] [--out F]
+                                       [--lang en|zh-TW] [--register audit|clean] [--registry P]
+  python3 flow_svg.py table <flow.md> [--lang en|zh-TW] [--out F.html]
+  python3 flow_svg.py lint <flow.md> [--layout canvas|stacked] [--register audit|clean] [--stack 2-6]
+                                     [--lang en|zh-TW] [--json] [--registry P]
   python3 flow_svg.py --selftest
 
   dev only, beside the workbench's scripts/flow-golden.ts:
   python3 flow_svg.py compare <flow.md>... --goldens <dir>
 
-render writes the SVG to --out, or to stdout. lint prints validation.md's report (or --json) and
+render writes the SVG to --out, or to stdout; with --embed it writes an HTML fragment for a page
+(legend, fit button, scroll box, the drawing inline). table writes the steps table that goes under
+a drawing. lint prints validation.md's report (or --json) and
 exits 1 when any rule is broken; warnings never change the exit. Exit 2 means it could not run.
 Python 3.9, standard library only: a Mac's /usr/bin/python3 runs it with nothing to install.
 """
@@ -1080,7 +1091,9 @@ def flow_title(fm, path):
     return os.path.splitext(os.path.basename(path or 'flow'))[0]
 
 
-def build(text, reg, lang='en', register='audit', path=None):
+def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas', embed=False, stack=None):
+    """layout_kind 'canvas' is Atlas's own columns, one step per row and column; 'stacked' is the
+    standard page drawing (below, The stacked layout)."""
     fm, fm_warnings, _ = read_frontmatter(text)
     cuts = []
     block = parse_step_block(fm, page=True, cuts=cuts)
@@ -1091,9 +1104,11 @@ def build(text, reg, lang='en', register='audit', path=None):
     model = {'fm': fm, 'fm_warnings': fm_warnings, 'cuts': cuts, 'block': block, 'layout': lay,
              'title': flow_title(fm, path),
              'nodes': {}, 'routes': [], 'labels': [], 'phases': [], 'overlaps': [], 'long_labels': [],
-             'lang': lang, 'register': register}
+             'lang': lang, 'register': register, 'page': parse_page(fm, block), 'embed': embed}
     if not steps:
         return model
+    if layout_kind == 'stacked':
+        return build_stacked(model, reg, stack or STACK_MAX)
     rows = lay['rows']
     row_index = dict((rk, n) for n, rk in enumerate(rows))
 
@@ -1293,6 +1308,9 @@ def route_edges(model, reg):
     x0, top, right, bottom = model['x0'], model['lanes_top'], model['lanes_right'], model['lanes_bottom']
     allports = dict((sid, ports_of(nd)) for sid, nd in nodes.items())
     infl = [(a - CLEAR, b - CLEAR, c + CLEAR, d + CLEAR) for (a, b, c, d) in (nd['bbox'] for nd in nodes.values())]
+    infl += [(a - 4, b - 4, c + 4, d + 4) for (a, b, c, d) in model.get('obstacles', [])]
+    col_w, node_w = model.get('col_w', COL_W), model.get('node_w', NW)
+    stacked = model['layout'].get('kind') == 'stacked'
     box = (x0 + 3, top + 3, right - 3, bottom - 3)
 
     def stub_ok(pt, own):
@@ -1315,9 +1333,9 @@ def route_edges(model, reg):
     xs, ys = [], []
     ncol = model['layout']['cols']
     for i in range(ncol + 1):
-        left = x0 + 3 if i == 0 else x0 + COL_W * i - (COL_W - NW) / 2 + CLEAR
-        rgt = right - 3 if i == ncol else x0 + COL_W * i + (COL_W - NW) / 2 - CLEAR
-        mid = x0 + COL_W * i if 0 < i < ncol else (left + rgt) / 2
+        left = x0 + 3 if i == 0 else x0 + col_w * i - (col_w - node_w) / 2 + CLEAR
+        rgt = right - 3 if i == ncol else x0 + col_w * i + (col_w - node_w) / 2 - CLEAR
+        mid = x0 + col_w * i if 0 < i < ncol else (left + rgt) / 2
         k = 0
         while True:
             a, b = mid - TRACK * (k + .5), mid + TRACK * (k + .5)
@@ -1344,7 +1362,8 @@ def route_edges(model, reg):
 
     order = sorted(range(len(flow)), key=lambda q: (flow[q]['role'] != 'spine',
                                                     abs(nodes[flow[q]['from']]['col'] - nodes[flow[q]['to']]['col']),
-                                                    abs(nodes[flow[q]['from']]['row'] - nodes[flow[q]['to']]['row']), q))
+                                                    abs(nodes[flow[q]['from']]['row'] - nodes[flow[q]['to']]['row']),
+                                                    abs(nodes[flow[q]['from']]['cy'] - nodes[flow[q]['to']]['cy']) if stacked else 0, q))
     back = model['layout']['back']
 
     def ends(e, sides):
@@ -1371,11 +1390,12 @@ def route_edges(model, reg):
         a, b = nodes[e['from']], nodes[e['to']]
         # A back edge (a retry) leaves and enters through the bottom or the top, so it loops around
         # the row and reads as a return, not as one more step forward.
-        starts, goals = ends(e, {'B': 0, 'T': 30}) if any(e is x for x in back) else ([], {})
+        # In a stack the return runs beside the column instead: the top and bottom carry the steps' own order.
+        starts, goals = ends(e, {'R': 0, 'L': 12} if stacked else {'B': 0, 'T': 30}) if any(e is x for x in back) else ([], {})
         if not starts or not goals:
             starts, goals = ends(e, None)
-        lo = min(a['bbox'][0], b['bbox'][0]) - COL_W
-        hi = max(a['bbox'][2], b['bbox'][2]) + COL_W
+        lo = min(a['bbox'][0], b['bbox'][0]) - col_w
+        hi = max(a['bbox'][2], b['bbox'][2]) + col_w
         res = router.search(starts, goals, (lo, hi)) if starts and goals else None
         if res is None and starts and goals:
             res = router.search(starts, goals)
@@ -1459,6 +1479,7 @@ def place_labels(model, reg):
     for nd in nodes.values():
         if nd.get('label_box'):
             blockers.append(nd['label_box'])
+    blockers.extend(model.get('obstacles', []))
     placed = []
     area = (model['x0'] + 2, model['lanes_top'] + 2, model['lanes_right'] - 2, model['lanes_bottom'] - 2)
     segs = []
@@ -1705,6 +1726,754 @@ def render_svg(model, reg):
 
 
 # ----------------------------------------------------------------------------------------------
+# The stacked layout (SKB-154): the standard page drawing. A phase is a run of columns, the steps
+# of a phase stack top to bottom inside their lane, and a store sits under the step that writes
+# it. A card shows more than its title: a note, what runs it, a link, and on a store the numbers
+# of the steps that write and read it. Hovering a step lights only its own lines.
+#
+# What a card shows beyond its title comes from the frontmatter's `page:` list. Atlas reads only
+# `steps:` and `flow:`, so the list changes nothing there:
+#
+#   page:
+#     - "## <phase> | <one line on what happens in it>"
+#     - "<step id> | note=<a few words> | run=<what runs it> | link=<https://…> | tip=<what opens>"
+#     - "<step id> | break"          (this step starts a new column inside its phase)
+
+STACK_MAX = 4
+LINK_RE = re.compile('https?://[!-~]+\\Z')
+S_GUT, S_NW, S_GAP, S_GW, S_GH = 76, 204, 84, 156, 88
+S_PAD = {'fe': (20, 28), 'be': (30, 40), 'db': (26, 30)}
+S_GAP_Y = {'fe': 30, 'be': 30, 'db': 22}
+FS_NAME, LH_NAME, FS_NOTE, LH_NOTE, FS_RUN, FS_STORE, FS_TAG, LH_TAG = 13, 16, 10.5, 13.5, 10, 12.5, 10, 14
+FS_UNDER, LH_UNDER = 11, 15
+MAX_NOTE_LINES = 3   # a title keeps the kit's own limit, MAX_NODE_LINES
+LANE_SHORT = {'fe': 'FE', 'be': 'BE', 'db': 'DB'}
+LEADS = ('start', 'input', 'context')   # front-end steps that lead into the step after them
+
+UI['en'].update({
+    'hover': 'Hover a step to light only its lines.',
+    'linked': 'An underlined name opens its source.',
+    'tags': 'On a store, W lists the steps that write it and R the steps that read it.',
+    'fit': 'Fit to width', 'actual': 'Actual size', 'scroll': 'Scroll sideways for the rest →',
+    'none': 'none', 'table': ('Step', 'Layer', 'What it does · what runs it', 'Reads', 'Writes'),
+    'how_stacked': 'Read left to right, one phase at a time; inside a phase, follow the solid line from the top down. '
+                   'Each box is one step, and its number is the step\'s number in the document. The lanes say who '
+                   'does it: a person at the top, the system in the middle, data and knowledge at the bottom. A '
+                   'box’s shape and colour say what kind of step it is. Dashed grey lines are reads and writes, and '
+                   'the arrow points the way the data moves.'})
+UI['zh-TW'].update({
+    'hover': '滑過任一步，只亮它的線',
+    'linked': '名稱有底線的方塊，可以點開它的來源',
+    'tags': '資料方塊上的 W 是寫入它的步驟，R 是讀取它的步驟',
+    'fit': '縮成一頁看全貌', 'actual': '放大看字', 'scroll': '往右捲，看後面的階段 →',
+    'none': '無', 'table': ('步驟', '層', '做什麼 · 誰執行', '讀', '寫'),
+    'how_stacked': '由左往右，一個階段一個階段讀；階段裡沿著實線由上往下。每個方塊是一步，方塊上的編號就是文件裡的步驟編號。'
+                   '泳道說明誰做：上面是人，中間是系統，下面是資料和知識。方塊的形狀和顏色說明是哪一種步驟。'
+                   '灰色虛線是讀寫資料，箭頭是資料往哪走。'})
+
+
+def parse_page(fm, block):
+    """The `page:` list. Unknown steps, phases and options are reported and skipped; a link that is
+    not http(s) is refused. Nothing here reaches Atlas: its parser never reads the key."""
+    out = {'steps': {}, 'gists': {}, 'warnings': []}
+    ids = set(s['id'] for s in block['steps'])
+    phases = set(p['name'] for p in block['phases'])
+
+    def warn(code, detail):
+        out['warnings'].append({'code': code, 'field': 'page', 'detail': detail})
+
+    for raw in as_array(fm.get('page')):
+        parts = [js_trim(p) for p in raw.split('|')]
+        head = PHASE_RE.match(parts[0])
+        if head:
+            name = js_slice(js_trim(head.group(1)), MAX_PHASE_NAME)
+            gist = js_trim(' | '.join(p for p in parts[1:] if p))
+            if name not in phases:
+                warn('page_unknown_phase', js_slice(name, 60))
+            elif gist:
+                out['gists'][name] = gist
+            continue
+        sid = parts[0]
+        if sid not in ids:
+            warn('page_unknown_step', js_slice(sid, 60))
+            continue
+        d = out['steps'].setdefault(sid, {'note': [], 'run': None, 'link': None, 'tip': None, 'break': False})
+        for opt in parts[1:]:
+            if opt == 'break':
+                d['break'] = True
+                continue
+            eq = opt.find('=')
+            k, v = (js_trim(opt[:eq]), js_trim(opt[eq + 1:])) if eq > 0 else (None, '')
+            if k == 'note' and v:
+                d['note'].append(v)
+            elif k == 'run' and v:
+                d['run'] = v
+            elif k == 'tip' and v:
+                d['tip'] = v
+            elif k == 'link' and v:
+                if LINK_RE.match(v):
+                    d['link'] = v
+                else:
+                    warn('page_link_refused', '%s: %s (a link starts with https:// or http://)' % (sid, js_slice(v, 80)))
+            else:
+                warn('page_opt_unknown', '%s: %s' % (sid, js_slice(opt, 60)))
+    return out
+
+
+def layout_stacked(block, page, stack_max=STACK_MAX):
+    """Columns for the stacked layout.
+
+    - The steps of the front end and the backend keep the file's order. Each phase takes its own
+      run of columns; inside a phase the backend steps fill a column top to bottom, at most
+      `stack_max` of them. A phase that needs more than one column spreads them as evenly as they
+      go, the fuller columns first (ten steps at four to a column are 4, 3 and 3). A `break` in
+      `page:` starts a new column at that step.
+    - A front-end step sits over the backend step it belongs to: a start, an input or a context
+      document over the step after it, anything else over the step before it.
+    - A store or an artifact sits in the column of the first step that writes it, or, when no step
+      writes it, of the first step that reads it. A knowledge source sits under its first reader:
+      steps rely on it from the start, and the step that maintains it usually comes last."""
+    steps, flow = block['steps'], block['flow']
+    by_id = dict((s['id'], s) for s in steps)
+    ids = [s['id'] for s in steps]
+    lane, sub, shape = {}, {}, {}
+    for s in steps:
+        lane[s['id']], sub[s['id']], shape[s['id']] = frame_step(s['kind'], block['feSublane'], s['by'])
+    spine = [f for f in flow if f['role'] == 'spine' and f['from'] in by_id and f['to'] in by_id]
+    back = back_edges_of(spine, ids)
+
+    fe_subs = sorted(set(sub[i] for i in ids if lane[i] == 'fe'))
+    split_fe = len(fe_subs) == 2
+    bands = []
+    if fe_subs:
+        bands += [('fe', sb) for sb in fe_subs] if split_fe else [('fe', None)]
+    if any(lane[i] == 'be' for i in ids):
+        bands.append(('be', None))
+    if any(lane[i] == 'db' for i in ids):
+        bands.append(('db', None))
+    band = dict((i, bands.index((lane[i], sub[i] if (lane[i] == 'fe' and split_fe) else None))) for i in ids)
+
+    # a step's phase, by the ordinals each phase spans (the block drops a phase that holds no step)
+    phase_of = {}
+    for pi, ph in enumerate(block['phases']):
+        for s in steps:
+            if ph['from'] <= s['ordinal'] <= ph['to']:
+                phase_of[s['id']] = pi
+    primary = [s for s in steps if lane[s['id']] != 'db']
+    runs = []
+    for s in primary:
+        if not runs or runs[-1][0] != phase_of.get(s['id']):
+            runs.append((phase_of.get(s['id']), []))
+        runs[-1][1].append(s)
+    col, groups, c = {}, [], 0
+    for ph, members in runs:
+        first = c
+        parts, cur = [], []
+        for s in members:
+            if cur and page['steps'].get(s['id'], {}).get('break'):
+                parts.append(cur)
+                cur = []
+            cur.append(s)
+        parts.append(cur)
+        for part in parts:
+            n_be = sum(1 for s in part if lane[s['id']] == 'be')
+            n_cols = max(1, -(-n_be // stack_max))
+            base, extra = divmod(n_be, n_cols)
+            sizes = [base + (1 if k < extra else 0) for k in range(n_cols)]
+            here, left, k = 0, n_be, 0
+            for s in part:
+                sid = s['id']
+                is_be = lane[sid] == 'be'
+                if (is_be or s['kind'] in LEADS) and n_be and here == sizes[k] and left > 0:
+                    c += 1
+                    k += 1
+                    here = 0
+                if is_be:
+                    here += 1
+                    left -= 1
+                col[sid] = c
+            c += 1
+        name = block['phases'][ph]['name'] if ph is not None else None
+        groups.append({'name': name, 'c0': first, 'c1': c - 1})
+    n_cols = max(1, c)
+
+    placed = dict(col)
+    last = 0
+    for s in steps:
+        sid = s['id']
+        if sid in placed:
+            last = placed[sid]
+            continue
+        writers = [placed[e['from']] for e in flow if e['role'] == 'plumbing' and e['to'] == sid and e['from'] in placed]
+        readers = [placed[e['to']] for e in flow if e['role'] == 'plumbing' and e['from'] == sid and e['to'] in placed]
+        if s['kind'] == 'knowledge' and readers:
+            col[sid] = min(readers)
+        else:
+            col[sid] = min(writers) if writers else (min(readers) if readers else last)
+
+    stacks = {}
+    for s in steps:
+        if s['kind'] != 'knowledge':
+            stacks.setdefault((col[s['id']], band[s['id']]), []).append(s['id'])
+    for s in steps:
+        if s['kind'] == 'knowledge':
+            stacks.setdefault((col[s['id']], band[s['id']]), []).append(s['id'])
+    return {'kind': 'stacked', 'ids': ids, 'lane': lane, 'sub': sub, 'shape': shape, 'col': col, 'tier': dict(col),
+            'bands': bands, 'band': band, 'stacks': stacks, 'cols': n_cols, 'groups': groups,
+            'back': [spine[i] for i in sorted(back)]}
+
+
+def number_key(n):
+    return [int(x) for x in re.findall('[0-9]+', n)]
+
+
+def store_tags(block, lay):
+    """Each store's W and R step numbers, from the plumbing lines, so a tag cannot disagree with a line."""
+    by_id = dict((s['id'], s) for s in block['steps'])
+    tags = {}
+    for e in block['flow']:
+        if e['role'] != 'plumbing':
+            continue
+        a_db, b_db = lay['lane'][e['from']] == 'db', lay['lane'][e['to']] == 'db'
+        if a_db == b_db:
+            continue
+        store, key, step = (e['to'], 'W', e['from']) if b_db else (e['from'], 'R', e['to'])
+        n = split_number(by_id[step]['title'])[0]
+        if n:
+            got = tags.setdefault(store, {'W': [], 'R': []})[key]
+            if n not in got:
+                got.append(n)
+    for t in tags.values():
+        t['W'].sort(key=number_key)
+        t['R'].sort(key=number_key)
+    return tags
+
+
+def stacked_node(s, lay, reg, page, tags, model):
+    """One step's box in the stacked layout: its size and its text, placed later."""
+    sid, kind = s['id'], s['kind']
+    shape = lay['shape'][sid]
+    in_db = lay['lane'][sid] == 'db'
+    number, name = (None, s['title']) if (in_db or shape == 'terminal') else split_number(s['title'])
+    d = page['steps'].get(sid, {})
+    notes = list(d.get('note') or [])
+    run = d.get('run')
+    if not run and s['ref']:
+        run = s['ref'] if s['ref'].startswith('atlas:') else '/' + s['ref']
+    nd = {'id': sid, 'kind': kind, 'role': reg['_role'][kind], 'shape': shape, 'number': number, 'badge': number,
+          'title': s['title'], 'col': lay['col'][sid], 'row': lay['band'][sid], 'lane': lay['lane'][sid],
+          'link': d.get('link'), 'tip': d.get('tip'), 'texts': [], 'under': [], 'under_h': 0, 'w': S_NW,
+          'bulge': 0, 'lines': []}
+    texts = nd['texts']   # (what, dx, dy, string, anchor)
+
+    def over(n, limit, what):
+        if n > limit:
+            model['long_labels'].append((sid, what, '%d lines' % n))
+
+    bw = max(22, len(number) * 6 + 6) if number else 0
+    if shape == 'junction':
+        nd['w'] = nd['h'] = 32
+        nd['under'] = wrap(name, FS_UNDER, S_NW / 2 + 6)
+        over(len(nd['under']), MAX_NODE_LINES, 'step')
+        nd['under_h'] = 6 + LH_UNDER * len(nd['under'])
+    elif shape == 'decision':
+        nl = wrap(name, FS_NAME, S_GW * .62)
+        over(len(nl), MAX_NODE_LINES, 'step')
+        nd['w'], nd['h'] = S_GW, S_GH + 26 * max(0, len(nl) - 2)
+        base = nd['h'] / 2 + (6 if number else 0) - 17 * len(nl) / 2 + 12.5
+        for i, line in enumerate(nl):
+            texts.append(('name', nd['w'] / 2, base + 17 * i, line, 'middle'))
+        if number:
+            nd['badge_at'] = (nd['w'] / 2 - bw / 2, 8, bw)
+        ul = [line for n in notes for line in wrap(n, FS_UNDER, S_NW / 2 + 6)] + ([run] if run else [])
+        over(len(ul), MAX_NOTE_LINES, 'note')
+        nd['under'] = ul
+        nd['under_h'] = (6 + LH_UNDER * len(ul)) if ul else 0
+    elif shape == 'terminal':
+        head, _, tail = s['title'].partition(' · ')
+        hl = wrap(head, FS_NAME, S_NW - 44)
+        sl = (wrap(tail, FS_NOTE, S_NW - 44) if tail else []) + [line for n in notes + ([run] if run else [])
+                                                                 for line in wrap(n, FS_NOTE, S_NW - 44)]
+        over(len(hl), MAX_NODE_LINES, 'step')
+        over(len(sl), MAX_NOTE_LINES, 'note')
+        nd['h'] = 14 + LH_NAME * len(hl) + LH_NOTE * len(sl) + (3 if sl else 0)
+        for i, line in enumerate(hl):
+            texts.append(('name', nd['w'] / 2, 19 + LH_NAME * i, line, 'middle'))
+        for i, line in enumerate(sl):
+            texts.append(('note', nd['w'] / 2, 17 + LH_NAME * len(hl) + LH_NOTE * i, line, 'middle'))
+    elif in_db:
+        nl = wrap(name, FS_STORE, S_NW - 22)
+        over(len(nl), MAX_NODE_LINES, 'step')
+        tl = [('note', line) for n in notes for line in wrap(n, FS_NOTE, S_NW - 20)]
+        over(len(tl), MAX_NOTE_LINES, 'note')
+        if run:
+            tl += [('run', line) for line in wrap(run, FS_RUN, S_NW - 20)]
+        tg = tags.get(sid)
+        if tg:
+            parts = [k + ' ' + ' '.join(tg[k]) for k in ('W', 'R') if tg[k]]
+            joined = ' · '.join(parts)
+            for part in ([joined] if tw(joined, FS_TAG) <= S_NW - 20 else parts):
+                tl += [('tag', line) for line in wrap(part, FS_TAG, S_NW - 20)]
+        top, tail = (2 * CYL, 11) if shape == 'database' else (7, 17)
+        need = top + LH_NAME * len(nl) + LH_TAG * len(tl) + tail
+        nd['h'] = max(50, need)
+        off = (nd['h'] - need) / 2
+        nd['bulge'] = CYL if shape == 'database' else WAVE
+        for i, line in enumerate(nl):
+            texts.append(('store', nd['w'] / 2, off + top + 14 + LH_NAME * i, line, 'middle'))
+        for i, (what, line) in enumerate(tl):
+            texts.append((what, nd['w'] / 2, off + top + LH_NAME * len(nl) + 12 + LH_TAG * i, line, 'middle'))
+    else:
+        tx0 = (6 + bw + 6) if number else 14
+        room = S_NW - tx0 - 8 - (6 if shape == 'manualOp' else 0)
+        nl = wrap(name, FS_NAME, room)
+        over(len(nl), MAX_NODE_LINES, 'step')
+        ml = [line for n in notes for line in wrap(n, FS_NOTE, room)]
+        over(len(ml), MAX_NOTE_LINES, 'note')
+        rl = wrap(run, FS_RUN, room) if run else []
+        block_h = LH_NAME * len(nl) + LH_NOTE * (len(ml) + len(rl))
+        body = max(54, block_h + 19)
+        top = SLANT - 3 if shape == 'manualIO' else 0
+        tail = POINT if shape == 'offpage' else (2 * WAVE if shape == 'document' else 0)
+        nd['h'] = top + body + tail
+        nd['bulge'] = WAVE if shape == 'document' else 0
+        ty = top + (body - block_h) / 2
+        for i, line in enumerate(nl):
+            texts.append(('name', tx0, ty + 12.5 + LH_NAME * i, line, None))
+        for i, line in enumerate(ml):
+            texts.append(('note', tx0, ty + LH_NAME * len(nl) + 10.5 + LH_NOTE * i, line, None))
+        for i, line in enumerate(rl):
+            texts.append(('run', tx0, ty + LH_NAME * len(nl) + LH_NOTE * (len(ml) + i) + 10.5, line, None))
+        if number:
+            nd['badge_at'] = (6 if shape != 'manualOp' else 9, top + body / 2 - 11, bw)
+    return nd
+
+
+def gutter_text(reg, lang, bands):
+    """The caption under each lane's FE, BE or DB, and a gutter wide enough for its longest word."""
+    titles = [reg['lanes']['titles'][lang][ln] if sb is None else reg['lanes']['rows'][lang][ln][sb] for ln, sb in bands]
+    longest = max([tw(word, FS_ROW - .5) for title in titles for word in title.split()] or [0])
+    gut = max(S_GUT, min(120, math.ceil(longest) + 30))
+    return gut, [wrap(title, FS_ROW - .5, gut - 12) for title in titles]
+
+
+def build_stacked(model, reg, stack_max=STACK_MAX):
+    block, page = model['block'], model['page']
+    steps = block['steps']
+    lay = layout_stacked(block, page, stack_max)
+    model['layout'] = lay
+    tags = store_tags(block, lay)
+    nodes = model['nodes']
+    for s in steps:
+        nodes[s['id']] = stacked_node(s, lay, reg, page, tags, model)
+    for sid, d in sorted(page['steps'].items()):
+        nd = nodes[sid]
+        unused = (['break'] if d.get('break') and nd['lane'] == 'db' else []) \
+            + (['note=', 'run='] if nd['shape'] == 'junction' and (d.get('note') or d.get('run')) else [])
+        if unused:
+            page['warnings'].append({'code': 'page_opt_unused', 'field': 'page', 'detail': '%s: %s (%s)' % (
+                sid, ' and '.join(unused), 'a store follows the step that writes it' if nd['lane'] == 'db'
+                else 'a junction shows its name only')})
+    headed = set(g['name'] for g in lay['groups'])
+    for name in sorted(page['gists']):
+        if name not in headed:
+            page['warnings'].append({'code': 'page_phase_unused', 'field': 'page', 'detail':
+                                     '%s (the phase holds only stores, so it has no column or heading of its own)' % js_slice(name, 60)})
+    bands, n_cols = lay['bands'], lay['cols']
+    cw = S_NW + S_GAP
+    gut, gutters = gutter_text(reg, model['lang'], bands)
+
+    def used(nd):
+        return nd['h'] + nd['bulge'] + nd['under_h']
+
+    band_h = []
+    for bi, (ln, sb) in enumerate(bands):
+        tallest = 0
+        for c in range(n_cols):
+            ids = lay['stacks'].get((c, bi), [])
+            if ids:
+                tallest = max(tallest, sum(used(nodes[i]) for i in ids) + S_GAP_Y[ln] * (len(ids) - 1))
+        band_h.append(max(tallest + S_PAD[ln][0] + S_PAD[ln][1], 58 + 13 * len(gutters[bi]), 96))
+
+    # the phase heads: a name, one line on what happens there (wrapped to two at most), a bracket
+    heads = []
+    for g in lay['groups']:
+        if not g['name']:
+            continue
+        room = (g['c1'] - g['c0'] + 1) * cw - 16
+        shown = g['name']
+        if tw(shown, FS_NAME) * 1.12 > room:
+            model['long_labels'].append((lay['stacks'].get((g['c0'], 0), [None])[0] or steps[0]['id'], 'phase', g['name']))
+            while shown and tw(shown + '…', FS_NAME) * 1.12 > room:
+                shown = shown[:-1]
+            shown += '…'
+        gist = wrap(page['gists'][g['name']], 12, room) if page['gists'].get(g['name']) else []
+        if len(gist) > 2:
+            model['long_labels'].append((steps[0]['id'], 'gist', g['name']))
+            gist = gist[:2]
+        heads.append({'name': g['name'], 'shown': shown, 'gist': gist, 'c0': g['c0'], 'c1': g['c1']})
+    head_h = (26 + 15 * max(len(h['gist']) for h in heads) + 14) if heads else 0
+
+    chrome = not model.get('embed')
+    x0 = MARGIN + gut
+    top0 = MARGIN + (TITLE_H if chrome else 0)
+    lanes_top = top0 + head_h
+    band_top = [lanes_top]
+    for h in band_h:
+        band_top.append(band_top[-1] + h)
+    model.update({'x0': x0, 'top0': top0, 'lanes_top': lanes_top, 'lanes_bottom': band_top[-1],
+                  'lanes_right': x0 + n_cols * cw, 'band_top': band_top, 'band_h': band_h, 'col_w': cw,
+                  'node_w': S_NW, 'gut': gut, 'gutters': gutters, 'heads': heads, 'obstacles': []})
+
+    for (c, bi), ids in sorted(lay['stacks'].items()):
+        ln = bands[bi][0]
+        y = band_top[bi] + S_PAD[ln][0]
+        cx = x0 + c * cw + cw / 2
+        for sid in ids:
+            nd = nodes[sid]
+            nd['x'], nd['y'] = cx - nd['w'] / 2, y
+            nd['cx'], nd['cy'] = cx, y + nd['h'] / 2
+            left, right, bottom = nd['x'], nd['x'] + nd['w'], y + nd['h'] + nd['bulge']
+            if nd['under']:
+                # a gate's note, or a junction's name, sits right of the bottom corner, so a line can still
+                # leave straight down
+                lw = max(tw(x, FS_UNDER) for x in nd['under'])
+                nd['under_box'] = (cx + 5, y + nd['h'] + 1, cx + 11 + lw, y + nd['h'] + 4 + LH_UNDER * len(nd['under']))
+                model['obstacles'].append(nd['under_box'])
+            nd['bbox'] = (left, y, right, bottom)
+            y += used(nd) + S_GAP_Y[ln]
+
+    ids = [s['id'] for s in steps]
+    for a in range(len(ids)):
+        for b in range(a + 1, len(ids)):
+            if rects_overlap(nodes[ids[a]]['bbox'], nodes[ids[b]]['bbox']):
+                model['overlaps'].append({'what': 'box', 'steps': [ids[a], ids[b]],
+                                          'detail': 'boxes %s and %s overlap' % (ids[a], ids[b])})
+    for nd in nodes.values():
+        ub = nd.get('under_box')
+        if ub and ub[2] > x0 + (nd['col'] + 1) * cw - 2:
+            model['overlaps'].append({'what': 'note', 'steps': [nd['id']],
+                                      'detail': 'the text under %s runs past its column' % nd['id']})
+    route_edges(model, reg)
+    place_labels(model, reg)
+    return model
+
+
+def svg_text(x, y, s, size, fill, weight=None, anchor=None, mono=False, cls=None, extra=''):
+    return ('<text x="%s" y="%s" font-family="%s" font-size="%s"%s fill="%s"%s%s%s>%s</text>'
+            % (f(x), f(y), esc(MONO if mono else FONT), f(size), ' font-weight="%s"' % weight if weight else '', fill,
+               ' text-anchor="%s"' % anchor if anchor else '', ' class="%s"' % cls if cls else '', extra, esc(s)))
+
+
+def stacked_shape(nd):
+    role = nd['role']
+    x, y, w, h = nd['x'], nd['y'], nd['w'], nd['h']
+    if nd['shape'] == 'process':
+        # an AI step's corners are round and a rules step's nearly square, so the two differ by more than colour
+        return ('<rect x="%s" y="%s" width="%s" height="%s" rx="%s" fill="%s" stroke="%s" stroke-width="1.2"/>'
+                % (f(x), f(y), f(w), f(h), 13 if nd['kind'] == 'llm' else 3, role['fill'], role['stroke']))
+    return shape_svg(nd['shape'], x, y, w, h, role['fill'], role['stroke'], role.get('dash'), 1.2)
+
+
+def stacked_glyph(role, x, y, reg):
+    if role['shape'] == 'process':
+        return ('<rect x="%s" y="%s" width="30" height="18" rx="%s" fill="%s" stroke="%s" stroke-width="1.1"/>'
+                % (f(x), f(y), 7 if role['role'] == 'llm' else 2, role['fill'], role['stroke']))
+    return glyph(role, x, y, reg)
+
+
+def hover_css(ids):
+    """Colour-free: it only fades the lines a hovered (or keyboard-focused) step does not touch."""
+    rules = ['svg.zflow .e{transition:opacity .15s ease}',
+             'svg.zflow:has(.nd:hover) .e,svg.zflow:has(a:focus-visible) .e{opacity:.12}']
+    for i in ids:
+        rules.append('svg.zflow:has(.nd[data-n="%s"]:hover) .e[data-a~="%s"],'
+                     'svg.zflow:has(a:focus-visible .nd[data-n="%s"]) .e[data-a~="%s"]{opacity:1}' % (i, i, i, i))
+    rules.append('svg.zflow a{cursor:pointer}')
+    rules.append('svg.zflow a .nm{text-decoration:underline}')
+    rules.append('@media (prefers-reduced-motion:reduce){svg.zflow .e{transition:none}}')
+    return '<style>' + '\n'.join(rules) + '</style>'
+
+
+def render_stacked(model, reg):
+    lang, ui = model['lang'], UI[model['lang']]
+    audit = model['register'] == 'audit'
+    embed = bool(model.get('embed'))
+    text, page, lanes = reg['text'], reg['page'], reg['lanes']
+    nodes, steps = model['nodes'], model['block']['steps']
+    if not steps:
+        raise KitError('the flow declares no steps')
+    lay = model['layout']
+    x0, cw, lanes_right = model['x0'], model['col_w'], model['lanes_right']
+    lanes_top, lanes_bottom, top0 = model['lanes_top'], model['lanes_bottom'], model['top0']
+    band_top, band_h, bands = model['band_top'], model['band_h'], lay['bands']
+    roles, edge_roles = legend_items(model, reg)
+    linked = any(nd.get('link') for nd in nodes.values())
+    tagged = any(t[0] == 'tag' for nd in nodes.values() for t in nd['texts'])
+    o = []
+
+    width = lanes_right + MARGIN if embed else max(lanes_right + MARGIN, 720)
+    height = lanes_bottom + MARGIN
+    placed_items, legend_h, tail_lines, panel_top, panel_h = [], 0, [], 0, 0
+    if not embed:
+        inner = width - 2 * MARGIN - 24
+        lx = ly = 0
+        for kind, what, label in ([('role', r, r['label'][lang]) for r in roles]
+                                  + [('edge', er, reg['edges'][er]['label'][lang]) for er in edge_roles]):
+            iw = 30 + 8 + tw(label, FS_LABEL) + 22
+            if lx and lx + iw > inner:
+                lx, ly = 0, ly + 26
+            placed_items.append((kind, what, label, lx, ly))
+            lx += iw
+        legend_h = ly + 26
+        notes = [ui['hover']] + ([ui['tags']] if tagged else []) + ([ui['linked']] if linked else [])
+        tips = '；'.join(notes) + '。' if lang == 'zh-TW' else ' '.join(notes)
+        tail_lines = wrap((ui['how_stacked'] + ('' if lang == 'zh-TW' else ' ') if not audit else '') + tips, FS_LABEL, inner)
+        panel_top = lanes_bottom + 18
+        panel_h = 30 + legend_h + 10 + 26 + LH_LABEL * len(tail_lines) + 6 + 16
+        height = panel_top + panel_h + MARGIN
+
+    o.append('<rect x="0" y="0" width="%s" height="%s" fill="%s"/>' % (f(width), f(height), page['background']))
+    o.append(hover_css(lay['ids']))
+    if not embed:
+        o.append(svg_text(MARGIN, MARGIN + 16, model['title'], 16, text['primary'], 700))
+        if audit:
+            o.append(svg_text(MARGIN, MARGIN + 34, '%d %s · %d %s · %s · %s %s' % (
+                len(steps), ui['steps'], len(model['block']['flow']), ui['lines'], ui['audit'], ui['colours'],
+                reg['version']), 11, text['muted']))
+    # phase heads
+    for h in model['heads']:
+        x1, x2 = x0 + h['c0'] * cw + S_GAP / 2, x0 + (h['c1'] + 1) * cw - S_GAP / 2
+        mid = (x1 + x2) / 2
+        o.append(svg_text(mid, top0 + 16, h['shown'], FS_NAME, text['primary'], 700, 'middle', mono=True,
+                          extra=' letter-spacing=".08em" data-phase="%s"' % esc(h['name'])))
+        for i, line in enumerate(h['gist']):
+            o.append(svg_text(mid, top0 + 35 + 15 * i, line, 12, text['muted'], 500, 'middle'))
+        o.append('<path d="M%s,%s V%s H%s V%s" fill="none" stroke="%s" stroke-width="1.5"/>'
+                 % (f(x1), f(lanes_top - 8), f(lanes_top - 12), f(x2), f(lanes_top - 8), lanes['frame']))
+    # lanes
+    gx, gut = MARGIN, model['gut']
+    for bi, (ln, sb) in enumerate(bands):
+        o.append('<rect x="%s" y="%s" width="%s" height="%s" fill="%s"/>'
+                 % (f(x0), f(band_top[bi]), f(lanes_right - x0), f(band_h[bi]), lanes['fill'][ln]))
+        o.append('<rect x="%s" y="%s" width="%s" height="%s" fill="%s"/>'
+                 % (f(gx), f(band_top[bi]), f(gut), f(band_h[bi]), lanes['header']['fill']))
+        gl = model['gutters'][bi]
+        mid = band_top[bi] + band_h[bi] / 2 - 13 * len(gl) / 2
+        o.append(svg_text(gx + gut / 2, mid, LANE_SHORT[ln], 17, lanes['header']['text'], 700, 'middle',
+                          extra=' data-lane="%s"' % ln))
+        for i, line in enumerate(gl):
+            o.append(svg_text(gx + gut / 2, mid + 18 + 13 * i, line, FS_ROW - .5, lanes['subheader']['text'], None, 'middle'))
+    bounds = set(g['c0'] for g in lay['groups'])
+    for c in range(1, lay['cols']):
+        o.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"%s/>'
+                 % (f(x0 + c * cw), f(lanes_top - (4 if model['heads'] else 0)), f(x0 + c * cw), f(lanes_bottom),
+                    lanes['separator'], '' if c in bounds else ' stroke-dasharray="3 5"'))
+    for bi in range(1, len(bands)):
+        same = bands[bi][0] == bands[bi - 1][0]
+        o.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"%s/>'
+                 % (f(gx), f(band_top[bi]), f(lanes_right), f(band_top[bi]), lanes['separator'],
+                    ' stroke-dasharray="3 4"' if same else ''))
+    o.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>'
+             % (f(x0), f(lanes_top), f(x0), f(lanes_bottom), lanes['separator']))
+    o.append('<rect x="%s" y="%s" width="%s" height="%s" rx="10" fill="none" stroke="%s" stroke-width="1"/>'
+             % (f(gx + .5), f(lanes_top + .5), f(lanes_right - gx - 1), f(lanes_bottom - lanes_top - 1), lanes['frame']))
+    # lines: plumbing under the spine
+    o.append('<defs>' + ''.join(
+        '<marker id="mk-%s" viewBox="0 0 8 8" refX="7.6" refY="4" markerWidth="%s" markerHeight="%s" '
+        'markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="%s"/></marker>'
+        % (er, 7 if er == 'spine' else 6, 7 if er == 'spine' else 6, reg['edges'][er]['stroke'])
+        for er in ('spine', 'plumbing')) + '</defs>')
+    for role in ('plumbing', 'spine'):
+        st = reg['edges'][role]
+        dash = ' stroke-dasharray="%s"' % st['dash'] if st.get('dash') else ''
+        for r in model['routes']:
+            e = r['edge']
+            if e['role'] != role:
+                continue
+            o.append('<path class="e" data-a="%s %s" d="%s" fill="none" stroke="%s" stroke-width="%s"%s '
+                     'marker-end="url(#mk-%s)" data-line="%s %s %s"/>'
+                     % (esc(e['from']), esc(e['to']), path_d(r['pts']), st['stroke'], f(st['width']), dash, role,
+                        esc(e['from']), '->' if role == 'spine' else '~>', esc(e['to'])))
+    # boxes
+    fills = {'name': text['primary'], 'store': text['primary'], 'run': text['primary'], 'tag': text['primary'],
+             'note': text['secondary']}
+    for s in steps:
+        nd = nodes[s['id']]
+        role = nd['role']
+        parts = ['<g class="nd" data-n="%s" data-step="%s" data-kind="%s">' % (esc(nd['id']), esc(nd['id']), nd['kind'])]
+        parts.append(stacked_shape(nd))
+        if nd.get('badge_at'):
+            bx, by, bw = nd['badge_at']
+            parts.append('<rect x="%s" y="%s" width="%s" height="22" rx="11" fill="%s" stroke="%s" stroke-width="1.1"/>'
+                         % (f(nd['x'] + bx), f(nd['y'] + by), f(bw), page['badge']['fill'], role['stroke']))
+            parts.append(svg_text(nd['x'] + bx + bw / 2, nd['y'] + by + 14.5, nd['number'], FS_BADGE, text['primary'], 700,
+                                  'middle', mono=True, extra=' data-number="%s"' % esc(nd['number'])))
+        for what, dx, dy, line, anchor in nd['texts']:
+            fill = fills[what]
+            if what == 'note' and nd['kind'] == 'deterministic':
+                fill = text['primary']   # the rules fill is the darkest: the lighter grey would not read on it
+            if what in ('name', 'store'):
+                parts.append(svg_text(nd['x'] + dx, nd['y'] + dy, line, FS_NAME if what == 'name' else FS_STORE, fill,
+                                      600, anchor, cls='nm',
+                                      extra=' text-decoration="underline"' if nd.get('link') else ''))
+            elif what == 'note':
+                parts.append(svg_text(nd['x'] + dx, nd['y'] + dy, line, FS_NOTE, fill, None, anchor))
+            else:
+                parts.append(svg_text(nd['x'] + dx, nd['y'] + dy, line, FS_RUN if what == 'run' else FS_TAG, fill, 500,
+                                      anchor, mono=True, extra=' data-%s=""' % what))
+        junction = nd['shape'] == 'junction'
+        for i, line in enumerate(nd['under']):
+            parts.append(svg_text(nd['cx'] + 8, nd['y'] + nd['h'] + 14 + LH_UNDER * i, line, FS_UNDER,
+                                  text['primary'] if junction else text['secondary'], 600 if junction else 500,
+                                  cls='nm' if junction else None))
+        parts.append('</g>')
+        body = ''.join(parts)
+        if nd.get('link'):
+            body = ('<a href="%s" target="_blank" rel="noopener"><title>%s</title>%s</a>'
+                    % (esc(nd['link']), esc(nd.get('tip') or nd['link']), body))
+        o.append(body)
+    # labels, on a halo, fading with their line
+    for lab in model['labels']:
+        a, b, c, d = lab['box']
+        e = lab['edge']
+        inner_svg = '<rect x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s"/>' % (
+            f(a), f(b), f(c - a), f(d - b), page['labelHalo'])
+        for i, line in enumerate(lab['lines']):
+            inner_svg += svg_text((a + c) / 2, b + 2 + 10.5 + LH_LABEL * i, line, FS_LABEL,
+                                  text['primary'] if lab['gate'] else text['secondary'], 700 if lab['gate'] else None,
+                                  'middle')
+        o.append('<g class="e" data-a="%s %s">%s</g>' % (esc(e['from']), esc(e['to']), inner_svg))
+    if not embed:
+        pn = page['panel']
+        o.append('<rect x="%s" y="%s" width="%s" height="%s" rx="6" fill="%s" stroke="%s" stroke-width="1"/>'
+                 % (f(MARGIN), f(panel_top), f(width - 2 * MARGIN), f(panel_h), pn['fill'], pn['stroke']))
+        o.append(svg_text(MARGIN + 12, panel_top + 20, ui['legend'], 12, text['primary'], 700))
+        o.append(svg_text(width - MARGIN - 12, panel_top + 20, 'flow-colours %s' % reg['version'], 10, text['muted'],
+                          None, 'end', mono=True))
+        base_y = panel_top + 32
+        for kind, what, label, ix, iy in placed_items:
+            gx2, gy = MARGIN + 12 + ix, base_y + iy
+            if kind == 'role':
+                o.append(stacked_glyph(what, gx2, gy, reg))
+            else:
+                st = reg['edges'][what]
+                dash = ' stroke-dasharray="%s"' % st['dash'] if st.get('dash') else ''
+                o.append('<path d="M%s,%s H%s" stroke="%s" stroke-width="%s"%s marker-end="url(#mk-%s)"/>'
+                         % (f(gx2 + 1), f(gy + 9), f(gx2 + 28), st['stroke'], f(st['width']), dash, what))
+            o.append(svg_text(gx2 + 38, gy + 13, label, FS_LABEL, text['secondary']))
+        hy = base_y + legend_h + 10
+        o.append(svg_text(MARGIN + 12, hy + 12, ui['how'], 12, text['primary'], 700))
+        for i, line in enumerate(tail_lines):
+            o.append(svg_text(MARGIN + 12, hy + 30 + LH_LABEL * i, line, FS_LABEL, text['secondary']))
+    described = model['fm'].get('description')
+    aria = '%s: %d %s' % (model['title'], len(steps), ui['steps'])
+    if isinstance(described, str) and js_trim(described):
+        aria += '. ' + js_trim(described)
+    head = ('<svg xmlns="http://www.w3.org/2000/svg" class="zflow" width="%s" height="%s" viewBox="0 0 %s %s" '
+            'role="group" aria-label="%s" data-flow-colours="%s" data-register="%s" data-layout="stacked">'
+            % (f(width), f(height), f(width), f(height), esc(aria), esc(reg['version']), model['register']))
+    return head + '\n' + '\n'.join(o) + '\n</svg>\n'
+
+
+def steps_table(model, reg):
+    """The table that goes under a drawing: one row per work step, numbered as the drawing is, with the
+    stores it reads and writes taken from the same `~>` lines the drawing draws."""
+    lang = model['lang']
+    ui = UI[lang]
+    block, page, lay = model['block'], model['page'], model['layout']
+    by_id = dict((s['id'], s) for s in block['steps'])
+    reads, writes = {}, {}
+    for e in block['flow']:
+        if e['role'] != 'plumbing':
+            continue
+        a_db, b_db = lay['lane'][e['from']] == 'db', lay['lane'][e['to']] == 'db'
+        if a_db and not b_db:
+            reads.setdefault(e['to'], []).append(by_id[e['from']]['title'])
+        elif b_db and not a_db:
+            writes.setdefault(e['from'], []).append(by_id[e['to']]['title'])
+    rows = []
+    for s in block['steps']:
+        if lay['lane'][s['id']] == 'db' or s['kind'] in ('start', 'end'):
+            continue
+        number, name = split_number(s['title'])
+        d = page['steps'].get(s['id'], {})
+        run = d.get('run') or ((s['ref'] if s['ref'].startswith('atlas:') else '/' + s['ref']) if s['ref'] else None)
+        does = ' · '.join(d.get('note') or [])
+        cells = ['<td class="zflow-step">%s%s</td>' % ('<span class="zflow-num">%s</span> ' % esc(number) if number else '', esc(name)),
+                 '<td>%s · %s</td>' % (LANE_SHORT[lay['lane'][s['id']]], esc(reg['_role'][s['kind']]['label'][lang])),
+                 '<td>%s%s%s</td>' % (esc(does), '<br>' if does and run else '',
+                                      ('<code class="zflow-run">%s</code>' % esc(run)) if run else '')]
+        for got in (reads.get(s['id']), writes.get(s['id'])):
+            cells.append('<td>%s</td>' % esc(' · '.join(got)) if got else '<td class="zflow-none">%s</td>' % esc(ui['none']))
+        rows.append('<tr data-step="%s">%s</tr>' % (esc(s['id']), ''.join(cells)))
+    head = ''.join('<th>%s</th>' % esc(x) for x in ui['table'])
+    return ('<table class="zflow-steps">\n<thead><tr>%s</tr></thead>\n<tbody>\n%s\n</tbody>\n</table>\n'
+            % (head, '\n'.join(rows)))
+
+
+EMBED_CSS = '''<style>
+.zflow-fig{margin:0 0 0 calc(50% - min(calc(var(--zflow-w) / 2 + 1px),calc(50vw - 16px)));width:min(calc(var(--zflow-w) + 2px),calc(100vw - 32px));display:flex;flex-direction:column;gap:10px}
+.zflow-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px;line-height:1.5}
+.zflow-legend span{display:inline-flex;align-items:center;gap:7px}
+.zflow-legend svg{flex:none;overflow:visible}
+.zflow-tip,.zflow-hint{opacity:.72}
+.zflow-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px}
+.zflow-hint{margin:0;font-size:12px}
+.zflow-fit{font:inherit;font-size:13px;font-weight:500;cursor:pointer;color:inherit;background:transparent;border:1px solid;border-color:color-mix(in srgb,currentColor 32%,transparent);border-radius:999px;padding:5px 14px}
+.zflow-fit:hover{border-color:currentColor}
+.zflow-scroll{overflow-x:auto;border:1px solid;border-color:color-mix(in srgb,currentColor 24%,transparent);border-radius:14px}
+.zflow-scroll svg{display:block;width:var(--zflow-w);max-width:none;height:auto}
+.zflow-fig.is-fit .zflow-scroll svg{width:100%}
+.zflow-fig.is-fit .zflow-hint{visibility:hidden}
+.zflow-fig:not(.can-fit) .zflow-bar{display:none}
+@media (hover:none){.zflow-tip{display:none}}
+</style>'''
+EMBED_JS = '''<script>
+(function(){document.querySelectorAll('.zflow-fig:not([data-ready])').forEach(function(fig){
+fig.setAttribute('data-ready','');var box=fig.querySelector('.zflow-scroll'),btn=fig.querySelector('.zflow-fit');
+function fits(){if(!fig.classList.contains('is-fit'))fig.classList.toggle('can-fit',box.scrollWidth>box.clientWidth+1);}
+btn.addEventListener('click',function(){var on=fig.classList.toggle('is-fit');btn.setAttribute('aria-pressed',on?'true':'false');
+btn.textContent=on?btn.getAttribute('data-actual'):btn.getAttribute('data-fit');});
+fits();window.addEventListener('resize',fits);if(window.ResizeObserver)new ResizeObserver(fits).observe(box);});})();
+</script>'''
+
+
+def embed_html(model, reg, svg):
+    """The drawing as one HTML fragment for a page: a legend that stays readable at any zoom, a
+    fit-to-width button, and the SVG inline in a box that scrolls sideways. The fragment writes no
+    colour of its own: its text and borders take the host page's."""
+    lang, ui = model['lang'], UI[model['lang']]
+    nodes = model['nodes']
+    roles, edge_roles = legend_items(model, reg)
+    spans = []
+    for role in roles:
+        spans.append('<span><svg viewBox="0 0 30 18" width="30" height="18" aria-hidden="true">%s</svg>%s</span>'
+                     % (stacked_glyph(role, 0, 0, reg), esc(role['label'][lang])))
+    for er in edge_roles:
+        st = reg['edges'][er]
+        dash = ' stroke-dasharray="%s"' % st['dash'] if st.get('dash') else ''
+        spans.append('<span><svg viewBox="0 0 30 18" width="30" height="18" aria-hidden="true">'
+                     '<path d="M1,9 H22" stroke="%s" stroke-width="%s"%s/><path d="M21,5 L29,9 L21,13 Z" fill="%s"/></svg>%s</span>'
+                     % (st['stroke'], f(st['width']), dash, st['stroke'], esc(st['label'][lang])))
+    tips = [ui['hover']]
+    if any(t[0] == 'tag' for nd in nodes.values() for t in nd['texts']):
+        tips.append(ui['tags'])
+    if any(nd.get('link') for nd in nodes.values()):
+        tips.append(ui['linked'])
+    spans.extend('<span class="zflow-tip">%s</span>' % esc(t) for t in tips)
+    width = re.search('<svg [^>]*width="([0-9.]+)"', svg).group(1)
+    return ('<figure class="zflow-fig" style="--zflow-w:%spx" data-flow-colours="%s">\n'
+            '<div class="zflow-legend" aria-label="%s">\n%s\n</div>\n'
+            '<div class="zflow-bar"><p class="zflow-hint">%s</p>'
+            '<button type="button" class="zflow-fit" aria-pressed="false" data-fit="%s" data-actual="%s">%s</button></div>\n'
+            '<div class="zflow-scroll" tabindex="0" role="region" aria-label="%s">\n%s</div>\n'
+            '</figure>\n%s\n%s\n'
+            % (width, esc(reg['version']), esc(ui['legend']), '\n'.join(spans), esc(ui['scroll']), esc(ui['fit']),
+               esc(ui['actual']), esc(ui['fit']), esc(model['title']), svg, EMBED_CSS, EMBED_JS))
+
+
+# ----------------------------------------------------------------------------------------------
 # Lint.
 
 RULES = {
@@ -1759,6 +2528,9 @@ def lint_model(model):
             hit('parse', [], '%s: %s' % (w['code'], w['detail']))
         else:
             notes.append({'code': w['code'], 'field': w['field'], 'message': w['detail']})
+    for w in model['page']['warnings']:
+        notes.append({'code': w['code'], 'field': w['field'], 'message': w['detail']})
+    stacked = model['layout'].get('kind') == 'stacked'
     if not steps and not any(h['rule'] == 'parse' for h in found):
         hit('parse', [], 'the file declares no steps')
     # a title or a phase name Atlas cuts: the parser keeps the first 60 or 40 characters, as Atlas's
@@ -1840,18 +2612,27 @@ def lint_model(model):
             hit('V12', [sid], 'the title takes %s in its box, more than %d' % (detail, MAX_NODE_LINES))
         elif what == 'line':
             hit('V12', [sid], 'the line label "%s" takes more than %d lines' % (detail, MAX_LABEL_LINES))
+        elif what == 'note':
+            hit('V12', [sid], 'the note takes %s on its card, more than %d' % (detail, MAX_NOTE_LINES),
+                'shorten the note in `page:` to a few words; the detail goes on the step card')
+        elif what == 'gist':
+            hit('V12', [], 'the line under the phase "%s" takes more than two lines' % detail,
+                'shorten the phase\'s line in `page:`')
         else:
             hit('V12', [sid], 'the phase name "%s" is wider than its phase\'s columns' % detail)
     # V14: more than three steps in one column, after layout
+    # (counted on Atlas's columns only: the stacked layout builds its own columns, a phase at a time)
     per_col = {}
     for s in steps:
         per_col.setdefault(model['layout']['col'][s['id']], []).append(s['id'])
     for c in sorted(per_col):
-        if len(per_col[c]) > 3:
+        if len(per_col[c]) > 3 and not stacked:
             hit('V14', per_col[c], 'col=%d holds %d steps' % (c, len(per_col[c])))
     # two boxes or labels that overlap (and a line no route keeps off the boxes)
     for ov in model['overlaps']:
-        hit('overlap', ov['steps'], ov['detail'])
+        hit('overlap', ov['steps'], ov['detail'],
+            'shorten the title, the note or the label, or start a new column at a step with `<id> | break` '
+            'in `page:`' if stacked else None)
     found.sort(key=lambda h: RULE_ORDER.index(h['rule']))
     return found, warnings, notes
 
@@ -1942,18 +2723,51 @@ def cmd_render(args):
     out = option(args, '--out')
     lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
     register = option(args, '--register', 'audit', ('audit', 'clean'))
-    if len(args) != 1:
-        raise KitError('usage: flow_svg.py render <flow.md> [--registry P] [--out F.svg] [--lang en|zh-TW] [--register audit|clean]')
+    layout_kind = option(args, '--layout', 'stacked', ('stacked', 'canvas'))
+    stack = option(args, '--stack', str(STACK_MAX), ('2', '3', '4', '5', '6'))
+    embed = '--embed' in args
+    if embed:
+        args.remove('--embed')
+    if len(args) != 1 or (embed and layout_kind != 'stacked'):
+        raise KitError('usage: flow_svg.py render <flow.md> [--layout stacked|canvas] [--embed] [--stack 2-6] '
+                       '[--registry P] [--out F] [--lang en|zh-TW] [--register audit|clean]; --embed needs the stacked layout')
     reg = load_registry(reg_path)
-    model = build(read_text(args[0]), reg, lang, register, args[0])
-    svg = render_svg(model, reg)
+    model = build(read_text(args[0]), reg, lang, register, args[0], layout_kind, embed, int(stack))
+    if layout_kind == 'stacked':
+        svg = render_stacked(model, reg)
+        if embed:
+            svg = embed_html(model, reg, svg)
+    else:
+        svg = render_svg(model, reg)
+    for ov in model['overlaps']:
+        sys.stderr.write('flow_svg: %s (lint --layout %s names the fix)\n' % (ov['detail'], layout_kind))
     if out:
         with open(out, 'w', encoding='utf-8', newline='\n') as fh:
             fh.write(svg)
-        sys.stderr.write('drew %d steps and %d lines into %s (flow-colours %s, %s register)\n'
-                         % (len(model['block']['steps']), len(model['block']['flow']), out, reg['version'], register))
+        sys.stderr.write('drew %d steps and %d lines in %d columns into %s (flow-colours %s, %s register, %s layout%s)\n'
+                         % (len(model['block']['steps']), len(model['block']['flow']), model['layout']['cols'], out,
+                            reg['version'], register, layout_kind, ', as a page fragment' if embed else ''))
     else:
         sys.stdout.write(svg)
+    return 0
+
+
+def cmd_table(args):
+    reg = load_registry(option(args, '--registry'))
+    out = option(args, '--out')
+    lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
+    if len(args) != 1:
+        raise KitError('usage: flow_svg.py table <flow.md> [--lang en|zh-TW] [--out F.html]')
+    model = build(read_text(args[0]), reg, lang, 'clean', args[0], 'stacked')
+    if not model['block']['steps']:
+        raise KitError('the flow declares no steps')
+    table = steps_table(model, reg)
+    if out:
+        with open(out, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write(table)
+        sys.stderr.write('wrote %d rows into %s\n' % (table.count('<tr data-step='), out))
+    else:
+        sys.stdout.write(whole_chars(table))
     return 0
 
 
@@ -1962,9 +2776,14 @@ def cmd_lint(args):
     if as_json:
         args.remove('--json')
     reg = load_registry(option(args, '--registry'))
+    layout_kind = option(args, '--layout', 'canvas', ('stacked', 'canvas'))
+    stack = option(args, '--stack', str(STACK_MAX), ('2', '3', '4', '5', '6'))
+    register = option(args, '--register', 'audit', ('audit', 'clean'))
+    lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
     if len(args) != 1:
-        raise KitError('usage: flow_svg.py lint <flow.md> [--json]')
-    model = build(read_text(args[0]), reg, 'en', 'audit', args[0])
+        raise KitError('usage: flow_svg.py lint <flow.md> [--layout canvas|stacked] [--register audit|clean] '
+                       '[--stack 2-6] [--lang en|zh-TW] [--json]')
+    model = build(read_text(args[0]), reg, lang, register, args[0], layout_kind, False, int(stack))
     report = lint_report(args[0], model)
     print(whole_chars(json.dumps(report, ensure_ascii=False, indent=2) if as_json else lint_text(report, model)))
     return report['exit']
@@ -2262,6 +3081,123 @@ def selftest():
     print('review: %d/%d checks hold (V5 per path, severity, col=, header, cuts, numbers, fork labels, '
           'half characters, exit 2, full stops)' % (sum(1 for _, good in review if good), len(review)))
 
+    # 8. the stacked layout (SKB-154), the standard page drawing: every fixture draws in it, each step
+    # once and each line once, with its number; the drawing's own style holds no colour; `page:` puts
+    # the note, what runs the step and a link on the card, and refuses a link that is not http(s).
+    stacked_steps = stacked_lines = 0
+    for name in names:
+        path = os.path.join(FIXTURES, name)
+        for register in ('audit', 'clean'):
+            try:
+                model = build(read_text(path), reg, 'en', register, path, 'stacked')
+                svg = render_stacked(model, reg)
+            except Exception as e:  # noqa: BLE001 - a crash is a failure, whatever it is
+                check(False, '%s (stacked, %s) does not render: %r' % (name, register, e))
+                continue
+            for s in model['block']['steps']:
+                group = re.findall('<g class="nd" data-n="%s" [^>]*>(.*?)</g>' % re.escape(esc(s['id'])), svg)
+                check(len(group) == 1, '%s (stacked, %s): step %s is drawn %d times' % (name, register, s['id'], len(group)))
+                number = split_number(s['title'])[0]
+                if number and group and model['layout']['lane'][s['id']] != 'db' and model['nodes'][s['id']]['shape'] != 'terminal':
+                    check('data-number="%s">%s</text>' % (esc(number), esc(number)) in group[0],
+                          '%s (stacked, %s): step %s does not show its number %s' % (name, register, s['id'], number))
+                stacked_steps += register == 'clean'
+            known = set(s['id'] for s in model['block']['steps'])
+            for e in model['block']['flow']:
+                if e['from'] not in known or e['to'] not in known:
+                    continue
+                n = svg.count('<path class="e" data-a="%s %s" ' % (esc(e['from']), esc(e['to'])))
+                want = sum(1 for x in model['block']['flow'] if (x['from'], x['to']) == (e['from'], e['to']))
+                check(n == want, '%s (stacked, %s): the line %s to %s is drawn %d times, not %d'
+                      % (name, register, e['from'], e['to'], n, want))
+                stacked_lines += register == 'clean'
+            per = {}
+            for (c, bi), ids in model['layout']['stacks'].items():
+                if model['layout']['bands'][bi][0] == 'be':
+                    per[c] = len(ids)
+            check(all(n <= STACK_MAX for n in per.values()), '%s (stacked): a backend stack holds more than %d steps' % (name, STACK_MAX))
+            if name in CLEAN_FIXTURES:
+                check(not model['overlaps'], '%s (stacked, %s): %s' % (name, register, [o['detail'] for o in model['overlaps']]))
+    path = os.path.join(FIXTURES, 'example-2.md')
+    text = read_text(path)
+    for lang in ('en', 'zh-TW'):
+        model = build(text, reg, lang, 'clean', path, 'stacked')
+        a = render_stacked(model, reg)
+        check(a == render_stacked(build(text, reg, lang, 'clean', path, 'stacked'), reg), 'example-2 (stacked, %s) renders differently twice' % lang)
+        check('data-flow-colours="%s"' % reg['version'] in a and 'data-layout="stacked"' in a, 'example-2 (stacked) is not stamped')
+        style = re.search('<style>(.*?)</style>', a, re.S)
+        check(bool(style) and '#' not in style.group(1) and 'rgb' not in style.group(1) and 'url(' not in style.group(1)
+              and '@import' not in style.group(1), 'the stacked drawing\'s style must hold no colour and load nothing')
+        check('var(--' not in a and 'prefers-color-scheme' not in a, 'example-2 (stacked, %s) follows a theme' % lang)
+        painted = set(c.upper() for c in re.findall('#[0-9A-Fa-f]{6}', a))
+        check(painted <= registry_colours(reg), 'example-2 (stacked) paints colours the registry does not hold: %s'
+              % sorted(painted - registry_colours(reg)))
+        urls = sorted(set(re.findall('https?://[^"\\s<]+', a)))
+        check(urls == ['http://www.w3.org/2000/svg', 'https://example.com/extraction-schema'],
+              'example-2 (stacked) names an address its `page:` list does not: %s' % urls)
+        check('<a href="https://example.com/extraction-schema" target="_blank" rel="noopener"><title>Opens the extraction schema</title>' in a,
+              'example-2 (stacked): the schema\'s link is not on its card')
+        check(len(model['layout']['groups']) == 2 and model['layout']['cols'] < build(text, reg)['layout']['cols'],
+              'example-2 (stacked) should take fewer columns than Atlas\'s canvas')
+        check('data-tag="">R 2<' in a and 'W 4 5 · R 6' in a, 'example-2 (stacked): the stores\' W and R tags do not follow the dashed lines')
+        whole = embed_html(build(text, reg, lang, 'clean', path, 'stacked', True), reg,
+                           render_stacked(build(text, reg, lang, 'clean', path, 'stacked', True), reg))
+        check('<figure class="zflow-fig"' in whole and 'class="zflow-fit"' in whole and whole.count('<svg xmlns') == 1,
+              'the page fragment lost its figure, its fit button or its drawing')
+        check(not (set(c.upper() for c in re.findall('#[0-9A-Fa-f]{6}', whole)) - registry_colours(reg)),
+              'the page fragment paints a colour the registry does not hold')
+        table = steps_table(model, reg)
+        check(table.count('<tr data-step=') == 6 and 'Invoice log' in table, 'the steps table should hold the six numbered steps')
+    canvas_before = render_svg(build(text, reg), reg)
+    check('note=' not in canvas_before and 'example.com' not in canvas_before, 'Atlas\'s canvas layout must not draw `page:`')
+    pg = ('---\nsteps:\n  - "## One"\n  - "a | start | Start"\n  - "b | deterministic | 1 First"\n  - "c | deterministic | 2 Second"\n'
+          '  - "d | llm | 3 Third | ref=some-skill"\n  - "s | store | Records"\n  - "z | end | End"\n'
+          'flow:\n  - "a -> b"\n  - "b -> c"\n  - "c -> d"\n  - "d -> z"\n  - "c ~> s"\n'
+          'page:\n  - "## One | What happens here"\n  - "## Nowhere | x"\n  - "b | note=Rules | run=tool.py | link=javascript:alert(1)"\n'
+          '  - "c | break | link=https://example.com/c | colour=red"\n  - "ghost | note=x"\n---\n')
+    m = build(pg, reg, 'en', 'clean', None, 'stacked')
+    svg = render_stacked(m, reg)
+    codes = sorted(w['code'] for w in m['page']['warnings'])
+    check(codes == ['page_link_refused', 'page_opt_unknown', 'page_unknown_phase', 'page_unknown_step'],
+          '`page:` should report its four mistakes, got %s' % codes)
+    check('javascript' not in svg and svg.count('<a href=') == 1, 'a link that is not http(s) must never reach the drawing')
+    check(m['layout']['col']['c'] == m['layout']['col']['b'] + 1 and m['layout']['col']['s'] == m['layout']['col']['c'],
+          '`break` starts a new column, and a store sits under the step that writes it')
+    check('>tool.py<' in svg and '>/some-skill<' in svg and '>What happens here<' in svg and '>W 2<' in svg,
+          'the card should show what runs the step, the ref, the phase line and the store\'s tag')
+    rep = lint_report('inline', m)
+    check(not [h for h in rep['violations'] if h['severity'] == 'hard']
+          and sorted(n['code'] for n in rep['notes'] if n['code'].startswith('page_')) == codes,
+          'a mistake in `page:` is a note in lint, never a violation')
+    many = '---\nsteps:\n  - "a | start | Start"\n' + ''.join('  - "s%d | deterministic | %d Step"\n' % (i, i) for i in range(1, 10)) \
+        + '  - "z | end | End"\nflow:\n  - "a -> s1"\n' + ''.join('  - "s%d -> s%d"\n' % (i, i + 1) for i in range(1, 9)) + '  - "s9 -> z"\n---\n'
+    m9 = build(many, reg, 'en', 'clean', None, 'stacked')
+
+    def split_of(m):
+        return [len(ids) for (c, bi), ids in sorted(m['layout']['stacks'].items()) if m['layout']['bands'][bi][0] == 'be']
+    check(split_of(m9) == [3, 3, 3] and not m9['overlaps'], 'nine backend steps in one phase split into three columns of three')
+    ten = many.replace('  - "z | end | End"\n', '  - "s10 | deterministic | 10 Step"\n  - "z | end | End"\n') \
+        .replace('  - "s9 -> z"\n', '  - "s9 -> s10"\n  - "s10 -> z"\n')
+    check(split_of(build(ten, reg, 'en', 'clean', None, 'stacked')) == [4, 3, 3], 'ten backend steps split 4, 3 and 3')
+    check(split_of(build(ten, reg, 'en', 'clean', None, 'stacked', False, 3)) == [3, 3, 2, 2], 'ten steps at three to a column split 3, 3, 2 and 2')
+    quiet = ('---\nsteps:\n  - "## Work"\n  - "a | start | Start · a very long trigger sentence that keeps going and going on"\n'
+             '  - "b | deterministic | 1 Do"\n  - "j | junction | Join"\n  - "z | end | End"\n  - "## Data"\n  - "s | store | Records"\n'
+             'flow:\n  - "a -> b"\n  - "b -> j"\n  - "j -> z"\n  - "b ~> s"\n'
+             'page:\n  - "## Data | Where it sits"\n  - "j | note=never drawn"\n  - "s | break"\n'
+             '  - "a | note=one long note that wraps | note=two long note that wraps | note=three long note that wraps | note=four"\n---\n')
+    mq = build(quiet, reg, 'en', 'clean', None, 'stacked')
+    check(sorted(w['code'] for w in mq['page']['warnings']) == ['page_opt_unused', 'page_opt_unused', 'page_phase_unused'],
+          'an option the drawing has no place for must be said: %s' % [w['code'] for w in mq['page']['warnings']])
+    check(any(h['rule'] == 'V12' and h['steps'] == ['a'] for h in lint_report('inline', mq)['violations']),
+          'a start card with too many lines is a V12 in the stacked lint')
+    gate3 = '---\nsteps:\n  - "a | start | Start"\n  - "g | gate | 1 Confidence above threshold?"\n  - "y | end | End · yes"\n  - "n | end | End · no"\n' \
+        'flow:\n  - "a -> g"\n  - "g -> y | Yes"\n  - "g -> n | No"\n---\n'
+    check(not lint_report('inline', build(gate3, reg, 'en', 'clean', None, 'stacked'))['violations'],
+          'a gate title of three words is clean in the stacked lint, as it is in the plain one')
+    check(not [h for h in lint_report('inline', m9)['violations'] if h['rule'] == 'V14'], 'the stacked layout is not held to V14')
+    print('stacked: %d fixtures draw in both registers (%d steps, %d lines); `page:` cards, links, tags and the page fragment hold'
+          % (len(names), stacked_steps, stacked_lines))
+
     if failures:
         print('selftest FAILED:')
         for m in failures:
@@ -2294,15 +3230,17 @@ def main(argv):
         if args == ['--selftest']:
             return selftest()
         if not args:
-            raise KitError('usage: flow_svg.py render|lint|compare ... | --selftest (see the docstring)')
+            raise KitError('usage: flow_svg.py render|lint|table|compare ... | --selftest (see the docstring)')
         cmd = args.pop(0)
         if cmd == 'render':
             return cmd_render(args)
         if cmd == 'lint':
             return cmd_lint(args)
+        if cmd == 'table':
+            return cmd_table(args)
         if cmd == 'compare':
             return cmd_compare(args)
-        raise KitError('unknown command %r: use render, lint, compare or --selftest' % cmd)
+        raise KitError('unknown command %r: use render, lint, table, compare or --selftest' % cmd)
     except KitError as e:
         sys.stderr.write('flow_svg: %s\n' % e)
         return 2
