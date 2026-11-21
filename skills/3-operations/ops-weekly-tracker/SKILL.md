@@ -150,8 +150,9 @@ exactly and save each result unchanged, as in `snapshot`.
 7. **Mail it, once.** Make the `sent_search` call and save the result, then run
    `python3 scripts/proposals.py sent --dir <dir>`:
    - `{"found": false}` → `send_gmail_message` to exactly `mail.to`, with exactly `mail.subject`, the
-     contents of `mail.body_path` as the body, `body_format="html"` and `include_signature=false`.
-     Then make the same `sent_search` call again (same save path) and run `sent` again. If the send
+     contents of `mail.body_path` as the body, `body_format="html"` and `include_signature=false`,
+     and `bcc` set to `mail.bcc` when it is not empty: the sending account's own copy, since Gmail
+     files a mail sent to a group you are in under Sent only (`SKB-159`). Then make the same `sent_search` call again (same save path) and run `sent` again. If the send
      call itself returned an error, run `python3 scripts/proposals.py sent --dir <dir>
      --send-failed` instead (nothing went out, so the next attempt may send) and receipt
      `status=failed`, `delivered=send-failed` with the error.
@@ -166,7 +167,7 @@ exactly and save each result unchanged, as in `snapshot`.
      Sent; receipt `status=failed` with the reason.
 
 **Rules for this mode.** Every change goes through `check`. Never write the Main Tracker, never
-send the mail to anyone but `mail.to` (the team address), never send it before `block confirm` has passed, and never
+send the mail to anyone but `mail.to` (the team address) and its `mail.bcc` copy to the sending account, never send it before `block confirm` has passed, and never
 send it twice: only `sent` says when to send. **Any refusal from `proposals.py` is a
 `status=failed` receipt with its reason**, and you write nothing to fix it: never a Ledger block of
 your own, never a file in the state folder (`approval.json` and its neighbours are the script's,

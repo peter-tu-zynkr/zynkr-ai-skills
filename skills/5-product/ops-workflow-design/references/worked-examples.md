@@ -212,27 +212,28 @@ placeholder address for the example; in a real flow a link is one the user gave.
    `knowledge` step, not a cylinder ✓ · V2 — upload and notify only show and take input ✓ · V3 —
    the branch leaves a gate, not the AI step ✓ · V10 — every kind matches its card ✓ · V7 — no
    `offpage` step ✓.
-5. **Route it.** Does the team or a client run it? Yes: a reviewer approves invoices every week.
-   So it is an Atlas draft, on the user's word: "Draft it in Atlas?"
-6. **The Atlas draft** (after a yes): `draft_new_item(type: "workflow", slug: "invoice-approval-flow",
+5. **Pick the drawing.** The user asked for a drawing, not for Atlas, so it is a page drawing in
+   the overview (step 7). Does the team or a client run it? Yes: a reviewer approves invoices every
+   week. So the reply offers the detailed version in Atlas, in one line under the drawing.
+6. **The Atlas draft**, only after a yes to that offer: `draft_new_item(type: "workflow", slug: "invoice-approval-flow",
    body: <the whole file>, notes: "New flow: invoice approval, drafted from a description")`. Then
    `list_pending` and `get_draft` on the new version: its sha256 equals `shasum -a 256 example-2.md`.
    Approve nothing.
-7. **A page drawing**, when the user wants a picture now (or every routing answer is no):
-   `python3 -I <skill>/scripts/flow_svg.py render example-2.md --register clean --embed --out invoice-approval.html`
-   and `table example-2.md --out invoice-approval-steps.html`; `lint example-2.md --layout stacked --register clean`
-   exits 0; then look at it. The ten steps sit
-   in two columns, one per phase: Intake's steps stacked in the first, Approval's in the second.
-   Each work card carries its number and its note, and step 2 names what runs it; the invoice log
-   reads `W 4 5 · R 6`;
-   the schema's name is underlined and opens its page; only the gate's branches carry labels; and
-   hovering step 5 leaves only its three lines dark.
+7. **The page drawing**, the overview:
+   `python3 -I <skill>/scripts/flow_svg.py render example-2.md --embed --out invoice-approval.html`
+   and `table example-2.md --out invoice-approval-steps.html`; `lint example-2.md --layout stacked`
+   exits 0; then look at it. The ten steps sit in two columns, one per phase: Intake's steps
+   stacked in the first, Approval's in the second. Each work card carries its number and its note,
+   and step 2 names what runs it. The invoice log reads `W 4 5 · R 6` and draws one line, from
+   step 4; the schema draws its one line into step 2. The schema's name is underlined and opens its
+   page; only the gate's branches carry labels; and hovering step 5 keeps its two lines dark and
+   calls out the gate, the invoice log and step 6.
 
 **Output to the user:**
 
-> Drafted "Invoice approval": 10 steps on three lanes, numbered 1–6 like the cards below. Lint is
-> clean and the kind checks pass. A reviewer runs it every week, so it is an Atlas draft: it waits
-> for a reviewer to approve it, and I approved nothing.
+> Drew "Invoice approval": 10 steps on three lanes, numbered 1–6 like the cards below. Lint is
+> clean and the kind checks pass. The drawing is the overview: the invoice log draws one line, and
+> its tags name the other steps that write and read it.
 >
 > - **1 · Upload the invoice CSV** — Front end · external — Input: the customer's invoice CSV · Process: upload the file · Output: the file, received · Reads: none · Writes: none · Knowledge: none
 > - **2 · Extract line items** — Backend · AI — Input: the CSV (1) · Process: extract the line items and totals · Output: draft invoices · Reads: none · Writes: none · Knowledge: Extraction schema (enforced · new) — to write
@@ -245,8 +246,13 @@ placeholder address for the example; in a real flow a link is one the user gave.
 > schema** (knowledge · enforced · new) — read by 2; nobody has written it yet, so it is the first
 > thing to create, with an owner.
 >
-> Review: <the review link `draft_new_item` returned> · the workflow: the same address with
-> `/workflows/invoice-approval-flow` in place of `/review`
+> A reviewer runs this every week: want the detailed version drafted in Atlas for review?
+>
+> Drawing: `invoice-approval.html` · steps table: `invoice-approval-steps.html`
+
+After a yes, step 6 files the draft, and the reply ends with the review link instead: the link
+`draft_new_item` returned, and the workflow beside it (the same address with
+`/workflows/invoice-approval-flow` in place of `/review`). It waits for a reviewer; approve nothing.
 
 ---
 

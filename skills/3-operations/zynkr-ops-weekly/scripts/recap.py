@@ -41,7 +41,7 @@ import re
 import subprocess
 import sys
 from datetime import date, timedelta
-from email.utils import parseaddr
+from email.utils import getaddresses, parseaddr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ledger  # noqa: E402
@@ -932,6 +932,15 @@ def audience_for(run):
     return "team"
 
 
+def self_copy(to, account):
+    """The sending account itself when `to` leaves it out, else "" (SKB-159). Gmail files a mail you
+    send to a group you are in under Sent only, so a recap to the team address never reached the
+    owner's own inbox; a bcc to the account does. A `to` that already names the account needs none."""
+    acct = (account or "").strip()
+    named = [addr.strip().lower() for _, addr in getaddresses([to or ""])]
+    return "" if not acct or acct.lower() in named else acct
+
+
 def sent_check(to, prefix):
     """How the run tells this mail already went. Sent to its first address in the last three days,
     25 a page, and a subject that starts with `prefix`: the recap's subject ends in counts (逾期 N 件
@@ -959,8 +968,8 @@ def r_render(d, tldr_path):
     save_run(run)
     audience = audience_for(run)
     to = run.get("recap_to") or (",".join(run["reporters"]) if audience == "team" else run["account"])
-    return {"subject": subject, "to": to, "audience": audience, "body_path": path, "body_format": "html",
-            "tldr_kept": len(kept), "tldr_dropped": dropped,
+    return {"subject": subject, "to": to, "bcc": self_copy(to, run["account"]), "audience": audience,
+            "body_path": path, "body_format": "html", "tldr_kept": len(kept), "tldr_dropped": dropped,
             "sent_check": sent_check(to, "【週報】%s 那週 —" % facts["label"])}
 
 
@@ -1557,10 +1566,12 @@ def selftest():
         serve(st_o["calls"], sheet)
         serve(r_blocks(st_o["dir"])["calls"], sheet)
         r_build(st_o["dir"], "2026-10-12")
-        check("recap defaults to the owner", r_render(st_o["dir"], None)["to"], "owner@example.com")
+        own = r_render(st_o["dir"], None)
+        check("recap defaults to the owner", own["to"], "owner@example.com")
+        check("the owner alone needs no copy of their own (SKB-159)", own["bcc"], "")
 
         # the switch set ahead: `team` starts with the recap of the Monday recap_team_from names
-        def to_with(team_from):
+        def to_with(team_from, field="to"):
             p = os.path.join(tmp, "cfg-team-from.json")
             raw_t = json.load(open(cfgp, encoding="utf-8"))
             raw_t["routine"] = {"recap_audience": "team", "recap_team_from": team_from}
@@ -1569,8 +1580,10 @@ def selftest():
             serve(s["calls"], sheet)
             serve(r_blocks(s["dir"])["calls"], sheet)
             r_build(s["dir"], "2026-10-12")
-            return r_render(s["dir"], None)["to"]
+            out = r_render(s["dir"], None)
+            return out[field]
 
+        check("a team of reporters copies the owner, who is not one (SKB-159)", to_with("2026-10-12", "bcc"), "owner@example.com")
         check("before the team's first Monday, the owner alone", to_with("2026-10-19"), "owner@example.com")
         check("from the team's first Monday, everyone", to_with("2026-10-12"), "a@example.com,b@example.com")
         check("a slash date is read too", to_with("2026/10/12"), "a@example.com,b@example.com")
@@ -1586,10 +1599,14 @@ def selftest():
             serve(s["calls"], sheet)
             serve(r_blocks(s["dir"])["calls"], sheet)
             r_build(s["dir"], "2026-10-12")
-            return r_render(s["dir"], None)["to"]
+            return r_render(s["dir"], None)
 
-        check("recap_to sends to the team address alone", to_recap("all@example.com"), "all@example.com")
-        check("a placeholder recap_to falls back to the audience", to_recap("<team address>"), "owner@example.com")
+        check("recap_to sends to the team address alone", to_recap("all@example.com")["to"], "all@example.com")
+        check("the team address copies the sending account to its own inbox (SKB-159)",
+              to_recap("all@example.com")["bcc"], "owner@example.com")
+        check("an account already named in to gets no second copy", self_copy('"Tu, Owner" <Owner@Example.com>, all@x.io', "owner@example.com"), "")
+        check("no account, no copy", self_copy("all@example.com", ""), "")
+        check("a placeholder recap_to falls back to the audience", to_recap("<team address>")["to"], "owner@example.com")
 
         # no Reports / Decisions recorded: says so, never "0"
         sheet2 = ledger_sheet([wrow("2026-W40", w40), wrow("2026-W41", w41)], w40, w41)
@@ -1774,6 +1791,8 @@ MUTATIONS = [
     ("the CRM's no-step line kept as a step", [(" and s.strip().lower() != PULSE_NO_STEP", "")]),
     ("first names never matched", [("    return hit[0] if len(hit) == 1 else name", "    return name")]),
     ("recap_to ignored", [('    to = run.get("recap_to") or (', '    to = (')]),
+    ("the team mail leaves the sender out of their own inbox", [('"bcc": self_copy(to, run["account"])', '"bcc": ""')]),
+    ("the owner copied even when to names them", [('    return "" if not acct or acct.lower() in named else acct', '    return acct')]),
     ("a drop is not a decision", [('DECIDED = ("決議", "放棄")', 'DECIDED = ("決議",)')]),
     ("an action counts as a decision", [('            elif r[2] == "行動":\n', '            elif False:\n')]),
     ("a live-written row goes unlisted", [('                               ("to-apply", "核准了，已寫進總表（有人手改過的格子會跳過）"),\n', "")]),

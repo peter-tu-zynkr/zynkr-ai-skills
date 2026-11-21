@@ -105,11 +105,13 @@ direction is the meaning:
 
 - A step that reads and writes one store has two lines, one each way.
 - Every `Reads`, `Writes` and `Knowledge` entry on a card is one line, and every line is one entry:
-  writing the cards first is how you find every store and source before the plumbing.
+  writing the cards first is how you find every store and source before the plumbing. Write them
+  all even for a page drawing: the overview draws one line per data box and lists the rest on the
+  box's tags (`SKILL.md`, Two views), so a line left out is missing from the tags too.
 - One `knowledge` step per source, and one line per source into each step that uses it. Merging
   sources into one step hides which source feeds which step.
-- Labels on plumbing are optional and short ("the fields to pull"). The clean register draws
-  labels only on the branches out of a gate or a junction.
+- Labels on plumbing are optional and short ("the fields to pull"). The overview draws labels only
+  on the branches out of a gate or a junction.
 - A plumbing line has a store, artifact or knowledge step at one end (on a page drawing, a context
   or ephemeral step too). Two work steps are joined by
   `->` (the work hands on); data one passes to the other goes through the store they share.
@@ -161,8 +163,8 @@ three or more parallel rows of steps is a matrix, not a flow.
 - **Knowledge titles** read `[RAG] <name> v<n>`: `[RAG] Extraction schema v1`, where `v1` is the
   version it ships as once written. The link stays on the card and in the store directory, not in
   the title.
-- **Clean register:** at most four words after the number. Both registers show the number on a tab
-  at the top of the box, so a drawing and its step cards match by number alone.
+- **The overview:** at most four words after the number. Both views show the number on a tab at the
+  top of the box, so a drawing and its step cards match by number alone.
 
 ## 8) Caps
 

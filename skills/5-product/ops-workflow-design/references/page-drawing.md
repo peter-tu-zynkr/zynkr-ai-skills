@@ -9,6 +9,10 @@ columns, one step to a column: a 23-step flow came out thirteen columns wide, wi
 nothing else on each card. The drawings people read most easily had been built by hand instead.
 This layout is what those drawings had in common, now drawn by the kit.
 
+Since 2026-11-21 (SKB-158) the page drawing is the **overview** unless someone asks for the detail:
+each data box draws one line, and its tags list the rest (§7). A drawing made before then drew every
+line; rendered again, it draws the overview.
+
 ---
 
 ## 1) What the drawing holds
@@ -19,9 +23,9 @@ This layout is what those drawings had in common, now drawn by the kit.
 | 2 | **A phase is a run of columns.** The phase's name sits above its columns, with one line on what happens there and a bracket over the columns it spans. A solid rule parts two phases; a dashed one parts two columns of the same phase. | The stages of the work, before any box is read. |
 | 3 | **Steps stack inside a column.** A phase's backend steps run top to bottom, at most four to a column. A front-end step sits over the backend step it belongs to. | The whole flow on about one screen: 28 steps fit seven columns. |
 | 4 | **A card says three things.** The step's number and name; under it a note of a few words on what kind of step this is; under that, in monospace, what runs it. | Enough to follow the flow without opening the step cards. |
-| 5 | **A store sits under the step that writes it** and lists the numbers of the steps that write it (`W`) and read it (`R`). The kit takes both from the `~>` lines; a step with no number has its line and no tag. | Where data lands, and that the tags and the lines agree. |
-| 6 | **Two kinds of line.** Solid is the next step. Thin dashed grey is a read or a write, and the arrow points the way the data moves. Only a branch out of a gate carries a label in the clean register. | The order of the work, apart from its data. |
-| 7 | **Hovering a step lights only its lines.** Every other line fades. A keyboard reader gets the same on a linked card. | One step's connections, in a drawing with forty lines. |
+| 5 | **A store sits under the step that writes it** and lists the numbers of the steps that write it (`W`) and read it (`R`). The kit takes both from the `~>` lines; a step with no number has its line and no tag. In the overview the store draws one line, from that step, and its tags carry the rest (§7). | Where data lands, and every step that touches it, without a line for each. |
+| 6 | **Two kinds of line.** Solid is the next step. Thin dashed grey is a read or a write, and the arrow points the way the data moves. In the overview only a branch out of a gate carries a label. | The order of the work, apart from its data. |
+| 7 | **Hovering a step calls out what it touches.** Its lines stay dark, and the cards it joins by any line in the flow text, drawn or listed, stay at full strength with a heavier outline. Every other line and card fades. A keyboard reader gets the same on a linked card. | One step's connections, the listed reads and writes included, in a drawing with forty lines. |
 | 8 | **A card links to its source** when the flow text gives one: the name is underlined, and the link opens in a new tab with a tooltip saying what opens. | The skill, the note or the page behind a step, one click away. |
 | 9 | **The page around it.** A legend above the drawing, a box that scrolls sideways, a button that fits the whole drawing to the page's width, and a table of the steps under it, numbered as the drawing is. | The legend stays readable at any zoom, and the detail sits next to the picture. |
 
@@ -101,10 +105,12 @@ Never squeeze instead: no title cut short to make room, no line laid over anothe
 ## 4) Putting it on a page
 
 ```bash
-python3 -I <skill>/scripts/flow_svg.py render <flow.md> --embed --register clean --lang zh-TW --out <name>.html
+python3 -I <skill>/scripts/flow_svg.py render <flow.md> --embed --lang zh-TW --out <name>.html
 python3 -I <skill>/scripts/flow_svg.py table  <flow.md> --lang zh-TW --out <name>-steps.html
 ```
 
+- **The overview is the default.** Add `--register audit` only when someone asks for every line on
+  the page (§7).
 - **`--embed`** writes one HTML fragment: the legend, the fit button, the scroll box and the
   drawing inline. Paste it into the page where the drawing goes. It writes no colour of its own
   outside the drawing: its text and borders take the page's. The figure breaks out of a narrow
@@ -131,7 +137,8 @@ Open the page fragment in a browser (SKILL.md, DRAFT step 7) and check:
 1. Every phase that holds a step has its line, and no phase name is cut.
 2. No card's text runs past its box; no gate note runs into the next column.
 3. No line crosses a box or lies along another line.
-4. Hover a step with several lines: only its lines stay dark.
+4. Hover a step with several lines: its lines and the cards they join stay at full strength, and
+   the rest fade. Hover a data box: every step on its tags lights, drawn line or not.
 5. Every underlined name opens the page its tooltip names.
 6. The fit button shows the whole drawing; pressing it again returns to full size.
 
@@ -147,3 +154,27 @@ and column, with no notes, links or hover. Use it only to preview how a draft wi
 V14 (at most three steps in a column) is counted on these columns, and plain `lint` checks it: a
 flow that will be drafted into Atlas passes plain `lint`. A page drawing answers to
 `lint --layout stacked`, which builds its own columns and so has no V14 to break.
+
+---
+
+## 7) The overview and the detail
+
+`render` on a page draws the **overview** (`--register clean`, the default for `--layout stacked`).
+`--register audit` draws the **detail**, as Atlas's canvas does:
+
+| Line in the flow text | Overview | Detail |
+|---|---|---|
+| `a -> b`, the spine | drawn | drawn |
+| `~>` between a step and a data box (any step in the DB lane: a store, an artifact, a knowledge source, the page-only `ephemeral`) | one per box: the line from the step that placed the box in its column (§3) — its first writer, or, for a knowledge source or a box no step writes, its first reader; the first in the file when two share that column | every one |
+| `~>` from a step with no number to a data box | drawn: a tag lists numbers, so it could list none | drawn |
+| `~>` that joins no data box (a context document, a hand-off) | drawn | drawn |
+| a label | only on a branch out of a gate or a junction | every one |
+
+What the overview leaves undrawn it lists. The box's `W` and `R` tags name every step that writes or
+reads it, the steps table gives each step its Reads and Writes, and hovering a step calls out every
+card it joins. `render` prints the count on stderr ("drew 41 steps and 47 lines (33 more reads and
+writes listed on their stores)"), and the note under the legend tells the reader where to look.
+
+The flow text never loses a line to make the overview: the detail, the tags and the table are all
+drawn from it. The detail lives in Atlas, whose canvas draws every line, or on a page drawn with
+`--register audit` when someone asks for every line there.

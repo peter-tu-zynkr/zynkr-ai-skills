@@ -24,9 +24,11 @@ flow that uses one stays a page drawing.
 
 Since SKB-154 a page is drawn in the STACKED layout (references/page-drawing.md): a phase is a run
 of columns, its steps stack top to bottom inside them, a store sits under the step that writes it,
-a card shows what the frontmatter's `page:` list adds (a note, what runs the step, a link), and
-hovering a step lights only its lines. Atlas's own columns stay as `--layout canvas`, and plain
-`lint` still lays the flow out as Atlas will.
+a card shows what the frontmatter's `page:` list adds (a note, what runs the step, a link). Since
+SKB-158 the page draws the OVERVIEW unless `--register audit` asks for the detail: every spine line,
+one read or write line per data box, the rest listed on the boxes' W · R tags; hovering a step
+lights its lines and calls out every card it joins. Atlas's own columns stay as `--layout canvas`,
+which draws every line, and plain `lint` still lays the flow out, and checks it, as Atlas will.
 
   python3 flow_svg.py render <flow.md> [--embed] [--layout stacked|canvas] [--stack 2-6] [--out F]
                                        [--lang en|zh-TW] [--register audit|clean] [--registry P]
@@ -47,6 +49,7 @@ Python 3.9, standard library only: a Mac's /usr/bin/python3 runs it with nothing
 
 import heapq
 import html
+import io
 import json
 import math
 import os
@@ -1360,7 +1363,9 @@ def route_edges(model, reg):
     def pkey(pt):
         return (pt['node'], round(pt['p'][0], 1), round(pt['p'][1], 1))
 
-    order = sorted(range(len(flow)), key=lambda q: (flow[q]['role'] != 'spine',
+    # The overview (the clean register on a page) routes only the lines it draws (overview_lines).
+    drawn = model.get('drawn')
+    order = sorted((q for q in range(len(flow)) if drawn is None or q in drawn), key=lambda q: (flow[q]['role'] != 'spine',
                                                     abs(nodes[flow[q]['from']]['col'] - nodes[flow[q]['to']]['col']),
                                                     abs(nodes[flow[q]['from']]['row'] - nodes[flow[q]['to']]['row']),
                                                     abs(nodes[flow[q]['from']]['cy'] - nodes[flow[q]['to']]['cy']) if stacked else 0, q))
@@ -1729,7 +1734,8 @@ def render_svg(model, reg):
 # The stacked layout (SKB-154): the standard page drawing. A phase is a run of columns, the steps
 # of a phase stack top to bottom inside their lane, and a store sits under the step that writes
 # it. A card shows more than its title: a note, what runs it, a link, and on a store the numbers
-# of the steps that write and read it. Hovering a step lights only its own lines.
+# of the steps that write and read it. Hovering a step lights its own lines and calls out every
+# card it joins, by a drawn line or one listed on a store (SKB-158).
 #
 # What a card shows beyond its title comes from the frontmatter's `page:` list. Atlas reads only
 # `steps:` and `flow:`, so the list changes nothing there:
@@ -1751,9 +1757,10 @@ LANE_SHORT = {'fe': 'FE', 'be': 'BE', 'db': 'DB'}
 LEADS = ('start', 'input', 'context')   # front-end steps that lead into the step after them
 
 UI['en'].update({
-    'hover': 'Hover a step to light only its lines.',
+    'hover': 'Hover a step to light its lines and the cards it connects to.',
     'linked': 'An underlined name opens its source.',
     'tags': 'On a store, W lists the steps that write it and R the steps that read it.',
+    'listed': 'A store draws one line: W on it lists every step that writes it, and R every step that reads it.',
     'fit': 'Fit to width', 'actual': 'Actual size', 'scroll': 'Scroll sideways for the rest →',
     'none': 'none', 'table': ('Step', 'Layer', 'What it does · what runs it', 'Reads', 'Writes'),
     'how_stacked': 'Read left to right, one phase at a time; inside a phase, follow the solid line from the top down. '
@@ -1762,9 +1769,10 @@ UI['en'].update({
                    'box’s shape and colour say what kind of step it is. Dashed grey lines are reads and writes, and '
                    'the arrow points the way the data moves.'})
 UI['zh-TW'].update({
-    'hover': '滑過任一步，只亮它的線',
+    'hover': '滑過任一步，它的線和連到的方塊會亮起來',
     'linked': '名稱有底線的方塊，可以點開它的來源',
     'tags': '資料方塊上的 W 是寫入它的步驟，R 是讀取它的步驟',
+    'listed': '資料方塊只畫一條線：方塊上的 W 是所有寫入它的步驟，R 是所有讀取它的步驟',
     'fit': '縮成一頁看全貌', 'actual': '放大看字', 'scroll': '往右捲，看後面的階段 →',
     'none': '無', 'table': ('步驟', '層', '做什麼 · 誰執行', '讀', '寫'),
     'how_stacked': '由左往右，一個階段一個階段讀；階段裡沿著實線由上往下。每個方塊是一步，方塊上的編號就是文件裡的步驟編號。'
@@ -1949,6 +1957,57 @@ def store_tags(block, lay):
     return tags
 
 
+def overview_lines(block, lay):
+    """The lines the clean register draws on a page, the overview (SKB-158), as indices into the flow.
+
+    - Every spine line.
+    - For each data box (a step in the DB lane: a store, an artifact, a knowledge source, or the
+      page-only `ephemeral`), the one `~>` line whose step placed it in its column (layout_stacked):
+      its leftmost writer, or for a knowledge source, or a box nobody writes, its leftmost reader; the
+      first in the file when two share that column. The line is short, and every box stays joined to
+      the flow.
+    - Every `~>` line that joins no data box to a step, and every one from a step with no number:
+      store_tags lists numbers, so no tag could list either.
+
+    A box's other reads and writes are not drawn. Its W · R tag, the steps table and the hover still
+    name every one, and the flow text keeps them all, so the page, Atlas and the table never disagree."""
+    flow, lane, col = block['flow'], lay['lane'], lay['col']
+    kinds = dict((s['id'], s['kind']) for s in block['steps'])
+    titles = dict((s['id'], s['title']) for s in block['steps'])
+    keep, pools = set(), {}
+    for q, e in enumerate(flow):
+        if e['from'] not in lane or e['to'] not in lane:
+            continue
+        a_db, b_db = lane[e['from']] == 'db', lane[e['to']] == 'db'
+        if e['role'] != 'plumbing' or a_db == b_db:
+            keep.add(q)
+            continue
+        box, key, step = (e['to'], 'W', e['from']) if b_db else (e['from'], 'R', e['to'])
+        pools.setdefault(box, {'W': [], 'R': []})[key].append((q, step))
+        if not split_number(titles[step])[0]:
+            keep.add(q)  # the same test as store_tags: a step it can't list keeps its line
+    for box, p in pools.items():
+        pool = p['R'] if (kinds.get(box) == 'knowledge' and p['R']) or not p['W'] else p['W']
+        keep.add(min(pool, key=lambda line: (col[line[1]], line[0]))[0])
+    return keep
+
+
+def listed_lines(model):
+    """How many flow lines the overview lists on their stores instead of drawing (0 in the audit register)."""
+    drawn = model.get('drawn')
+    return 0 if drawn is None else len(model['block']['flow']) - len(drawn)
+
+
+def neighbours(block):
+    """Each step's cards at the other end of its flow lines, drawn or listed on a store: the hover's call-outs."""
+    near = {}
+    for e in block['flow']:
+        if e['from'] != e['to']:
+            near.setdefault(e['from'], set()).add(e['to'])
+            near.setdefault(e['to'], set()).add(e['from'])
+    return near
+
+
 def stacked_node(s, lay, reg, page, tags, model):
     """One step's box in the stacked layout: its size and its text, placed later."""
     sid, kind = s['id'], s['kind']
@@ -2062,6 +2121,8 @@ def build_stacked(model, reg, stack_max=STACK_MAX):
     steps = block['steps']
     lay = layout_stacked(block, page, stack_max)
     model['layout'] = lay
+    if model['register'] == 'clean':
+        model['drawn'] = overview_lines(block, lay)
     tags = store_tags(block, lay)
     nodes = model['nodes']
     for s in steps:
@@ -2182,16 +2243,26 @@ def stacked_glyph(role, x, y, reg):
     return glyph(role, x, y, reg)
 
 
-def hover_css(ids):
-    """Colour-free: it only fades the lines a hovered (or keyboard-focused) step does not touch."""
-    rules = ['svg.zflow .e{transition:opacity .15s ease}',
-             'svg.zflow:has(.nd:hover) .e,svg.zflow:has(a:focus-visible) .e{opacity:.12}']
+def hover_css(ids, near=None):
+    """Colour-free. A hovered (or keyboard-focused) step keeps its own lines and fades the rest; the
+    cards at the other end of its flow lines, drawn or listed on a store (`near`), stay at full
+    strength with a thicker outline, and every other card fades (SKB-158)."""
+    near = near or {}
+    rules = ['svg.zflow .e,svg.zflow .nd{transition:opacity .15s ease}',
+             'svg.zflow:has(.nd:hover) .e,svg.zflow:has(a:focus-visible) .e{opacity:.12}',
+             'svg.zflow:has(.nd:hover) .nd,svg.zflow:has(a:focus-visible .nd) .nd{opacity:.3}']
     for i in ids:
-        rules.append('svg.zflow:has(.nd[data-n="%s"]:hover) .e[data-a~="%s"],'
-                     'svg.zflow:has(a:focus-visible .nd[data-n="%s"]) .e[data-a~="%s"]{opacity:1}' % (i, i, i, i))
+        on = 'svg.zflow:has(.nd[data-n="%s"]:hover) %%s,svg.zflow:has(a:focus-visible .nd[data-n="%s"]) %%s' % (i, i)
+        rules.append(on % ('.e[data-a~="%s"]' % i, '.e[data-a~="%s"]' % i) + '{opacity:1}')
+        others = sorted(near.get(i, ()))
+        cards = ':is(%s)' % ','.join('.nd[data-n="%s"]' % n for n in [i] + others)
+        rules.append(on % (cards, cards) + '{opacity:1}')
+        if others:
+            outline = ':is(%s)>:is(:first-child,ellipse)' % ','.join('.nd[data-n="%s"]' % n for n in others)
+            rules.append(on % (outline, outline) + '{stroke-width:2.6}')
     rules.append('svg.zflow a{cursor:pointer}')
     rules.append('svg.zflow a .nm{text-decoration:underline}')
-    rules.append('@media (prefers-reduced-motion:reduce){svg.zflow .e{transition:none}}')
+    rules.append('@media (prefers-reduced-motion:reduce){svg.zflow .e,svg.zflow .nd{transition:none}}')
     return '<style>' + '\n'.join(rules) + '</style>'
 
 
@@ -2226,7 +2297,8 @@ def render_stacked(model, reg):
             placed_items.append((kind, what, label, lx, ly))
             lx += iw
         legend_h = ly + 26
-        notes = [ui['hover']] + ([ui['tags']] if tagged else []) + ([ui['linked']] if linked else [])
+        notes = [ui['hover']] + ([ui['listed'] if listed_lines(model) else ui['tags']] if tagged else []) \
+            + ([ui['linked']] if linked else [])
         tips = '；'.join(notes) + '。' if lang == 'zh-TW' else ' '.join(notes)
         tail_lines = wrap((ui['how_stacked'] + ('' if lang == 'zh-TW' else ' ') if not audit else '') + tips, FS_LABEL, inner)
         panel_top = lanes_bottom + 18
@@ -2234,7 +2306,7 @@ def render_stacked(model, reg):
         height = panel_top + panel_h + MARGIN
 
     o.append('<rect x="0" y="0" width="%s" height="%s" fill="%s"/>' % (f(width), f(height), page['background']))
-    o.append(hover_css(lay['ids']))
+    o.append(hover_css(lay['ids'], neighbours(model['block'])))
     if not embed:
         o.append(svg_text(MARGIN, MARGIN + 16, model['title'], 16, text['primary'], 700))
         if audit:
@@ -2458,7 +2530,7 @@ def embed_html(model, reg, svg):
                      % (st['stroke'], f(st['width']), dash, st['stroke'], esc(st['label'][lang])))
     tips = [ui['hover']]
     if any(t[0] == 'tag' for nd in nodes.values() for t in nd['texts']):
-        tips.append(ui['tags'])
+        tips.append(ui['listed'] if listed_lines(model) else ui['tags'])
     if any(nd.get('link') for nd in nodes.values()):
         tips.append(ui['linked'])
     spans.extend('<span class="zflow-tip">%s</span>' % esc(t) for t in tips)
@@ -2644,7 +2716,10 @@ def lint_report(path, model):
     # where each step landed, so a V14 or an overlap can be traced to the step that moved
     columns = dict((s['id'], model['layout']['col'][s['id']]) for s in model['block']['steps'])
     return {'file': path, 'title': model['title'], 'steps': len(model['block']['steps']),
-            'lines': len(model['block']['flow']), 'violations': found, 'warnings': warnings, 'notes': notes,
+            'lines': len(model['block']['flow']),
+            # the drawing it measured: Atlas's canvas or the page, the detail (audit) or the overview (clean)
+            'layout': model['layout'].get('kind', 'canvas'), 'register': model['register'],
+            'violations': found, 'warnings': warnings, 'notes': notes,
             'columns': columns,
             'summary': {'hard': len(hard), 'soft': len(soft), 'warnings': len(warnings), 'notes': len(notes)},
             'exit': 1 if found else 0}
@@ -2718,13 +2793,21 @@ def option(args, name, default=None, choices=None):
     return default
 
 
+def default_register(layout_kind):
+    """The view a command draws when no --register is given (SKB-158): a page drawing, the stacked
+    layout, is the overview (clean); Atlas's canvas is the detail (audit), every line, as Atlas draws it."""
+    return 'clean' if layout_kind == 'stacked' else 'audit'
+
+
 def cmd_render(args):
     reg_path = option(args, '--registry')
     out = option(args, '--out')
     lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
-    register = option(args, '--register', 'audit', ('audit', 'clean'))
+    register = option(args, '--register', None, ('audit', 'clean'))
     layout_kind = option(args, '--layout', 'stacked', ('stacked', 'canvas'))
     stack = option(args, '--stack', str(STACK_MAX), ('2', '3', '4', '5', '6'))
+    # A page drawing is the overview unless asked otherwise; Atlas's canvas is the detail (SKB-158).
+    register = register or default_register(layout_kind)
     embed = '--embed' in args
     if embed:
         args.remove('--embed')
@@ -2744,9 +2827,12 @@ def cmd_render(args):
     if out:
         with open(out, 'w', encoding='utf-8', newline='\n') as fh:
             fh.write(svg)
-        sys.stderr.write('drew %d steps and %d lines in %d columns into %s (flow-colours %s, %s register, %s layout%s)\n'
-                         % (len(model['block']['steps']), len(model['block']['flow']), model['layout']['cols'], out,
-                            reg['version'], register, layout_kind, ', as a page fragment' if embed else ''))
+        listed = listed_lines(model)
+        sys.stderr.write('drew %d steps and %d lines%s in %d columns into %s (flow-colours %s, %s register, %s layout%s)\n'
+                         % (len(model['block']['steps']), len(model['routes']),
+                            ' (%d more reads and writes listed on their stores)' % listed if listed else '',
+                            model['layout']['cols'], out, reg['version'], register, layout_kind,
+                            ', as a page fragment' if embed else ''))
     else:
         sys.stdout.write(svg)
     return 0
@@ -2778,7 +2864,7 @@ def cmd_lint(args):
     reg = load_registry(option(args, '--registry'))
     layout_kind = option(args, '--layout', 'canvas', ('stacked', 'canvas'))
     stack = option(args, '--stack', str(STACK_MAX), ('2', '3', '4', '5', '6'))
-    register = option(args, '--register', 'audit', ('audit', 'clean'))
+    register = option(args, '--register', None, ('audit', 'clean')) or default_register(layout_kind)
     lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
     if len(args) != 1:
         raise KitError('usage: flow_svg.py lint <flow.md> [--layout canvas|stacked] [--register audit|clean] '
@@ -3103,14 +3189,19 @@ def selftest():
                           '%s (stacked, %s): step %s does not show its number %s' % (name, register, s['id'], number))
                 stacked_steps += register == 'clean'
             known = set(s['id'] for s in model['block']['steps'])
-            for e in model['block']['flow']:
+            drawn = model.get('drawn')
+            check((drawn is None) == (register == 'audit'), '%s (stacked, %s): only the clean register is the overview'
+                  % (name, register))
+            for q, e in enumerate(model['block']['flow']):
                 if e['from'] not in known or e['to'] not in known:
                     continue
                 n = svg.count('<path class="e" data-a="%s %s" ' % (esc(e['from']), esc(e['to'])))
-                want = sum(1 for x in model['block']['flow'] if (x['from'], x['to']) == (e['from'], e['to']))
+                # the audit register (the detail) draws every line; the clean one (the overview) the lines overview_lines keeps
+                want = sum(1 for k, x in enumerate(model['block']['flow'])
+                           if (x['from'], x['to']) == (e['from'], e['to']) and (drawn is None or k in drawn))
                 check(n == want, '%s (stacked, %s): the line %s to %s is drawn %d times, not %d'
                       % (name, register, e['from'], e['to'], n, want))
-                stacked_lines += register == 'clean'
+                stacked_lines += register == 'clean' and (drawn is None or q in drawn)
             per = {}
             for (c, bi), ids in model['layout']['stacks'].items():
                 if model['layout']['bands'][bi][0] == 'be':
@@ -3197,6 +3288,90 @@ def selftest():
     check(not [h for h in lint_report('inline', m9)['violations'] if h['rule'] == 'V14'], 'the stacked layout is not held to V14')
     print('stacked: %d fixtures draw in both registers (%d steps, %d lines); `page:` cards, links, tags and the page fragment hold'
           % (len(names), stacked_steps, stacked_lines))
+
+    # 9. the overview (SKB-158): the clean register on a page draws every spine line and one line per
+    # data box, the one that placed it in its column; every other read and write stays on the box's tag,
+    # and the hover still calls out every card a step joins, drawn or listed.
+    n_boxes = n_listed = 0
+    for name in names:
+        path = os.path.join(FIXTURES, name)
+        try:
+            model = build(read_text(path), reg, 'en', 'clean', path, 'stacked')
+        except Exception as e:  # noqa: BLE001 - a crash is a failure, whatever it is
+            check(False, '%s (overview) does not build: %r' % (name, e))
+            continue
+        lay, flow, drawn = model['layout'], model['block']['flow'], model.get('drawn') or set()
+        tags = store_tags(model['block'], lay)
+        joins = {}
+        for q, e in enumerate(flow):
+            if e['from'] not in lay['lane'] or e['to'] not in lay['lane']:
+                continue
+            a_db, b_db = lay['lane'][e['from']] == 'db', lay['lane'][e['to']] == 'db'
+            if e['role'] == 'spine' or a_db == b_db:
+                check(q in drawn, '%s (overview): the line %s to %s must be drawn' % (name, e['from'], e['to']))
+                continue
+            box, step, key = (e['to'], e['from'], 'W') if b_db else (e['from'], e['to'], 'R')
+            joins.setdefault(box, []).append((q, step, key))
+        for box, lines in sorted(joins.items()):
+            n_boxes += 1
+            shown = [(q, step) for q, step, key in lines if q in drawn]
+            # a step with no number keeps its line (no tag can list it), so only numbered lines count to one
+            numbered = [(q, step) for q, step in shown if split_number(model['nodes'][step]['title'])[0]]
+            check(bool(shown) and len(numbered) <= 1, '%s (overview): the box %s draws %d lines, not 1'
+                  % (name, box, len(numbered) or len(shown)))
+            if shown:
+                check(any(lay['col'][step] == lay['col'][box] for q, step in shown), '%s (overview): the line drawn '
+                      'for %s comes from %s, outside its column' % (name, box, shown[0][1]))
+            for q, step, key in lines:
+                if q in drawn:
+                    continue
+                n_listed += 1
+                number = split_number(model['nodes'][step]['title'])[0]
+                if number:
+                    check(number in tags.get(box, {}).get(key, []), '%s (overview): %s %s of %s is neither drawn nor on its tag'
+                          % (name, step, key, box))
+                else:
+                    check(False, '%s (overview): %s %s of %s is hidden, but %s has no number for a tag to list'
+                          % (name, step, key, box, step))
+    path = os.path.join(FIXTURES, 'example-2.md')
+    text = read_text(path)
+    numbered_post = '"post | deterministic | 5 Auto-post"'
+    check(numbered_post in text, 'example-2.md should number its auto-post step 5')
+    bare = build(text.replace(numbered_post, '"post | deterministic | Auto-post"'), reg, 'en', 'clean', path, 'stacked')
+    check(any(e['from'] == 'post' and e['to'] == 'log' for q, e in enumerate(bare['block']['flow']) if q in bare['drawn']),
+          'example-2 (overview): with no number, the auto-post step must keep its line to the invoice log')
+    model = build(text, reg, 'en', 'clean', path, 'stacked')
+    svg = render_stacked(model, reg)
+    style = re.search('<style>(.*?)</style>', svg, re.S).group(1)
+    folded = [e for q, e in enumerate(model['block']['flow']) if q not in model['drawn']]
+    check(bool(folded), 'example-2 (overview) should list at least one read or write on its store')
+    for e in folded:
+        rule = re.search('svg\\.zflow:has\\(\\.nd\\[data-n="%s"\\]:hover\\) :is\\(([^)]*)\\)' % re.escape(e['to']), style)
+        check(bool(rule) and 'data-n="%s"' % e['from'] in rule.group(1),
+              'example-2 (overview): hovering %s must call out %s, whose line is listed, not drawn' % (e['to'], e['from']))
+    check('svg.zflow:has(.nd:hover) .nd' in style and 'stroke-width:2.6' in style, 'the hover must fade the other cards and outline the joined ones')
+    whole = embed_html(build(text, reg, 'en', 'clean', path, 'stacked', True), reg, svg)
+    detail = build(text, reg, 'en', 'audit', path, 'stacked', True)
+    check(UI['en']['listed'] in whole and UI['en']['listed'] not in embed_html(detail, reg, render_stacked(detail, reg)),
+          'the overview, and only the overview, says a store draws one line')
+    check(default_register('stacked') == 'clean' and default_register('canvas') == 'audit',
+          'a page drawing defaults to the overview, Atlas\'s canvas to the detail')
+
+    def cli(cmd, argv):
+        """A command's stdout, run as the command line runs it, flags and defaults included."""
+        out, sys.stdout = sys.stdout, io.StringIO()
+        try:
+            cmd(list(argv))
+            return sys.stdout.getvalue()
+        finally:
+            sys.stdout = out
+    check('data-register="clean"' in cli(cmd_render, [path]) and 'data-register="audit"' in cli(cmd_render, [path, '--layout', 'canvas']),
+          'render draws the overview on a page and the detail on Atlas\'s canvas')
+    check(json.loads(cli(cmd_lint, [path, '--json']))['register'] == 'audit'
+          and json.loads(cli(cmd_lint, [path, '--layout', 'stacked', '--json']))['register'] == 'clean',
+          'plain lint checks the detail, as Atlas draws it, and lint --layout stacked the overview, as the page does')
+    print('overview: %d fixtures draw one line per data box (%d boxes; %d reads and writes listed on their stores); '
+          'hover calls out every card a step joins' % (len(names), n_boxes, n_listed))
 
     if failures:
         print('selftest FAILED:')

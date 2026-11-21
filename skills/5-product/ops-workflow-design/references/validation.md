@@ -111,7 +111,7 @@ never changes the exit.
 
 ### V14 — One spine; at most 3 steps per column · lint
 
-- **Principle**: two registers, `SKILL.md` ("one step per real step … at most three steps in a
+- **Principle**: two views, `SKILL.md` ("one step per real step … at most three steps in a
   column"). The rule was always implied; an owner's ruling on 2026-09-01 made it a rule.
 - **Detect**: a column holding **4 or more** steps, counted **across all lanes** after layout. Lint
   names the column as `col=` counts it, from 0, and its steps.
@@ -195,14 +195,15 @@ never changes the exit.
 
 ### V12 — Clean-register hygiene · lint and renderer
 
-- **Principle**: two registers, `SKILL.md`.
+- **Principle**: two views, `SKILL.md`.
 - **Lint** — a label longer than its place can hold: a step title that takes more than three lines
   in its box, a line label of more than two lines, or a phase name wider than its band. Fix:
   shorten it (verb + noun), and put the detail in the prose under the frontmatter.
-- **Renderer** — both registers draw the legend and leave out a lane row that holds no step;
-  `--register clean` shows labels only on the branches out of a gate or a junction.
-- The rest of the clean register is how you write the flow text: short titles, and one `knowledge`
-  step per source (`SKILL.md`, Two registers).
+- **Renderer** — both views draw the legend and leave out a lane row that holds no step; the
+  overview (`--register clean`) shows labels only on the branches out of a gate or a junction, and
+  one line per data box (`SKILL.md`, Two views).
+- The rest of the overview is how you write the flow text: short titles, and one `knowledge`
+  step per source (`SKILL.md`, Two views).
 
 ### V13 — Straight lines and legible lane headers · renderer
 

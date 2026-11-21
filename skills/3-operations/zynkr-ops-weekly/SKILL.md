@@ -291,7 +291,7 @@ save each result unchanged, and write the TL;DR.
    `references/wording.md`, about what most needs the team's attention. **Every line cites the item
    number it is about** (`#1.03`). Save them as a JSON list to `tldr.json` in the run folder. Write
    about what the facts show, never about how they were gathered.
-6. `python3 scripts/recap.py render --dir <dir> --tldr <dir>/tldr.json` → `subject`, `to` and
+6. `python3 scripts/recap.py render --dir <dir> --tldr <dir>/tldr.json` → `subject`, `to`, `bcc` and
    `body_path`. Lines that cite no real item number are dropped, and it says which.
 7. **Never send twice.** `search_gmail_messages` with `sent_check.query` and `sent_check.page_size`
    exactly as `render` (or `notice`) printed them, then read the subject of each message it finds.
@@ -300,7 +300,9 @@ save each result unchanged, and write the TL;DR.
    the day (逾期 N 件), so a send made yesterday still counts. (Gmail's `subject:` search misses 【】
    and CJK text, so compare the subjects yourself.)
 8. `send_gmail_message` to exactly `to`, with exactly `subject`, the contents of `body_path` as the
-   body, and `body_format="html"`. No cc, no bcc, no other recipients.
+   body, and `body_format="html"`; when `render` printed a non-empty `bcc`, pass it as `bcc`. No cc,
+   no other recipients. That `bcc` is the sending account itself (`SKB-159`): Gmail files a mail you
+   send to a group you are in under Sent only, so without it the owner never sees the recap arrive.
 9. **Assert it fired.** Make the `sent_check` search again and find a message whose subject equals
    `subject`. Found → receipt
    `status=ok`, `delivered=recap-sent-to-<count of addresses in to>`. Not found → `status=failed`,

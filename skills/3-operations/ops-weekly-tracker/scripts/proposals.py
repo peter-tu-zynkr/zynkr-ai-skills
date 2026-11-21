@@ -62,7 +62,7 @@ import shlex
 import sys
 import time
 from datetime import date
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
 LEDGER_API = 4   # the ledger.py this script was written against (SKB-091; 3 = SKB-118's check_saved; 4 = SKB-128's Harvest `item`); not the Snapshot's LAYOUT marker
@@ -715,7 +715,8 @@ def write_mail(run, rows):
                           "thread apply reads must fit one tool result — propose fewer rows" % (len(flat), MAIL_TEXT_MAX))
     body = os.path.join(d, "mail.html")
     open(body, "w", encoding="utf-8").write(markup)
-    mail = {"to": run["weekly_to"], "subject": subject_for(run["week"], len(rows)), "body_path": body,
+    mail = {"to": run["weekly_to"], "bcc": self_copy(run["weekly_to"], run["account"]),
+            "subject": subject_for(run["week"], len(rows)), "body_path": body,
             "body_format": "html", "include_signature": False}
     json.dump(mail, open(os.path.join(d, "mail.json"), "w", encoding="utf-8"), ensure_ascii=False)
     query = sent_query(run["week"], 1)
@@ -1012,6 +1013,15 @@ def reply_call(run, tid, subject, body, msgs, target):
 # ── sent and apply ───────────────────────────────────────────────────────────
 def thread_state_path(week):
     return state_file(week, "approval.json")
+
+
+def self_copy(to, account):
+    """The sending account itself when `to` leaves it out, else "" (SKB-159). Gmail files a mail you
+    send to a group you are in under Sent only, so the 【週結】 to the team address never reached the
+    owner's own inbox; a bcc to the account does. It is the same message, so Sent still holds one."""
+    acct = (account or "").strip()
+    named = [addr.strip().lower() for _, addr in getaddresses([to or ""])]
+    return "" if not acct or acct.lower() in named else acct
 
 
 def sent_query(week, days):
@@ -2104,6 +2114,10 @@ def selftest():
         check("source from evidence", (rows[2][10], rows[4][10]), ("會議", "收成"))
         check("mail subject", ck["mail"]["subject"], "【週結】WB 10/12 那週 · 5 件變更提案（2026-W42）")
         check("mail to the team", ck["mail"]["to"], "team@example.com")
+        check("the sending account gets its own copy (SKB-159)", ck["mail"]["bcc"], "peter_tu@example.com")
+        check("a to that names the account gets no second copy",
+              self_copy('"Tu, Owner" <Owner@Example.com>, team@example.com', "owner@example.com"), "")
+        check("no account, no copy", self_copy("team@example.com", ""), "")
         mail = open(ck["mail"]["body_path"], encoding="utf-8").read()
         flat = flat_text(mail)
         check("mail shows the shadow banner", "試行中" in mail, True)
@@ -2839,6 +2853,8 @@ MUTATIONS = [
     ("the job does not say where a refusal goes",
      [('                       "refused_path": refusal_path(run["week"], c[2])},', '                       },')]),
     ("the summary is never cut", [('if size + len(x) > SUMMARY_MAX:', 'if False:')]),
+    ("the 【週結】 leaves the sender out of their own inbox", [('"bcc": self_copy(run["weekly_to"], run["account"])', '"bcc": ""')]),
+    ("the owner copied even when to names them", [('    return "" if not acct or acct.lower() in named else acct', '    return acct')]),
     ("the 【週結】 goes to the owner alone", [('mail = {"to": run["weekly_to"]', 'mail = {"to": run["account"]')]),
     ("no team address is fine", [('if not to or to.startswith("<"):', 'if not to:')]),
     ("any mode word means live", [('return "live" if raw.get("routine", {}).get("apply_mode") == "live" else "shadow"',
