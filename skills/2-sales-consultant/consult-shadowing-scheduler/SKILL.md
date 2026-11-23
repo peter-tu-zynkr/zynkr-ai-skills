@@ -70,7 +70,7 @@ client, is worse than one follow-up question. Re-runs update, never duplicate.
   the Google Workspace connector's calendar tools (`query_freebusy`, `manage_event`,
 `get_events`) work only where its Calendar API is enabled, which it isn't on the owner's Google Cloud project.
 - **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything directly in it
-- **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- **CRM deal URL** for the report/backlink: `https://crm.zynkr.ai/deals/{deal_id}`
 - Ownership needs no lookup and no hardcoded id: every `mcp__zynkr__*` write is made as the user, on their own workspace, and defaults the owner to them.
 
 ## Scheduling defaults (the user overrides any of these by saying so)
@@ -214,7 +214,7 @@ mcp__claude_ai_Google_Calendar__create_event(
   summary     = "[Shadowing] {{COMPANY}} — 現場跟拍",
   startTime   = "2026-08-12T10:00:00+08:00", endTime = "2026-08-12T12:00:00+08:00",
   timeZone    = "Asia/Taipei",   # overrides the offsets above: use the zone the slot was given in
-  description = "Deal: https://platform.zynkr.ai/deals/{deal_id}\n專案資料夾: <folder url>",
+  description = "Deal: https://crm.zynkr.ai/deals/{deal_id}\n專案資料夾: <folder url>",
   attendees   = [],  # the client ONLY if opted in at the gate: [{"email": "<contact email>"}]
   addGoogleMeetUrl = <true for 遠端, false for 現場>
 )

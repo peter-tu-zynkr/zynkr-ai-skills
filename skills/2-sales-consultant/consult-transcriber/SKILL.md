@@ -75,7 +75,7 @@ engagement, which phase, which folder, and the CRM breadcrumb.
 
 - **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
 - **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, home of the numbered `[N]` folders): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t` — orientation only; this skill never creates anything directly in it
-- **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- **CRM deal URL** for the report/backlink: `https://crm.zynkr.ai/deals/{deal_id}`
 
 ## Hard rules
 

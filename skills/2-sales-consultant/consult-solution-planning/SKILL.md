@@ -73,7 +73,7 @@ recognize or a score he'd contest poisons everything downstream of it.
 
 - **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
 - **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, where numbered project folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
-- **CRM deal URL** for the doc/report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- **CRM deal URL** for the doc/report/backlink: `https://crm.zynkr.ai/deals/{deal_id}`
 
 ## Hard rules
 
@@ -156,23 +156,29 @@ Present scope + metrics; **confirm** — this is the last gate before the Doc.
 ### 7 · Generate the `[Plan]` Doc + CRM note
 
 Assemble the confirmed sections (persona · journey · ranked-pain table ·
-opportunity list · MVP in/out · metrics · the handoff block from step 8) and
-create the Doc via the reliable two-step (direct create-in-folder returns 400):
+opportunity list · MVP in/out · metrics · the handoff block from step 8) as
+Markdown: one `##` heading per section, the persona canvas, journey and
+ranked-pain table as Markdown tables, and a blank line before every heading,
+table and list, or the import merges it into the paragraph above it.
+
+Create it in one call, so the Markdown arrives formatted:
 
 ```
-## 1. create the doc (lands in My Drive root)
-mcp__google-workspace__create_doc(
+mcp__google-workspace__import_to_google_doc(
   user_google_email = "<your-google-workspace-account>",
-  title   = "[Plan] {{COMPANY}} — {{PROJECT}}",
-  content = "<assembled plan>"
-)
-## 2. move it into the client's [N] project folder
-mcp__google-workspace__update_drive_file(
-  user_google_email = "<your-google-workspace-account>",
-  file_id     = "<doc id from step 1>",
-  add_parents = "<the [N] folder id from workflow step 1>"
+  file_name     = "[Plan] {{COMPANY}} — {{PROJECT}}",
+  content       = "<assembled plan>",
+  source_format = "md",
+  folder_id     = "<the [N] folder id from workflow step 1>"
 )
 ```
+
+Never use `create_doc(content=…)` here: it inserts plain text, so every `#`, `|` and `**`
+marker would show up literally and the tables arrive as rows of pipes.
+
+Then set the exact title. The import cuts a title at its last ASCII `.`, treating the rest as a
+file extension (a project named `… v2.0 rollout` arrives as `… v2`), so rename the new Doc right
+away: `mcp__google-workspace__update_drive_file(user_google_email="<your-google-workspace-account>", file_id="<new id>", name="[Plan] {{COMPANY}} — {{PROJECT}}")`.
 
 Then append the Doc to the deal's notes (same pattern as consult-brd-writer):
 

@@ -70,7 +70,7 @@ its source — who said it, or which transcript section.
 
 - **Google account** for all Gmail/Drive/Docs tools: `<your-google-workspace-account>`
 - **Drive parent folder** (`[3.1] 顧問部門：專案 (Project tracking)`, where numbered project folders live): `1hkXPX7OXPFOU0BcloPbJSFp8O0zArM8t`
-- **CRM deal URL** for the report/backlink: `https://platform.zynkr.ai/deals/{deal_id}`
+- **CRM deal URL** for the report/backlink: `https://crm.zynkr.ai/deals/{deal_id}`
 
 ## Hard rules
 
@@ -175,22 +175,34 @@ The fork's addition — a table under the four sections, one row per pain:
 ### 4 · Create and file the `[Notes]` Doc
 
 Title: `[Notes] {{COMPANY}} — {{SESSION_TYPE}} {{YYYY-MM-DD}}`. Content: the
-step-2 summary + the step-3 ledger. Create via the reliable two-step (creating
-a Doc directly in a folder via `create_drive_file` returns HTTP 400):
-
-```
-## 1. create the doc (lands in My Drive root)
-mcp__google-workspace__create_doc(user_google_email="<your-google-workspace-account>",
-  title="[Notes] {{COMPANY}} — {{SESSION_TYPE}} {{YYYY-MM-DD}}", content="<summary + ledger>")
-## 2. move it into the engagement folder
-mcp__google-workspace__update_drive_file(user_google_email="<your-google-workspace-account>",
-  file_id="<doc id from step 1>", add_parents="<target folder id>")
-```
+step-2 summary + the step-3 ledger, as Markdown: the summary's first line as the
+`#` heading, each of the four labels as a `##` heading with its content beneath
+it, then `## 痛點 Ledger` and its table. Keep a blank line before every heading,
+list and the table, or the import merges it into the paragraph above it.
 
 Target folder: for `shadowing` sessions, look inside the `[N]` folder for a
 `Shadowing — YYYY-MM-DD` subfolder (via `list_drive_items`) and file there when
 it exists; otherwise — and for all other session types — the `[N]` folder
 itself. Never create the subfolder.
+
+Create it in one call, so the Markdown arrives formatted:
+
+```
+mcp__google-workspace__import_to_google_doc(
+  user_google_email = "<your-google-workspace-account>",
+  file_name     = "[Notes] {{COMPANY}} — {{SESSION_TYPE}} {{YYYY-MM-DD}}",
+  content       = "<summary + ledger>",
+  source_format = "md",
+  folder_id     = "<target folder id>"
+)
+```
+
+Never use `create_doc(content=…)` here: it inserts plain text, so every `#` and `|`
+marker would show up literally and the ledger arrives as rows of pipes.
+
+Then set the exact title. The import cuts a title at its last ASCII `.`, treating the rest as a
+file extension (`[Notes] … Co., Ltd. — 訪談 2026-08-03` arrives as `[Notes] … Co., Ltd`), so rename the new Doc right
+away: `mcp__google-workspace__update_drive_file(user_google_email="<your-google-workspace-account>", file_id="<new id>", name="[Notes] {{COMPANY}} — {{SESSION_TYPE}} {{YYYY-MM-DD}}")`.
 
 ### 5 · CRM note on the deal
 
