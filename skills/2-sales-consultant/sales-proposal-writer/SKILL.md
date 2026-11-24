@@ -197,6 +197,13 @@ costs: it is the part that makes the rest credible.
 
 ### 7 · Publish and log
 
+**Build the page from the layout template** on a first version: copy
+`references/proposal-layout-template.crm.html` into the run's scratch folder as `<deal-slug>-proposal.crm.html`,
+fill every `{{…}}` and delete the blocks this proposal does not need and every comment. It holds the house layout
+(報頭與事實列 · 案例卡 · 議程表 · 前後對照 · 範圍 · 費用 · 下一步) and the brand tokens; keep its classes rather than
+restyling. Never start from an earlier client's proposal: it carries that client's name and amounts. On a revision,
+edit the local source of the published version instead (the revision loop's step 4).
+
 Publish as a 交付文件, then write **one CRM note** carrying the pricing rationale, the ranking
 criterion, any internal→external mapping, and the share URL.
 
@@ -296,6 +303,12 @@ that shifts meaning, or a consistency edit applied beyond the anchored spot.
 - A chase task on the deal, due by the policy's follow-up rhythm
 - The proposal's 產品 tags on the contact and the company, read back (or the `標籤建議` note)
 - On revisions: the comment→change table, the checksum verification, and what was synced
+
+## Reference files
+
+- `references/proposal-layout-template.crm.html` — the proposal page's layout, read at step 7 on a first version. Its
+  top comment is the contract: amounts only from step 5, no hours or session lengths, Orange once on the
+  recommended fee line, no internal notation.
 
 ## Limitations
 

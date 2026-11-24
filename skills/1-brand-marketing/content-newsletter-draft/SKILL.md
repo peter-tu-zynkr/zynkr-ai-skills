@@ -175,7 +175,7 @@ Run `content-reader` with `mode: newsletter`. Give it both tabs, the chosen open
 
 ## Step 8: Ship
 
-1. **Doc.** Create `(NN) 電子報｜<title>` in the Docs folder with two tabs: 正式版 (the copy that goes to Kit) and 筆友書信體版本.
+1. **Doc.** Create `(NN) 電子報｜<title>` in the Docs folder with two tabs: 正式版 and 筆友書信體版本 (the copy that goes to Kit, Peter 2026-11-21).
    - Use real Doc tabs, or two `#` H1 sections when tabs can't be made.
    - Read the Doc back. Importing HTML turns the text between two `$` in one paragraph into an equation, and merges an `<hr>` into the next paragraph.
 2. **Card.** Create the issue's Content DB card, or update it if the topic came from one. Fill:
@@ -184,8 +184,9 @@ Run `content-reader` with `mode: newsletter`. Give it both tabs, the chosen open
 
    Then add the card to the 用在 of each 讀者原話庫 row the brief used.
 3. **Copy file.** In the drip checkout, write `src/newsletters/NL-<YYYY-MM>-<slug>.md`.
-   - It holds Tab 1 word for word, laid out in the copy-file format the drip README describes (headings become its heading markers; bold becomes plain).
+   - It holds Tab 2 word for word, laid out in the copy-file format the drip README describes: each section heading becomes a `〔小標〕` row, unnumbered, and every paragraph stays its own paragraph.
    - 收件對象 is `newsletter-test`.
+   - Don't write the 「關於這封信」 FAQ into it. The renderer adds it to every issue after the sign-off, from the drip checkout's `src/faq.md` (why you get this mail, sharing, the LINE group, courses and events, unsubscribe; Peter, 2026-11-22). A change to the FAQ goes in that file.
    - The CTA replaces 【CTA 待 Peter 確認】; ask Peter if he hasn't named one. The copy check refuses any 【…】, so no tag can reach Kit.
    - Each ad goes between a `〔廣告〕` line and a `〔/廣告〕` line, with its link or button row inside (House format → Ads). The copy check refuses a box that never closes, a box inside a box, and a box with no paragraph.
    - Every text is plain: the copy check stops at a link inside a sentence (`[text](url)`, an `<a>` tag or a bare `https://` address), any other HTML tag, and `**`. A link goes on its own `〔連結〕` row.
@@ -224,15 +225,15 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 
 **Container**
 - One Google Doc per issue in the Docs folder, named `(NN) 電子報｜<title>`.
-- Two tabs: Tab 1 正式版 (the copy that goes to Kit) and Tab 2 筆友書信體版本.
+- Two tabs: Tab 1 正式版 and Tab 2 筆友書信體版本. Tab 2 is the copy that goes to Kit (Peter, 2026-11-21).
 - Exemplars: (59) `1VrMSecK9pSVQRFoxOmYKS8xn5tAcAMllFUfUZC2X9pM`, (60) `1449GY5oyBshxmxyuiKsp7dmhunUW_nOeLZCHowunbTg`, (61) `1ZW50dFApBTPaYv-iSryizh7GMvmGV_cvxuiYKChosTo`.
 
 **Past issues (both tabs)**
 - A callback names the earlier issue in words: its month and its subject (「八月那封〈為什麼有了 AI，我反而更忙？〉」).
 - Never name an issue by its number (「第 N 期」, (NN)): the subjects carry none, so readers never see them.
 - When the brief gives that issue a Web URL, link its page:
-  - In Tab 1, on a line of its own right after the paragraph that names it, with the issue's subject as the link text. The copy file makes that line a `〔連結〕` row (subject | Web URL): Kit's rows take plain text, so a link inside a sentence would reach readers as typed, and the copy check stops at one.
-  - In Tab 2, on a few of the sentence's own words.
+  - In Tab 2, on a line of its own right after the paragraph that names it, with the issue's subject as the link text. The copy file makes that line a `〔連結〕` row (subject | Web URL): Kit's rows take plain text, so a link inside a sentence would reach readers as typed, and the copy check stops at one.
+  - In Tab 1, on a few of the sentence's own words.
 - An earlier issue with no web page is described in words (「上個月講時間管理那封」), never linked or numbered.
 
 **Tab 1 正式版: 1,200–1,500 字**
@@ -244,7 +245,7 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 **Tab 2 筆友書信體版本: 1,200–2,000 字, not counting the ad boxes** (Peter raised it from 1,400 on 2026-11-09: the lower cap made every pass cut his spoken words)
 1. Open with the chosen opening's sentences, word for word, one per line. A reader's question in it is the reader's own words, never an invented 「很多人問我」 (《[3.2]》 K).
 2. Address the reader as 「你」 throughout. Anticipate at most one objection, and only a real one (《[3.2]》 J).
-3. No headings. **No separator lines between paragraphs: never insert `–` / `—` / `---` lines; a blank line separates paragraphs** (Peter's rule, 2026-08-17).
+3. The same 4–5 section headings as Tab 1, as `##` headings with no number (「這一年發生了什麼」, not 「一、這一年發生了什麼」). The opening comes before the first one (Peter, 2026-11-21: he sent (66) this way and asked for it to be the format). **No separator lines between paragraphs: never insert `–` / `—` / `---` lines; a blank line separates paragraphs** (Peter's rule, 2026-08-17).
 4. Mostly one sentence per line; each sentence is its own paragraph.
 5. No bold.
 6. Explain jargon in the same sentence, in plain words.
@@ -259,7 +260,9 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 - zh-TW. Chinese headings and taglines carry no ending 句號; use 「·」 for series.
 - Peter's spoken register stays (《[2.2]》 §四 保留講話的連接詞, 2026-11-09). His connectives (但、可是、所以、其實、就、也、反而、結果、我以為) are not filler, and sentences are never merged or trimmed to save words. It reads less polished and less like a machine. Read it aloud: it should sound like his livestream, not a press release.
 - Voice and structure: 《[2.2] 內文風格指南》 §三–§七 (開場四環節 · 開場怎麼寫 · 帶收據 · 語言使用 · 資訊節奏 · 電子報格式). It is Doc `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M`; use its `# 最終產出` section.
-- Forbidden patterns and their per-issue caps: 《[3.2] 禁用詞清單》 A–W. X is for sales mail only.
+- Show the reasoning (《[2.2]》 §四 把因果說出來): a judgment (我覺得 · 我的看法是 · 我的推測是) says what fact it follows from and what follows from it, joined with 因為、所以、但、雖然說. Don't set two facts side by side and leave the reader to guess the link.
+- Every verb says what it acts on (《[3.2]》 Y): not 「履歷都卡住」 but 「履歷都找不到工作」; not 「把能做的事拉寬了」 but a verb that names what grew.
+- Forbidden patterns and their per-issue caps: 《[3.2] 禁用詞清單》 A–W and Y. X is for sales mail only.
 - The facts match across the tabs. Only 【CTA 待 Peter 確認】 may remain as a placeholder, and only until Ship.
 
 ## House style

@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{客戶名}} {{提案標題}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<!--
+  The proposal page's layout, for sales-proposal-writer step 7 (SKB-162). Copy this file into the run's scratch
+  folder, never into a repo, as <deal-slug>-proposal.crm.html, and fill it there.
+
+  The contract:
+  - Fill every {{…}} and delete every block the proposal does not need. Delete every comment, this one included,
+    before publishing: they are for whoever edits the template, not for the client.
+  - Amounts come only from the skill's step 5 (the Atlas cards b2b-enterprise-pricing and zynkr-service-offerings,
+    and sales.quote-proposal-policy). Never type a figure from memory, an older proposal or this file.
+  - No hours and no session length anywhere: not in the fact row, the agenda, a case card or the fee line. A
+    one-off event names its format (半天 / 全天); a recurring session gives its cadence (每週一次).
+  - No internal notation: no colour codes, spec IDs or internal module numbers. Modules are M1 · M2 · M3, no gaps.
+  - Orange once: the recommended fee line (.fline.cta). Every other surface is Paper, Ink and Sage Deep. Ink is
+    type, never a fill, and there is no dark theme.
+  - The renderer is a sandboxed iframe: scripts do not run, so all CSS stays inline in this file.
+
+  The blocks, in order: 報頭與事實列 (masthead + fact row) · 我們聽到的 (numbered list) · 案例卡 (case cards) ·
+  議程表 (agenda table) · 前後對照 (before / after trio) · 範圍 (scope split + boundaries) · 費用 (fee lines) ·
+  下一步 (the ask) · footer. Each section opens with .section-head: an English eyebrow, the zh-TW h2, a Sage Deep rule.
+-->
+<style>
+  /* Layout: single-column proposal scroll on Paper · one Orange, on the recommended fee line */
+  /* Brand tokens keep the names and values of zynkr.ai/data/tokens.json, TOKENS_VERSION 2026-07-02.1
+     (scripts/brand-tokens.json). The two font stacks are the brand stacks with Noto Sans TC first, so CJK renders in it. */
+  :root {
+    color-scheme: light;
+    --paper: #FBF7F0; --paper-raised: #FDFAF5; --ink: #0F0F0E; --ink-mid: #3D3A36;
+    --mute: #6F6B62; --line: rgba(43, 43, 40, 0.12);
+    --sage-deep: #5FA48A; --sage-soft: #DCEEE6;
+    --orange: #F26B1F;
+    --radius-sm: 8px; --radius-md: 14px; --radius-pill: 999px;
+    --font-zh: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-zh);
+    font-size: 15.5px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+  .page { max-width: 880px; margin: 0 auto; padding: 56px 28px 96px; display: flex; flex-direction: column; gap: 56px; }
+  @media (max-width: 600px) { .page { padding: 36px 18px 72px; gap: 44px; } }
+
+  /* 報頭與事實列 */
+  .eyebrow { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--sage-deep); }
+  .masthead { display: flex; flex-direction: column; gap: 14px; }
+  .mast-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .brand-stamp { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: 0.04em; color: var(--ink); }
+  .meta { font-family: var(--font-display); font-size: 12.5px; color: var(--mute); letter-spacing: 0.02em; }
+  h1 { margin: 8px 0 0; font-size: clamp(26px, 4.2vw, 36px); font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { margin: 0; max-width: 62ch; color: var(--ink-mid); font-size: 16px; }
+  .lede strong { color: var(--ink); font-weight: 700; }
+  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 8px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .fact { padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fact + .fact { padding-left: 16px; border-left: 1px solid var(--line); }
+  .fact .k { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+  .fact .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) {
+    .facts { grid-template-columns: 1fr 1fr; }
+    .fact:nth-child(3) { padding-left: 0; border-left: 0; }
+    .fact:nth-child(n+3) { border-top: 1px solid var(--line); }
+  }
+
+  /* section head */
+  section { display: flex; flex-direction: column; gap: 18px; }
+  .section-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; border-bottom: 2px solid var(--sage-deep); }
+  .section-head h2 { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.35; text-wrap: balance; }
+  .section-head .en { font-family: var(--font-display); font-weight: 600; font-size: 12.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--sage-deep); }
+  p.body { margin: 0; max-width: 66ch; color: var(--ink-mid); }
+  p.body strong { color: var(--ink); font-weight: 700; }
+  .note { margin: 0; font-size: 13.5px; color: var(--mute); }
+
+  /* 我們聽到的: numbered list */
+  .changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+  .change { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
+  .change .n { width: 26px; height: 26px; border-radius: 50%; background: var(--sage-soft); color: var(--sage-deep);
+    font-family: var(--font-display); font-weight: 600; font-size: 12.5px; display: grid; place-items: center; margin-top: 2px; }
+  .change strong { display: block; font-size: 15.5px; font-weight: 700; }
+  .change span { font-size: 14.5px; color: var(--ink-mid); }
+
+  /* 案例卡 */
+  .cases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 820px) { .cases { grid-template-columns: 1fr; } }
+  .case { display: flex; flex-direction: column; gap: 12px; padding: 18px 18px 20px; border-radius: var(--radius-md);
+    background: var(--paper-raised); border: 1px solid var(--line); min-width: 0; }
+  .case .tag { font-family: var(--font-display); font-size: 11.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sage-deep); }
+  .case h3 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.4; }
+  .case dl { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .case dt { font-size: 12px; font-weight: 700; color: var(--mute); letter-spacing: 0.04em; }
+  .case dd { margin: 2px 0 0; font-size: 14px; color: var(--ink-mid); line-height: 1.65; }
+  .case .sessions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+  .pill { font-family: var(--font-mono); font-size: 11.5px; padding: 2px 8px; border-radius: var(--radius-pill);
+    background: var(--sage-soft); color: var(--sage-deep); white-space: nowrap; }
+
+  /* 議程表 */
+  .tablewrap { overflow-x: auto; }
+  table.agenda { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+  table.agenda th { text-align: left; font-family: var(--font-display); font-size: 11.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--sage-deep); font-weight: 600; padding: 0 12px 10px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.agenda td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-mid); line-height: 1.65; }
+  table.agenda td.no { font-family: var(--font-mono); font-size: 13px; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.agenda td.topic strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
+  table.agenda td.out { color: var(--ink); font-weight: 500; }
+  table.agenda tr.lab td { background: var(--sage-soft); }
+  table.agenda tr.lab td:first-child { box-shadow: inset 3px 0 0 var(--sage-deep); padding-left: 10px; }
+
+  /* 前後對照 */
+  .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 760px) { .trio { grid-template-columns: 1fr; } }
+  .trio > div { padding: 16px 18px; border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--paper-raised); min-width: 0; }
+  .trio h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+  .trio ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--ink-mid); display: flex; flex-direction: column; gap: 4px; }
+
+  /* 範圍 */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+  .half { padding: 16px 18px; border-radius: var(--radius-md); min-width: 0; }
+  .half.can { background: var(--sage-soft); border: 1px solid var(--sage-deep); }
+  .half.later { background: var(--paper-raised); border: 1px dashed var(--line); }
+  .half .label { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--sage-deep); }
+  .half.later .label { color: var(--mute); }
+  .half ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-mid); display: flex; flex-direction: column; gap: 4px; }
+  .boundary { margin: 0; padding: 12px 16px; border-left: 3px solid var(--sage-deep); background: var(--paper-raised);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 14px; color: var(--ink-mid); }
+  .boundary b { color: var(--ink); }
+
+  /* 費用: the page's one Orange is .fline.cta */
+  .fee-lines { display: flex; flex-direction: column; gap: 0; border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--paper-raised); overflow: hidden; }
+  .fline { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; padding: 18px 22px; align-items: baseline; }
+  .fline + .fline { border-top: 1px solid var(--line); }
+  .fline h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  .fline p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-mid); }
+  .fline .tag-ab { font-family: var(--font-display); font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--sage-deep); display: block; margin-bottom: 2px; }
+  .fline .amt { font-family: var(--font-display); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  .fline.cta { box-shadow: inset 4px 0 0 var(--orange); }
+  .fline.cta .amt { color: var(--orange); font-size: 30px; font-family: var(--font-zh); font-weight: 700; }
+  @media (max-width: 560px) { .fline { grid-template-columns: 1fr; } .fline .amt { text-align: left; } }
+  .terms { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--ink-mid); }
+
+  /* 下一步: a Paper panel with a Sage Deep border (Ink is never a fill) */
+  .ask { background: var(--paper-raised); border: 1px solid var(--sage-deep); border-radius: var(--radius-md); padding: 28px 28px 30px; gap: 16px; }
+  .ask h2 { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.35; }
+  .ask ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; counter-reset: s; }
+  .ask li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; counter-increment: s; }
+  .ask li::before { content: counter(s); width: 26px; height: 26px; border-radius: 50%; background: var(--sage-soft); color: var(--sage-deep);
+    font-family: var(--font-display); font-weight: 600; font-size: 12.5px; display: grid; place-items: center; margin-top: 2px; }
+  .ask li b { display: block; font-size: 15.5px; }
+  .ask li span { font-size: 14px; color: var(--ink-mid); }
+  @media (max-width: 600px) { .ask { padding: 22px 18px 24px; } }
+
+  footer { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid var(--line);
+    font-family: var(--font-display); font-size: 12.5px; color: var(--mute); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- 報頭與事實列: brand stamp + version line, eyebrow, h1, one lede, then four facts. A fact never holds hours. -->
+  <header class="masthead">
+    <div class="mast-top">
+      <span class="brand-stamp">Zynkr · {{提案類型}}</span>
+      <span class="meta">{{版本}} · {{YYYY-MM-DD}}</span>
+    </div>
+    <span class="eyebrow">Proposal for {{客戶英文名或 Proposal}}</span>
+    <h1>{{客戶名}}：{{一句話說這份提案要解決什麼}}</h1>
+    <p class="lede">{{兩三句：客戶現在的情況，和這份提案讓它變成什麼}}<strong>{{最想讓客戶記住的一句}}</strong></p>
+    <div class="facts">
+      <div class="fact"><span class="k">對象</span><span class="v">{{對象}}</span></div>
+      <div class="fact"><span class="k">形式</span><span class="v">{{形式：半天 / 全天 / 每週一次}}</span></div>
+      <div class="fact"><span class="k">期程</span><span class="v">{{期程：起訖月份或週數，不寫時數}}</span></div>
+      <div class="fact"><span class="k">費用</span><span class="v">{{金額：見 Atlas b2b-enterprise-pricing}}</span></div>
+    </div>
+  </header>
+
+  <!-- 我們聽到的: what the client told us, in their terms. Three to five items. -->
+  <section>
+    <div class="section-head"><span class="en">What we heard</span><h2>{{我們聽到的}}</h2></div>
+    <ol class="changes">
+      <li class="change"><span class="n">1</span><div><strong>{{痛點或需求}}</strong><span>{{一句具體的情況}}</span></div></li>
+      <li class="change"><span class="n">2</span><div><strong>{{痛點或需求}}</strong><span>{{一句具體的情況}}</span></div></li>
+      <li class="change"><span class="n">3</span><div><strong>{{痛點或需求}}</strong><span>{{一句具體的情況}}</span></div></li>
+    </ol>
+  </section>
+
+  <!-- 案例卡: one card per use case or module (M1 · M2 · M3). The tag is the 第一順位／額外項目 label or the module id. -->
+  <section>
+    <div class="section-head"><span class="en">{{Use cases 或 Modules}}</span><h2>{{這次要做的事}}</h2></div>
+    <p class="body">{{排序的準則，說出來：例如「先做最快產生價值的」}}這是我們的判斷，不用照單全收</p>
+    <div class="cases">
+      <article class="case">
+        <span class="tag">{{第一順位 · M1}}</span>
+        <h3>{{交付物}}</h3>
+        <dl>
+          <div><dt>{{現在怎麼做}}</dt><dd>{{現況}}</dd></div>
+          <div><dt>{{之後怎麼做}}</dt><dd>{{做完之後}}</dd></div>
+          <div><dt>你拿到</dt><dd>{{交付物的具體內容}}</dd></div>
+        </dl>
+        <div class="sessions"><span class="pill">{{場次或模組編號}}</span></div>
+      </article>
+      <article class="case">
+        <span class="tag">{{第一順位 · M2}}</span>
+        <h3>{{交付物}}</h3>
+        <dl>
+          <div><dt>{{現在怎麼做}}</dt><dd>{{現況}}</dd></div>
+          <div><dt>{{之後怎麼做}}</dt><dd>{{做完之後}}</dd></div>
+          <div><dt>你拿到</dt><dd>{{交付物的具體內容}}</dd></div>
+        </dl>
+        <div class="sessions"><span class="pill">{{場次或模組編號}}</span></div>
+      </article>
+      <article class="case">
+        <span class="tag">{{額外項目 · M3}}</span>
+        <h3>{{交付物}}</h3>
+        <dl>
+          <div><dt>{{現在怎麼做}}</dt><dd>{{現況}}</dd></div>
+          <div><dt>{{之後怎麼做}}</dt><dd>{{做完之後}}</dd></div>
+          <div><dt>要先確認</dt><dd>{{範圍要先確認的原因}}</dd></div>
+        </dl>
+        <div class="sessions"><span class="pill">{{場次或模組編號}}</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- 議程表: one row per session or step. No time column, no clock times, no lengths. tr.lab marks a group of rows. -->
+  <section>
+    <div class="section-head"><span class="en">Rundown</span><h2>{{怎麼進行}}</h2></div>
+    <div class="tablewrap">
+      <table class="agenda">
+        <thead><tr><th>#</th><th>內容</th><th>你會做什麼</th></tr></thead>
+        <tbody>
+          <tr><td class="no">01</td><td class="topic"><strong>{{主題}}</strong>{{一句說明}}</td><td class="out">{{客戶當場的產出}}</td></tr>
+          <tr class="lab"><td class="no">02</td><td class="topic"><strong>{{主題}}</strong>{{一句說明}}</td><td class="out">{{客戶當場的產出}}</td></tr>
+          <tr><td class="no">03</td><td class="topic"><strong>{{主題}}</strong>{{一句說明}}</td><td class="out">{{客戶當場的產出}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">各場次時間以行事曆邀請為準</p>
+  </section>
+
+  <!-- 前後對照: what we prepare, what the client prepares (say when it can be skipped), what they take away. -->
+  <section>
+    <div class="section-head"><span class="en">Before &amp; after</span><h2>{{開始之前，結束之後}}</h2></div>
+    <div class="trio">
+      <div><h3>我們準備</h3><ul><li>{{項目}}</li><li>{{項目}}</li><li>{{項目}}</li></ul></div>
+      <div><h3>你準備</h3><ul><li>{{項目}}</li><li>{{項目}}</li><li>{{項目}}</li></ul></div>
+      <div><h3>你帶走</h3><ul><li>{{交付物}}</li><li>{{交付物}}</li><li>{{交付物}}</li></ul></div>
+    </div>
+  </section>
+
+  <!-- 範圍: in scope beside not-this-time, then the honest boundaries (what we will not do, and why). -->
+  <section>
+    <div class="section-head"><span class="en">Scope</span><h2>{{這次做什麼，不做什麼}}</h2></div>
+    <div class="split">
+      <div class="half can"><span class="label">這次包含</span><ul><li>{{項目}}</li><li>{{項目}}</li><li>{{項目}}</li></ul></div>
+      <div class="half later"><span class="label">本次未納入</span><ul><li>{{項目}}</li><li>{{項目}}</li></ul></div>
+    </div>
+    <p class="boundary"><b>{{我們不做的事}}</b>：{{為什麼，一句}}</p>
+  </section>
+
+  <!-- 費用: one line per deliverable with its amount, never hours. Only the recommended line is .fline cta (the Orange). -->
+  <section>
+    <div class="section-head"><span class="en">Fee</span><h2>費用</h2></div>
+    <div class="fee-lines">
+      <div class="fline cta"><div><span class="tag-ab">{{建議方案}}</span><h3>{{交付物}}</h3><p>{{這一筆包含什麼}}</p></div><div class="amt">{{金額：見 Atlas b2b-enterprise-pricing}}</div></div>
+      <div class="fline"><div><span class="tag-ab">{{額外項目}}</span><h3>{{交付物}}</h3><p>{{這一筆包含什麼，或「範圍要先確認」}}</p></div><div class="amt">{{金額：見 Atlas b2b-enterprise-pricing}}</div></div>
+    </div>
+    <ul class="terms">
+      <li>報價有效期限：{{YYYY-MM-DD}}</li>
+      <li>付款方式：{{付款條件：見 Atlas sales.quote-proposal-policy §5}}</li>
+      <li>{{含稅 / 未稅，以及客戶直接支付的項目}}</li>
+    </ul>
+  </section>
+
+  <!-- 下一步: two or three steps the client takes. -->
+  <section class="ask">
+    <span class="eyebrow">Next step</span>
+    <h2>{{下一步}}</h2>
+    <ol>
+      <li><div><b>{{第一步}}</b><span>{{怎麼做、跟誰說}}</span></div></li>
+      <li><div><b>{{第二步}}</b><span>{{怎麼做}}</span></div></li>
+    </ol>
+  </section>
+
+  <footer>
+    <span>Zynkr · zynkr.ai</span>
+    <span>{{寄件人}} · {{寄件人信箱}} · {{版本}} · {{YYYY-MM-DD}}</span>
+  </footer>
+
+</div>
+</body>
+</html>

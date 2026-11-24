@@ -142,7 +142,9 @@ is §3.
         "CRM deal 關閉",
         "客戶版連結權限"
       ],
-      "comms_cadence": "biweekly"     // weekly | biweekly — 客戶窗口 雙週 Email vs 內部 週報
+      "comms_cadence": "biweekly"     // weekly | biweekly | on_demand — 客戶窗口 雙週 Email vs 內部 週報;
+                                      // on_demand = no scheduled client status mail: the owner
+                                      // runs /project-status-update when needed
     },
 
     "課程案": {

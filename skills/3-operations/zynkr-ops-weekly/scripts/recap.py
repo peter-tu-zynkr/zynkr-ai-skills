@@ -15,7 +15,8 @@ calls, each with a path to save the tool's result to, word for word.
                                                          against the week before's, and one `gh api`
                                                          per commit for its pull request (SKB-110)
     recap.py build  --dir D --today YYYY-MM-DD        -> facts.json + a short summary for the TL;DR
-    recap.py render --dir D --tldr tldr.json          -> subject, recipients, recap.html; TL;DR lines
+    recap.py render --dir D --tldr tldr.json [--wording wording.json]
+                                                      -> subject, recipients, recap.html; TL;DR lines
                                                          that cite no real item # are dropped
     recap.py notice --dir D                           -> the owner-only "close-out did not run" mail
     recap.py --selftest
@@ -93,6 +94,19 @@ PROGRESS_MAX = 6
 BRACKET_TAIL = re.compile(r"\s*[（(][^（()）]*[）)]\s*$")     # an item's closing note: a site, a date, who it is for
 HARVEST_PLAN = 2
 CUT = 80
+# SKB-166: the lines whose source is English (the Pulse's steps, the harvest's waiting lines) reach the mail
+# in the run's own zh-TW wording, within these lengths, keeping every item #, PR/issue # and spec ID
+CJK = re.compile(r"[㐀-鿿]")
+WORD_MAX = {"業務": 60, "卡關": 80}
+KEEP = re.compile(r"(?<![\d.])\d{1,2}\.\d{2}(?![\d.])|\b[A-Z]{2,5}-\d{2,4}\b|#\d+(?![.\d])")
+WORD_PREFIX = {"業務": "業務：", "卡關": "在等你："}     # what a plan line carries before a worded line
+LATIN = re.compile(r"[A-Za-z]")
+
+
+def english(text):
+    """A sentence in English, though it may quote a Chinese name or term: more than twice as many Latin
+    letters as Chinese characters (`Grant the student the 作業本 access` is English; `陪跑營 skill demo 收尾` is not)."""
+    return len(LATIN.findall(str(text))) > 2 * len(CJK.findall(str(text)))
 KIND_ZH = {"shipped": "完成", "moving": "進行中", "waiting": "在等"}
 SKILLS_LOOKBACK = 8         # weeks back the 技能更新 comparison looks for the last recorded Skills block
 DECIDED = ("決議", "放棄")                   # what the meeting settled; 行動 is a plan, 進度 a state
@@ -602,7 +616,7 @@ def build_plan(run, items, actions, flagged, pulse, progress=()):
                 add(who, "#%s %s — %s" % (x["#"], clip(x["項目"], 30), x["why"]), x["#"])
     for name, (_, _, steps) in (pulse or {}).items():
         for s in steps:
-            add(person_of(run, name), "業務：%s" % clip(s, 80), "deal")
+            add(person_of(run, name), pulse_line(s), "deal")
     roster = run.get("roster", [])
     everyone = set(plan) | set(open_)
     order = sorted(everyone, key=lambda w: (w in ("全體", "負責人未定"), roster.index(w) if w in roster else len(roster), w))
@@ -613,6 +627,71 @@ def build_plan(run, items, actions, flagged, pulse, progress=()):
 def clip(s, n):
     s = " ".join(str(s or "").split())
     return s if len(s) <= n else s[:n - 1] + "…"
+
+
+def pulse_line(step):
+    """A Pulse step as the plan carries it when the run wrote no zh-TW for it."""
+    return "業務：%s" % clip(step, 80)
+
+
+def build_wording(run, plan, pulse, harvest):
+    """SKB-166: every line the mail would carry in English, for the run to word in zh-TW. A 卡關 line from
+    the harvest and a plan line from the Pulse get an id (`blocker["w"]`, `plan[i]["w"]`); each entry holds
+    the source's whole text, never the clipped one, so the zh-TW line can say all of it. A plan line that
+    is a harvest waiting line (`在等你：`, when `sections` kept no zh-TW for that person) takes the id of its
+    卡關 line, so one zh-TW line serves both. A source that is already Chinese (`english` says no) is left as it is."""
+    out, waits = [], {}
+
+    def new(kind, who, src):
+        wid = "w%d" % (len(out) + 1)
+        out.append({"id": wid, "kind": kind, "who": who, "src": " ".join(str(src).split()), "max": WORD_MAX[kind]})
+        return wid
+
+    for b in harvest["blockers"]:
+        b["w"] = new("卡關", b["who"], b["卡關"]) if english(b["卡關"]) else None
+        if b["w"]:
+            waits.setdefault((b["who"], "在等你：%s" % cut(b["卡關"], 60)), b["w"])
+    steps = {}
+    for name, (_, _, ss) in (pulse or {}).items():
+        for s in ss:
+            steps.setdefault((person_of(run, name), pulse_line(s)), s)
+    for p in plan:
+        ids = []
+        for line in p["lines"]:
+            key = (p["who"], line)
+            ids.append(new("業務", p["who"], steps[key]) if key in steps and english(steps[key])
+                       else waits.get(key))
+        p["w"] = ids
+    return out
+
+
+def gate_wording(raw, wording):
+    """The zh-TW lines the run wrote ({id: line}) that may replace their English source, and why each
+    other one may not. A kept line is one line, has Chinese in it, fits its kind's length, and keeps every
+    item #, PR/issue # and spec ID its source names. A dropped line leaves its source in the mail."""
+    if not raw:
+        return {}, []
+    if not isinstance(raw, dict):
+        return {}, ["wording.json is not a JSON object"]
+    by_id = {w["id"]: w for w in wording}
+    kept, dropped = {}, []
+    for wid, line in raw.items():
+        w = by_id.get(wid)
+        if not w:
+            dropped.append("%s: no such line" % wid)
+            continue
+        t = " ".join(line.split()) if isinstance(line, str) else ""
+        if t.startswith(WORD_PREFIX[w["kind"]]):
+            t = t[len(WORD_PREFIX[w["kind"]]):].strip()
+        missing = [k for k in dict.fromkeys(KEEP.findall(w["src"])) if k not in t]
+        why = ("empty" if not t else "no zh-TW in it" if not CJK.search(t)
+               else "longer than %d" % w["max"] if len(t) > w["max"]
+               else "drops %s" % "、".join(missing) if missing else "")
+        if why:
+            dropped.append("%s: %s" % (wid, why))
+        else:
+            kept[wid] = t
+    return kept, dropped
 
 
 def read_block(run, key, wrow):
@@ -749,6 +828,7 @@ def r_build(d, today):
                         "lines": skills.lines_for(run["skill_changes"], d) if run.get("skills") == "diffed" else []},
              "links": {"tracker": run["tracker_url"], "doc": run["doc_url"], "ledger": run["ledger_url"]}}
     facts["plan"], facts["plan_dropped"] = build_plan(run, names, decisions["actions"], facts, pulse, progress["people"])
+    facts["wording"] = build_wording(run, facts["plan"], pulse, harvest)
     json.dump(facts, open(os.path.join(d, "facts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     run.update(built=True)
     save_run(run)
@@ -762,7 +842,9 @@ def r_build(d, today):
             "progress": {e["who"]: e["from"] for e in progress["people"]},
             "pulse": pulse_state, "skills": facts["skills"]["state"], "skill_lines": len(facts["skills"]["lines"]),
             "facts": os.path.join(d, "facts.json"),
-            "tldr": "write at most 3 lines to tldr.json (a JSON list); each must cite an item # from facts.items"}
+            "tldr": "write at most 3 lines to tldr.json (a JSON list); each must cite an item # from facts.items",
+            "wording": ("word %d English lines in zh-TW to wording.json ({id: line}, from facts.wording)"
+                        % len(facts["wording"])) if facts["wording"] else "none"}
 
 
 # ── rendering ────────────────────────────────────────────────────────────────
@@ -796,7 +878,42 @@ def li(text):
     return "<li>%s</li>" % text
 
 
-def render_html(facts, tldr):
+NOTE_SPLIT = re.compile(r"[｜\r\n]+")
+
+
+def note_parts(value):
+    """A 備註 cell's entries. The tracker keeps a 備註 as one cell of dated entries joined by ｜ or a
+    line break, so the entries are the unit a reader follows (SKB-164)."""
+    return [p.strip() for p in NOTE_SPLIT.split(str(value or "")) if p.strip()]
+
+
+def change_li(num, item, column, old, new):
+    """One change line for 上週改了什麼 and 上週的變更提案. A short field reads as old → new. A 備註
+    change shows only the entries it added or dropped, each as a sub-bullet: printing the whole cell
+    twice buried the one new line (W47's #4.05 ran to ~1,200 characters for a 21-character entry)."""
+    head = "#%s %s — %s" % (esc(num), esc(item), esc(FIELD.get(column, column)))
+    if column != "備註":
+        return li("%s：%s → %s" % (head, esc(old or "（空白）"), esc(new or "（空白）")))
+    was, now = note_parts(old), note_parts(new)
+    added = [p for p in now if p not in was]
+    dropped = [p for p in was if p not in now]
+    if not (added or dropped):
+        return li("%s：只改了格式，內容沒變" % head)
+    if added and dropped:
+        subs = [li("新增：" + esc(p)) for p in added] + [li("刪掉：" + esc(p)) for p in dropped]
+        return li("%s改了：<ul>%s</ul>" % (head, "".join(subs)))
+    return li("%s%s：<ul>%s</ul>" % (head, "新增" if added else "刪掉", "".join(li(esc(p)) for p in added or dropped)))
+
+
+def render_html(facts, tldr, zh=None):
+    zh = zh or {}
+    kinds = {w["id"]: w["kind"] for w in facts.get("wording", [])}
+
+    def plan_line(p, i, line):
+        ids = p.get("w") or []
+        wid = ids[i] if i < len(ids) else None
+        return WORD_PREFIX[kinds[wid]] + zh[wid] if wid in zh and wid in kinds else line
+
     o = ['<div style="font-family:-apple-system,Segoe UI,Noto Sans TC,sans-serif;font-size:14px;line-height:1.6;color:#0F0F0E;max-width:680px">']
     o.append("<p>%s（%s）的週報，資料來自主追蹤表每週五的快照和週報帳本。</p>" % (esc(facts["label"]), esc(facts["range"])))
     if tldr:
@@ -820,7 +937,8 @@ def render_html(facts, tldr):
                 o.append("<p>%s</p>%s" % (head, "<ul>%s</ul>" % "".join(lines) if lines else ""))
     o.append("<h3>這週的計畫</h3>")
     for p in facts.get("plan", []):
-        o.append("<p><b>%s</b></p><ul>%s</ul>" % (esc(p["who"]), "".join(li(esc(x)) for x in p["lines"])))
+        o.append("<p><b>%s</b></p><ul>%s</ul>" % (esc(p["who"]), "".join(li(esc(plan_line(p, i, x)))
+                                                                         for i, x in enumerate(p["lines"]))))
     if not facts.get("plan"):
         o.append("<p>這週沒有排定的行動、到期或缺日期的項目</p>")
     if facts.get("pulse") != "found":
@@ -832,9 +950,7 @@ def render_html(facts, tldr):
     elif not (facts["changes"] or facts["added"] or facts["removed"]):
         o.append("<p>主追蹤表上週沒有任何變動</p>")
     else:
-        rows = [li("#%s %s — %s：%s → %s" % (esc(c["#"]), esc(c["項目"]), esc(FIELD.get(c["column"], c["column"])),
-                                           esc(c["old"] or "（空白）"), esc(c["new"] or "（空白）")))
-                for c in facts["changes"]]
+        rows = [change_li(c["#"], c["項目"], c["column"], c["old"], c["new"]) for c in facts["changes"]]
         rows += [li("#%s %s — 新增（%s）" % (esc(a["#"]), esc(a["項目"]), esc(a["狀態"]))) for a in facts["added"]]
         rows += [li("#%s %s — 從表上移除了" % (esc(r["#"]), esc(r["項目"]))) for r in facts["removed"]]
         o.append("<ul>%s</ul>" % "".join(rows))
@@ -868,8 +984,7 @@ def render_html(facts, tldr):
         prs = pr["rows"]
 
         def pline(x):
-            return li("#%s %s — %s：%s → %s" % (esc(x["#"]), esc(x["項目"]), esc(FIELD.get(x["欄位"], x["欄位"])),
-                                              esc(x["現值"] or "（空白）"), esc(x["建議值"])))
+            return change_li(x["#"], x["項目"], x["欄位"], x["現值"], x["建議值"])
         if not prs:
             o.append("<p>上週沒有變更提案</p>")
         elif not pr["applied_ran"]:
@@ -898,7 +1013,8 @@ def render_html(facts, tldr):
         if not hv["recorded"]:
             o.append("<p>上週的 harvest 沒有記到帳本</p>")
         else:
-            o.append("<ul>%s</ul>" % "".join(li("%s：%s" % (esc(b["who"]), esc(b["卡關"]))) for b in hv["blockers"])
+            o.append("<ul>%s</ul>" % "".join(li("%s：%s" % (esc(b["who"]), esc(zh.get(b.get("w")) or b["卡關"])))
+                                             for b in hv["blockers"])
                      if hv["blockers"] else "<p>沒有人回報卡關</p>")
             if hv.get("more"):
                 o.append("<p>另有沒列出的：%s（見各人的收成檔）</p>"
@@ -948,7 +1064,7 @@ def sent_check(to, prefix):
     return {"query": "in:sent newer_than:3d to:%s" % to.split(",")[0].strip(), "page_size": 25, "prefix": prefix}
 
 
-def r_render(d, tldr_path):
+def r_render(d, tldr_path, wording_path=None):
     run = load_run(d)
     if not run.get("built"):
         raise Refuse(2, "run `recap.py build` first")
@@ -959,9 +1075,14 @@ def r_render(d, tldr_path):
         raise Refuse(3, "cannot read the TL;DR (%s)" % e)
     if not isinstance(lines, list):
         raise Refuse(3, "the TL;DR must be a JSON list of lines")
+    try:
+        raw = json.load(open(wording_path, encoding="utf-8")) if wording_path else {}
+    except (OSError, ValueError) as e:
+        raise Refuse(3, "cannot read the wording (%s)" % e)
+    zh, zh_dropped = gate_wording(raw, facts.get("wording", []))
     kept, dropped = gate_tldr(lines, facts["items"])
     subject = subject_for(facts)
-    body = render_html(facts, kept)
+    body = render_html(facts, kept, zh)
     path = os.path.join(d, "recap.html")
     open(path, "w", encoding="utf-8").write(body)
     run.update(rendered=True, subject=subject)
@@ -970,6 +1091,7 @@ def r_render(d, tldr_path):
     to = run.get("recap_to") or (",".join(run["reporters"]) if audience == "team" else run["account"])
     return {"subject": subject, "to": to, "bcc": self_copy(to, run["account"]), "audience": audience,
             "body_path": path, "body_format": "html", "tldr_kept": len(kept), "tldr_dropped": dropped,
+            "wording_kept": len(zh), "wording_left": len(facts.get("wording", [])) - len(zh), "wording_dropped": zh_dropped,
             "sent_check": sent_check(to, "【週報】%s 那週 —" % facts["label"])}
 
 
@@ -1006,6 +1128,7 @@ def main(argv=None):
     r = sub.add_parser("render")
     r.add_argument("--dir", required=True)
     r.add_argument("--tldr")
+    r.add_argument("--wording")
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
@@ -1017,7 +1140,7 @@ def main(argv=None):
         elif a.cmd == "build":
             emit(r_build(a.dir, a.today))
         elif a.cmd == "render":
-            emit(r_render(a.dir, a.tldr))
+            emit(r_render(a.dir, a.tldr, a.wording))
         elif a.cmd == "notice":
             emit(r_notice(a.dir))
         elif a.cmd == "pulse":
@@ -1047,6 +1170,55 @@ def selftest():
     check("previous week across a year", previous_week("2027-W01"), "2026-W53")
     check("WB label", wb_label("2026-W41"), "WB 10/5")
     check("range", week_range("2026-W41"), "10/5–10/11")
+    # a 備註 change shows only the entries it added or dropped, as sub-bullets (SKB-164); W47's #4.05 and #6.10
+    w47_old = "Folder：規劃稿｜2026-10-19（W43）同步：開營 12/14\r\n11/05 說明會先辦 11/8 一場｜2026-11-09：加開直播"
+    check("備註 append → only the new entry", change_li("4.05", "陪跑課", "備註", w47_old, w47_old + "\r\n11/19 週會：12/14 開課照舊"),
+          "<li>#4.05 陪跑課 — 備註新增：<ul><li>11/19 週會：12/14 開課照舊</li></ul></li>")
+    check("備註 ｜-joined append → one sub-bullet per entry",
+          change_li("6.10", "LMS", "備註", "a｜b", "a｜b｜2026-11-16（Ann）：c｜2026-11-18（Ann）：d"),
+          "<li>#6.10 LMS — 備註新增：<ul><li>2026-11-16（Ann）：c</li><li>2026-11-18（Ann）：d</li></ul></li>")
+    check("備註 from blank", change_li("1.01", "x", "備註", "", "10/8 會議：x"),
+          "<li>#1.01 x — 備註新增：<ul><li>10/8 會議：x</li></ul></li>")
+    check("備註 entry dropped", change_li("1.01", "x", "備註", "a｜b", "a"), "<li>#1.01 x — 備註刪掉：<ul><li>b</li></ul></li>")
+    check("備註 entry edited → 改了 with both", change_li("1.01", "x", "備註", "a｜等驗收", "a｜已驗收"),
+          "<li>#1.01 x — 備註改了：<ul><li>新增：已驗收</li><li>刪掉：等驗收</li></ul></li>")
+    check("備註 only the separators changed", change_li("1.01", "x", "備註", "a｜b", "a\r\nb"),
+          "<li>#1.01 x — 備註：只改了格式，內容沒變</li>")
+    check("備註 entry escaped", change_li("1.01", "x", "備註", "", "<b>x</b>"),
+          "<li>#1.01 x — 備註新增：<ul><li>&lt;b&gt;x&lt;/b&gt;</li></ul></li>")
+    # the zh-TW wording gate (SKB-166): one line, Chinese, within its length, every item #, PR # and spec ID kept
+    wd = [{"id": "w1", "kind": "業務", "who": "Ann", "src": "task on #4.05 is 6 days overdue, do it", "max": 60},
+          {"id": "w2", "kind": "卡關", "who": "Ann", "src": "Say merge 86 for PLAT-087 (zynkr-ai-platform#86)", "max": 80}]
+    check("wording kept, 業務 prefix stripped",
+          gate_wording({"w1": "業務：#4.05 的待辦逾期 6 天，請處理", "w2": "請說 merge 86，合併 PLAT-087（#86）"}, wd),
+          ({"w1": "#4.05 的待辦逾期 6 天，請處理", "w2": "請說 merge 86，合併 PLAT-087（#86）"}, []))
+    check("wording that drops an item # or a PR #, or has no Chinese, or runs long, or names no line",
+          gate_wording({"w1": "待辦逾期 6 天", "w2": "請合併 PLAT-087", "w3": "多的", "w9": "x"}, wd)[1],
+          ["w1: drops 4.05", "w2: drops #86", "w3: no such line", "w9: no such line"])
+    check("a 在等你 prefix copied into a 卡關 line is stripped",
+          gate_wording({"w2": "在等你：請說 merge 86，合併 PLAT-087（#86）"}, wd)[0], {"w2": "請說 merge 86，合併 PLAT-087（#86）"})
+    check("wording in English, or empty, or too long",
+          gate_wording({"w1": "do #4.05 now", "w2": ""}, wd)[1] + gate_wording({"w1": "#4.05 " + "很" * 60}, wd)[1],
+          ["w1: no zh-TW in it", "w2: empty", "w1: longer than 60"])
+    check("english(): a sentence quoting a Chinese term is English; zh-TW with English terms is not",
+          [english(x) for x in ("Grant the student the 作業本 access they asked for",
+                                "the open task 「Ann：時段信沒回」 on Ann is 6 days overdue, do it",
+                                "陪跑營藍圖、學習地圖、五份週簡報與作業 hub 已私下上線，每堂以 10 分鐘 skill demo 收尾",
+                                "等客戶回覆")], [True, True, False, False])
+    check("no wording file is no change", gate_wording({}, wd), ({}, []))
+    check("a wording list is refused whole", gate_wording(["#4.05 請處理"], wd), ({}, ["wording.json is not a JSON object"]))
+    bw_plan = [{"who": "Ann Lee", "lines": ["#1.01 做完", "在等你：waiting on the brief", pulse_line("call the client back"),
+                                            pulse_line("已經是中文的一步")]}]
+    bw_hv = {"blockers": [{"who": "Ann Lee", "卡關": "waiting on  the  brief"}, {"who": "Bob Wu", "卡關": "等客戶回覆"}]}
+    bw = build_wording({"roster": ["Ann Lee", "Bob Wu"], "aliases": {}}, bw_plan,
+                       {"Ann": (1, 5, ["call the client back", "已經是中文的一步"])}, bw_hv)
+    check("build_wording: an English 卡關 (and its 在等你 line) and an English Pulse step, by id; Chinese ones are left",
+          ([(w["id"], w["kind"], w["who"], w["src"]) for w in bw], bw_plan[0]["w"], [b["w"] for b in bw_hv["blockers"]]),
+          ([("w1", "卡關", "Ann Lee", "waiting on the brief"), ("w2", "業務", "Ann Lee", "call the client back")],
+           [None, "w1", "w2", None], ["w1", None]))
+    check("a short field stays old → new", change_li("1.01", "x", "狀態", "未開始", "進行中"),
+          "<li>#1.01 x — 狀態：未開始 → 進行中</li>")
+    check("a short field cleared", change_li("1.01", "x", "結束", "11/30", ""), "<li>#1.01 x — 結束：11/30 → （空白）</li>")
     # the plan (SKB-091): order, the five-line cap, an item listed once, uncited lines dropped, names
     prun = {"roster": ["Ann Lee", "Bob Wu"], "aliases": {"Fish": "Bob Wu"}}
     check("a first name finds the roster name", person_of(prun, "Ann"), "Ann Lee")
@@ -1261,6 +1433,29 @@ def selftest():
         bodyp = open(r_render(stp["dir"], None)["body_path"], encoding="utf-8").read()
         check("the Pulse step in the mail, and no missing-Pulse line", ("業務：call Acme back" in bodyp, "沒有列" in bodyp),
               (True, False))
+        # SKB-166: the Pulse's English step is listed for wording, and the run's zh-TW line replaces it
+        factsp = json.load(open(bp["facts"], encoding="utf-8"))
+        wp = [w for w in factsp["wording"] if w["kind"] == "業務"]
+        check("the Pulse step is listed for wording, whole", [(w["who"], w["src"]) for w in wp], [("Ann", "call Acme back")])
+        check("build says how many lines to word", bp["wording"].startswith("word 1 English lines"), True)
+        wjson = os.path.join(stp["dir"], "wording.json")
+        json.dump({wp[0]["id"]: "業務：回電給客戶"}, open(wjson, "w", encoding="utf-8"), ensure_ascii=False)
+        outw = r_render(stp["dir"], None, wjson)
+        bodyw = open(outw["body_path"], encoding="utf-8").read()
+        check("the zh-TW step replaces the English one, prefixed once",
+              ("<li>業務：回電給客戶</li>" in bodyw, "call Acme back" in bodyw, outw["wording_kept"], outw["wording_left"]),
+              (True, False, 1, 0))
+        json.dump({wp[0]["id"]: "call Acme back soon"}, open(wjson, "w", encoding="utf-8"), ensure_ascii=False)
+        outw = r_render(stp["dir"], None, wjson)
+        check("an English 'wording' is dropped and the source stays",
+              ("業務：call Acme back" in open(outw["body_path"], encoding="utf-8").read(), outw["wording_dropped"]),
+              (True, ["%s: no zh-TW in it" % wp[0]["id"]]))
+        open(wjson, "w").write("{not json")
+        try:
+            r_render(stp["dir"], None, wjson)
+            check("an unreadable wording.json stops render", "rendered", "refused")
+        except Refuse as e:
+            check("an unreadable wording.json stops render", e.code, 3)
         check("the Pulse threads are fetched as HTML",
               {c["args"].get("body_format") for c in r_pulse(stp["dir"])["calls"]}, {"html"})
         # the 26 Oct Pulse as the html fetch returns it: one person per list item
@@ -1451,6 +1646,15 @@ def selftest():
             body8 = open(r_render(st8["dir"], None)["body_path"], encoding="utf-8").read()
             check("v4: 卡關 are the harvest's waiting lines, from both pages",
                   (built8["blockers"], "Ann：needs the keyword list" in body8, "Cat：on the second page" in body8), (3, True, True))
+            # SKB-166: each English waiting line is listed for wording, and a kept zh-TW line replaces it under 卡關
+            w8 = {w["src"]: w for w in json.load(open(built8["facts"], encoding="utf-8"))["wording"] if w["kind"] == "卡關"}
+            check("v4: the English 卡關 lines are listed for wording", "needs the keyword list" in w8, True)
+            wj8 = os.path.join(st8["dir"], "wording.json")
+            json.dump({w8["needs the keyword list"]["id"]: "還在等關鍵字清單"}, open(wj8, "w", encoding="utf-8"), ensure_ascii=False)
+            body8w = open(r_render(st8["dir"], None, wj8)["body_path"], encoding="utf-8").read()
+            check("v4: a zh-TW 卡關 line replaces its English one in 卡關 and in the plan's 在等你, the others stay",
+                  ("Ann：還在等關鍵字清單" in body8w, "在等你：還在等關鍵字清單" in body8w, "needs the keyword list" in body8w,
+                   "Cat：on the second page" in body8w), (True, True, False, True))
             check("v4: a name `collect` kept apart is not read as the roster's again, and a row with no text is no line",
                   ("Ann Chen：on Chen&#x27;s desk" in body8 or "Ann Chen：on Chen's desk" in body8, "Ann：</li>" in body8,
                    "Ann Chen " in body8.split("另有沒列出的")[1].split("</p>")[0]), (True, False, False))
@@ -1797,6 +2001,23 @@ MUTATIONS = [
     ("an action counts as a decision", [('            elif r[2] == "行動":\n', '            elif False:\n')]),
     ("a live-written row goes unlisted", [('                               ("to-apply", "核准了，已寫進總表（有人手改過的格子會跳過）"),\n', "")]),
     ("notice mailed to the team", [('return {"subject": subject, "to": run["account"],', 'return {"subject": subject, "to": ",".join(run["reporters"]),')]),
+    ("a 備註 printed whole again", [('    if column != "備註":\n', '    if True:\n')]),
+    ("a 備註 split on ｜ only", [('NOTE_SPLIT = re.compile(r"[｜\\r\\n]+")', 'NOTE_SPLIT = re.compile(r"[｜]+")')]),
+    ("a 備註 shows every entry, not the new ones", [('    added = [p for p in now if p not in was]', '    added = now')]),
+    ("a dropped 備註 entry goes unlisted", [('    dropped = [p for p in was if p not in now]', '    dropped = []')]),
+    ("a 備註 entry not escaped", [('"".join(li(esc(p)) for p in added or dropped)', '"".join(li(p) for p in added or dropped)')]),
+    ("the run's zh-TW wording ignored", [("    zh = zh or {}\n", "    zh = {}\n")]),
+    ("an English 'wording' kept", [('"no zh-TW in it" if not CJK.search(t)', '"no zh-TW in it" if False')]),
+    ("a worded line of any length kept", [('"longer than %d" % w["max"] if len(t) > w["max"]', '"longer than %d" % w["max"] if False')]),
+    ("a worded line may drop an item #", [('    missing = [k for k in dict.fromkeys(KEEP.findall(w["src"])) if k not in t]', '    missing = []')]),
+    ("#4.05 read as #4", [('|#\\d+(?![.\\d])")', '|#\\d+")')]),
+    ("the plan's 在等你 line not worded", [("                       else waits.get(key))", "                       else None)")]),
+    ("a Chinese 卡關 listed for wording", [('b["w"] = new("卡關", b["who"], b["卡關"]) if english(b["卡關"]) else None',
+                                         'b["w"] = new("卡關", b["who"], b["卡關"])')]),
+    ("an English line quoting a Chinese term not listed", [("    return len(LATIN.findall(str(text))) > 2 * len(CJK.findall(str(text)))",
+                                                            "    return not CJK.search(str(text))")]),
+    ("a copied prefix left in", [("        if t.startswith(WORD_PREFIX[w[\"kind\"]]):\n", "        if False:\n")]),
+    ("an unreadable wording.json ignored", [('        raise Refuse(3, "cannot read the wording (%s)" % e)', '        raw = {}')]),
 ]
 
 

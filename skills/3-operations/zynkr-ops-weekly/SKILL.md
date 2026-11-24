@@ -257,7 +257,8 @@ item the plan already names for them, by an action or a due date, is not repeate
 harvest was not recorded says so under 上週進度, and the rest of the mail is as it was.
 
 `scripts/recap.py` works out every range, fact and the subject; you make its printed calls exactly,
-save each result unchanged, and write the TL;DR.
+save each result unchanged, write the TL;DR, and word in zh-TW the lines whose source is English (the
+Pulse is an English mail, and harvests are written in English).
 
 1. **The week.** Use the `week=` argument the runner passes; that is the current week, and
    `recap.py` works out the one before it. If a `config=<path>` argument is present, add
@@ -291,8 +292,19 @@ save each result unchanged, and write the TL;DR.
    `references/wording.md`, about what most needs the team's attention. **Every line cites the item
    number it is about** (`#1.03`). Save them as a JSON list to `tldr.json` in the run folder. Write
    about what the facts show, never about how they were gathered.
-6. `python3 scripts/recap.py render --dir <dir> --tldr <dir>/tldr.json` → `subject`, `to`, `bcc` and
-   `body_path`. Lines that cite no real item number are dropped, and it says which.
+   **Then word the English lines** (`SKB-166`). `facts.json`'s `wording` lists every line the mail
+   would otherwise carry in English: each Pulse step in the plan (`業務`) and each harvest waiting line
+   (`卡關`, which also stands in for the plan's `在等你：` line when `sections` kept none for that person).
+   Each entry gives the source's whole text (`src`) and a length cap (`max`). Write each as **one zh-TW
+   line** in the voice of `references/wording.md`: what the person has to do, or what is stuck, and
+   nothing the source does not say. Keep every item number, PR or issue number (`#86`) and spec ID
+   (`LRN-029`) it names; leave out its prefix (`業務：`, `在等你：`) and its trailing `(2026-11-18)`.
+   Save `{id: line}` to `wording.json` in the run folder. With `wording: "none"`, skip this.
+6. `python3 scripts/recap.py render --dir <dir> --tldr <dir>/tldr.json --wording <dir>/wording.json` →
+   `subject`, `to`, `bcc` and `body_path`. Lines that cite no real item number are dropped, and it says
+   which. A worded line that is not one zh-TW line within its `max`, or drops a number or ID its source
+   names, is dropped too (`wording_dropped` says why): its source stays in the mail as before. With no
+   `wording` to write, leave `--wording` out.
 7. **Never send twice.** `search_gmail_messages` with `sent_check.query` and `sent_check.page_size`
    exactly as `render` (or `notice`) printed them, then read the subject of each message it finds.
    One that starts with `sent_check.prefix` → this week's mail already went: do not send; receipt

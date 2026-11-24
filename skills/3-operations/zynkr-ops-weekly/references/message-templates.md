@@ -101,9 +101,17 @@ Body sections, in order:
    deal); one that does not is dropped. Without a Pulse in the last day: 「業務的下一步沒有列：
    這封信寄出前沒有收到 Sales Pulse」. After a person's actions, and on top of the five, come what last
    week's harvest left open (`SKB-128`): at most two items still in motion
-   (`#6.10 LMS — 上週還在進行`) and two lines waiting on them (`在等你：…`).
+   (`#6.10 LMS — 上週還在進行`) and two lines waiting on them (`在等你：…`). The Pulse is written in
+   English, so each `業務：` line is the run's own zh-TW wording of the whole step (`SKB-166`), at most
+   60 characters and keeping every item #, PR # and spec ID: `業務：Ann 的待辦「時段信沒回，輕問一句」逾期
+   6 天：做掉或改日期`, never `業務：the open task 「Ann：…」 … do it or …`. A line the run did not
+   word, or whose wording `render` dropped, is the Pulse's step cut at 80 characters, as before.
 4. **上週改了什麼** — every changed cell in the Main Tracker between the last two Friday snapshots,
-   `#1.03 SEO 文章 — 狀態：進行中 → 完成`, plus items added and removed.
+   `#1.03 SEO 文章 — 狀態：進行中 → 完成`, plus items added and removed. A 備註 change never prints the
+   cell twice (`SKB-164`): the cell is split into its entries at ｜ and line breaks, and only the
+   entries it gained or lost show, one sub-bullet each — `#4.05 陪跑課 — 備註新增：` › `11/19 週會：…`
+   (`備註刪掉：` for a loss, `備註改了：` with 新增／刪掉 for both). 上週的變更提案 shows a 備註 proposal the
+   same way.
 5. **要注意的** — 逾期 · 兩週內到期 · P0/P1 還沒排日期 · 備註看起來做完了但狀態沒改, each with its evidence,
    from zynkr-gm's state rules.
 6. **上週談定的事** — 決議 and 放棄 (`放棄：…`) with 負責人 and 期限, then 還沒定案 (卡關 · 風險 ·
@@ -120,7 +128,10 @@ Body sections, in order:
    earlier one in reach was not recorded, or a read failed, the heading is left out.
 9. **卡關** — from 2026-W45 the waiting lines of last week's harvest, how many more each harvest held
    than the mail lists (`另有沒列出的：…`), and who had no harvest. Before that, the week's `#週報` posts
-   and who did not post.
+   and who did not post. A waiting line written in English reaches the mail in the run's zh-TW wording
+   (`SKB-166`, at most 80 characters, every number and ID kept): `Peter Tu：說「merge 86」和「merge 87」，
+   合併稽核第 4 步和合併後檢查（#86、#87）`. The same line stands in for that person's `在等你：` plan line
+   when `sections` kept no zh-TW line for them. Not worded, or dropped → the harvest's own text.
 10. Links to the Main Tracker, the Doc and the Ledger.
 
 The 1.2 notice (`【週報】WB 10/5 那週沒有產出：週五的快照沒有記到`) goes to the owner only: a recap
