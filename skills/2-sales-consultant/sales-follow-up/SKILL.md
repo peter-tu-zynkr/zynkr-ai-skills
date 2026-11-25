@@ -189,7 +189,7 @@ equal the ORIGINAL thread id. A `threadId` that equals the `messageId` means det
 (`sales-outbound` may use `update_draft` freely — its mails are new, not threaded replies.)
 
 **Shape of the email.** The authoritative wording rules are 《[2.2] 內文風格指南》 **Part 3 §八 業務信件格式**
-(positive) and 《[3.2] 禁用詞清單》 **category X** (forbidden) — read them first, see *Fixed facts*.
+(positive) and 《[3.2] 禁用詞清單》 **十一 業務信件專屬** (forbidden) — read them first, see *Fixed facts*.
 The *form* belongs to the recap format (`references/recap-mail.md`): it replaces X's plain-text
 form rules for a recap, and nothing else. What follows is the follow-up-specific running order,
 each beat with its block, plus a condensed fallback. **Where they disagree, the Docs win.**
@@ -197,7 +197,7 @@ each beat with its block, plus a condensed fallback. **Where they disagree, the 
 Follow-up-specific beats, in order:
 - **Open by mirroring their pain** (`intro` + a `quote` block) — name the 1–2 problems they raised
   on the call; the strongest one goes in the `quote` block in *their* words, verbatim. Never
-  paraphrase their words into marketing language (category X).
+  paraphrase their words into marketing language (十一).
 - **Map pain → capability** (`text` blocks) — one short paragraph per pain, each answered by the
   capability they actually saw on the call. Prose, not a list. When they described the process the
   capability changes, a `flow` block may show it, built only from steps they named.
@@ -224,7 +224,7 @@ Condensed house style (fallback only — the Doc is authoritative):
 - Blank-line paragraphs, 1–3 sentences each. A post-demo follow-up runs **600–950 字** — that is
   the longest genre Peter writes. Do not exceed it.
 - Numbering is the renderer's (the badges in `flow` and `next_steps`). Type no numbers, emoji
-  numerals (1️⃣) or circled digits (①) into payload text: 禁用詞清單 S and X ban them in email.
+  numerals (1️⃣) or circled digits (①) into payload text: 禁用詞清單 8.2 and 十一 ban them in email.
 - The dash is the **half-width ` — ` with one space each side**. Never the full-width ——.
 - Prose takes 句號; list items and micro-replies do not. Headings/taglines take no 句號. `·` for
   series separators. One space between CJK and Latin/digits. Time ranges use an EN dash `–`.

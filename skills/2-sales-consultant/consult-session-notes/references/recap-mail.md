@@ -13,7 +13,7 @@ the same way and the form rules hold without anyone remembering them.
 | A first-touch outbound mail, a reply to a short question, a scheduling mail | Plain text, per 《[2.2]》 Part 3 §八 — unchanged |
 
 The house voice still governs every word in the payload: 《[2.0]》, 《[2.2]》 Part 3 §八 and
-《[3.2]》 categories A–I, P, Q, R, W and X. The renderer replaces only X's *form* rules for this one
+《[3.2]》 十一 with the categories its scope names. The renderer replaces only 十一's *form* rules for this one
 genre (plain text only, `── 文字 · 文字 ──` as the only heading, at most two lists): headings, the
 quote box, the diagrams and the numbered next steps are the renderer's, and are allowed here.
 

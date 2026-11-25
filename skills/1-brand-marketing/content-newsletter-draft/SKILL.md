@@ -88,7 +88,7 @@ If Peter has given a topic or an outline in this conversation, use it. If not, a
 
 Then:
 - **Number.** NN is the newest issue in the Docs folder, plus one.
-- **Overlap.** Check the topic against every past issue title in the folder, not just the last few (《[3.2]》 V). A concept an earlier issue already covered gets one line of callback, not a second explanation. Note that issue's Web URL from its Content DB card, or that it has none: step 5 needs it.
+- **Overlap.** Check the topic against every past issue title in the folder, not just the last few (《[3.2]》 10.1). A concept an earlier issue already covered gets one line of callback, not a second explanation. Note that issue's Web URL from its Content DB card, or that it has none: step 5 needs it.
 
 ## Step 2: Reader brief
 
@@ -243,8 +243,8 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 - The ending is 《[2.2]》 §七 結尾固定. The CTA goes on the line above the question; until Peter names it, that line is `【CTA 待 Peter 確認】`.
 
 **Tab 2 筆友書信體版本: 1,200–2,000 字, not counting the ad boxes** (Peter raised it from 1,400 on 2026-11-09: the lower cap made every pass cut his spoken words)
-1. Open with the chosen opening's sentences, word for word, one per line. A reader's question in it is the reader's own words, never an invented 「很多人問我」 (《[3.2]》 K).
-2. Address the reader as 「你」 throughout. Anticipate at most one objection, and only a real one (《[3.2]》 J).
+1. Open with the chosen opening's sentences, word for word, one per line. A reader's question in it is the reader's own words, never an invented 「很多人問我」 (《[3.2]》 3.5).
+2. Address the reader as 「你」 throughout. Anticipate at most one objection, and only a real one (《[3.2]》 3.4).
 3. The same 4–5 section headings as Tab 1, as `##` headings with no number (「這一年發生了什麼」, not 「一、這一年發生了什麼」). The opening comes before the first one (Peter, 2026-11-21: he sent (66) this way and asked for it to be the format). **No separator lines between paragraphs: never insert `–` / `—` / `---` lines; a blank line separates paragraphs** (Peter's rule, 2026-08-17).
 4. Mostly one sentence per line; each sentence is its own paragraph.
 5. No bold.
@@ -261,8 +261,8 @@ After the issue goes out, step 0 of the next run sets its card to `Published`, r
 - Peter's spoken register stays (《[2.2]》 §四 保留講話的連接詞, 2026-11-09). His connectives (但、可是、所以、其實、就、也、反而、結果、我以為) are not filler, and sentences are never merged or trimmed to save words. It reads less polished and less like a machine. Read it aloud: it should sound like his livestream, not a press release.
 - Voice and structure: 《[2.2] 內文風格指南》 §三–§七 (開場四環節 · 開場怎麼寫 · 帶收據 · 語言使用 · 資訊節奏 · 電子報格式). It is Doc `1ect0fDoHZQ7srFEQvLNCSLsQk-UTawvbxpt3SteYP1M`; use its `# 最終產出` section.
 - Show the reasoning (《[2.2]》 §四 把因果說出來): a judgment (我覺得 · 我的看法是 · 我的推測是) says what fact it follows from and what follows from it, joined with 因為、所以、但、雖然說. Don't set two facts side by side and leave the reader to guess the link.
-- Every verb says what it acts on (《[3.2]》 Y): not 「履歷都卡住」 but 「履歷都找不到工作」; not 「把能做的事拉寬了」 but a verb that names what grew.
-- Forbidden patterns and their per-issue caps: 《[3.2] 禁用詞清單》 A–W and Y. X is for sales mail only.
+- Every verb says what it acts on (《[3.2]》 6.1): not 「履歷都卡住」 but 「履歷都找不到工作」; not 「把能做的事拉寬了」 but a verb that names what grew.
+- Forbidden patterns and their per-issue caps: 《[3.2] 禁用詞清單》 families 一 to 十 (1.1–10.1). 十一 is for sales mail only.
 - The facts match across the tabs. Only 【CTA 待 Peter 確認】 may remain as a placeholder, and only until Ship.
 
 ## House style
