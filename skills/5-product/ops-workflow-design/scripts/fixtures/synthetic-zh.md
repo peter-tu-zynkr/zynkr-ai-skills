@@ -9,7 +9,7 @@ steps:
   - "start | start | 開始 · 客戶提出需求"
   - "ask | input | 1.1 填寫需求表單"
   - "draft | llm | 1.2 草擬報價"
-  - "price | knowledge | [RAG] 價目表 v4 | col=2"
+  - "price | knowledge | [RAG] 價目表 v4"
   - "## 核准"
   - "big | gate | 2.1 金額超過十萬？"
   - "approve | hitl | 2.2 主管核准"

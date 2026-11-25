@@ -8,7 +8,7 @@ steps:
   - "## Intake"
   - "start | start | Start · a request arrives"
   - "ask | input | 1 Send the request"
-  - "notes | context | Call notes (this session) | col=2"
+  - "notes | context | Call notes (this session)"
   - "draft | llm | 2 Draft the reply"
   - "scratch | ephemeral | Draft notes (session only)"
   - "## Reply"

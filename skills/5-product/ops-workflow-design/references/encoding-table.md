@@ -95,6 +95,6 @@ Workflow drawings use workflow colours only, never a brand colour.
 
 - **The colour values** — `flow-colours.json`, by role name. A change there is a new registry
   version, and every drawing is stamped with the version it was drawn with.
-- **Placement** — columns, phases and the at-most-three-per-column rule: `scaffold.md`.
+- **Placement** — columns, phases and the one-spine rule (V14): `scaffold.md` §6.
 - **Sequence diagrams and infrastructure icons** — out of scope: flow text has no lifelines and no
   cloud shapes.

@@ -12,9 +12,9 @@ steps:
   - "decide | gate | Decision"
   - "db | store | Database"
   - "ai_yes | llm | AI process"
-  - "kb_one | knowledge | Knowledge for retrieval | col=3"
+  - "kb_one | knowledge | Knowledge for retrieval"
   - "manual_yes | hitl | Manual operation"
-  - "kb_two | knowledge | Knowledge for retrieval | col=4"
+  - "kb_two | knowledge | Knowledge for retrieval"
   - "manual_no | hitl | Manual operation"
   - "out | output | Output to human | by=external"
 flow:

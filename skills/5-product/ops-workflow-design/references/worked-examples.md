@@ -26,9 +26,9 @@ steps:
   - "decide | gate | Decision"
   - "db | store | Database"
   - "ai_yes | llm | AI process"
-  - "kb_one | knowledge | Knowledge for retrieval | col=3"
+  - "kb_one | knowledge | Knowledge for retrieval"
   - "manual_yes | hitl | Manual operation"
-  - "kb_two | knowledge | Knowledge for retrieval | col=4"
+  - "kb_two | knowledge | Knowledge for retrieval"
   - "manual_no | hitl | Manual operation"
   - "out | output | Output to human | by=external"
 flow:
@@ -144,8 +144,8 @@ the customer gets notified."
       gate's branches. Both branches rejoin at step 6 within a column, so the spine stays one path.
    2. The front end: `executed_by: external-user` puts the customer's steps on the external row.
    3. Stores and knowledge: one `store` (the invoice log) and one `knowledge` step (the schema),
-      then one `~>` line per Reads, Writes and Knowledge entry. The schema is only read, so it takes
-      `col=2`, the column of step 2, to sit under it.
+      then one `~>` line per Reads, Writes and Knowledge entry. The schema is only read, so it sits
+      under step 2, its first reader, on both drawings: there is nothing to place.
    4. Phases: `## Intake` and `## Approval`.
 
 The frontmatter of the file, `example-2.md` (its body holds the step cards and the store directory):
@@ -163,7 +163,7 @@ steps:
   - "start | start | Start · a customer has invoices to send"
   - "upload | input | 1 Upload the invoice CSV"
   - "extract | llm | 2 Extract line items"
-  - "schema | knowledge | [RAG] Extraction schema v1 | col=2"
+  - "schema | knowledge | [RAG] Extraction schema v1"
   - "## Approval"
   - "big | gate | 3 Total over $10k?"
   - "review | hitl | 4 Reviewer approves"

@@ -44,8 +44,8 @@
         "title": "[RAG] Extraction schema v1",
         "ref": null,
         "by": null,
-        "col": 2,
-        "raw": "schema | knowledge | [RAG] Extraction schema v1 | col=2",
+        "col": null,
+        "raw": "schema | knowledge | [RAG] Extraction schema v1",
         "line": 5,
         "phase": 0,
         "ordinal": 4

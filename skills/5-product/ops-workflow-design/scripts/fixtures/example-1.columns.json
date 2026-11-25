@@ -1,90 +1,99 @@
 {
-  "rows": [
+  "bands": [
     "fe0",
     "fe1",
-    "be0",
-    "be1",
-    "db0",
-    "db1"
+    "be",
+    "db"
   ],
-  "cols": 5,
+  "cols": 2,
   "steps": [
     {
       "id": "input",
       "lane": "fe",
       "sublane": 1,
-      "tier": 0,
-      "col": 0
+      "band": 1,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "ai",
       "lane": "be",
       "sublane": 1,
-      "tier": 1,
-      "col": 1
+      "band": 2,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "doc",
       "lane": "db",
       "sublane": 0,
-      "tier": 1,
-      "col": 1
+      "band": 3,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "decide",
       "lane": "be",
       "sublane": 1,
-      "tier": 2,
-      "col": 2
+      "band": 2,
+      "col": 0,
+      "slot": 1
     },
     {
       "id": "db",
       "lane": "db",
       "sublane": 0,
-      "tier": 2,
-      "col": 2
+      "band": 3,
+      "col": 0,
+      "slot": 1
     },
     {
       "id": "ai_yes",
       "lane": "be",
       "sublane": 1,
-      "tier": 3,
-      "col": 3
+      "band": 2,
+      "col": 0,
+      "slot": 2
     },
     {
       "id": "kb_one",
       "lane": "db",
       "sublane": 1,
-      "tier": 3,
-      "col": 3
+      "band": 3,
+      "col": 0,
+      "slot": 2
     },
     {
       "id": "manual_yes",
       "lane": "be",
       "sublane": 0,
-      "tier": 4,
-      "col": 4
+      "band": 2,
+      "col": 1,
+      "slot": 0
     },
     {
       "id": "kb_two",
       "lane": "db",
       "sublane": 1,
-      "tier": 4,
-      "col": 4
+      "band": 3,
+      "col": 1,
+      "slot": 0
     },
     {
       "id": "manual_no",
       "lane": "be",
       "sublane": 0,
-      "tier": 3,
-      "col": 3
+      "band": 2,
+      "col": 1,
+      "slot": 1
     },
     {
       "id": "out",
       "lane": "fe",
       "sublane": 0,
-      "tier": 4,
-      "col": 4
+      "band": 0,
+      "col": 1,
+      "slot": 0
     }
   ]
 }

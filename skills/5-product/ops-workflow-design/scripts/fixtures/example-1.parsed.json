@@ -80,8 +80,8 @@
         "title": "Knowledge for retrieval",
         "ref": null,
         "by": null,
-        "col": 3,
-        "raw": "kb_one | knowledge | Knowledge for retrieval | col=3",
+        "col": null,
+        "raw": "kb_one | knowledge | Knowledge for retrieval",
         "line": 7,
         "phase": null,
         "ordinal": 7
@@ -104,8 +104,8 @@
         "title": "Knowledge for retrieval",
         "ref": null,
         "by": null,
-        "col": 4,
-        "raw": "kb_two | knowledge | Knowledge for retrieval | col=4",
+        "col": null,
+        "raw": "kb_two | knowledge | Knowledge for retrieval",
         "line": 9,
         "phase": null,
         "ordinal": 9

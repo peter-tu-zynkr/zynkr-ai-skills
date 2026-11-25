@@ -11,17 +11,17 @@ fix it. Apply them on every read, and as the self-check after every draft and ed
 Every rule has one home:
 
 - **lint** — `flow_svg.py lint` checks it mechanically and names the rule and the step ids: V4, V5,
-  V6, V9, V12 (label length) and V14, plus two boxes or labels that overlap, and a step or line
-  Atlas would not draw (`parse`). `lint --layout stacked` checks the page drawing: the same rules
-  without V14, with the overlaps and the card text measured on the stacked drawing its
-  `--register`, `--stack` and `--lang` make (a title, a note or a phase line that takes too many
-  lines is a V12).
+  V6, V9 and V12 (label length), plus two boxes, labels or notes that overlap, and a step or line
+  Atlas would not draw (`parse`). Plain `lint` measures Atlas's canvas; `lint --layout stacked`
+  measures the page drawing, the same rules with the overlaps and the card text measured on the
+  stacked drawing its `--register`, `--stack` and `--lang` make (a title, a note or a phase line
+  that takes too many lines is a V12). Both place the steps by one rule since ATL-147.
 - **kind** — settled when you pick each step's kind. The kind decides the step's lane, shape and
   fill, so a drawing can't break these rules; a wrong kind can. Check the kinds against the cards
   and the titles: V1, V2, V3, V8 and V10.
 - **renderer** — `render` keeps it on every drawing, so a kit drawing needs no check: V12 (the
   legend and empty lanes) and V13 (a) and (b).
-- **judgment** — read the flow: V7.
+- **judgment** — read the flow: V7 and V14.
 - **retired** — no longer a rule: V11 and V13 (c). The renderer sets the text size.
 
 | Rule | In short | Home | Severity |
@@ -39,8 +39,8 @@ Every rule has one home:
 | V11 | Node text size | retired | — |
 | V12 | Clean-register hygiene | lint (label length) · renderer (legend, empty lanes) | soft |
 | V13 | Straight lines, legible lane headers | renderer (a, b) · retired (c) | soft |
-| V14 | One spine; at most 3 steps per column | lint | hard |
-| — | Two boxes or labels overlap | lint | hard |
+| V14 | One spine; each column one stretch of it, read top to bottom | judgment | hard |
+| — | Two boxes, labels or notes overlap | lint | hard |
 | — | A step or line Atlas would not draw, or a title or phase name it would cut (`parse`) | lint | hard |
 
 Severity sorts the report: a hard rule is a ship-blocker, a soft one an observation. **Lint exits 1
@@ -49,8 +49,8 @@ as an image, a soft finding is flagged, not blocking.
 
 `lint` also **warns** on a page-only kind (`context`, `junction`, `ephemeral`): the kit draws the
 step, but Atlas has no kind for it and would drop it, so the flow stays a page drawing. It warns on
-a step option it can't read (a `by=` or `col=` with a bad value, an unknown option) too. A warning
-never changes the exit.
+a step option it can't read (a `by=` or `col=` with a bad value, an unknown option) too, and it
+notes a `col=` it reads and ignores (`col_ignored`). A warning or a note never changes the exit.
 
 ---
 
@@ -109,22 +109,19 @@ never changes the exit.
   check the order by eye.
 - **Fix**: redraw it from flow text.
 
-### V14 — One spine; at most 3 steps per column · lint
+### V14 — One spine; each column one stretch of it, read top to bottom · judgment
 
-- **Principle**: two views, `SKILL.md` ("one step per real step … at most three steps in a
-  column"). The rule was always implied; an owner's ruling on 2026-09-01 made it a rule.
-- **Detect**: a column holding **4 or more** steps, counted **across all lanes** after layout. Lint
-  names the column as `col=` counts it, from 0, and its steps.
-- **Where it applies**: Atlas's columns, which is what plain `lint` lays out. The page drawing
-  builds its own columns (a phase is a run of columns, and its steps stack top to bottom inside
-  them, `page-drawing.md`), so `lint --layout stacked` does not count V14. The rule's first half
-  holds on both: one spine. On a page each column is one stretch of that spine read top to
-  bottom, never a second path beside it.
+- **Principle**: two views, `SKILL.md`. The rule was always implied; an owner's ruling on
+  2026-09-01 made it a rule, counted then as at most three steps in a column of Atlas's canvas,
+  which put one step to a cell. Since ATL-147 (Atlas `D-190`, 2026-11-24) the canvas stacks a
+  column as the page does, and the count went with the old columns: a column is now one stretch of
+  the spine read top to bottom, with its stores and sources under it.
+- **Detect**: read the flow. Two paths that run side by side through the same columns, or a lane
+  whose rows are alternatives rather than one sequence, break it. Lint counts nothing here.
+- **Where it applies**: both drawings, which place the steps by one rule (`page-drawing.md` §3).
 - **Fix**: pick **one** path as the spine and run it left to right. Alternative paths leave the
   spine through an `offpage` step that names their own flow, and rejoin, if they do, as a
-  plumbing line, never as another row. A column's budget is the spine step, one store or sign-off,
-  and one knowledge source. A source that steps only read takes `col=` to sit under its reader
-  (`scaffold.md`).
+  plumbing line, never as another row. A gate's branches stack under it and rejoin.
 - **Why it's hard, not soft**: this is not cosmetics. A reader follows a process along one axis;
   parallel branch rows force them to read in two dimensions, and the sequence is lost. Fixing it
   late means re-deciding what the flow is *about*, which is a re-architecture, not a nudge, so it
@@ -132,11 +129,13 @@ never changes the exit.
 
 ### Overlap · lint
 
-- **Detect**: two boxes, two labels or two phase bands overlap after layout. For phase bands lint
-  names the steps in the columns both phases hold, each with its `col=`; `lint --json` lists every
-  step's column.
-- **Fix**: reorder the steps or the phases, or move one step with `col=`, so each phase holds
-  neighbouring columns. A shorter title or label helps too.
+- **Detect**: two boxes or two labels overlap after layout, or the text under a gate or a junction
+  (a gate's note, which `page:` writes, or a junction's name) runs past its column; `lint --json`
+  lists every step's cell.
+  Since ATL-147 each phase takes columns of its own on both drawings, so two phases never share a
+  column.
+- **Fix**: shorten the title, the label or the note. Where the steps crowd, start a new phase with
+  a `## <phase>` line, or, on a page, a new column at a step with `<id> | break`.
 
 ### Parse — a step or line Atlas would not draw · lint
 
@@ -238,7 +237,7 @@ Total: N hard, M soft.
 
 Every line gives the rule, its severity (by the group it sits in), the step ids it is about (the
 flow's own `id`s, never positions) and the fix. A group with nothing in it is left out. A finding
-the kinds or judgment turned up (V1, V2, V3, V7, V8, V10) goes in its group the same way.
+the kinds or judgment turned up (V1, V2, V3, V7, V8, V10, V14) goes in its group the same way.
 
 If clean, the report ends "Clean — no convention violations." instead of the total. Don't pad.
 

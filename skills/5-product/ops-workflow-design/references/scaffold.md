@@ -116,35 +116,27 @@ direction is the meaning:
   or ephemeral step too). Two work steps are joined by
   `->` (the work hands on); data one passes to the other goes through the store they share.
 
-## 6) Columns, and at most 3 steps per column (V14)
+## 6) Columns: one placement rule, and one spine (V14)
 
-A flow has two sets of columns. **On a page** the kit builds its own: each phase is a run of
-columns and its steps stack inside them, so nothing below applies and `col=` is not read
-(`page-drawing.md` §3). **On Atlas's canvas**, and in `render --layout canvas`, columns are
-placed this way, and V14 counts them:
+Atlas's canvas and the page place the steps by one rule since ATL-147 (Atlas `D-190`), so a flow
+has one set of columns (`page-drawing.md` §3 has the rule in full):
 
-- **The spine sets the column.** Columns count from 0 at `start`. Each step sits one column right
-  of the furthest step whose `->` line leads to it.
-- **A store, artifact or knowledge step that a step writes into** (`step ~> store`) takes that
-  step's column, so it sits under the step that writes it. With several writers it takes the
-  rightmost writer's column, which can sit in the next phase: give it `col=` to keep it in its own.
-- **Anything else that no `->` line leads to** — typically a source or a store that steps only
-  read (`source ~> step`) — stays in column 0. Give it `col=N`, the column of the step that reads
-  it.
-- **`col=N`** always wins over the computed column.
-- **One band holds one step per column.** A second step aimed at a taken cell in the same band moves
-  to the next free column on its right. That is how a gate's two branches end up side by side when
-  they share a band. The step that moved keeps its new cell, and the steps after it don't move
-  with it: a later step in the band aimed at that cell moves on in turn, in the order the file
-  lists them. One crowded cell can so shift a run of the band right while the other bands stay,
-  and spill a phase into its neighbour. `lint --json` lists the column each step landed in
-  (`columns`); pin the step that moved with `col=`, or give the branch a band of its own.
+- **Each phase takes its own run of columns**, in the order `steps:` lists the phases.
+- **Inside a phase the backend steps fill a column top to bottom**, at most four, spread as evenly
+  as they go, the fuller columns first: five steps become three and two.
+- **A front-end step sits over the step it belongs to:** a `start`, an `input` or a `context`
+  document over the step after it, any other over the step before it.
+- **A store or an artifact sits under the step that first writes it**, else under its first reader;
+  a knowledge source under its first reader, last in its stack.
+- **`col=` moves nothing.** It still parses, as Atlas parses it, and lint notes it. A page can start
+  a new column with `<id> | break` in `page:`; Atlas reads no `page:`, so its canvas never breaks
+  there.
 
-**V14: no column holds more than three steps, counted across all lanes.** The budget for a column
-is the spine step, one store or sign-off, and one knowledge source. A gate's branches put two steps
-in the next column: keep each branch short and rejoin, or send the other path out through an
-`offpage` step. `lint` counts after layout and names the column and its steps. A lane stacking
-three or more parallel rows of steps is a matrix, not a flow.
+**V14: one spine, each column one stretch of it, read top to bottom.** One path runs left to right;
+every other path leaves through an `offpage` step that names its own flow. A column is where that
+path goes down, never a second path beside it: a gate's branches stack under it and rejoin. Lint
+counts no steps per column since `D-190`; the rule is judged. A lane whose rows are alternatives
+rather than one sequence is a matrix, not a flow.
 
 ## 7) Ids, titles and step numbers
 
@@ -193,7 +185,7 @@ steps:
   - "## <Phase 2>"
   - "<id> | hitl | 2.1 <title>"
   - "<id> | store | <Store name> (<tool>)"
-  - "<id> | knowledge | [RAG] <name> v1 | col=<the reader's column>"
+  - "<id> | knowledge | [RAG] <name> v1"
   - "end | end | End · <the outcome>"
 flow:
   - "start -> <id>"

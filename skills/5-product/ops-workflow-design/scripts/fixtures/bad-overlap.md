@@ -1,21 +1,28 @@
 ---
 name: bad-overlap
-originalName: Order with interleaved phases
+originalName: Invoice check with a long script name
 type: workflow
-description: "Breaks the overlap rule only: the two phases share columns, so their bands overlap."
-executed_by: external-user
+description: "Breaks the overlap rule only, on the page drawing: the script named under its gate runs past the gate's column."
+executed_by: internal-user
 steps:
-  - "## Prepare"
-  - "start | start | Start · an order arrives"
-  - "pack | deterministic | 1.2 Pack the order"
-  - "## Pay"
-  - "charge | deterministic | 1.1 Charge the card"
-  - "end | end | End · order shipped"
+  - "start | start | Start · an invoice arrives"
+  - "check | gate | 1 Total over the limit?"
+  - "hold | deterministic | 2 Hold for review"
+  - "post | deterministic | 3 Post it"
+  - "end | end | End · invoice handled"
 flow:
-  - "start -> charge"
-  - "charge -> pack"
-  - "pack -> end"
+  - "start -> check"
+  - "check -> hold | Yes"
+  - "check -> post | No"
+  - "hold -> end"
+  - "post -> end"
+page:
+  - "check | run=scripts/finance/check_invoice_total_against_the_limit.py"
 ---
 
-A synthetic flow for the kit's selftest: `lint` must exit 1 with an overlap, because the steps
-are written in a different order from the one the work runs in.
+A synthetic flow for the kit's selftest: `lint --layout stacked` must exit 1 with an overlap. The
+page drawing writes what runs a gate under it, on one line, and this gate names a script too long
+for its column. Plain `lint` passes the same file: Atlas's canvas ignores `page:`.
+
+Until ATL-147 this fixture interleaved two phases, so their bands shared columns on Atlas's canvas.
+Each phase now stacks in columns of its own on the canvas too, and that overlap cannot happen.

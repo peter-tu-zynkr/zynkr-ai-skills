@@ -117,7 +117,9 @@ the same file drafts into Atlas or renders as a page without a change.
   - `title` — at most 60 characters, with no `|` or `"`. A work step's title starts with its step
     number (`1.1 Diff vs last week`); a knowledge source's title reads `[RAG] <name> v<n>`.
   - `ref=<skill-slug>` binds the step to a skill and `ref=atlas:<key>` to an Atlas note; `by=` puts
-    a front-end step with an external or an internal person; `col=N` sets its column.
+    a front-end step with an external or an internal person. `col=N` still parses, as Atlas
+    parses it, and moves nothing: since ATL-147 Atlas's canvas and the page place every step by
+    one rule (`references/scaffold.md` §6), and lint notes a `col=` (`col_ignored`).
 - **`"## <phase>"`** lines inside `steps:` start a phase: the steps below, up to the next header.
   A phase name has at most 40 characters.
 - **`flow:`** — one quoted line per line drawn:
@@ -154,7 +156,7 @@ steps:
   - "start | start | Start · a customer has invoices to send"
   - "upload | input | 1 Upload the invoice CSV"
   - "extract | llm | 2 Extract line items"
-  - "schema | knowledge | [RAG] Extraction schema v1 | col=2"
+  - "schema | knowledge | [RAG] Extraction schema v1"
   - "## Approval"
   - "big | gate | 3 Total over $10k?"
   - "review | hitl | 4 Reviewer approves"
@@ -208,31 +210,36 @@ python3 -I <skill>/scripts/flow_svg.py --selftest
     registry's version (`data-flow-colours`), and the same input gives the same bytes.
   - **`--embed`** writes an HTML fragment for a page instead of a bare SVG: the legend, a
     fit-to-width button, a box that scrolls sideways and the drawing inline.
-  - **`--layout canvas`** draws Atlas's own columns instead, one step to a row and column, with no
-    notes, links or hover: a preview of how a draft will sit in Atlas, not a page drawing. It draws
-    every line, as Atlas does.
-  - `--stack` sets how many backend steps a column holds (4 unless you say). `--lang` picks the
+  - **`--layout canvas`** draws Atlas's own canvas instead: since ATL-147 it places every step as
+    the page does, at most four backend steps to a column and with no `break`, and draws each card
+    as Atlas does, with no notes, links or hover: a preview of how a draft will sit in Atlas, not a
+    page drawing. It draws every line, as Atlas does.
+  - `--stack` sets how many backend steps a page's column holds (4 unless you say); Atlas's canvas
+    always stacks up to four, so `--layout canvas` refuses it. `--lang` picks the
     language of the lane titles and the legend. `--register clean` (the overview) is the default
     for a page, and `--register audit` (the detail) for `--layout canvas`.
 - **`table`** writes the steps table for under the drawing: one row per work step, numbered as
   the drawing is, with the stores it reads and writes taken from the `~>` lines.
 - **`lint`** names the rule and the step ids, and exits 1 on any rule it finds, soft ones
-  included: V4, V5, V6, V9, V12 (label length), V14 (counted after layout), two boxes, labels or
-  phase bands that overlap, and a step or line Atlas would not draw or a title or phase name it
-  would cut (`parse`). V5, V9 and V12 are soft, the rest hard (`references/validation.md`). It warns, without
-  failing, on a page-only kind or a step option it can't read, and notes a `page:` line it
-  skipped. `--json` prints the same report as JSON, with the column each step landed in
-  (`columns`) and the drawing it measured (`layout`, `register`). A clean flow exits 0.
-  - Plain `lint` checks the flow as Atlas will draw it, V14 included. Every flow passes it before
-    it is drafted into Atlas.
-  - **`lint --layout stacked`** checks the page drawing instead: the same rules without V14 (the
-    page builds its own columns), with overlaps and long card text measured on the stacked
-    drawing. Give it the `--register`, `--stack` and `--lang` you render with, so it measures the
-    drawing you ship: a label the overview leaves off can't overlap there.
+  included: V4, V5, V6, V9, V12 (label length), two boxes, labels or notes that overlap, and a
+  step or line Atlas would not draw or a title or phase name it would cut (`parse`). V5, V9 and
+  V12 are soft, the rest hard (`references/validation.md`). It counts no steps per column: V14 is
+  a written rule since ATL-147. It warns, without failing, on a page-only kind or a step option it
+  can't read, and notes a `page:` line it skipped and a `col=` it ignores. `--json` prints the
+  same report as JSON, with the cell each step landed in (`cells`: its band, column and slot;
+  `columns` keeps the column alone) and the drawing it measured (`layout`, `register`). A clean
+  flow exits 0.
+  - Plain `lint` checks the flow as Atlas will draw it, every line included. Every flow passes it
+    before it is drafted into Atlas.
+  - **`lint --layout stacked`** checks the page drawing instead: the same rules, with overlaps and
+    long card text measured on the stacked drawing and the notes `page:` puts on it. Give it the
+    `--register`, `--stack` and `--lang` you render with, so it measures the drawing you ship: a
+    label the overview leaves off can't overlap there.
 - **Exit 2** from any command means the kit could not run (a missing file, a bad registry). It is
   never a pass: say what it printed.
-- **`--selftest`** checks the kit against its fixtures: parsing and columns against Atlas's own
-  results, and one bad fixture per lint rule. Run it after an install or an update; it must exit 0.
+- **`--selftest`** checks the kit against its fixtures: parsing and each step's cell against
+  Atlas's own results, and one bad fixture per lint rule. Run it after an install or an update;
+  it must exit 0.
 - **Colours** come only from `references/flow-colours.json`. Never write a colour value: not in
   flow text, not on the page around a drawing, not in a reply. A workflow drawing uses workflow
   colours only, never a brand colour.
@@ -345,16 +352,16 @@ A worked READ is in `references/worked-examples.md`.
       the front end; `by=` overrides it for one step.
    3. **Stores and knowledge.** One `store` step (or `artifact`, for a durable document) per data
       store and one `knowledge` step per source on the cards, then a `~>` line for every Reads,
-      Writes and Knowledge entry, in its direction. Give a source that steps only read a `col=`, so
-      it sits under the step that reads it.
+      Writes and Knowledge entry, in its direction. There is nothing to place: a store sits under
+      the step that first writes it and a knowledge source under its first reader, on both drawings.
    4. **Phases.** A `## <phase>` header over each stage, beat or day.
 4. **Lint** — `python3 -I <skill>/scripts/flow_svg.py lint <flow.md>`. Exit 1 names the rule and the
    step ids: fix the text and lint again until it exits 0. Then walk the checks lint can't do
    (`references/validation.md`: the kind checks V1, V2, V3, V8 and V10, and V7). Settle them now: a
-   fix after an Atlas draft is filed waits for a reviewer. When lint names a V14 or an overlap,
-   `lint --json` lists the column each step landed in (`columns`), so you can see which step moved.
-   A flow that will only ever be a page drawing lints with `--layout stacked` instead: V14 counts
-   Atlas's columns, which that drawing doesn't use.
+   fix after an Atlas draft is filed waits for a reviewer. When lint names an overlap,
+   `lint --json` lists the cell each step landed in (`cells`), so you can see what crowds it. A
+   flow that will only ever be a page drawing lints with `--layout stacked` instead: that is the
+   drawing it ships, with its notes and tags.
 5. **Pick the drawing.** The default is a page drawing in the overview (step 7): it is what someone
    asking for a drawing wants to read. An Atlas draft, the detail (step 6), is made only when the
    user asks for it: "draft it in Atlas", "upload it to Zynkr", 「上傳到 Zynkr」, 「放到 Atlas」. A
@@ -490,10 +497,10 @@ the user did not ask for.
 
 1. **Read** the flow (READ, minimally).
 2. **Lint it:** `python3 -I <skill>/scripts/flow_svg.py lint <flow.md> --json` — V4, V5, V6, V9,
-   V12 (label length), V14, overlaps and `parse` (titles and phase names Atlas would cut included), plus a warning
+   V12 (label length), overlaps and `parse` (titles and phase names Atlas would cut included), plus a warning
    for each page-only kind.
 3. **Check the kinds** against the cards and the titles: V1, V2, V3, V8 and V10.
-4. **Judge** V7.
+4. **Judge** V7, and V14: one spine, each column one stretch of it read top to bottom.
 5. **Report** in `references/validation.md`'s format — rule · severity · step ids · fix — with the
    flow's own step ids:
 
@@ -557,7 +564,8 @@ What the overview asks of the flow text:
 
 Both views keep the convention and lint clean. The overview spends its complexity budget on clarity
 instead of completeness, and never drops information that changes meaning: what it does not draw,
-it lists. Atlas's canvas draws its own way, every line; `render --layout canvas` previews it.
+it lists. Atlas's canvas places the steps as the page does (ATL-147) and draws every line;
+`render --layout canvas` previews it.
 
 ---
 
@@ -588,8 +596,9 @@ it lists. Atlas's canvas draws its own way, every line; `render --layout canvas`
   move to Atlas as text. The stacked columns, the hover, the links and the store tags all come
   from the kit: a drawing that needs one of them needs a `page:` line, not a script of its own.
   The host page's brand rules stop at the drawing's edge.
-- **One step to a column on a page.** `--layout canvas` is Atlas's preview. On a page it makes a
-  long strip of title-only cards that nobody can take in at once.
+- **Atlas's preview on a page.** `--layout canvas` shows how a draft will sit in Atlas: cards with
+  a title and nothing else, every read and write drawn, no notes, links or hover. On a page that is
+  a web of lines nobody can take in at once: a page gets the page drawing, `render`'s default.
 - **Bare cards.** A page drawing whose cards show a title and nothing else has no `page:` list.
   Write the notes and what runs each step before you render.
 - **A link nobody gave.** A `link=` is an address the user gave or one you opened. Never build one

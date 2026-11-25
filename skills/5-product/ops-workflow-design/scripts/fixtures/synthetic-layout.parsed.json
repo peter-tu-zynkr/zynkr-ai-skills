@@ -140,8 +140,8 @@
         "title": "2.5 Flag early rows",
         "ref": null,
         "by": null,
-        "col": 2,
-        "raw": "early | deterministic | 2.5 Flag early rows | col=2",
+        "col": 0,
+        "raw": "early | deterministic | 2.5 Flag early rows | col=0",
         "line": 14,
         "phase": 1,
         "ordinal": 12

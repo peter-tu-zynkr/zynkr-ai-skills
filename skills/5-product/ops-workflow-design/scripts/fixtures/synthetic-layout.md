@@ -2,7 +2,7 @@
 name: synthetic-layout
 originalName: Layout cases
 type: workflow
-description: "A synthetic flow that exercises the layout: longest paths, a back edge, companions, col= and collisions."
+description: "A synthetic flow that exercises the stacked layout: phases, a split column, the front end over its step, data boxes, a retry, a skip and col=."
 executed_by: internal-user
 steps:
   - "## Collect"
@@ -18,7 +18,7 @@ steps:
   - "fix | hitl | 2.3 Fix the outliers"
   - "fixlog | artifact | Fix record"
   - "auto | deterministic | 2.4 Accept the batch"
-  - "early | deterministic | 2.5 Flag early rows | col=2"
+  - "early | deterministic | 2.5 Flag early rows | col=0"
   - "learned | knowledge | [RAG] Learned rules v1"
   - "## Hand off"
   - "handoff | offpage | 3.1 Send to reporting"
@@ -45,12 +45,20 @@ flow:
   - "early ~> rows"
 ---
 
-A synthetic flow for the kit's selftest. The columns it exercises:
+A synthetic flow for the kit's selftest. The cells it exercises, the same on Atlas's canvas and on
+the page since ATL-147 (one placement rule for both):
 
-- `start -> show` is shorter than the spine, so `show` takes the longest path's column.
-- `fix -> score` returns to a step already on the walk: a back edge, drawn but not counted.
-- `rows`, `fixlog` and `learned` are written by a step, so each sits under its writer.
-- `guide` and `notes` are only read and carry no `col=`, so both aim at column 0; `notes` moves
-  right.
-- `early` asks for `col=2`, which `clean` holds, so it moves right past every step that came
-  before it in the file, and pushes `handoff` along.
+- Each phase takes columns of its own: Collect column 0, Check columns 1 and 2, Hand off column 3.
+- Check holds five backend steps, one more than a column holds, so they split as evenly as they go,
+  the fuller column first: `score`, `fit` and `fix` in column 1, `auto` and `early` in column 2.
+- `start` and `pull` sit over the step after them, `show` over the step before it. With an internal
+  and an external front-end step, the front end takes two bands.
+- `rows` sits under the step that first writes it (`clean`; `early` writes it later), `fixlog`
+  under its writer, `guide` and `notes` under their first reader, after the stores and artifacts in
+  their stack. `learned`, which no step reads, sits under `fix`, the step that keeps it, after
+  `notes`.
+- `fix -> score` returns to a step higher in its stack: a retry. It moves nothing, and its line
+  loops back beside the column.
+- `start -> show` skips ahead and moves nothing.
+- `early` asks for `col=0`, which moves nothing: it stays under `auto` in column 2, and lint notes
+  it (`col_ignored`).

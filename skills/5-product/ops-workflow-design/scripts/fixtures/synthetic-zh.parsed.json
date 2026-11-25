@@ -44,8 +44,8 @@
         "title": "[RAG] 價目表 v4",
         "ref": null,
         "by": null,
-        "col": 2,
-        "raw": "price | knowledge | [RAG] 價目表 v4 | col=2",
+        "col": null,
+        "raw": "price | knowledge | [RAG] 價目表 v4",
         "line": 5,
         "phase": 0,
         "ordinal": 4

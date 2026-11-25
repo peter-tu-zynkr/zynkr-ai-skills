@@ -1,52 +1,58 @@
 {
-  "rows": [
-    "fe0",
-    "be1",
-    "db1"
+  "bands": [
+    "fe",
+    "be",
+    "db"
   ],
-  "cols": 5,
+  "cols": 1,
   "steps": [
     {
       "id": "start",
       "lane": "fe",
       "sublane": 0,
-      "tier": 0,
-      "col": 0
+      "band": 0,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "ask",
       "lane": "fe",
       "sublane": 0,
-      "tier": 1,
-      "col": 1
+      "band": 0,
+      "col": 0,
+      "slot": 1
     },
     {
       "id": "answer",
       "lane": "be",
       "sublane": 1,
-      "tier": 2,
-      "col": 2
+      "band": 1,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "faq",
       "lane": "db",
       "sublane": 1,
-      "tier": 2,
-      "col": 2
+      "band": 2,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "show",
       "lane": "fe",
       "sublane": 0,
-      "tier": 3,
-      "col": 3
+      "band": 0,
+      "col": 0,
+      "slot": 2
     },
     {
       "id": "end",
       "lane": "fe",
       "sublane": 0,
-      "tier": 4,
-      "col": 4
+      "band": 0,
+      "col": 0,
+      "slot": 3
     }
   ]
 }

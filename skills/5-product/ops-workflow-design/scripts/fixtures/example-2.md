@@ -10,7 +10,7 @@ steps:
   - "start | start | Start · a customer has invoices to send"
   - "upload | input | 1 Upload the invoice CSV"
   - "extract | llm | 2 Extract line items"
-  - "schema | knowledge | [RAG] Extraction schema v1 | col=2"
+  - "schema | knowledge | [RAG] Extraction schema v1"
   - "## Approval"
   - "big | gate | 3 Total over $10k?"
   - "review | hitl | 4 Reviewer approves"

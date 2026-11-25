@@ -8,7 +8,7 @@ steps:
   - "start | start | Start · a question arrives"
   - "ask | input | 1 Ask a question"
   - "answer | llm | 2 Draft the answer"
-  - "faq | knowledge | [RAG] Product FAQ v3 | col=2"
+  - "faq | knowledge | [RAG] Product FAQ v3"
   - "show | output | 3 Show the answer"
   - "end | end | End · answer shown"
 flow:

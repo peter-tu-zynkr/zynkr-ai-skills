@@ -5,85 +5,98 @@
       {
         "id": "start",
         "kind": "start",
-        "title": "Start · an order arrives",
+        "title": "Start · an invoice arrives",
         "ref": null,
         "by": null,
         "col": null,
-        "raw": "start | start | Start · an order arrives",
-        "line": 2,
-        "phase": 0,
+        "raw": "start | start | Start · an invoice arrives",
+        "line": 1,
+        "phase": null,
         "ordinal": 1
       },
       {
-        "id": "pack",
-        "kind": "deterministic",
-        "title": "1.2 Pack the order",
+        "id": "check",
+        "kind": "gate",
+        "title": "1 Total over the limit?",
         "ref": null,
         "by": null,
         "col": null,
-        "raw": "pack | deterministic | 1.2 Pack the order",
-        "line": 3,
-        "phase": 0,
+        "raw": "check | gate | 1 Total over the limit?",
+        "line": 2,
+        "phase": null,
         "ordinal": 2
       },
       {
-        "id": "charge",
+        "id": "hold",
         "kind": "deterministic",
-        "title": "1.1 Charge the card",
+        "title": "2 Hold for review",
         "ref": null,
         "by": null,
         "col": null,
-        "raw": "charge | deterministic | 1.1 Charge the card",
-        "line": 5,
-        "phase": 1,
+        "raw": "hold | deterministic | 2 Hold for review",
+        "line": 3,
+        "phase": null,
         "ordinal": 3
+      },
+      {
+        "id": "post",
+        "kind": "deterministic",
+        "title": "3 Post it",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "post | deterministic | 3 Post it",
+        "line": 4,
+        "phase": null,
+        "ordinal": 4
       },
       {
         "id": "end",
         "kind": "end",
-        "title": "End · order shipped",
+        "title": "End · invoice handled",
         "ref": null,
         "by": null,
         "col": null,
-        "raw": "end | end | End · order shipped",
-        "line": 6,
-        "phase": 1,
-        "ordinal": 4
+        "raw": "end | end | End · invoice handled",
+        "line": 5,
+        "phase": null,
+        "ordinal": 5
       }
     ],
-    "phases": [
-      {
-        "name": "Prepare",
-        "from": 1,
-        "to": 2
-      },
-      {
-        "name": "Pay",
-        "from": 3,
-        "to": 4
-      }
-    ],
+    "phases": [],
     "flow": [
       {
         "from": "start",
-        "to": "charge",
+        "to": "check",
         "role": "spine",
         "label": null
       },
       {
-        "from": "charge",
-        "to": "pack",
+        "from": "check",
+        "to": "hold",
+        "role": "spine",
+        "label": "Yes"
+      },
+      {
+        "from": "check",
+        "to": "post",
+        "role": "spine",
+        "label": "No"
+      },
+      {
+        "from": "hold",
+        "to": "end",
         "role": "spine",
         "label": null
       },
       {
-        "from": "pack",
+        "from": "post",
         "to": "end",
         "role": "spine",
         "label": null
       }
     ],
-    "feSublane": 0,
+    "feSublane": 1,
     "executionMode": null,
     "warnings": []
   }

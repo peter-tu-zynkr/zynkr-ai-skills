@@ -1,37 +1,49 @@
 {
-  "rows": [
-    "fe0",
-    "be1"
+  "bands": [
+    "fe",
+    "be"
   ],
-  "cols": 4,
+  "cols": 1,
   "steps": [
     {
       "id": "start",
       "lane": "fe",
-      "sublane": 0,
-      "tier": 0,
-      "col": 0
+      "sublane": 1,
+      "band": 0,
+      "col": 0,
+      "slot": 0
     },
     {
-      "id": "pack",
+      "id": "check",
       "lane": "be",
       "sublane": 1,
-      "tier": 2,
-      "col": 2
+      "band": 1,
+      "col": 0,
+      "slot": 0
     },
     {
-      "id": "charge",
+      "id": "hold",
       "lane": "be",
       "sublane": 1,
-      "tier": 1,
-      "col": 1
+      "band": 1,
+      "col": 0,
+      "slot": 1
+    },
+    {
+      "id": "post",
+      "lane": "be",
+      "sublane": 1,
+      "band": 1,
+      "col": 0,
+      "slot": 2
     },
     {
       "id": "end",
       "lane": "fe",
-      "sublane": 0,
-      "tier": 3,
-      "col": 3
+      "sublane": 1,
+      "band": 0,
+      "col": 0,
+      "slot": 1
     }
   ]
 }

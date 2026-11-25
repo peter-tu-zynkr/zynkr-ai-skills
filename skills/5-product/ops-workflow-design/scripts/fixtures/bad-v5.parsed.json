@@ -44,8 +44,8 @@
         "title": "[RAG] Product FAQ v3",
         "ref": null,
         "by": null,
-        "col": 2,
-        "raw": "faq | knowledge | [RAG] Product FAQ v3 | col=2",
+        "col": null,
+        "raw": "faq | knowledge | [RAG] Product FAQ v3",
         "line": 4,
         "phase": null,
         "ordinal": 4

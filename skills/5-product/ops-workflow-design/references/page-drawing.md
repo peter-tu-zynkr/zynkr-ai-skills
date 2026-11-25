@@ -7,7 +7,8 @@ the flow text to fill it, and what to check when you look at it.
 It became the standard on 2026-11-20 (SKB-154). Before that the kit drew a page in Atlas's own
 columns, one step to a column: a 23-step flow came out thirteen columns wide, with a title and
 nothing else on each card. The drawings people read most easily had been built by hand instead.
-This layout is what those drawings had in common, now drawn by the kit.
+This layout is what those drawings had in common, now drawn by the kit. Since 2026-11-24 (ATL-147)
+Atlas's own canvas stacks its columns the same way (§6).
 
 Since 2026-11-21 (SKB-158) the page drawing is the **overview** unless someone asks for the detail:
 each data box draws one line, and its tags list the rest (§7). A drawing made before then drew every
@@ -80,14 +81,15 @@ The kit decides the columns; the flow text only nudges them.
 - Inside a phase the backend steps fill a column top to bottom. Past four they spread over as few
   columns as hold them, as evenly as they go, the fuller columns first: five steps become three
   and two, nine become three columns of three, ten become four, three and three. `--stack N`
-  changes the four (2 to 6).
+  changes the four on a page (2 to 6); Atlas's canvas keeps four.
 - A front-end step sits in the column of the backend step it belongs to: a `start`, an `input` or
   a `context` document over the step after it, an `output` or an `end` over the step before it.
 - A store or an artifact sits under the first step that writes it; when no step writes it, under
   the first that reads it. A knowledge source sits under its first reader.
 - A phase that holds only stores gets no column and no heading: its stores sit under the steps
   that use them.
-- `col=` is not read here. It places a step on Atlas's canvas only.
+- `col=` moves nothing, here or on Atlas's canvas, which places the steps by this rule too since
+  ATL-147: at most four backend steps to a column, and no `break` (§6).
 
 When a column reads badly, change the text, in this order:
 
@@ -147,13 +149,14 @@ the `--register`, `--stack` and `--lang` you render with: it measures the drawin
 
 ---
 
-## 6) Atlas's columns: `--layout canvas`
+## 6) Atlas's canvas: `--layout canvas`
 
-`render --layout canvas` draws the flow in the columns Atlas's canvas gives it, one step to a row
-and column, with no notes, links or hover. Use it only to preview how a draft will sit in Atlas.
-V14 (at most three steps in a column) is counted on these columns, and plain `lint` checks it: a
-flow that will be drafted into Atlas passes plain `lint`. A page drawing answers to
-`lint --layout stacked`, which builds its own columns and so has no V14 to break.
+Since ATL-147 (Atlas `D-190`) Atlas's canvas places the steps by §3's rule too: the same phases,
+stacks and data boxes, at most four backend steps to a column, and no `break` (Atlas reads no
+`page:`). `render --layout canvas` draws it as Atlas draws its cards, every line and no notes,
+links or hover. Use it only to preview how a draft will sit in Atlas. Plain `lint` checks that
+drawing, and a flow that will be drafted into Atlas passes it. A page drawing answers to
+`lint --layout stacked`, which measures the notes and tags the page adds.
 
 ---
 

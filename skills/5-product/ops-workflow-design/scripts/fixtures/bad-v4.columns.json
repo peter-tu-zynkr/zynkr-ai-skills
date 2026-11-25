@@ -1,52 +1,57 @@
 {
-  "rows": [
-    "fe0",
-    "be0",
-    "be1"
+  "bands": [
+    "fe",
+    "be"
   ],
-  "cols": 6,
+  "cols": 1,
   "steps": [
     {
       "id": "start",
       "lane": "fe",
       "sublane": 0,
-      "tier": 0,
-      "col": 0
+      "band": 0,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "send",
       "lane": "fe",
       "sublane": 0,
-      "tier": 1,
-      "col": 1
+      "band": 0,
+      "col": 0,
+      "slot": 1
     },
     {
       "id": "check",
       "lane": "be",
       "sublane": 1,
-      "tier": 2,
-      "col": 2
+      "band": 1,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "review",
       "lane": "be",
       "sublane": 0,
-      "tier": 3,
-      "col": 3
+      "band": 1,
+      "col": 0,
+      "slot": 1
     },
     {
       "id": "tell",
       "lane": "fe",
       "sublane": 0,
-      "tier": 4,
-      "col": 4
+      "band": 0,
+      "col": 0,
+      "slot": 2
     },
     {
       "id": "end",
       "lane": "fe",
       "sublane": 0,
-      "tier": 5,
-      "col": 5
+      "band": 0,
+      "col": 0,
+      "slot": 3
     }
   ]
 }

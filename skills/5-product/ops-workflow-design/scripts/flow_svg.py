@@ -9,14 +9,16 @@ The flow text is a Zynkr Atlas workflow body, unchanged. Its frontmatter holds `
   - parses it exactly as Atlas does (zynkr-atlas src/lib/steps.ts and declarations.ts): the same
     twelve kinds, the same caps (200 steps, 300 lines, titles of 60, phase names of 40), the same
     drops and the same warnings;
-  - lays it out exactly as Atlas's canvas does: longest-path columns with the back edges set aside,
-    companions (a store, artifact or knowledge step a `~>` line points at) under the step that
-    uses them, `col=` honoured, then one step per row and column, nudged right on a collision;
+  - lays it out exactly as Atlas's canvas does since ATL-147 (D-190): the stacked rule of
+    layout_stacked below, at most four backend steps to a column as on Atlas's canvas, and with
+    none of the page's `break` lines, which Atlas never reads; `col=` is parsed, as Atlas parses
+    it, and moves nothing;
   - draws it as ONE self-contained SVG: lanes FE · BE · DB, each step in its kind's shape and fill,
     lines routed orthogonally around the boxes, every colour inline from references/flow-colours.json,
     the root stamped data-flow-colours="<registry version>", and the same input gives the same bytes;
-  - lints it: V4, V5, V6, V9, V12 (label length), V14 (after layout), overlapping boxes, labels or
-    phase bands, and anything Atlas would drop or cut (`parse`), with validation.md's severities.
+  - lints it: V4, V5, V6, V9, V12 (label length), overlapping boxes, labels or notes, and anything
+    Atlas would drop or cut (`parse`), with validation.md's severities. V14 is a written rule since
+    D-190: both drawings stack a column, so lint counts no steps per column.
 
 It also draws three page-only kinds Atlas has no kind for yet: `context` (encoding row 4),
 `junction` (row 13) and `ephemeral` (row 15). Atlas would drop those steps, so lint warns, and a
@@ -27,8 +29,10 @@ of columns, its steps stack top to bottom inside them, a store sits under the st
 a card shows what the frontmatter's `page:` list adds (a note, what runs the step, a link). Since
 SKB-158 the page draws the OVERVIEW unless `--register audit` asks for the detail: every spine line,
 one read or write line per data box, the rest listed on the boxes' W · R tags; hovering a step
-lights its lines and calls out every card it joins. Atlas's own columns stay as `--layout canvas`,
-which draws every line, and plain `lint` still lays the flow out, and checks it, as Atlas will.
+lights its lines and calls out every card it joins. Since ATL-147 Atlas's canvas stacks the same
+way, so `--layout canvas` places every step as the page does, less the `break` lines and at four to
+a column, and draws it as Atlas draws its cards, every line included; plain `lint` checks the flow
+as Atlas will draw it.
 
   python3 flow_svg.py render <flow.md> [--embed] [--layout stacked|canvas] [--stack 2-6] [--out F]
                                        [--lang en|zh-TW] [--register audit|clean] [--registry P]
@@ -446,9 +450,6 @@ STEP_FRAMING = {
     'context': ('fe', None, 'document'), 'junction': ('be', 1, 'junction'),
     'ephemeral': ('db', 0, 'document'),
 }
-ROW_ORDER = (('fe', 0), ('fe', 1), ('be', 0), ('be', 1), ('db', 0), ('db', 1))
-COMPANIONS = ('store', 'artifact', 'knowledge')
-PAGE_COMPANIONS = COMPANIONS + ('context', 'ephemeral')
 
 
 def frame_step(kind, fe_sublane, by):
@@ -487,56 +488,30 @@ def back_edges_of(spine, order):
     return out
 
 
-def layout(block, page=False):
-    steps, flow = block['steps'], block['flow']
-    by_id = dict((s['id'], s) for s in steps)
-    ids = [s['id'] for s in steps]
-    spine = [f for f in flow if f['role'] == 'spine' and f['from'] in by_id and f['to'] in by_id]
-    back = back_edges_of(spine, ids)
-    forward = [f for i, f in enumerate(spine) if i not in back]
-    col = dict((sid, 0) for sid in ids)
-    for _ in range(len(ids)):
-        moved = False
-        for f in forward:
-            nxt = col.get(f['from'], 0) + 1
-            if nxt > col.get(f['to'], 0):
-                col[f['to']] = nxt
-                moved = True
-        if not moved:
-            break
-    companions = PAGE_COMPANIONS if page else COMPANIONS
-    for f in flow:
-        if f['role'] != 'plumbing' or f['from'] not in by_id or f['to'] not in by_id:
-            continue
-        if by_id[f['to']]['kind'] in companions:
-            col[f['to']] = max(col.get(f['to'], 0), col.get(f['from'], 0))
-    tier, lane, sub, shape = {}, {}, {}, {}
-    for s in steps:
-        tier[s['id']] = s['col'] if s['col'] is not None else col.get(s['id'], 0)
-        lane[s['id']], sub[s['id']], shape[s['id']] = frame_step(s['kind'], block['feSublane'], s['by'])
-    present = [(lane[i], sub[i]) for i in ids]
-    rows = [rk for rk in ROW_ORDER if rk in present]
-    taken, final = {}, {}
-    for i in ids:
-        used = taken.setdefault((lane[i], sub[i]), set())
-        c = max(0, int(tier[i]))
-        while c in used:
-            c += 1
-        used.add(c)
-        final[i] = c
-    cols = max([0] + list(final.values())) + 1
-    return {'ids': ids, 'tier': tier, 'lane': lane, 'sub': sub, 'shape': shape, 'col': final,
-            'rows': rows, 'cols': cols, 'back': [spine[i] for i in sorted(back)]}
+def atlas_layout(block):
+    """Where Atlas's canvas puts each step since ATL-147 (D-190): the page's stacked rule
+    (layout_stacked, below) at Atlas's stack of four, with none of the page's `break` lines, which
+    Atlas never reads. `col=` moves nothing: Atlas parses it and places by the rule."""
+    lay = layout_stacked(block, {'steps': {}}, STACK_MAX)
+    lay['kind'] = 'canvas'
+    return lay
+
+
+def band_labels(bands):
+    """Each band's name, as the goldens write it: its lane, and its row only where the front end's
+    two rows each have a band."""
+    return [ln + ('' if sb is None else str(sb)) for ln, sb in bands]
 
 
 def atlas_view(text):
-    """What Atlas keeps and where its canvas puts it, in the shape of the golden files."""
+    """What Atlas keeps and where its canvas puts it, in the shape of the golden files: the bands, the
+    column count, and each step's band, column and slot (ATL-147)."""
     fm, fm_warnings, _ = read_frontmatter(text)
     block = parse_step_block(fm, page=False)
-    lay = layout(block, page=False)
-    columns = {'rows': [ln + str(sb) for ln, sb in lay['rows']], 'cols': lay['cols'],
-               'steps': [{'id': i, 'lane': lay['lane'][i], 'sublane': lay['sub'][i], 'tier': lay['tier'][i],
-                          'col': lay['col'][i]} for i in lay['ids']]}
+    lay = atlas_layout(block)
+    columns = {'bands': band_labels(lay['bands']), 'cols': lay['cols'],
+               'steps': [{'id': i, 'lane': lay['lane'][i], 'sublane': lay['sub'][i], 'band': lay['band'][i],
+                          'col': lay['col'][i], 'slot': lay['slot'][i]} for i in lay['ids']]}
     return {'frontmatterWarnings': fm_warnings, 'block': block}, columns
 
 
@@ -1095,12 +1070,13 @@ def flow_title(fm, path):
 
 
 def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas', embed=False, stack=None):
-    """layout_kind 'canvas' is Atlas's own columns, one step per row and column; 'stacked' is the
-    standard page drawing (below, The stacked layout)."""
+    """layout_kind 'canvas' is Atlas's own canvas: since ATL-147 its stacked placement (atlas_layout),
+    drawn as Atlas draws its cards, one band per lane; 'stacked' is the standard page drawing (below,
+    The stacked layout)."""
     fm, fm_warnings, _ = read_frontmatter(text)
     cuts = []
     block = parse_step_block(fm, page=True, cuts=cuts)
-    lay = layout(block, page=True)
+    lay = atlas_layout(block)
     steps, flow = block['steps'], block['flow']
     audit = register == 'audit'
     ui = UI[lang]
@@ -1112,8 +1088,7 @@ def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas
         return model
     if layout_kind == 'stacked':
         return build_stacked(model, reg, stack or STACK_MAX)
-    rows = lay['rows']
-    row_index = dict((rk, n) for n, rk in enumerate(rows))
+    bands = lay['bands']
 
     # node text and sizes
     nodes = model['nodes']
@@ -1131,20 +1106,28 @@ def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas
         nodes[sid] = {'id': sid, 'kind': s['kind'], 'role': reg['_role'][s['kind']], 'shape': shape,
                       'lines': lines, 'badge': badge, 'number': number, 'w': NW if shape != 'junction' else 32,
                       'h': node_height(shape, len(lines)), 'col': lay['col'][sid],
-                      'row': row_index[(lay['lane'][sid], lay['sub'][sid])], 'lane': lay['lane'][sid],
+                      'row': lay['band'][sid], 'slot': lay['slot'][sid], 'lane': lay['lane'][sid],
                       'title': s['title']}
 
-    # lane header text
+    # lane header text: each lane's title, and under it the caption of every row its band holds. One
+    # band holds a lane's rows, as on Atlas's canvas, except where the front end has both of its rows:
+    # then each row is a band of its own (ATL-147).
     lane_rows = {}
-    for n, (ln, sb) in enumerate(rows):
+    for n, (ln, sb) in enumerate(bands):
         lane_rows.setdefault(ln, []).append(n)
     titles, row_titles = reg['lanes']['titles'][lang], reg['lanes']['rows'][lang]
     lane_title_lines = dict((ln, wrap(titles[ln], FS_HEAD, HEAD_W - 18)) for ln in lane_rows)
-    row_title_lines = [wrap(row_titles[ln][sb], FS_ROW, HEAD_W - 18) for (ln, sb) in rows]
+    held = [sorted(set(lay['sub'][i] for i in lay['ids'] if lay['band'][i] == n)) for n in range(len(bands))]
+    row_title_lines = [[line for sb in held[n] for line in wrap(row_titles[ln][sb], FS_ROW, HEAD_W - 18)]
+                       for n, (ln, _) in enumerate(bands)]
 
-    # rows: tall enough for the tallest box (its badge tab and its bottom curve included) and the header
-    row_h = []
-    for n, (ln, sb) in enumerate(rows):
+    # bands: one pitch per slot, tall enough for the band's tallest box (its badge tab and its bottom
+    # curve included), and as many slots as the band's tallest stack; tall enough for the header too
+    slots = [1] * len(bands)
+    for (c, bi), ids in lay['stacks'].items():
+        slots[bi] = max(slots[bi], len(ids))
+    pitch, row_h = [], []
+    for n, (ln, sb) in enumerate(bands):
         need = MIN_ROW_H
         for nd in nodes.values():
             if nd['row'] == n:
@@ -1152,10 +1135,11 @@ def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas
                 if nd['shape'] == 'junction':
                     extent = nd['h'] * 2
                 need = max(need, extent + 2 * ROW_PAD)
+        pitch.append(need)
         head = 14 + 15 * len(row_title_lines[n])
         if lane_rows[ln][0] == n:
             head += 16 + 15 * len(lane_title_lines[ln])
-        row_h.append(max(need, head))
+        row_h.append(max(need * slots[n], head))
 
     has_phases = any(p for p in block['phases'])
     x0 = MARGIN + HEAD_W
@@ -1169,9 +1153,11 @@ def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas
                   'row_top': row_top, 'row_h': row_h, 'lane_rows': lane_rows,
                   'lane_title_lines': lane_title_lines, 'row_title_lines': row_title_lines})
 
-    # place the boxes: centred in their cell, every box in a row on the row's centre line
+    # place the boxes: centred in their column, slot 0 at the top of its band and each slot one pitch
+    # under the one before, as Atlas stacks its cards
     for nd in nodes.values():
-        mid = row_top[nd['row']] + row_h[nd['row']] / 2
+        n = nd['row']
+        mid = row_top[n] + (row_h[n] - pitch[n] * slots[n]) / 2 + pitch[n] * (nd['slot'] + .5)
         cx = x0 + nd['col'] * COL_W + COL_W / 2
         if nd['shape'] == 'junction':
             nd['x'], nd['y'] = cx - 16, mid - 16
@@ -1205,15 +1191,16 @@ def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas
             left = min(left, bx)
         nd['bbox'] = (left, top, right, bottom)
 
-    # phase bands, from the cells of the steps each phase holds
-    by_ordinal = dict((s['ordinal'], s['id']) for s in steps)
-    bands = []
-    for ph in block['phases']:
-        members = [by_ordinal[o] for o in range(ph['from'], ph['to'] + 1) if o in by_ordinal]
-        if not members:
+    # phase bands, one per phase over the run of columns its steps take. A store or a knowledge source
+    # sits under the step that uses it, maybe in another phase's columns, so it is not counted, as on
+    # Atlas's phase strip; and as each phase has a run of its own, two bands never share a column.
+    phase_bands = []
+    for g in lay['groups']:
+        if g['phase'] is None:
             continue
-        c0 = min(nodes[m]['col'] for m in members)
-        c1 = max(nodes[m]['col'] for m in members)
+        ph = block['phases'][g['phase']]
+        members = [s['id'] for s in steps if ph['from'] <= s['ordinal'] <= ph['to']]
+        c0, c1 = g['c0'], g['c1']
         bx0, bx1 = x0 + c0 * COL_W + 6, x0 + (c1 + 1) * COL_W - 6
         by0 = lanes_top - PHASE_GAP - PHASE_H
         room = bx1 - bx0 - 16
@@ -1224,22 +1211,9 @@ def build(text, reg, lang='en', register='audit', path=None, layout_kind='canvas
             while shown and tw(shown + '…', FS_HEAD) > room:
                 shown = shown[:-1]
             shown += '…'
-        bands.append({'name': name, 'shown': shown, 'box': (bx0, by0, bx1, by0 + PHASE_H), 'members': members,
-                      'c0': c0, 'c1': c1})
-    model['phases'] = bands
-    for a in range(len(bands)):
-        for b in range(a + 1, len(bands)):
-            if rects_overlap(bands[a]['box'], bands[b]['box']):
-                pa, pb = bands[a], bands[b]
-                # name the steps that sit inside the other phase's columns: those are the ones to move.
-                # Two bands that share a column always have one: the leftmost step of one band sits in
-                # the other's columns.
-                inside = ([m for m in pa['members'] if pb['c0'] <= nodes[m]['col'] <= pb['c1']] +
-                          [m for m in pb['members'] if pa['c0'] <= nodes[m]['col'] <= pa['c1']])
-                model['overlaps'].append({'what': 'phase', 'steps': inside,
-                                          'detail': 'phase bands "%s" (col=%d–%d) and "%s" (col=%d–%d) share columns: %s'
-                                                    % (pa['name'], pa['c0'], pa['c1'], pb['name'], pb['c0'], pb['c1'],
-                                                       ', '.join('%s at col=%d' % (m, nodes[m]['col']) for m in inside))})
+        phase_bands.append({'name': name, 'shown': shown, 'box': (bx0, by0, bx1, by0 + PHASE_H), 'members': members,
+                            'c0': c0, 'c1': c1})
+    model['phases'] = phase_bands
 
     for a in steps:
         for b in steps:
@@ -1313,7 +1287,6 @@ def route_edges(model, reg):
     infl = [(a - CLEAR, b - CLEAR, c + CLEAR, d + CLEAR) for (a, b, c, d) in (nd['bbox'] for nd in nodes.values())]
     infl += [(a - 4, b - 4, c + 4, d + 4) for (a, b, c, d) in model.get('obstacles', [])]
     col_w, node_w = model.get('col_w', COL_W), model.get('node_w', NW)
-    stacked = model['layout'].get('kind') == 'stacked'
     box = (x0 + 3, top + 3, right - 3, bottom - 3)
 
     def stub_ok(pt, own):
@@ -1368,7 +1341,7 @@ def route_edges(model, reg):
     order = sorted((q for q in range(len(flow)) if drawn is None or q in drawn), key=lambda q: (flow[q]['role'] != 'spine',
                                                     abs(nodes[flow[q]['from']]['col'] - nodes[flow[q]['to']]['col']),
                                                     abs(nodes[flow[q]['from']]['row'] - nodes[flow[q]['to']]['row']),
-                                                    abs(nodes[flow[q]['from']]['cy'] - nodes[flow[q]['to']]['cy']) if stacked else 0, q))
+                                                    abs(nodes[flow[q]['from']]['cy'] - nodes[flow[q]['to']]['cy']), q))
     back = model['layout']['back']
 
     def ends(e, sides):
@@ -1393,10 +1366,10 @@ def route_edges(model, reg):
     for q in order:
         e = flow[q]
         a, b = nodes[e['from']], nodes[e['to']]
-        # A back edge (a retry) leaves and enters through the bottom or the top, so it loops around
-        # the row and reads as a return, not as one more step forward.
-        # In a stack the return runs beside the column instead: the top and bottom carry the steps' own order.
-        starts, goals = ends(e, {'R': 0, 'L': 12} if stacked else {'B': 0, 'T': 30}) if any(e is x for x in back) else ([], {})
+        # A back edge (a retry) runs beside the column, out of a side and into a side, so it reads as a
+        # return, not as one more step forward: in a stack the top and the bottom carry the steps' own
+        # order. Both layouts stack since ATL-147.
+        starts, goals = ends(e, {'R': 0, 'L': 12}) if any(e is x for x in back) else ([], {})
         if not starts or not goals:
             starts, goals = ends(e, None)
         lo = min(a['bbox'][0], b['bbox'][0]) - col_w
@@ -1608,7 +1581,7 @@ def render_svg(model, reg):
         o.append('<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="600" fill="%s" text-anchor="middle">%s</text>'
                  % (f((a + c) / 2), f(b + PHASE_H / 2 + 4), esc(FONT), f(FS_HEAD), ph['text'], esc(band['shown'])))
     # lanes: a faint fill per layer, a light header column, dark titles
-    rows, row_top, row_h = model['layout']['rows'], model['row_top'], model['row_h']
+    rows, row_top, row_h = model['layout']['bands'], model['row_top'], model['row_h']
     for n, (ln, sb) in enumerate(rows):
         o.append('<rect x="%s" y="%s" width="%s" height="%s" fill="%s"/>'
                  % (f(x0), f(row_top[n]), f(lanes_right - x0), f(row_h[n]), lanes['fill'][ln]))
@@ -1902,7 +1875,7 @@ def layout_stacked(block, page, stack_max=STACK_MAX):
                 col[sid] = c
             c += 1
         name = block['phases'][ph]['name'] if ph is not None else None
-        groups.append({'name': name, 'c0': first, 'c1': c - 1})
+        groups.append({'name': name, 'phase': ph, 'c0': first, 'c1': c - 1})
     n_cols = max(1, c)
 
     placed = dict(col)
@@ -1926,8 +1899,9 @@ def layout_stacked(block, page, stack_max=STACK_MAX):
     for s in steps:
         if s['kind'] == 'knowledge':
             stacks.setdefault((col[s['id']], band[s['id']]), []).append(s['id'])
+    slot = dict((sid, k) for ids_ in stacks.values() for k, sid in enumerate(ids_))
     return {'kind': 'stacked', 'ids': ids, 'lane': lane, 'sub': sub, 'shape': shape, 'col': col, 'tier': dict(col),
-            'bands': bands, 'band': band, 'stacks': stacks, 'cols': n_cols, 'groups': groups,
+            'bands': bands, 'band': band, 'slot': slot, 'stacks': stacks, 'cols': n_cols, 'groups': groups,
             'back': [spine[i] for i in sorted(back)]}
 
 
@@ -2560,12 +2534,10 @@ RULES = {
     'V9': ('soft', 'one start that only leads out, and an end (or more than one) that only takes lines in'),
     'V12': ('soft', 'shorten it: a title is its number and at most four words, a label a word or two; '
                     'the detail goes on the step card'),
-    'V14': ('hard', 'pick one path as the spine and run it left to right; other paths leave through an offpage step, '
-                    'and a source that steps only read takes col= under its reader (columns count from 0)'),
-    'overlap': ('hard', 'shorten the title or the label, or move one step with col=; keep each phase a run of '
-                        'neighbouring columns'),
+    'overlap': ('hard', 'shorten the title or the label; where the steps crowd, start a new phase with a '
+                        '`## <phase>` line (each phase stacks in columns of its own, in the file\'s order)'),
 }
-RULE_ORDER = ('parse', 'V4', 'V5', 'V6', 'V9', 'V12', 'V14', 'overlap')
+RULE_ORDER = ('parse', 'V4', 'V5', 'V6', 'V9', 'V12', 'overlap')
 
 
 def lint_model(model):
@@ -2602,7 +2574,14 @@ def lint_model(model):
             notes.append({'code': w['code'], 'field': w['field'], 'message': w['detail']})
     for w in model['page']['warnings']:
         notes.append({'code': w['code'], 'field': w['field'], 'message': w['detail']})
-    stacked = model['layout'].get('kind') == 'stacked'
+    # col= is parsed, as Atlas parses it, and moves nothing: Atlas's canvas and the page both place a
+    # step by the stacked rule (ATL-147, D-190)
+    for s in steps:
+        if s['col'] is not None:
+            notes.append({'code': 'col_ignored', 'field': 'steps',
+                          'message': '%s: col=%d moves nothing: Atlas and the page place every step by the stacked '
+                                     'rule, each phase in columns of its own, in the file\'s order' % (s['id'], s['col'])})
+    page_drawing = model['layout'].get('kind') == 'stacked'
     if not steps and not any(h['rule'] == 'parse' for h in found):
         hit('parse', [], 'the file declares no steps')
     # a title or a phase name Atlas cuts: the parser keeps the first 60 or 40 characters, as Atlas's
@@ -2692,19 +2671,13 @@ def lint_model(model):
                 'shorten the phase\'s line in `page:`')
         else:
             hit('V12', [sid], 'the phase name "%s" is wider than its phase\'s columns' % detail)
-    # V14: more than three steps in one column, after layout
-    # (counted on Atlas's columns only: the stacked layout builds its own columns, a phase at a time)
-    per_col = {}
-    for s in steps:
-        per_col.setdefault(model['layout']['col'][s['id']], []).append(s['id'])
-    for c in sorted(per_col):
-        if len(per_col[c]) > 3 and not stacked:
-            hit('V14', per_col[c], 'col=%d holds %d steps' % (c, len(per_col[c])))
+    # V14 is a written rule since D-190 (validation.md): both drawings stack a column, so nothing here
+    # counts its steps.
     # two boxes or labels that overlap (and a line no route keeps off the boxes)
     for ov in model['overlaps']:
         hit('overlap', ov['steps'], ov['detail'],
             'shorten the title, the note or the label, or start a new column at a step with `<id> | break` '
-            'in `page:`' if stacked else None)
+            'in `page:`' if page_drawing else None)
     found.sort(key=lambda h: RULE_ORDER.index(h['rule']))
     return found, warnings, notes
 
@@ -2713,14 +2686,19 @@ def lint_report(path, model):
     found, warnings, notes = lint_model(model)
     hard = [h for h in found if h['severity'] == 'hard']
     soft = [h for h in found if h['severity'] == 'soft']
-    # where each step landed, so a V14 or an overlap can be traced to the step that moved
-    columns = dict((s['id'], model['layout']['col'][s['id']]) for s in model['block']['steps'])
+    # where each step landed, so an overlap can be traced to the step that moved: its column, and its
+    # band, column and slot (ATL-147)
+    lay = model['layout']
+    labels = band_labels(lay['bands'])
+    columns = dict((s['id'], lay['col'][s['id']]) for s in model['block']['steps'])
+    cells = dict((s['id'], {'band': labels[lay['band'][s['id']]], 'col': lay['col'][s['id']], 'slot': lay['slot'][s['id']]})
+                 for s in model['block']['steps'])
     return {'file': path, 'title': model['title'], 'steps': len(model['block']['steps']),
             'lines': len(model['block']['flow']),
             # the drawing it measured: Atlas's canvas or the page, the detail (audit) or the overview (clean)
             'layout': model['layout'].get('kind', 'canvas'), 'register': model['register'],
             'violations': found, 'warnings': warnings, 'notes': notes,
-            'columns': columns,
+            'columns': columns, 'cells': cells,
             'summary': {'hard': len(hard), 'soft': len(soft), 'warnings': len(warnings), 'notes': len(notes)},
             'exit': 1 if found else 0}
 
@@ -2793,6 +2771,16 @@ def option(args, name, default=None, choices=None):
     return default
 
 
+def stack_option(args, layout_kind):
+    """--stack sets the page drawing's stack. Atlas's canvas always stacks up to four (ATL-147), so
+    the flag is refused there rather than drawn as a canvas Atlas would not draw."""
+    stack = option(args, '--stack', None, ('2', '3', '4', '5', '6'))
+    if stack is not None and layout_kind == 'canvas':
+        raise KitError('--stack sets the page drawing\'s stack; Atlas\'s canvas always stacks %d backend steps to a '
+                       'column, so --layout canvas takes no --stack' % STACK_MAX)
+    return stack or str(STACK_MAX)
+
+
 def default_register(layout_kind):
     """The view a command draws when no --register is given (SKB-158): a page drawing, the stacked
     layout, is the overview (clean); Atlas's canvas is the detail (audit), every line, as Atlas draws it."""
@@ -2805,7 +2793,7 @@ def cmd_render(args):
     lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
     register = option(args, '--register', None, ('audit', 'clean'))
     layout_kind = option(args, '--layout', 'stacked', ('stacked', 'canvas'))
-    stack = option(args, '--stack', str(STACK_MAX), ('2', '3', '4', '5', '6'))
+    stack = stack_option(args, layout_kind)
     # A page drawing is the overview unless asked otherwise; Atlas's canvas is the detail (SKB-158).
     register = register or default_register(layout_kind)
     embed = '--embed' in args
@@ -2863,7 +2851,7 @@ def cmd_lint(args):
         args.remove('--json')
     reg = load_registry(option(args, '--registry'))
     layout_kind = option(args, '--layout', 'canvas', ('stacked', 'canvas'))
-    stack = option(args, '--stack', str(STACK_MAX), ('2', '3', '4', '5', '6'))
+    stack = stack_option(args, layout_kind)
     register = option(args, '--register', None, ('audit', 'clean')) or default_register(layout_kind)
     lang = option(args, '--lang', 'en', ('en', 'zh-TW'))
     if len(args) != 1:
@@ -2934,9 +2922,17 @@ def cmd_compare(args):
 # ----------------------------------------------------------------------------------------------
 # Selftest.
 
-BAD_FIXTURES = (('bad-v4.md', 'V4'), ('bad-v5.md', 'V5'), ('bad-v6.md', 'V6'), ('bad-v9.md', 'V9'),
-                ('bad-v12.md', 'V12'), ('bad-v14.md', 'V14'), ('bad-overlap.md', 'overlap'))
+# Each bad fixture breaks one rule, linted as the drawing it names: plain lint measures Atlas's
+# canvas, `lint --layout stacked` the page drawing. The overlap fixture is the page's: a script named
+# under a gate is written on one line, and since ATL-147 the canvas stacks each phase in columns of its
+# own, so the old fixture (two phases sharing columns) has nothing left to overlap there.
+BAD_FIXTURES = (('bad-v4.md', 'V4', 'canvas'), ('bad-v5.md', 'V5', 'canvas'), ('bad-v6.md', 'V6', 'canvas'),
+                ('bad-v9.md', 'V9', 'canvas'), ('bad-v12.md', 'V12', 'canvas'), ('bad-overlap.md', 'overlap', 'stacked'))
 CLEAN_FIXTURES = ('example-2.md', 'page-only-kinds.md')
+# Fixtures a later version retired (bad-v14 with ATL-147: lint counts no column since D-190). An update that keeps
+# the files it did not write (`/skill-sync` without `--force`) leaves them behind with goldens in an older shape,
+# so the selftest skips them, their goldens with them, and lists every file it skipped.
+RETIRED_FIXTURES = ('bad-v14',)
 
 
 def selftest():
@@ -2950,7 +2946,11 @@ def selftest():
     reg = load_registry()
     # A fixture whose frontmatter is not valid YAML on purpose is a .txt: the workbench's ingest
     # reads every .md under skills/ as YAML and stops on the first it cannot parse.
-    names = sorted(n for n in os.listdir(FIXTURES) if n.endswith(('.md', '.txt')))
+    listed = sorted(os.listdir(FIXTURES))
+    retired = [n for n in listed if n.split('.', 1)[0] in RETIRED_FIXTURES]
+    names = [n for n in listed if n.endswith(('.md', '.txt')) and n not in retired]
+    if retired:
+        print('note: left by an older version, retired and not checked, safe to delete: %s' % ', '.join(retired))
     # 1. the parser and the layout against Atlas's own answers
     n_parse = ok_parse = n_layout = ok_layout = 0
     for name in names:
@@ -2968,14 +2968,33 @@ def selftest():
     check(n_parse > 0, 'no fixtures with goldens')
     print('parse: %d/%d fixtures match Atlas' % (ok_parse, n_parse))
     print('layout: %d/%d fixtures match Atlas' % (ok_layout, n_layout))
+    # ...and `--layout canvas` draws each step in the cell atlas_view gives it (ATL-147: one placement rule
+    # for Atlas and the kit). A fixture with a page-only kind is left out: the kit draws steps Atlas drops.
+    n_canvas = ok_canvas = own = 0
+    for name in names:
+        path = os.path.join(FIXTURES, name)
+        text = read_text(path)
+        want = dict((x['id'], (x['band'], x['col'], x['slot'])) for x in atlas_view(text)[1]['steps'])
+        lay = build(text, reg, 'en', 'audit', path)['layout']
+        drawn = dict((i, (lay['band'][i], lay['col'][i], lay['slot'][i])) for i in lay['ids'])
+        if set(drawn) != set(want):
+            own += 1
+            continue
+        n_canvas += 1
+        ok_canvas += drawn == want
+        check(drawn == want, '%s: the canvas drawing puts %s outside the cell Atlas gives it'
+              % (name, sorted(i for i in want if drawn[i] != want[i])))
+    check(n_canvas > 0, 'no fixture checks the canvas drawing')
+    print('canvas: %d/%d fixtures draw each step in the cell Atlas gives it (left out: %d with page-only steps, '
+          'which Atlas drops)' % (ok_canvas, n_canvas, own))
 
     # 2. one bad fixture per lint rule fails with that rule, and the clean ones pass
     ok_bad = 0
-    for name, rule in BAD_FIXTURES:
+    for name, rule, kind in BAD_FIXTURES:
         path = os.path.join(FIXTURES, name)
         if not check(os.path.exists(path), 'missing fixture %s' % name):
             continue
-        model = build(read_text(path), reg, 'en', 'audit', path)
+        model = build(read_text(path), reg, 'en', default_register(kind), path, kind)
         report = lint_report(path, model)
         rules = sorted(set(h['rule'] for h in report['violations']))
         good = report['exit'] == 1 and rule in rules
@@ -3103,7 +3122,13 @@ def selftest():
 
     st, en = 'start | start | Start', 'end | end | End'
     ai = ['draft | llm | 1 Draft', 'send | output | 2 Send', 'fix | hitl | 3 Fix']
-    v14 = os.path.join(FIXTURES, 'bad-v14.md')
+    # col= moves nothing on either drawing (ATL-147, D-190), and lint says so
+    moved = text_of([st, 'a | deterministic | 1 A | col=3', 'b | deterministic | 2 B', en], ['start -> a', 'a -> b', 'b -> end'])
+    unmoved = moved.replace(' | col=3', '')
+    col_same = atlas_view(moved)[1] == atlas_view(unmoved)[1] and all(
+        build(moved, reg, 'en', 'clean', None, 'stacked')['layout'][k] == build(unmoved, reg, 'en', 'clean', None, 'stacked')['layout'][k]
+        for k in ('band', 'col', 'slot'))
+    col_noted = [n['code'] for n in lint_report('inline', build(moved, reg, 'en', 'audit', 'inline'))['notes']] == ['col_ignored']
     fork = model_of([st, 'j | junction | Fork', 'a | deterministic | 1 A', 'b | deterministic | 2 B', en],
                     ['start -> j', 'j -> a | Path A', 'j -> b | Path B', 'a -> end', 'b -> end'], 'clean')
     review = [
@@ -3117,9 +3142,8 @@ def selftest():
          not found([st, 'prep | deterministic | 1 Prep', 'draft | llm | 2 Draft', 'send | output | 3 Send', en],
                    ['start -> prep', 'prep -> draft', 'draft -> prep', 'draft -> send', 'send -> end'])),
         ('V9 and V12 are soft', RULES['V9'][0] == RULES['V12'][0] == 'soft'),
-        ('V14 counts columns as col= does, from 0',
-         [h['message'] for h in lint_report(v14, build(read_text(v14), reg, 'en', 'audit', v14))['violations']
-          if h['rule'] == 'V14'] == ['col=3 holds 4 steps']),
+        ('col= moves nothing on Atlas\'s canvas or the page, and lint notes it', col_same and col_noted),
+        ('V14 is a written rule since D-190: lint counts no column', 'V14' not in RULES and 'V14' not in RULE_ORDER),
         ('a header above the --- is named as the cause',
          any('does not open with a --- line' in h['message']
              for h in found([st, en], ['start -> end'], head='# A workflow\n\n```markdown\n'))),
@@ -3228,8 +3252,11 @@ def selftest():
               'example-2 (stacked) names an address its `page:` list does not: %s' % urls)
         check('<a href="https://example.com/extraction-schema" target="_blank" rel="noopener"><title>Opens the extraction schema</title>' in a,
               'example-2 (stacked): the schema\'s link is not on its card')
-        check(len(model['layout']['groups']) == 2 and model['layout']['cols'] < build(text, reg)['layout']['cols'],
-              'example-2 (stacked) should take fewer columns than Atlas\'s canvas')
+        canvas = build(text, reg)['layout']
+        check(len(model['layout']['groups']) == 2 and all(
+            (model['layout']['band'][i], model['layout']['col'][i], model['layout']['slot'][i])
+            == (canvas['band'][i], canvas['col'][i], canvas['slot'][i]) for i in canvas['ids']),
+            'example-2: Atlas\'s canvas should put every step where the page does (ATL-147; the file has no `break`)')
         check('data-tag="">R 2<' in a and 'W 4 5 · R 6' in a, 'example-2 (stacked): the stores\' W and R tags do not follow the dashed lines')
         whole = embed_html(build(text, reg, lang, 'clean', path, 'stacked', True), reg,
                            render_stacked(build(text, reg, lang, 'clean', path, 'stacked', True), reg))
@@ -3254,6 +3281,9 @@ def selftest():
     check('javascript' not in svg and svg.count('<a href=') == 1, 'a link that is not http(s) must never reach the drawing')
     check(m['layout']['col']['c'] == m['layout']['col']['b'] + 1 and m['layout']['col']['s'] == m['layout']['col']['c'],
           '`break` starts a new column, and a store sits under the step that writes it')
+    mc = build(pg, reg)['layout']
+    check(mc['col']['c'] == mc['col']['b'] and mc['col']['s'] == mc['col']['c'],
+          'Atlas\'s canvas ignores `break` (it reads no `page:`), and its store still sits under its writer')
     check('>tool.py<' in svg and '>/some-skill<' in svg and '>What happens here<' in svg and '>W 2<' in svg,
           'the card should show what runs the step, the ref, the phase line and the store\'s tag')
     rep = lint_report('inline', m)
@@ -3285,7 +3315,9 @@ def selftest():
         'flow:\n  - "a -> g"\n  - "g -> y | Yes"\n  - "g -> n | No"\n---\n'
     check(not lint_report('inline', build(gate3, reg, 'en', 'clean', None, 'stacked'))['violations'],
           'a gate title of three words is clean in the stacked lint, as it is in the plain one')
-    check(not [h for h in lint_report('inline', m9)['violations'] if h['rule'] == 'V14'], 'the stacked layout is not held to V14')
+    m9c = build(many, reg)
+    check(split_of(m9c) == [3, 3, 3] and not lint_report('inline', m9c)['violations'],
+          'Atlas\'s canvas splits nine backend steps 3, 3 and 3 as the page does, and lints clean')
     print('stacked: %d fixtures draw in both registers (%d steps, %d lines); `page:` cards, links, tags and the page fragment hold'
           % (len(names), stacked_steps, stacked_lines))
 

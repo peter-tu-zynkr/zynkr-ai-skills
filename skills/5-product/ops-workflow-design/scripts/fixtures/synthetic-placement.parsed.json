@@ -1,0 +1,246 @@
+{
+  "frontmatterWarnings": [],
+  "block": {
+    "steps": [
+      {
+        "id": "start",
+        "kind": "start",
+        "title": "Start · a batch is due",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "start | start | Start · a batch is due",
+        "line": 2,
+        "phase": 0,
+        "ordinal": 1
+      },
+      {
+        "id": "check",
+        "kind": "deterministic",
+        "title": "1 Check the batch",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "check | deterministic | 1 Check the batch",
+        "line": 3,
+        "phase": 0,
+        "ordinal": 2
+      },
+      {
+        "id": "split",
+        "kind": "deterministic",
+        "title": "2 Split it",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "split | deterministic | 2 Split it",
+        "line": 4,
+        "phase": 0,
+        "ordinal": 3
+      },
+      {
+        "id": "price",
+        "kind": "deterministic",
+        "title": "3 Price each part",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "price | deterministic | 3 Price each part",
+        "line": 5,
+        "phase": 0,
+        "ordinal": 4
+      },
+      {
+        "id": "confirm",
+        "kind": "input",
+        "title": "4 Confirm the prices",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "confirm | input | 4 Confirm the prices",
+        "line": 6,
+        "phase": 0,
+        "ordinal": 5
+      },
+      {
+        "id": "apply",
+        "kind": "deterministic",
+        "title": "5 Apply the prices",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "apply | deterministic | 5 Apply the prices",
+        "line": 7,
+        "phase": 0,
+        "ordinal": 6
+      },
+      {
+        "id": "send",
+        "kind": "deterministic",
+        "title": "6 Send the batch",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "send | deterministic | 6 Send the batch",
+        "line": 8,
+        "phase": 0,
+        "ordinal": 7
+      },
+      {
+        "id": "guide",
+        "kind": "knowledge",
+        "title": "[RAG] Pricing guide v1",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "guide | knowledge | [RAG] Pricing guide v1",
+        "line": 9,
+        "phase": 0,
+        "ordinal": 8
+      },
+      {
+        "id": "archive",
+        "kind": "store",
+        "title": "Archive",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "archive | store | Archive",
+        "line": 10,
+        "phase": 0,
+        "ordinal": 9
+      },
+      {
+        "id": "review",
+        "kind": "deterministic",
+        "title": "7 Review the run",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "review | deterministic | 7 Review the run",
+        "line": 12,
+        "phase": 1,
+        "ordinal": 10
+      },
+      {
+        "id": "update",
+        "kind": "deterministic",
+        "title": "8 Update the guide",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "update | deterministic | 8 Update the guide",
+        "line": 13,
+        "phase": 1,
+        "ordinal": 11
+      },
+      {
+        "id": "end",
+        "kind": "end",
+        "title": "End · the batch is sent",
+        "ref": null,
+        "by": null,
+        "col": null,
+        "raw": "end | end | End · the batch is sent",
+        "line": 14,
+        "phase": 1,
+        "ordinal": 12
+      }
+    ],
+    "phases": [
+      {
+        "name": "Prepare",
+        "from": 1,
+        "to": 9
+      },
+      {
+        "name": "Close",
+        "from": 10,
+        "to": 12
+      }
+    ],
+    "flow": [
+      {
+        "from": "start",
+        "to": "check",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "check",
+        "to": "split",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "split",
+        "to": "price",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "price",
+        "to": "confirm",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "confirm",
+        "to": "apply",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "apply",
+        "to": "send",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "send",
+        "to": "review",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "review",
+        "to": "update",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "update",
+        "to": "end",
+        "role": "spine",
+        "label": null
+      },
+      {
+        "from": "guide",
+        "to": "apply",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "guide",
+        "to": "check",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "guide",
+        "to": "review",
+        "role": "plumbing",
+        "label": null
+      },
+      {
+        "from": "update",
+        "to": "guide",
+        "role": "plumbing",
+        "label": null
+      }
+    ],
+    "feSublane": 1,
+    "executionMode": null,
+    "warnings": []
+  }
+}

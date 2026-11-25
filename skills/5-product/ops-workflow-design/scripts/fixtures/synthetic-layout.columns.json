@@ -1,125 +1,139 @@
 {
-  "rows": [
+  "bands": [
     "fe0",
     "fe1",
-    "be0",
-    "be1",
-    "db0",
-    "db1"
+    "be",
+    "db"
   ],
-  "cols": 9,
+  "cols": 4,
   "steps": [
     {
       "id": "start",
       "lane": "fe",
       "sublane": 1,
-      "tier": 0,
-      "col": 0
+      "band": 1,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "pull",
       "lane": "fe",
       "sublane": 0,
-      "tier": 1,
-      "col": 1
+      "band": 0,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "clean",
       "lane": "be",
       "sublane": 1,
-      "tier": 2,
-      "col": 2
+      "band": 2,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "rows",
       "lane": "db",
       "sublane": 0,
-      "tier": 2,
-      "col": 2
+      "band": 3,
+      "col": 0,
+      "slot": 0
     },
     {
       "id": "guide",
       "lane": "db",
       "sublane": 1,
-      "tier": 0,
-      "col": 0
+      "band": 3,
+      "col": 0,
+      "slot": 1
     },
     {
       "id": "notes",
       "lane": "db",
       "sublane": 1,
-      "tier": 0,
-      "col": 1
+      "band": 3,
+      "col": 1,
+      "slot": 1
     },
     {
       "id": "score",
       "lane": "be",
       "sublane": 1,
-      "tier": 3,
-      "col": 3
+      "band": 2,
+      "col": 1,
+      "slot": 0
     },
     {
       "id": "fit",
       "lane": "be",
       "sublane": 1,
-      "tier": 4,
-      "col": 4
+      "band": 2,
+      "col": 1,
+      "slot": 1
     },
     {
       "id": "fix",
       "lane": "be",
       "sublane": 0,
-      "tier": 5,
-      "col": 5
+      "band": 2,
+      "col": 1,
+      "slot": 2
     },
     {
       "id": "fixlog",
       "lane": "db",
       "sublane": 0,
-      "tier": 5,
-      "col": 5
+      "band": 3,
+      "col": 1,
+      "slot": 0
     },
     {
       "id": "auto",
       "lane": "be",
       "sublane": 1,
-      "tier": 5,
-      "col": 5
+      "band": 2,
+      "col": 2,
+      "slot": 0
     },
     {
       "id": "early",
       "lane": "be",
       "sublane": 1,
-      "tier": 2,
-      "col": 6
+      "band": 2,
+      "col": 2,
+      "slot": 1
     },
     {
       "id": "learned",
       "lane": "db",
       "sublane": 1,
-      "tier": 5,
-      "col": 5
+      "band": 3,
+      "col": 1,
+      "slot": 2
     },
     {
       "id": "handoff",
       "lane": "be",
       "sublane": 1,
-      "tier": 6,
-      "col": 7
+      "band": 2,
+      "col": 3,
+      "slot": 0
     },
     {
       "id": "show",
       "lane": "fe",
       "sublane": 1,
-      "tier": 7,
-      "col": 7
+      "band": 1,
+      "col": 3,
+      "slot": 0
     },
     {
       "id": "end",
       "lane": "fe",
       "sublane": 1,
-      "tier": 8,
-      "col": 8
+      "band": 1,
+      "col": 3,
+      "slot": 1
     }
   ]
 }
