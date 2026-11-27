@@ -63,9 +63,10 @@ department map of its own**.
 | When | Beat | Skill | What happens |
 |---|---|---|---|
 | Mon 08:00 → 20:00 | `recap` | this one | Mail the team last week's recap and this week's plan, read from the Ledger |
-| Wed 20:00 Taipei | — | `weekly-insights` | Each person's week closes; the harvest routine writes `harvest-<person>.md` (`SKB-094`) |
-| Wed 14:30 → 21:00 | `collect` | this one | Read the harvest into the Ledger's Harvest block; one Chat line names whoever has none |
-| Wed 14:30 → 23:00 | `sections` | `ops-weekly-doc` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's Doc section |
+| Wed 20:00 Taipei | — | `weekly-insights` | Each person's week closes (a person may close later, up to about 22:30) |
+| Wed 23:00 Taipei | — | `weekly-insights` | The harvest routine writes `harvest-<person>.md` (`SKB-094`; 20:00 until `SKB-168`) |
+| Wed 17:30 → 21:00 | `collect` | this one | Read the harvest into the Ledger's Harvest block; one Chat line names whoever has none |
+| Wed 17:30 → 23:00 | `sections` | `ops-weekly-doc` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's Doc section |
 | Thu 21:00 Taipei | — | team | The weekly meeting |
 | Thu 23:00 Taipei | `scaffoldNextWeek` | Apps Script | Copy the newest week section forward |
 | Thu 18:30 → 23:00, Fri 08:00 → 11:00 | `minutes` | `ops-weekly-doc` | The meeting's minutes from its transcript, into the Doc and the Ledger |
@@ -153,7 +154,7 @@ changed after the runner saved it. When a step says a result is missing, does no
 that call again exactly as printed and run the step again; if it still refuses, receipt `status=failed`
 with its message.
 
-### `collect` (Wed 14:30 → 21:00)
+### `collect` (Wed 17:30 → 21:00)
 
 Each person's week, from the Wednesday harvest routine's files (`SKB-094`) into the Ledger's
 `Harvest` block, then one Chat line for whoever had a quiet week. It replaces the `#週報` posts and

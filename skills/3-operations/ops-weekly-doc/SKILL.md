@@ -51,7 +51,7 @@ rehearsal `config=<path>`. Use the week as given; never work it out again mid-ru
 
 | When | Mode | What happens |
 |---|---|---|
-| Wed 14:30 → 23:00, after `collect` (or from 21:00 without it) | `sections` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's section, from the Ledger's Harvest rows |
+| Wed 17:30 → 23:00, after `collect` (or from 21:00 without it) | `sections` | Each team's 進度 · 卡關 · 下一步 · 待討論 in this week's section, from the Ledger's Harvest rows |
 | Thu 21:00 Taipei | — | The weekly meeting. The team edits the Doc live |
 | Thu 23:00 Taipei | `scaffoldNextWeek` | **Apps Script**: duplicates the newest week section and re-stamps next Thursday |
 | Thu 18:30 → 23:00, Fri 08:00 → 11:00 | `minutes` | The meeting's decisions, actions and blockers from its Fireflies transcript, into the Doc and the Ledger |
@@ -129,7 +129,7 @@ that call again exactly as printed and run the step again; if it still refuses, 
 with its message. A read that no script printed (the Doc in `tidy`)
 is still yours to save.
 
-### `sections` (Wed 14:30 → 23:00, after `collect`)
+### `sections` (Wed 17:30 → 23:00, after `collect`)
 
 One `〔自動彙整〕` block under each team heading of **this Thursday's** section, holding 進度 · 卡關 ·
 下一步 · 待討論 for that heading's owner. The inputs are the Ledger's `Harvest` rows (from
